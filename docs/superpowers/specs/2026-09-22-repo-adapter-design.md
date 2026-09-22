@@ -311,6 +311,7 @@ After each listing, the adapter writes `/data/repo-adapter/report.json` atomical
 - **§4, §12:** the `repo-adapter` service, the `repo` network, `uc/uc/repo_adapter/` and the new tests.
 - **§7.1, §9.2, §11:** the §6 keys and secrets.
 - **§7.3:** the blocked-hosts override also covers `repo-adapter`.
+- **§7.1, §7.4, §11:** the `CORE_AGE_DAYS` setting and the second patch (§12).
 - **§10:** with the adapter, the repository needs `.hpi`/`.jpi`/`.war` files in Maven layout under the
   group named in each manifest. A real `.pom` is needed only for archives without an embedded one, and
   `.jar` files are optional.
@@ -321,15 +322,54 @@ After each listing, the adapter writes `/data/repo-adapter/report.json` atomical
 
 ## 11. Known limitations
 
-- **Timestamps are upload times** in operator repositories, for both types (§2). Plugin release dates
-  show as upload dates, and a core gets tiers until 400 days after it was **uploaded**, not released.
-  This is the same with or without the adapter.
+- **Timestamps are upload times** in operator repositories, for both types (§2), with or without the
+  adapter. Plugin release dates show as upload dates. Tiers no longer depend on them at the air-gapped
+  default `CORE_AGE_DAYS=0` (§12). A later change could take release dates from each archive's
+  `META-INF/MANIFEST.MF` entry time. In a sample of 31 archives on 2026-09-22, 30 were within 8 hours
+  of the real release: zip times carry no time zone, and reproducible builds stamp the commit time.
+  The exception was stamped 1980-02-01 by a reproducible build.
 - **Parent POMs are not derivable.** Plugins that inherit `<scm>` from a parent POM the repository
   lacks miss their SCM link, as in the main spec.
 - **Gradle-built plugins** still need their real `.pom` procured.
 - **Artifact Keeper** downloads each archive once, because it has no Range support.
 
-## 12. Out of scope
+## 12. Configurable core age (independent of the adapter)
+
+**Upstream's rule** (`json/TieredUpdateSitesGenerator.java:96-146`). The candidates are the core
+versions that plugins declare as their minimum (`Jenkins-Version`) and whose WAR is in the repository.
+They are walked newest first, separately for LTS and weekly lines. Every core inside the
+`CORE_AGE_DAYS = 400` window (`:154`) gets a tier, then one older core as the floor, then the walk
+stops.
+
+- **The setting.** `CORE_AGE_DAYS` is an integer ≥ 0, where `0` means no age limit: every declared core
+  whose WAR is in the repository gets a tier.
+  - **Online default `400`,** upstream's value. With `0`, the public repository's full history would
+    produce a tier for every baseline ever declared.
+  - **Air-gapped default `0`.** The operator chose which WARs to store, their timestamps are upload
+    times anyway, and the number of tiers cannot exceed the number of WARs stored.
+- **A second upstream patch,** `uc/patches/0002-core-age-configurable.patch`, in
+  `json/TieredUpdateSitesGenerator.java`, adding the import of
+  `io.jenkins.update_center.util.Environment`:
+
+  ```java
+  -    private static final int CORE_AGE_DAYS = 400;
+  +    private static final int CORE_AGE_DAYS = Environment.getInteger("CORE_AGE_DAYS", 400);
+  ```
+
+  `isReleaseRecentEnough` returns `true` when `CORE_AGE_DAYS == 0`. The Dockerfile already applies every
+  `uc/patches/*.patch`. It is submitted upstream as a PR, like the popularity patch, and main spec §7.4
+  applies once a release contains both.
+- **Passing it on.** `uc` validates the setting (a negative or non-integer value is a configuration
+  error) and passes it in the jar's environment. The image's version label becomes `<version>+patches`,
+  and `make upstream-diff` also watches `TieredUpdateSitesGenerator.java`.
+- **Testing.**
+  - The unit tests cover validation and the per-mode defaults.
+  - `make it-airgapped` seeds two cores that plugins declare as their minimum, each with its WAR's
+    timestamp set to its real release date, more than 400 days ago. It asserts that the default `0`
+    gives both a tier, and that the tier step run with `CORE_AGE_DAYS=400` keeps only the newest of
+    the two, as the floor.
+
+## 13. Out of scope
 
 - Writing, moving or fixing files in the operator's repositories.
 - A helper that lays downloaded `.hpi` files out in Maven layout.
