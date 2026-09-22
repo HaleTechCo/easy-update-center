@@ -144,6 +144,19 @@ def test_overlay_warning_without_id(tmp_path):
         merge_overlay(upstream, overlay, tmp_path / "merged")
 
 
+def test_overlay_warning_with_duplicate_id(tmp_path):
+    upstream = tmp_path / "up"
+    upstream.mkdir()
+    (upstream / "warnings.json").write_text("[]")
+    overlay = tmp_path / "overlay"
+    overlay.mkdir()
+    (overlay / "warnings.json").write_text(json.dumps([
+        {"id": "SECURITY-1234", "message": "one"}, {"id": "SECURITY-1234", "message": "two"},
+    ]))
+    with pytest.raises(ResourcesError, match=r"duplicate warning id\(s\) in the overlay: SECURITY-1234"):
+        merge_overlay(upstream, overlay, tmp_path / "merged")
+
+
 def test_missing_overlay_dir_is_fine(tmp_path):
     upstream = tmp_path / "up"
     upstream.mkdir()

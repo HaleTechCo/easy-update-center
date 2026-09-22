@@ -122,9 +122,13 @@ def fetch_upstream(
 def _merge_warnings(base: object, extra: object) -> list:
     if not isinstance(base, list) or not isinstance(extra, list):
         raise ResourcesError("warnings.json must be a JSON array")
-    by_id = {w["id"]: w for w in extra if isinstance(w, dict) and "id" in w}
-    if len(by_id) != len(extra):
+    if any(not isinstance(w, dict) or "id" not in w for w in extra):
         raise ResourcesError("every overlay warning needs an 'id'")
+    ids = [w["id"] for w in extra]
+    duplicates = sorted({i for i in ids if ids.count(i) > 1})
+    if duplicates:
+        raise ResourcesError(f"duplicate warning id(s) in the overlay: {', '.join(duplicates)}")
+    by_id = {w["id"]: w for w in extra}
     merged = [by_id.pop(w.get("id"), w) if isinstance(w, dict) else w for w in base]
     merged.extend(by_id.values())
     return merged
