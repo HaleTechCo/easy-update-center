@@ -365,7 +365,8 @@ dropped and the Dockerfile downloads the released `-bin.zip` instead (pinned by 
    `DOWNLOAD_ACCESS=proxy`: reverse-proxy to the same URL with
    `RequestHeader set Authorization` from a read-only download secret. Streamed, not cached, and
    with a timeout. `SSLProxyEngine` is enabled for https backends. The `web` service gets this one
-   secret only in proxy mode.
+   secret only in proxy mode. The proxy verifies the backend's certificate against
+   `DOWNLOAD_PROXY_CA_FILE`, which must be overridden and mounted when the backend uses a private CA.
 4. Index pages under `/download/plugins/<id>/` and `/download/war/` are static files in the release.
 
 ### 8.3 Headers
@@ -441,7 +442,7 @@ Compose file-based secrets, mounted under `/run/secrets/`:
 | `root-ca.crt` | `uc` generate (not secret, but distributed alongside) |
 | `artifactory_username`, `artifactory_password` | `uc` generate and doctor |
 | `github_username`, `github_token` | `uc` generate (optional) |
-| `download_proxy_auth` | `web`, only when `DOWNLOAD_ACCESS=proxy` |
+| `download_proxy_auth` | `web` (mounted always; read only when `DOWNLOAD_ACCESS=proxy`) |
 
 `uc` reads them using the `*_FILE` convention and passes them only to the jar's process
 environment, never through Compose `environment:`.
@@ -511,6 +512,7 @@ It exits non-zero when anything will be dropped. `uc generate` includes a summar
 | `POPULARITY_JSON_URL`, `TOOL_INSTALLERS_URL` | §7.1 | |
 | `ARTIFACTORY_URL`, `ARTIFACTORY_API_URL`, `ARTIFACTORY_REPOSITORY` | §7.1 | passed to the jar |
 | `DOWNLOAD_BACKEND`, `DOWNLOAD_BACKEND_URL`, `DOWNLOAD_ACCESS` | §7.1 | |
+| `DOWNLOAD_PROXY_CA_FILE`, `DOWNLOAD_PROXY_AUTH_FILE` | system CA bundle, `/run/secrets/download_proxy_auth` | `web`, only with `DOWNLOAD_ACCESS=proxy` |
 | `RETAIN_RELEASES` | `5` | |
 | `MIN_PLUGINS`, `MIN_PLUGIN_RATIO` | `1`, `0.9` | |
 | `CERTIFICATE_MINIMUM_VALID_DAYS` | `30` | also read by the jar |
