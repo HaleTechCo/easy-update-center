@@ -180,7 +180,7 @@ available for a proxy in front.
 
 | Symptom | Cause and fix |
 |---|---|
-| `ARTIFACTORY_USERNAME and ARTIFACTORY_PASSWORD need to be set` / AQL HTTP 403 | Credentials missing or not allowed to run AQL (spec S1). |
+| `Artifactory credentials missing: provide /run/secrets/artifactory_username and /run/secrets/artifactory_password` (preflight), or AQL HTTP 403 / `ARTIFACTORY_USERNAME and ARTIFACTORY_PASSWORD need to be set` from the generator | Credentials missing or not allowed to run AQL (spec S1). |
 | `PUBLIC_URL must be a bare origin` | Remove the path; give the update center its own hostname. |
 | `signing certificate expires in N days` | Rotate the signing certificate (section 3). |
 | `plugin count N < 0.9 × M` | The source shrank. Check `uc doctor`; if intended, `uc generate --force`. |
