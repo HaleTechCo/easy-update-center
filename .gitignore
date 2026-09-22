@@ -1,1 +1,10 @@
+# local configuration and secrets
 .env
+data/
+secrets/*
+!secrets/README.md
+# integration-test scratch
+tests/integration/.versions.env
+tests/integration/.results/
+# agent scratch
+.superpowers/
