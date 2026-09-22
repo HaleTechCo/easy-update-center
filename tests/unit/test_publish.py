@@ -15,6 +15,7 @@ from uc.publish import (
     new_release_id,
     prune,
     publish,
+    reclaim_orphans,
     releases_dir,
     rollback,
     swap_live,
@@ -79,6 +80,28 @@ def test_mark_failed_keeps_only_the_latest_failure(tmp_path):
     create_staging(tmp_path, R2)
     mark_failed(tmp_path, R2)
     assert sorted(p.name for p in releases_dir(tmp_path).glob(".failed-*")) == [f".failed-{R2}"]
+
+
+def test_reclaim_orphans_removes_stale_staging_and_work(tmp_path):
+    create_staging(tmp_path, R1)  # belongs to the current run
+    create_staging(tmp_path, R2)  # left by a killed run
+    (tmp_path / "work" / R1).mkdir(parents=True)
+    (tmp_path / "work" / R2).mkdir(parents=True)
+    (releases_dir(tmp_path) / f".failed-{R3}").mkdir(parents=True)
+    make_release(tmp_path, R4)
+
+    assert reclaim_orphans(tmp_path, R1) == [f"releases/{R2}.staging", f"work/{R2}"]
+
+    assert (releases_dir(tmp_path) / f"{R1}.staging").is_dir()
+    assert (tmp_path / "work" / R1).is_dir()
+    assert not (releases_dir(tmp_path) / f"{R2}.staging").exists()
+    assert not (tmp_path / "work" / R2).exists()
+    assert (releases_dir(tmp_path) / f".failed-{R3}").is_dir()
+    assert (releases_dir(tmp_path) / R4).is_dir()
+
+
+def test_reclaim_orphans_tolerates_missing_directories(tmp_path):
+    assert reclaim_orphans(tmp_path, R1) == []
 
 
 def test_rollback(tmp_path):

@@ -114,6 +114,34 @@ def prune(data_dir: Path, retain: int) -> list[str]:
     return removed
 
 
+def reclaim_orphans(data_dir: Path, current_id: str) -> list[str]:
+    """Remove staging and work trees left by a run that was killed (spec §6 step 10).
+
+    Called under the RunLock, so anything here belongs to a run that is no longer alive.
+    `.failed-*` is deliberately kept: mark_failed preserves the last failure for debugging.
+    """
+    removed: list[str] = []
+    root = releases_dir(data_dir)
+    if root.is_dir():
+        for path in root.glob("*.staging"):
+            if path.name != f"{current_id}.staging":
+                if path.is_dir() and not path.is_symlink():
+                    shutil.rmtree(path, ignore_errors=True)
+                else:
+                    path.unlink(missing_ok=True)
+                removed.append(f"releases/{path.name}")
+    work_root = data_dir / "work"
+    if work_root.is_dir():
+        for path in work_root.iterdir():
+            if path.name != current_id:
+                if path.is_dir() and not path.is_symlink():
+                    shutil.rmtree(path, ignore_errors=True)
+                else:
+                    path.unlink(missing_ok=True)
+                removed.append(f"work/{path.name}")
+    return sorted(removed)
+
+
 def mark_failed(data_dir: Path, release_id: str) -> None:
     """Keep the failed staging directory for debugging, replacing any older failure."""
     root = releases_dir(data_dir)
