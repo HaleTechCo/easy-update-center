@@ -326,8 +326,10 @@ resolver entirely, so every unlisted host, including Artifactory, would fail to 
 - An empty URL, or any `IOException`/`RuntimeException` while fetching, logs a warning and uses an
   empty map (popularity 0), matching how `HealthScores` behaves.
 
-This is submitted upstream as a PR. When a release contains it, the patch and the source build are
-dropped and the Dockerfile downloads the released `-bin.zip` instead (pinned by SHA-256).
+This is submitted upstream as a PR. When a release contains it, the patch and the `git apply` step
+are dropped and the jar can come from the released `-bin.zip` (pinned by SHA-256) instead of a
+source build. The pinned clone stays either way: the `-bin` assembly contains only jars, while
+`site/generate-htaccess.sh` and `resources/` exist only in the git tree.
 
 ## 8. Web tier
 
