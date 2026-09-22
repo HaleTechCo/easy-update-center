@@ -80,10 +80,11 @@ def _dispatch(args: argparse.Namespace) -> int:
     if args.command == "rollback":
         from .validate import count_plugins
 
-        target = publish.rollback(settings.data_dir, args.release)
-        live = publish.live_path(settings.data_dir)
-        status.update_status(settings.data_dir, live_release=target,
-                             plugin_count=count_plugins(live / "current") if live else None)
+        with publish.RunLock(settings.data_dir):
+            target = publish.rollback(settings.data_dir, args.release)
+            live = publish.live_path(settings.data_dir)
+            status.update_status(settings.data_dir, live_release=target,
+                                 plugin_count=count_plugins(live / "current") if live else None)
         print(f"live release is now {target}")
         return 0
     if args.command == "status":

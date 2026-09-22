@@ -51,6 +51,17 @@ def test_generate_reports_a_held_lock(monkeypatch, tmp_path, secrets_dir):
         assert main(["generate"]) == EXIT_LOCKED
 
 
+def test_rollback_reports_a_held_lock(monkeypatch, tmp_path, secrets_dir):
+    data = use_env(monkeypatch, tmp_path, secrets_dir)
+    for rid in ("20260922T010000Z", "20260922T020000Z"):
+        write_site(data / "releases" / rid / "current", uc_document("https://uc.example.com"))
+    os.symlink("releases/20260922T020000Z", data / "live")
+    with RunLock(data):
+        assert main(["rollback"]) == EXIT_LOCKED
+    assert read_status(data).get("live_release") != "20260922T010000Z"
+    assert os.readlink(data / "live") == "releases/20260922T020000Z"
+
+
 def test_pki_init_and_show(tmp_path, capsys):
     out = tmp_path / "pki"
     assert main(["pki", "init", "--out", str(out), "--root-days", "30", "--signing-days", "10"]) == 0
