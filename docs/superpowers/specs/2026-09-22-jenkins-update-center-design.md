@@ -71,8 +71,8 @@ Everything below was checked against `update-center2` at `update-center2-3.18.4`
   | Issue trackers, maintainers (`reports.jenkins.io`) | yes | warning |
   | Health scores (`reports.jenkins.io`) | no | warning |
 
-  None of these HTTP clients set timeouts, so an unreachable host that silently drops packets can
-  hang the run.
+  None of these HTTP clients set timeouts, so a host that silently drops packets stalls each
+  source for the OS TCP connect timeout (about two minutes on Linux defaults).
 - **Security warnings and plugin suspensions are data in the git repo, not the jar**
   (`resources/warnings.json`, `resources/artifact-ignores.properties`). Upstream commits to them
   for every advisory, most recently on 2026-09-16, after the 3.18.4 tag.
@@ -159,7 +159,7 @@ These specifics are not:
 | `uc doctor` | Report what the generator will and won't see in the source repository (§10). |
 | `uc rollback [id]` | Point `live` at the previous release, or at `id`. |
 | `uc status` | Print `status.json`. |
-| `uc schedule` | Run `supercronic` with `GENERATE_SCHEDULE` → `uc generate`. |
+| `uc schedule` | Run `uc generate` once immediately if no release is live, then run `supercronic` with `GENERATE_SCHEDULE` → `uc generate`. |
 | `uc pki init \| rotate \| show` | Signing PKI (§9). |
 
 The CLI is Python 3, standard library only. All logic that isn't glue is unit-tested (§13).
@@ -204,7 +204,8 @@ failed run leaves the current site untouched. The last failed staging directory 
      GitHub-sourced labels will be missing)
    - `POPULARITY_JSON_URL` (§7.4)
    - `-Dfile.encoding=UTF-8`, `CERTIFICATE_MINIMUM_VALID_DAYS`, `JAVA_TOOL_OPTIONS` passed through
-   - in air-gapped mode, `-Djdk.net.hosts.file` (§7.3)
+   - `UC_EXTRA_ARGS`, appended to every argument line and the tier run (like upstream's
+     `EXTRA_ARGS`); used by tests, e.g. `--max-plugins 20`
 4. **Tiers.** `java -jar … --dynamic-tier-list-file <staging>/tiers.json`. Empty weekly and/or
    stable lists are legal.
 5. **`.htaccess`.**
@@ -241,12 +242,14 @@ failed run leaves the current site untouched. The last failed staging directory 
      `release-history.json`, `plugin-versions.json`, `update-center.json`,
      `update-center.actual.json`
    - `uctest.json` (`{}`), `tiers.json`, and our neutral `index.html`
-   - `updates/`: if `TOOL_INSTALLERS_URL` is set, download every `*.json` it lists, unmodified
-     (they keep the Jenkins project's signatures); on failure, copy from the previous release with
-     a warning
-   - **Download map** (only when `DOWNLOAD_BACKEND=artifactory`): run the generator's AQL query
-     with the same credentials, keep only `.hpi`/`.jpi`/`.war` entries that have a `.pom`, and
-     write `<staging>/.htdownload-map` in Apache `RewriteMap txt` format:
+   - `updates/`: if `TOOL_INSTALLERS_URL` is set, download every `*.json` and `*.json.html` its
+     index lists, following redirects (upstream answers with 307 to `mirrors.updates.jenkins.io`),
+     unmodified (they keep the Jenkins project's signatures). Each `.json` must start with
+     `downloadService.post(`. On failure, copy from the previous release with a warning.
+   - **Download map**, always written because Apache refuses to start without the map file (it
+     is empty unless `DOWNLOAD_BACKEND=artifactory`). For `artifactory`: run the generator's AQL
+     query with the same credentials, keep only `.hpi`/`.jpi`/`.war` entries that have a `.pom`,
+     and write `<staging>/.htdownload-map` in Apache `RewriteMap txt` format:
      `plugins/<artifactId>/<version> <maven path>` and `war/<version> <maven path>`. When one
      artifactId/version exists under several groupIds, prefer the groupId in
      `current/update-center.actual.json` (`plugins.<id>.gav`) and log a warning.
@@ -285,7 +288,7 @@ requests) and caches them. Later runs fetch only what's new (spike S6 measures t
 | `RESOURCES_SOURCE` | `github` | `bundled` (set `url` for procured copies) |
 | `POPULARITY_JSON_URL` | upstream's URL | empty (skip) |
 | `TOOL_INSTALLERS_URL` | `https://updates.jenkins.io/updates/` | empty (skip) |
-| Blocked hosts (§7.3) | none | `api.github.com`, `raw.githubusercontent.com`, `reports.jenkins.io`, `github.com`, `codeload.github.com`, `updates.jenkins.io` |
+| Blocked hosts (§7.3, set in `compose.airgapped.yaml`) | none | `api.github.com`, `raw.githubusercontent.com`, `reports.jenkins.io`, `github.com`, `codeload.github.com`, `updates.jenkins.io` |
 
 ### 7.2 Online mode
 
@@ -306,9 +309,12 @@ private online Artifactory works by overriding the `ARTIFACTORY_*` settings and 
 | `updates/` tool installers | dropped unless `TOOL_INSTALLERS_URL` points at a procured copy; their download links still point at the internet |
 | Links to plugins.jenkins.io and the wiki | present in the JSON, dead in the air gap (cosmetic) |
 
-**Fast-fail for blocked hosts.** `uc` writes a hosts file mapping every blocked host to `127.0.0.1`
-and passes `-Djdk.net.hosts.file=<file>` to the jar. Connections fail immediately instead of
-hanging on a firewall that drops packets, and each source's own error handling produces a warning.
+**Fast-fail for blocked hosts.** `compose.airgapped.yaml` adds `extra_hosts` entries mapping every
+blocked host to `127.0.0.1` for the `uc` and `scheduler` services. Connections are refused
+immediately instead of stalling on a firewall that drops packets, and each source's own error
+handling produces a warning. The container's normal resolver still handles every other name,
+including the internal Artifactory. (`-Djdk.net.hosts.file` was rejected: it replaces the JVM's
+resolver entirely, so every unlisted host, including Artifactory, would fail to resolve.)
 
 ### 7.4 The one upstream patch
 
@@ -338,6 +344,10 @@ dropped and the Dockerfile downloads the released `-bin.zip` instead (pinned by 
 - `<Files ".ht*">` denied. `ServerTokens Prod`. `TraceEnable off`.
 - The entrypoint turns `DOWNLOAD_BACKEND`, `DOWNLOAD_ACCESS` and `TLS_*` into `-D` defines, so one
   config file covers every combination.
+- Apache refuses to start while `DocumentRoot` or the `RewriteMap` file is missing, so the
+  entrypoint waits until `/data/live/.htdownload-map` exists (the first published release) before
+  starting `httpd`. The image must not contain `/data/live`: Docker would copy that directory into
+  the empty volume, and the later rename of a symlink over it would fail.
 
 ### 8.2 Download handling (server level, before the site's `.htaccess`)
 
@@ -464,6 +474,13 @@ What the source Artifactory repository must contain:
 3. **Core:** `org/jenkins-ci/main/jenkins-war/<v>/jenkins-war-<v>.war` and `.pom` for each core
    version to offer. Without them the site offers no core and has no tiers.
 4. A **service account** that can run AQL against the repository (spike S1).
+   The generator sends the AQL query with credentials up front, but it answers file-download
+   challenges only when the port in `ARTIFACTORY_URL` equals the connection's port
+   (`ArtifactoryRepositoryImpl.java`, `AuthenticatorImpl`). `URI.getPort()` is -1 for a URL
+   without an explicit port, so `https://artifactory.corp/…` would never send credentials for
+   manifests and POMs. `uc` therefore always passes `ARTIFACTORY_URL` to the jar with an explicit
+   port (`:443` / `:80` added when missing). Redirects to `DOWNLOAD_BACKEND_URL` still use the URL
+   as configured.
 5. Parent POMs are optional. Without them, SCM links for some plugins may be missing (a warning
    from the generator).
 
@@ -509,6 +526,7 @@ Replaces the current `generator/`, `httpd/`, `docker-compose.yml`, `README.md` a
 ```
 Makefile                 build · test · it-online · it-airgapped · it-full · upstream-diff
 compose.yaml             web + scheduler; uc under profile "tools" for one-shot commands
+compose.airgapped.yaml   override: extra_hosts fast-fail entries for uc and scheduler
 .env.online.example
 .env.airgapped.example
 uc/
@@ -527,7 +545,7 @@ config/
 tests/
   unit/                  pytest
   routing/               fixture tree + generated .htaccess against the web image
-  integration/           compose files, Artifactory OSS seed, Jenkins controllers
+  integration/           compose files, fake Artifactory, seed script, Jenkins controllers
 docs/
   01–05 (ChatGPT, unchanged) · operations.md · superpowers/specs/
 secrets/README.md        everything else in secrets/ is gitignored
@@ -563,13 +581,20 @@ All tests run in containers through `make`, so no local Python or Java is needed
   from `repo.jenkins-ci.org`, restricted with `--max-plugins`, then check redirects to
   get.jenkins.io, signatures and tier selection.
 - **Integration, air-gapped (`make it-airgapped`):** run on a Docker `internal: true` network.
-  Artifactory OSS is seeded with about five plugins plus their dependencies (`.hpi` + real `.pom`)
-  and three core WARs with POMs, plus one plugin missing its POM and one with a stub POM.
+  A test-only fake Artifactory (`tests/integration/fake_artifactory.py`) serves the three calls
+  the generator makes (AQL listing, file download, archive entry) over a Maven-layout directory.
+  The real protocol is covered by `it-online` against `repo.jenkins-ci.org` and by the operator
+  checks against the internal instance (S1, S2). The seed step, run before the network is cut,
+  resolves a small plugin set plus dependencies with `jenkins-plugin-cli`, adds each plugin's real
+  `.pom` from `repo.jenkins-ci.org` and three core WARs with POMs, plus one plugin missing its POM
+  and one with a stub POM.
   - `uc doctor` reports exactly the seeded defects.
   - `uc generate` publishes, with the expected drop warnings.
   - Jenkins controllers (current LTS, an older LTS, a weekly), configured through `init.groovy.d`
-    with our root CA, each get the correct tier, accept the signature and install a plugin, in
-    both redirect and proxy modes. `jenkins-plugin-cli` installs the same plugin.
+    with our root CA, accept the signature and install a plugin, in both redirect and proxy
+    modes. Tier correctness is checked as a property: every plugin in the site a controller is
+    routed to has `requiredCore` ≤ that controller's version. `jenkins-plugin-cli` installs the
+    same plugin.
   - `uc rollback` restores the previous release.
 - **Full catalog (`make it-full`, run by hand):** a complete online generation that records
   duration, heap use, cache size and site size.
@@ -587,18 +612,21 @@ resource data (warnings) is already refreshed on every run in online mode.
 
 ## 15. Spikes and risks
 
-The implementation plan starts with these spikes. Each ends in a written result that either
-confirms or amends this spec.
+Each spike ends in a written result that either confirms or amends this spec. The spikes that need
+real credentials (S1, S2, S6, S7) use `uc doctor` and `uc generate` themselves, so they run as an
+operator checkpoint once those commands exist.
 
 | # | Question | If the answer is no |
 |---|---|---|
 | S1 | Can a community account (online) and a non-admin service account (internal) run the generator's AQL query? | Online mode requires a private Artifactory mirror; document the required permissions. |
 | S2 | Does AQL work on virtual repositories? | Require a single local repository (already the documented contract). |
-| S3 | Does Artifactory OSS support AQL well enough for integration tests? | Use a trial or Pro licence for tests, or a test-only AQL fixture server. |
-| S4 | Does the popularity patch, together with `jdk.net.hosts.file`, produce a clean air-gapped run with only warnings? | Extend the patch or the blocked-host list. |
-| S5 | Does Apache pick up a symlinked `DocumentRoot` swap and a `RewriteMap` behind that symlink without a restart? | Use a graceful reload (`apachectl -k graceful`) triggered through a shared signal file. |
+| S3 | ~~Artifactory OSS for tests~~ Replaced by the test-only fake Artifactory (§13). | — |
+| S4 | Do the popularity patch and `extra_hosts` fast-fail produce a clean air-gapped run with only warnings? (Covered by `it-airgapped`.) | Extend the patch or the blocked-host list. |
+| S5 | ~~Apache symlink swap~~ **Resolved during planning (2026-09-22):** a `live` swap and the `RewriteMap` behind it are picked up with no restart. Kept as a routing test. | — |
 | S6 | Full-catalog first-run duration, heap and cache size. | Tune `JAVA_TOOL_OPTIONS` defaults; document sizing. |
 | S7 | Does GitHub GraphQL accept username plus token over basic auth (upstream's method)? | Document the token type needed. |
+
+Also verified during planning: the patched 3.18.4 build passes all 45 upstream tests.
 
 Risks:
 - `resources/` on master may start using a format the pinned jar doesn't understand. Validation
