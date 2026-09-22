@@ -116,6 +116,27 @@ curl -sI "$PUBLIC_URL/update-center.json?version=2.528.1"   # expect a redirect 
 With `DOWNLOAD_ACCESS=redirect`, controllers download plugins from `DOWNLOAD_BACKEND_URL` directly
 and must be able to read it without credentials; otherwise use `DOWNLOAD_ACCESS=proxy`.
 
+### DOWNLOAD_ACCESS=proxy against an HTTPS backend
+
+The web container verifies the backend certificate (`SSLProxyVerify require`) against
+`DOWNLOAD_PROXY_CA_FILE`, default `/etc/ssl/certs/ca-certificates.crt`. A backend using a private or
+corporate CA needs that bundle mounted and the variable pointed at it, or every `/download/**` returns
+502:
+
+```yaml
+# compose.proxy-ca.yaml
+services:
+  web:
+    volumes:
+      - ./secrets/proxy-ca.crt:/etc/ssl/uc-proxy-ca.crt:ro
+    environment:
+      DOWNLOAD_PROXY_CA_FILE: /etc/ssl/uc-proxy-ca.crt
+```
+
+Then `docker compose -f compose.yaml -f compose.proxy-ca.yaml up -d`. `DOWNLOAD_PROXY_AUTH_FILE`
+similarly overrides where the `username:password` is read from (default
+`/run/secrets/download_proxy_auth`).
+
 ## 8. Everyday operations
 
 | Task | Command |
@@ -127,9 +148,9 @@ and must be able to read it without credentials; otherwise use `DOWNLOAD_ACCESS=
 | Logs | `docker compose logs -f scheduler web` |
 
 The last `RETAIN_RELEASES` (5) releases are kept under `/data/releases/`. The last failed attempt is
-kept as `/data/releases/.failed-<id>`, and its error is in `status.json` under `last_run.error`. The
-generator's full output goes to the container log: `docker compose logs scheduler` for scheduled runs,
-or the terminal for `docker compose run --rm uc generate`.
+kept as `/data/releases/.failed-<id>`. `status.json` names only the failure's class under
+`last_run.error`; the full message goes to the container log: `docker compose logs scheduler` for
+scheduled runs, or the terminal for `docker compose run --rm uc generate`.
 
 ## 9. Air-gapped specifics
 
@@ -186,5 +207,6 @@ available for a proxy in front.
 | `plugin count N < 0.9 × M` | The source shrank. Check `uc doctor`; if intended, `uc generate --force`. |
 | `upstream generate-htaccess.sh changed` | An upgrade changed upstream's routing script; follow docs/upgrading.md. |
 | Jenkins: "signature verification failed" | `root-ca.crt` missing from `update-center-rootCAs/`, or controller clock skew. |
-| Plugin downloads fail with 404 | The version is not in the download map; check `uc doctor` and the Artifactory contents. |
+| Plugin downloads fail with 404 | The version is not in the download map; check `uc doctor` and the Artifactory contents. Also check `status.json`'s `download_backend` against the current `DOWNLOAD_BACKEND`: if it changed since the live release was generated, the release's download map matches the old backend and every lookup misses — run `docker compose run --rm uc generate`. |
+| `/download/…` returns 502 with `DOWNLOAD_ACCESS=proxy` | The backend's TLS certificate does not verify against `DOWNLOAD_PROXY_CA_FILE` (section 7). |
 | web container keeps logging "waiting for the first published release" | No release is live yet; check `docker compose logs scheduler`. |

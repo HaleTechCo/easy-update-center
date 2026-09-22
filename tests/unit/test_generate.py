@@ -6,14 +6,14 @@ from fakejar import FakeJar, SimpleVersions
 from sitefixture import DEFAULT_PLUGINS
 from ucsupport import make_settings
 
-from uc.aql import RepoFile
+from uc.aql import AqlError, RepoFile
 from uc.generate import Toolchain, generate
 from uc.htaccess import absolute_targets
 from uc.jar import JarError
 from uc.model import Tiers
 from uc.pki import cert_der_b64
 from uc.preflight import PreflightError
-from uc.publish import LockBusy, RunLock, list_releases, live_release
+from uc.publish import LockBusy, RunLock, create_staging, list_releases, live_release
 from uc.status import read_status
 from uc.validate import ValidationError
 
@@ -96,7 +96,7 @@ def test_failed_validation_keeps_the_live_release(tmp_path, secrets_dir):
     status = read_status(data)
     assert status["live_release"] == first
     assert status["last_run"]["result"] == "failed"
-    assert "download URLs outside" in status["last_run"]["error"]
+    assert status["last_run"]["error"] == "ValidationError: see the generator log"
     assert (data / "releases" / ".failed-20260922T090000Z").is_dir()
 
 
@@ -161,3 +161,57 @@ def test_old_releases_are_pruned(tmp_path, secrets_dir):
     for hour in range(4):
         generate(settings, tools=tools_for(settings), now=T1 + dt.timedelta(hours=hour), base_env={})
     assert list_releases(settings.data_dir) == ["20260922T050000Z", "20260922T060000Z"]
+
+
+def test_generate_reclaims_orphaned_staging_and_work(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir)
+    data = settings.data_dir
+    stale = "20260922T020000Z"
+    create_staging(data, stale)
+    (data / "work" / stale).mkdir(parents=True)
+
+    rid = generate(settings, tools=tools_for(settings), now=T1, base_env={})
+
+    assert not (data / "releases" / f"{stale}.staging").exists()
+    assert not (data / "work" / stale).exists()
+    status = read_status(data)
+    warning = next(w for w in status["warnings"] if "leftover director" in w)
+    assert f"releases/{stale}.staging" in warning
+    assert f"work/{stale}" in warning
+    assert live_release(data) == rid
+
+
+def test_status_error_omits_raw_exception_text(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir)
+    secret = "AQL query to https://artifactory.corp.internal/artifactory/api/ failed with HTTP 401: topsecret-body"
+
+    def boom(*args):
+        raise AqlError(secret)
+
+    tools = tools_for(settings)
+    tools.aql_query = boom
+
+    with pytest.raises(AqlError):
+        generate(settings, tools=tools, now=T1, base_env={})
+
+    error = read_status(settings.data_dir)["last_run"]["error"]
+    assert "topsecret-body" not in error
+    assert "artifactory.corp.internal" not in error
+    assert error == "AqlError: see the generator log"
+
+
+def test_post_publish_failure_still_reports_the_new_live_release(tmp_path, secrets_dir, monkeypatch):
+    settings = make_settings(tmp_path, secrets_dir)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("prune blew up")
+
+    monkeypatch.setattr("uc.generate.publish.prune", boom)
+    with pytest.raises(RuntimeError):
+        generate(settings, tools=tools_for(settings), now=T1, base_env={})
+
+    data = settings.data_dir
+    assert live_release(data) == "20260922T030000Z"
+    status = read_status(data)
+    assert status["live_release"] == "20260922T030000Z"
+    assert status["last_run"]["result"] == "failed"

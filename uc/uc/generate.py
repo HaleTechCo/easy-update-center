@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
-from . import aql, args, doctor, downloadmap, htaccess, http, jar, layout, pki, preflight, publish, resources, status, validate
+from . import aql, args, doctor, downloadmap, errors, htaccess, http, jar, layout, pki, preflight, publish, resources, status, validate
 from .config import Settings
 from .timeutil import iso, utcnow
 from .versions import VersionTool
@@ -42,6 +42,11 @@ def generate(
     data.mkdir(parents=True, exist_ok=True)
     with publish.RunLock(data):
         warnings: list[str] = []
+        orphans = publish.reclaim_orphans(data, release_id)
+        if orphans:
+            warnings.append(
+                f"removed {len(orphans)} leftover director(ies) from an interrupted run: {', '.join(orphans)}"
+            )
         work = data / "work" / release_id
         shutil.rmtree(work, ignore_errors=True)
         work.mkdir(parents=True)
@@ -52,7 +57,10 @@ def generate(
             status.update_status(
                 data,
                 mode=settings.mode,
-                last_run={"id": release_id, "result": "failed", "error": str(exc), "finished_at": iso(utcnow())},
+                last_run={
+                    "id": release_id, "result": "failed",
+                    "error": errors.public_summary(exc), "finished_at": iso(utcnow()),
+                },
                 warnings=warnings,
             )
             raise
@@ -131,6 +139,7 @@ def _build_and_publish(
             )
 
     publish.publish(data, staging, release_id)
+    status.update_status(data, live_release=release_id)
     resources.save_last_good(prepared, data)
     publish.prune(data, settings.retain_releases)
     finished = utcnow()
