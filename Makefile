@@ -12,13 +12,19 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro"
 
-.PHONY: build build-uc test-unit
+.PHONY: build build-uc build-web test-unit test-web
 
-build: build-uc
+build: build-uc build-web
 
 build-uc:
 	docker build --target runtime -t $(UC_IMAGE) uc
 	docker build --target test -t $(UC_TEST_IMAGE) uc
 
+build-web:
+	docker build -t $(WEB_IMAGE) web
+
 test-unit: build-uc
 	docker run --rm $(SRC_MOUNTS) $(UC_TEST_IMAGE) -q /tests/unit $(ARGS)
+
+test-web: build-web
+	bash tests/web/entrypoint-checks.sh $(WEB_IMAGE)
