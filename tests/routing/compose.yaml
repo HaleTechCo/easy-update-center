@@ -1,0 +1,106 @@
+# Web-tier routing tests (spec §13). Run with `make test-routing`.
+name: uc-routing
+
+x-web: &web
+  image: ${WEB_IMAGE:-jenkins-uc/web:local}
+  read_only: true
+  tmpfs:
+    - /tmp
+  depends_on:
+    fixtures:
+      condition: service_completed_successfully
+  healthcheck:
+    test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+    interval: 2s
+    timeout: 3s
+    retries: 30
+    start_period: 1s
+
+x-uc-test: &uc-test
+  image: ${UC_TEST_IMAGE:-jenkins-uc/uc-test:local}
+  user: "0:0"
+
+services:
+  fixtures:
+    <<: *uc-test
+    entrypoint: ["python3", "/tests/routing/build_fixtures.py", "/fixtures"]
+    volumes:
+      - fixtures:/fixtures
+      - ../../tests:/tests:ro
+      - ../../uc/uc:/opt/uc/python/uc:ro
+      - ../../uc/templates:/opt/uc/templates:ro
+
+  backend:
+    <<: *uc-test
+    entrypoint: ["python3", "/tests/routing/stub_backend.py", "9000"]
+    volumes:
+      - ../../tests:/tests:ro
+
+  web-full:
+    <<: *web
+    environment: {MODE: online, PUBLIC_URL: "http://web-full:8080"}
+    volumes:
+      - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: full}}
+
+  web-artifactory:
+    <<: *web
+    environment:
+      MODE: airgapped
+      PUBLIC_URL: "http://web-artifactory:8080"
+      ARTIFACTORY_URL: "http://artifactory.internal/artifactory/"
+      ARTIFACTORY_REPOSITORY: jenkins
+    volumes:
+      - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: artifactory}}
+
+  web-proxy:
+    <<: *web
+    environment:
+      MODE: airgapped
+      PUBLIC_URL: "http://web-proxy:8080"
+      DOWNLOAD_ACCESS: proxy
+      DOWNLOAD_BACKEND_URL: "http://backend:9000/repo"
+    secrets:
+      - download_proxy_auth
+    volumes:
+      - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: artifactory}}
+
+  web-weekly:
+    <<: *web
+    environment: {MODE: online, PUBLIC_URL: "http://web-weekly:8080"}
+    volumes:
+      - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: weekly}}
+
+  web-stable:
+    <<: *web
+    environment: {MODE: online, PUBLIC_URL: "http://web-stable:8080"}
+    volumes:
+      - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: stable}}
+
+  web-zero:
+    <<: *web
+    environment: {MODE: online, PUBLIC_URL: "http://web-zero:8080"}
+    volumes:
+      - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: zero}}
+
+  tester:
+    <<: *uc-test
+    entrypoint: ["python3", "-m", "pytest", "-p", "no:cacheprovider", "-q", "/tests/routing"]
+    depends_on:
+      backend: {condition: service_started}
+      web-full: {condition: service_healthy}
+      web-artifactory: {condition: service_healthy}
+      web-proxy: {condition: service_healthy}
+      web-weekly: {condition: service_healthy}
+      web-stable: {condition: service_healthy}
+      web-zero: {condition: service_healthy}
+    volumes:
+      - fixtures:/fixtures
+      - ../../tests:/tests:ro
+      - ../../uc/uc:/opt/uc/python/uc:ro
+
+volumes:
+  fixtures:
+
+secrets:
+  download_proxy_auth:
+    file: ./proxy-auth.txt
