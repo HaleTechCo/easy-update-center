@@ -139,8 +139,9 @@ These specifics are not:
   - upstream `site/generate-htaccess.sh` and `resources/`, both from the same tag (`resources/` is
     the fallback copy)
   - the `uc` CLI
-  - `VersionTool.java`, a single-file Java helper run against the jar's classpath so version
-    comparisons use `hudson.util.VersionNumber`
+  - `VersionTool.java`, a small Java helper compiled at image build time against the generator's
+    jars (the JRE base image cannot run single-file source programs), so version comparisons use
+    `hudson.util.VersionNumber`
 
   Runs as uid 10001 with a read-only root filesystem; only `/data` and `/tmp` are writable.
 - **`web` image:** `httpd:2.4` with our config (§8). Mounts `/data` read-only and never sees the
