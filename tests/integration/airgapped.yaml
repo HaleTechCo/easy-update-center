@@ -1,0 +1,184 @@
+# Air-gapped integration test (spec §13). Run with `make it-airgapped`.
+name: uc-it-airgapped
+
+networks:
+  airgap:
+    internal: true
+  internet: {}
+
+x-uc-test: &uc-test
+  image: ${UC_TEST_IMAGE:-jenkins-uc/uc-test:local}
+  user: "0:0"
+
+x-jenkins: &jenkins
+  networks: [airgap]
+  environment:
+    JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
+  volumes:
+    - trust:/var/jenkins_home/update-center-rootCAs:ro
+    - ./jenkins-init.groovy:/var/jenkins_home/init.groovy.d/uc-test.groovy:ro
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:8080/login"]
+    interval: 5s
+    timeout: 5s
+    retries: 60
+    start_period: 20s
+
+services:
+  # ---- seeding: profile "seed", internet access ----
+  seed-versions:
+    <<: *uc-test
+    profiles: ["seed"]
+    networks: [internet]
+    entrypoint: ["python3", "/tests/integration/seed.py", "versions"]
+    volumes:
+      - ../../tests:/tests:ro
+      - ../../uc/uc:/opt/uc/python/uc:ro
+
+  seed-plugins:
+    image: jenkins/jenkins:${LTS_OLD:-lts}
+    profiles: ["seed"]
+    user: "0:0"
+    networks: [internet]
+    entrypoint: ["jenkins-plugin-cli", "--plugins", "${SEED_PLUGINS:-timestamper}", "--plugin-download-directory", "/seed/downloads"]
+    volumes:
+      - seed:/seed
+
+  seed-repo:
+    <<: *uc-test
+    profiles: ["seed"]
+    networks: [internet]
+    entrypoint: ["python3", "/tests/integration/seed.py", "repo", "--downloads", "/seed/downloads",
+                 "--out", "/seed/repo", "--repository", "jenkins",
+                 "--cores", "${LTS_OLD:-x},${LTS_NEW:-x},${WEEKLY:-x}", "--jenkins-version", "${LTS_OLD:-x}"]
+    volumes:
+      - seed:/seed
+      - ../../tests:/tests:ro
+      - ../../uc/uc:/opt/uc/python/uc:ro
+
+  pki:
+    image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    profiles: ["seed"]
+    user: "0:0"
+    network_mode: none
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        uc pki init --out /pki && cp /pki/root-ca.crt /trust/ &&
+        printf uc > /pki/artifactory_username && printf uc-secret > /pki/artifactory_password &&
+        printf uc:uc-secret > /pki/download_proxy_auth && chmod -R a+rX /pki /trust
+    volumes:
+      - pki:/pki
+      - trust:/trust
+
+  # ---- the air-gapped side: no route to the internet ----
+  artifactory:
+    <<: *uc-test
+    networks: [airgap]
+    entrypoint: ["python3", "/tests/integration/fake_artifactory.py", "--root", "/seed/repo", "--port", "8081",
+                 "--credentials", "uc:uc-secret", "--anonymous-read"]
+    volumes:
+      - seed:/seed:ro
+      - ../../tests:/tests:ro
+
+  artifactory-private:
+    <<: *uc-test
+    networks: [airgap]
+    entrypoint: ["python3", "/tests/integration/fake_artifactory.py", "--root", "/seed/repo", "--port", "8081",
+                 "--credentials", "uc:uc-secret"]
+    volumes:
+      - seed:/seed:ro
+      - ../../tests:/tests:ro
+
+  web:
+    image: ${WEB_IMAGE:-jenkins-uc/web:local}
+    networks: [airgap]
+    environment:
+      MODE: airgapped
+      PUBLIC_URL: "http://web:8080"
+      ARTIFACTORY_URL: "http://artifactory:8081/artifactory/"
+      ARTIFACTORY_REPOSITORY: jenkins
+    volumes:
+      - uc-data:/data:ro
+
+  web-proxy:
+    image: ${WEB_IMAGE:-jenkins-uc/web:local}
+    networks: [airgap]
+    environment:
+      MODE: airgapped
+      PUBLIC_URL: "http://web-proxy:8080"
+      DOWNLOAD_ACCESS: proxy
+      DOWNLOAD_BACKEND_URL: "http://artifactory-private:8081/artifactory/jenkins"
+      DOWNLOAD_PROXY_AUTH_FILE: /pki/download_proxy_auth
+    volumes:
+      - uc-data-proxy:/data:ro
+      - pki:/pki:ro
+
+  jenkins-lts-old:
+    <<: *jenkins
+    image: jenkins/jenkins:${LTS_OLD:-lts}
+
+  jenkins-lts-new:
+    <<: *jenkins
+    image: jenkins/jenkins:${LTS_NEW:-lts}
+
+  jenkins-weekly:
+    <<: *jenkins
+    image: jenkins/jenkins:${WEEKLY:-latest}
+
+  driver:
+    <<: *uc-test
+    networks: [airgap]
+    extra_hosts:
+      - "api.github.com:127.0.0.1"
+      - "github.com:127.0.0.1"
+      - "codeload.github.com:127.0.0.1"
+      - "raw.githubusercontent.com:127.0.0.1"
+      - "reports.jenkins.io:127.0.0.1"
+      - "updates.jenkins.io:127.0.0.1"
+    environment:
+      MODE: airgapped
+      PUBLIC_URL: "http://web:8080"
+      ARTIFACTORY_URL: "http://artifactory:8081/artifactory/"
+      ARTIFACTORY_REPOSITORY: jenkins
+      SECRETS_DIR: /pki
+      UC_DATA_DIR: /data
+      LTS_OLD: ${LTS_OLD:-x}
+      LTS_NEW: ${LTS_NEW:-x}
+      WEEKLY: ${WEEKLY:-x}
+      SEED_TOP_PLUGIN: ${SEED_TOP_PLUGIN:-timestamper}
+    entrypoint: ["python3", "-m", "pytest", "-p", "no:cacheprovider", "-q", "-x", "/tests/integration/test_airgapped.py"]
+    depends_on:
+      artifactory: {condition: service_started}
+      artifactory-private: {condition: service_started}
+      web: {condition: service_started}
+      web-proxy: {condition: service_started}
+      jenkins-lts-old: {condition: service_healthy}
+      jenkins-lts-new: {condition: service_healthy}
+      jenkins-weekly: {condition: service_healthy}
+    volumes:
+      - uc-data:/data
+      - uc-data-proxy:/data-proxy
+      - pki:/pki:ro
+      - seed:/seed:ro
+      - ../../tests:/tests:ro
+      - ../../uc/uc:/opt/uc/python/uc:ro
+
+  plugin-cli:
+    image: jenkins/jenkins:${LTS_NEW:-lts}
+    networks: [airgap]
+    user: "0:0"
+    environment:
+      JENKINS_UC: "http://web:8080"
+      JENKINS_UC_EXPERIMENTAL: "http://web:8080/experimental"
+      JENKINS_PLUGIN_INFO: "http://web:8080/current/plugin-versions.json"
+    entrypoint: ["jenkins-plugin-cli", "--verbose", "--plugins", "${SEED_TOP_PLUGIN:-timestamper}",
+                 "--plugin-download-directory", "/tmp/plugins"]
+
+volumes:
+  seed:
+  pki:
+  trust:
+  uc-data:
+  uc-data-proxy:
