@@ -12,7 +12,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro"
 
-.PHONY: build build-uc build-web test test-unit test-web test-routing pki-init secrets-placeholders compose-check
+.PHONY: build build-uc build-web test test-unit test-web test-routing pki-init secrets-placeholders compose-check it-airgapped it-clean
 
 build: build-uc build-web
 
@@ -54,3 +54,20 @@ compose-check:
 	UC_ENV_FILE=.env.online.example docker compose --env-file .env.online.example config --quiet
 	UC_ENV_FILE=.env.airgapped.example docker compose --env-file .env.airgapped.example \
 	  -f compose.yaml -f compose.airgapped.yaml config --quiet
+
+IT_DIR = tests/integration
+IT_AIR = docker compose -f $(IT_DIR)/airgapped.yaml --env-file $(IT_DIR)/.versions.env
+
+it-airgapped: build
+	docker compose -f $(IT_DIR)/airgapped.yaml --profile seed run --rm -T seed-versions > $(IT_DIR)/.versions.env
+	cat $(IT_DIR)/.versions.env
+	$(IT_AIR) --profile seed run --rm seed-plugins
+	$(IT_AIR) --profile seed run --rm seed-repo
+	$(IT_AIR) --profile seed run --rm pki
+	$(IT_AIR) run --rm driver $(ARGS); rc=$$?; \
+	  if [ $$rc -eq 0 ]; then $(IT_AIR) run --rm plugin-cli; rc=$$?; fi; \
+	  $(IT_AIR) --profile seed down -v --remove-orphans >/dev/null 2>&1; exit $$rc
+
+it-clean:
+	docker compose -f $(IT_DIR)/airgapped.yaml --profile seed down -v --remove-orphans
+	docker compose -f $(IT_DIR)/online.yaml down -v --remove-orphans
