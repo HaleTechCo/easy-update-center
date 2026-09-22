@@ -23,8 +23,12 @@ every online run regardless.
    | `Popularities.java` | whether the patch still applies, or is no longer needed |
 
 2. Update `uc/Dockerfile`: set `UC2_VERSION`, and set `UC2_COMMIT` to `git rev-parse update-center2-<version>^{commit}`.
-   If upstream has merged the popularity change, delete the patch and switch the `jar-build` stage
-   to downloading `update-center2-<version>-bin.zip` from `repo.jenkins-ci.org`, pinned by SHA-256.
+   If upstream has merged the popularity change, delete the patch and drop the `git apply` step; the
+   `jar-build` stage can then take the generator jar from the released
+   `update-center2-<version>-bin.zip` on `repo.jenkins-ci.org`, pinned by SHA-256, instead of running
+   `mvn verify`. Keep the pinned `git clone` in that stage regardless: it is still where
+   `site/generate-htaccess.sh` and `resources/` come from (the `-bin.zip` contains only jars), and
+   `UC2_COMMIT` still pins the source those two are copied from.
 3. Update the verified-facts list in the implementation plan, and the version in the README and spec header.
 4. Run `make test`, `make it-airgapped`, then `make it-online` (needs community credentials).
 5. Deploy: `docker compose build` is not used (images are built by `make build`), so
