@@ -1,0 +1,57 @@
+# Online integration test (spec §13). Run with `make it-online` (capped) or `make it-full`.
+name: uc-it-online
+
+services:
+  pki:
+    image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    user: "0:0"
+    network_mode: none
+    environment:
+      ARTIFACTORY_USERNAME: ${ARTIFACTORY_USERNAME:?set ARTIFACTORY_USERNAME (a Jenkins community account)}
+      ARTIFACTORY_PASSWORD: ${ARTIFACTORY_PASSWORD:?set ARTIFACTORY_PASSWORD}
+      GITHUB_USERNAME: ${GITHUB_USERNAME:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        uc pki init --out /pki &&
+        printf %s "$$ARTIFACTORY_USERNAME" > /pki/artifactory_username &&
+        printf %s "$$ARTIFACTORY_PASSWORD" > /pki/artifactory_password &&
+        printf %s "$$GITHUB_USERNAME" > /pki/github_username &&
+        printf %s "$$GITHUB_TOKEN" > /pki/github_token &&
+        chmod -R a+rX /pki
+    volumes:
+      - pki:/pki
+
+  web:
+    image: ${WEB_IMAGE:-jenkins-uc/web:local}
+    environment:
+      MODE: online
+      PUBLIC_URL: "http://web:8080"
+    volumes:
+      - uc-data:/data:ro
+
+  driver:
+    image: ${UC_TEST_IMAGE:-jenkins-uc/uc-test:local}
+    user: "0:0"
+    environment:
+      MODE: online
+      PUBLIC_URL: "http://web:8080"
+      SECRETS_DIR: /pki
+      UC_DATA_DIR: /data
+      UC_EXTRA_ARGS: ${UC_EXTRA_ARGS---max-plugins 25}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xmx2g}
+    entrypoint: ["python3", "-m", "pytest", "-p", "no:cacheprovider", "-q", "-x", "-s", "/tests/integration/test_online.py"]
+    depends_on:
+      web: {condition: service_started}
+    volumes:
+      - uc-data:/data
+      - pki:/pki:ro
+      - ../../tests:/tests:ro
+      - ../../uc/uc:/opt/uc/python/uc:ro
+      - ./.results:/results
+
+volumes:
+  pki:
+  uc-data:
