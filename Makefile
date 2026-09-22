@@ -70,7 +70,10 @@ it-airgapped: build
 
 it-clean:
 	docker compose -f $(IT_DIR)/airgapped.yaml --profile seed down -v --remove-orphans
-	docker compose -f $(IT_DIR)/online.yaml down -v --remove-orphans
+	# Compose interpolates online.yaml's required (:?) vars even for `down`, which never starts
+	# the pki service that actually needs them, so harmless placeholders are enough here.
+	ARTIFACTORY_USERNAME=unused ARTIFACTORY_PASSWORD=unused \
+	  docker compose -f $(IT_DIR)/online.yaml down -v --remove-orphans
 
 IT_ONLINE = docker compose -f $(IT_DIR)/online.yaml
 
