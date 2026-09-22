@@ -1,0 +1,15 @@
+# Air-gapped override (spec §7.3): these outside hosts resolve to 127.0.0.1, so their clients fail
+# at once instead of waiting for TCP timeouts. Every other name still uses the normal resolver.
+x-blocked-hosts: &blocked-hosts
+  - "api.github.com:127.0.0.1"
+  - "github.com:127.0.0.1"
+  - "codeload.github.com:127.0.0.1"
+  - "raw.githubusercontent.com:127.0.0.1"
+  - "reports.jenkins.io:127.0.0.1"
+  - "updates.jenkins.io:127.0.0.1"
+
+services:
+  scheduler:
+    extra_hosts: *blocked-hosts
+  uc:
+    extra_hosts: *blocked-hosts

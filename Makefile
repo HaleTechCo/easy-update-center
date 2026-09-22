@@ -12,7 +12,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro"
 
-.PHONY: build build-uc build-web test test-unit test-web test-routing
+.PHONY: build build-uc build-web test test-unit test-web test-routing pki-init secrets-placeholders compose-check
 
 build: build-uc build-web
 
@@ -36,3 +36,21 @@ ROUTING = docker compose -f tests/routing/compose.yaml
 test-routing: build-uc build-web
 	$(ROUTING) run --rm tester $(ARGS); rc=$$?; \
 	  $(ROUTING) down -v --remove-orphans >/dev/null 2>&1; exit $$rc
+
+# Creates the PKI in ./secrets as uid 10001 (the uc user). Refuses to overwrite existing files.
+pki-init: build-uc
+	@mkdir -p secrets
+	docker run --rm --user 0:0 --entrypoint sh -v "$(CURDIR)/secrets:/pki" $(UC_IMAGE) \
+	  -c 'uc pki init --out /pki && chown -R 10001:10001 /pki'
+
+secrets-placeholders:
+	@mkdir -p secrets
+	@for f in artifactory_username artifactory_password github_username github_token download_proxy_auth; do \
+	  [ -e secrets/$$f ] || : > secrets/$$f; done
+	@echo "secrets/: created any missing credential files (empty means 'not set')"
+
+# UC_ENV_FILE selects the services' env_file; --env-file only feeds compose's own interpolation.
+compose-check:
+	UC_ENV_FILE=.env.online.example docker compose --env-file .env.online.example config --quiet
+	UC_ENV_FILE=.env.airgapped.example docker compose --env-file .env.airgapped.example \
+	  -f compose.yaml -f compose.airgapped.yaml config --quiet

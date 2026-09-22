@@ -1,0 +1,69 @@
+# Jenkins update center (spec §4).
+#   online:     docker compose up -d
+#   air-gapped: docker compose -f compose.yaml -f compose.airgapped.yaml up -d
+#   one-shot:   docker compose run --rm uc doctor | generate | rollback | status
+name: jenkins-update-center
+
+x-uc: &uc
+  image: ${UC_IMAGE:-jenkins-uc/uc:local}
+  env_file: ${UC_ENV_FILE:-.env}
+  read_only: true
+  tmpfs:
+    - /tmp
+  volumes:
+    - uc-data:/data
+    - ./config/overlay:/config/overlay:ro
+  secrets:
+    - update-center.key
+    - update-center.cert
+    - root-ca.crt
+    - artifactory_username
+    - artifactory_password
+    - github_username
+    - github_token
+
+services:
+  web:
+    image: ${WEB_IMAGE:-jenkins-uc/web:local}
+    env_file: ${UC_ENV_FILE:-.env}
+    read_only: true
+    tmpfs:
+      - /tmp
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+      - "${HTTPS_PORT:-8443}:8443"
+    volumes:
+      - uc-data:/data:ro
+    secrets:
+      - download_proxy_auth
+    restart: unless-stopped
+
+  scheduler:
+    <<: *uc
+    command: ["schedule"]
+    restart: unless-stopped
+
+  uc:
+    <<: *uc
+    profiles: ["tools"]
+
+volumes:
+  uc-data:
+
+secrets:
+  update-center.key:
+    file: ./secrets/update-center.key
+  update-center.cert:
+    file: ./secrets/update-center.cert
+  root-ca.crt:
+    file: ./secrets/root-ca.crt
+  artifactory_username:
+    file: ./secrets/artifactory_username
+  artifactory_password:
+    file: ./secrets/artifactory_password
+  github_username:
+    file: ./secrets/github_username
+  github_token:
+    file: ./secrets/github_token
+  download_proxy_auth:
+    file: ./secrets/download_proxy_auth
