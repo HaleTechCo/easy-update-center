@@ -1,6 +1,7 @@
 # Operating the Jenkins update center
 
-Design and rationale: `docs/superpowers/specs/2026-09-22-jenkins-update-center-design.md`.
+Design and rationale: `docs/superpowers/specs/2026-09-22-jenkins-update-center-design.md`, and for
+reading Artifact Keeper or filling gaps in a repository, `docs/superpowers/specs/2026-09-22-repo-adapter-design.md`.
 
 ## 1. Build
 
@@ -15,6 +16,18 @@ Copy `.env.online.example` or `.env.airgapped.example` to `.env` and set `PUBLIC
 origin Jenkins will use, with no path (for example `https://jenkins-updates.example.com`). The URL is
 baked into the signed metadata, so changing it requires a new generation. To keep several
 configurations side by side, set `UC_ENV_FILE=<file>` when running `docker compose`.
+
+Air-gapped, set `REPO_TYPE`, `REPO_URL` and `REPO_KEY` to your repository:
+
+| Repository | `REPO_TYPE` | `REPO_URL` | `REPO_KEY` |
+|---|---|---|---|
+| Artifactory | `artifactory` (default) | `https://artifactory.corp.example/artifactory/` | the repository key |
+| Artifact Keeper | `artifact-keeper` | the server's base URL, `https://artifacts.corp.example/` | the repository key (not its display name) |
+
+The **repo-adapter** service reads the repository for the generator. It is on by default in
+air-gapped mode and always on for Artifact Keeper (`REPO_ADAPTER`). It fills in what procurement
+often leaves out: each plugin's POM, description and release date come from inside its `.hpi`
+when the repository has no usable copy. See section 9.
 
 ## 3. Signing keys
 
@@ -40,7 +53,7 @@ expiring certificate stops publication before Jenkins would reject the signature
 ```bash
 make secrets-placeholders
 printf '%s' 'svc-jenkins-uc' > secrets/repo_username
-printf '%s' '…password or API token…' > secrets/repo_password
+printf '%s' '…password or API token…' > secrets/repo_password   # Artifact Keeper: an API token
 # online, recommended: GitHub user and a token without scopes
 printf '%s' 'my-bot' > secrets/github_username
 printf '%s' 'ghp_…' > secrets/github_token
@@ -49,7 +62,9 @@ printf '%s' 'svc-read:…' > secrets/download_proxy_auth
 ```
 
 Online mode uses a free Jenkins community account (https://accounts.jenkins.io) for
-`repo.jenkins-ci.org`. Anonymous AQL queries are refused with HTTP 403.
+`repo.jenkins-ci.org`. Anonymous AQL queries are refused with HTTP 403. With the repo-adapter on
+(the air-gapped default), only the `repo-adapter` container receives these two files; `uc` and the
+scheduler authenticate to the adapter with a token it creates in `/data/repo-adapter/token`.
 
 ### File ownership on Linux
 
@@ -154,16 +169,53 @@ scheduled runs, or the terminal for `docker compose run --rm uc generate`.
 
 ## 9. Air-gapped specifics
 
-### What the Artifactory repository must contain
+### What the repository must contain
 
-- One **local** repository in Maven layout: `<group path>/<artifactId>/<version>/<artifactId>-<version>.hpi`
-  plus the **real `.pom`** from `repo.jenkins-ci.org` at the same path. Plugins without a POM are
-  dropped.
-- Core: `org/jenkins-ci/main/jenkins-war/<version>/jenkins-war-<version>.war` and `.pom` for every core
-  version you want to offer. Without them the site offers no core and has no tiers.
-- An account that can run AQL on the repository.
+- One Artifactory repository (local or virtual) or one Artifact Keeper Maven repository.
+- Each plugin's `.hpi` (or `.jpi`) in Maven layout, under the group its own manifest names:
+  `<group path>/<artifactId>/<version>/<artifactId>-<version>.hpi`. Plugins do not share one group
+  (`caffeine-api` is `io.jenkins.plugins`, `git` is `org.jenkins-ci.plugins`). A file downloaded from
+  updates.jenkins.io is named `<id>.hpi`; rename it to `<artifactId>-<version>.hpi`. To read the
+  coordinates, open the `.hpi` (it is a zip) and look at `META-INF/MANIFEST.MF`:
 
-`uc doctor --fetch` checks all of this and lists anything the generator will drop.
+  ```bash
+  unzip -p caffeine-api.hpi META-INF/MANIFEST.MF | grep -E '^(Group-Id|Artifact-Id|Plugin-Version):'
+  ```
+
+  ```powershell
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  $zip = [IO.Compression.ZipFile]::OpenRead("$PWD\caffeine-api.hpi")
+  (New-Object IO.StreamReader($zip.GetEntry('META-INF/MANIFEST.MF').Open())).ReadToEnd() -split "`r?`n" |
+    Select-String '^(Group-Id|Artifact-Id|Plugin-Version):'
+  $zip.Dispose()
+  ```
+
+- **POMs are optional** with the repo-adapter: it serves the one embedded in each `.hpi`. Only plugins
+  built without Maven (Gradle) have none; `uc doctor` lists them with the repo.jenkins-ci.org URL of
+  the real `.pom` to procure. A saved error page is not a POM: the adapter ignores it. `.jar` files
+  are optional too.
+- Core: `org/jenkins-ci/main/jenkins-war/<version>/jenkins-war-<version>.war` for every core version
+  you want to offer (its POM is optional too). Without them the site offers no core and has no tiers.
+  Every stored core that a plugin requires gets a tier (`CORE_AGE_DAYS=0`, the air-gapped default);
+  `CORE_AGE_DAYS=400` behaves like updates.jenkins.io, which drops cores released over 400 days ago.
+- An account that can read the repository: for Artifactory, one that can run AQL (a non-admin
+  account works); for Artifact Keeper, a user name and API token.
+
+A repository behind a private CA needs its bundle in the `repo-adapter` container:
+
+```yaml
+# compose.repo-ca.yaml
+services:
+  repo-adapter:
+    volumes:
+      - ./secrets/repo-ca.crt:/etc/ssl/uc-repo-ca.crt:ro
+    environment:
+      REPO_CA_FILE: /etc/ssl/uc-repo-ca.crt
+```
+
+`docker compose run --rm uc doctor --fetch` checks all of this. With the adapter on it also lists the
+POMs it filled in, `.pom` files it ignored and why, **misplaced** plugins with the path to move each
+to, and archives whose release date came from the repository instead of the archive.
 
 ### Keeping upstream data fresh
 
@@ -210,3 +262,8 @@ available for a proxy in front.
 | Plugin downloads fail with 404 | The version is not in the download map; check `uc doctor` and the Artifactory contents. Also check `status.json`'s `download_backend` against the current `DOWNLOAD_BACKEND`: if it changed since the live release was generated, the release's download map matches the old backend and every lookup misses — run `docker compose run --rm uc generate`. |
 | `/download/…` returns 502 with `DOWNLOAD_ACCESS=proxy` | The backend's TLS certificate does not verify against `DOWNLOAD_PROXY_CA_FILE` (section 7). |
 | web container keeps logging "waiting for the first published release" | No release is live yet; check `docker compose logs scheduler`. |
+| `repo-adapter token missing: /data/repo-adapter/token` | The repo-adapter has not started; check `docker compose logs repo-adapter`. |
+| `REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on` | Only the adapter speaks to Artifact Keeper; remove `REPO_ADAPTER=off`. |
+| repo-adapter logs `listing failed: … HTTP 401` | Wrong repository credentials. For Artifact Keeper, `repo_password` must be an API token. |
+| A plugin is missing and `uc doctor` lists it as misplaced | It is stored under another group than its manifest's `Group-Id`; move it to the path shown. |
+| `uc doctor`: "no POM in the repository or the archive" | A Gradle-built plugin: procure its real `.pom` from the URL shown and store it beside the `.hpi`. |
