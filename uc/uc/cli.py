@@ -1,4 +1,4 @@
-"""Command-line entry point: uc generate | doctor | rollback | status | schedule | pki (spec §5)."""
+"""Command-line entry point: uc generate | doctor | rollback | status | schedule | repo-adapter | pki (spec §5)."""
 from __future__ import annotations
 
 import argparse
@@ -31,6 +31,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("status", help="print status.json")
     sub.add_parser("schedule", help="run generate on GENERATE_SCHEDULE (the scheduler service)")
+
+    adapter = sub.add_parser("repo-adapter", help="serve the repository to the generator (the repo-adapter service)")
+    adapter.add_argument("--port", type=int, default=8081)
 
     pki = sub.add_parser("pki", help="manage the signing PKI").add_subparsers(dest="pki_command", required=True)
     init = pki.add_parser("init", help="create a root CA and a signing certificate")
@@ -94,6 +97,11 @@ def _dispatch(args: argparse.Namespace) -> int:
         from .schedule import run_schedule
 
         run_schedule(settings)
+        return 0
+    if args.command == "repo-adapter":
+        from .repo_adapter.server import serve
+
+        serve(settings, port=args.port)
         return 0
     raise AssertionError(f"unhandled command {args.command}")
 

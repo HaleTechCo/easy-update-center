@@ -62,6 +62,14 @@ def test_rollback_reports_a_held_lock(monkeypatch, tmp_path, secrets_dir):
     assert os.readlink(data / "live") == "releases/20260922T020000Z"
 
 
+def test_repo_adapter_refuses_to_start_without_repository_credentials(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv("REPO_ADAPTER", "on")
+    (secrets_dir / "repo_password").write_text("")
+    assert main(["repo-adapter", "--port", "0"]) == 1
+    assert "uc: error: Repository credentials missing" in capsys.readouterr().err
+
+
 def test_pki_init_and_show(tmp_path, capsys):
     out = tmp_path / "pki"
     assert main(["pki", "init", "--out", str(out), "--root-days", "30", "--signing-days", "10"]) == 0
