@@ -15,8 +15,8 @@ JSONP_PREFIX = "updateCenter.post("
 SITE_FILES = ("update-center.json", "update-center.actual.json")
 CURRENT_FILES = SITE_FILES + (
     "plugin-versions.json", "release-history.json", "plugin-documentation-urls.json",
-    "latestCore.txt", "pluginCount.txt", "timestamp.txt",
-)
+    "pluginCount.txt", "timestamp.txt",
+)  # and latestCore.txt, when the site offers a core
 ROOT_FILES = (".htaccess", ".htdownload-map", "tiers.json", "uctest.json", "index.html")
 MAX_LISTED = 5
 
@@ -59,6 +59,13 @@ def download_key(url: str, downloads_root: str) -> str | None:
     if len(parts) == 3 and parts[0] == "war" and parts[2] == "jenkins.war":
         return f"war/{parts[1]}"
     return None
+
+
+def offers_core(doc: Any) -> bool:
+    """With no jenkins-war in the repository, upstream still writes `core`, holding only its defaults
+    (name and size): the site then offers plugins only, which is valid (spec §6 step 9)."""
+    core = doc.get("core") if isinstance(doc, dict) else None
+    return isinstance(core, dict) and bool(core.get("url") or core.get("version"))
 
 
 def _listed(items: Iterable[str]) -> str:
@@ -113,13 +120,10 @@ def validate_release(
             problems.append(f"{site.name}/ update-center JSON does not parse: {exc}")
             continue
         check_signature(doc, f"{site.name}/update-center.actual.json")
-        core = doc.get("core")
-        if isinstance(core, dict):
-            check_url(core.get("url"), f"{site.name} core", collect=True)
-        elif site.name == "current":
-            problems.append(
-                "current/ offers no Jenkins core (the source needs jenkins-war .war and .pom; see 'uc doctor')"
-            )
+        if offers_core(doc):
+            check_url(doc["core"].get("url"), f"{site.name} core", collect=True)
+            if site.name == "current" and not (site / "latestCore.txt").is_file():
+                problems.append("current/ is missing latestCore.txt")
         for plugin_id, plugin in (doc.get("plugins") or {}).items():
             url = plugin.get("url") if isinstance(plugin, dict) else None
             check_url(url, f"{site.name} {plugin_id}", collect=True)

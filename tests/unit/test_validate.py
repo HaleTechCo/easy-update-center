@@ -103,9 +103,28 @@ def test_download_map_must_cover_offered_versions(tmp_path):
     validate(staging, download_map={key: "x" for key in OFFERED})
 
 
-def test_current_without_core(tmp_path):
-    with pytest.raises(ValidationError, match="offers no Jenkins core"):
-        validate(build(tmp_path, core=None))
+def test_a_site_without_a_core_is_valid(tmp_path):
+    """A repository with no jenkins-war publishes plugins only: no core, no tiers (spec §6 step 9)."""
+    result = validate(build(tmp_path, tiers=Tiers((), ()), core=None), tiers=Tiers((), ()))
+    assert result.plugin_count == 2
+    assert result.offered == OFFERED - {"war/2.528.1"}
+
+
+def test_an_offered_core_needs_a_download_url(tmp_path):
+    staging = build(tmp_path)
+    doc = json.loads((staging / "current" / "update-center.actual.json").read_text())
+    del doc["core"]["url"]
+    (staging / "current" / "update-center.actual.json").write_text(json.dumps(doc))
+    with pytest.raises(ValidationError, match="current core None"):
+        validate(staging)
+
+
+def test_an_offered_core_needs_latest_core_txt(tmp_path):
+    staging = build(tmp_path)
+    (staging / "current" / "latestCore.txt").unlink()
+    with pytest.raises(ValidationError) as err:
+        validate(staging)
+    assert "current/ is missing latestCore.txt" in err.value.problems
 
 
 def test_count_plugins(tmp_path):
