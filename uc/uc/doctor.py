@@ -1,4 +1,5 @@
 """uc doctor: what the generator will and won't see in the source repository (spec §10)."""
+
 from __future__ import annotations
 
 import base64
@@ -44,8 +45,7 @@ class DoctorReport:
     @property
     def dropped(self) -> int:
         # needs_pom archives already count as hpi_without_pom: no POM reaches the listing for them.
-        return (len(self.hpi_without_pom) + len(self.war_without_pom) + len(self.non_maven)
-                + len(self._adapter("misplaced")) + len(self._adapter("skipped")))
+        return len(self.hpi_without_pom) + len(self.war_without_pom) + len(self.non_maven) + len(self._adapter('misplaced')) + len(self._adapter('skipped'))
 
     def exit_code(self) -> int:
         return 1 if self.dropped or self.missing_dependencies else 0
@@ -53,19 +53,22 @@ class DoctorReport:
     def summary(self) -> dict:
         """For the public status.json: counts only, never paths or URLs."""
         return {
-            "plugins": self.plugins, "cores": self.cores,
-            "hpi_without_pom": len(self.hpi_without_pom), "war_without_pom": len(self.war_without_pom),
-            "non_maven": len(self.non_maven), "stub_poms": len(self.stub_poms),
-            "missing_dependencies": len(self.missing_dependencies), "unchecked": self.unchecked,
-            "repo_adapter": ({name: len(self._adapter(name)) for name in ADAPTER_SECTIONS}
-                             if self.repo_adapter is not None else None),
+            'plugins': self.plugins,
+            'cores': self.cores,
+            'hpi_without_pom': len(self.hpi_without_pom),
+            'war_without_pom': len(self.war_without_pom),
+            'non_maven': len(self.non_maven),
+            'stub_poms': len(self.stub_poms),
+            'missing_dependencies': len(self.missing_dependencies),
+            'unchecked': self.unchecked,
+            'repo_adapter': ({name: len(self._adapter(name)) for name in ADAPTER_SECTIONS} if self.repo_adapter is not None else None),
         }
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-ADAPTER_SECTIONS = ("derived_poms", "replaced_poms", "needs_pom", "misplaced", "skipped", "dates_from_repository")
+ADAPTER_SECTIONS = ('derived_poms', 'replaced_poms', 'needs_pom', 'misplaced', 'skipped', 'dates_from_repository')
 
 
 def attach_adapter_report(report: DoctorReport, settings: Settings) -> DoctorReport:
@@ -86,31 +89,29 @@ class Source(Protocol):
 class ArtifactSource:
     """Reads POMs and MANIFEST.MF the way update-center2 does, from its cache first."""
 
-    def __init__(self, artifactory_url: str, repository: str, username: str, password: str,
-                 cache_dir: Path | None, allow_network: bool, timeout: float = 60) -> None:
-        self.base = f"{artifactory_url}{repository}/"
+    def __init__(self, artifactory_url: str, repository: str, username: str, password: str, cache_dir: Path | None, allow_network: bool, timeout: float = 60) -> None:
+        self.base = f'{artifactory_url}{repository}/'
         self.cache_dir = cache_dir
         self.allow_network = allow_network
         self.timeout = timeout
-        self._auth = "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode()
+        self._auth = 'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()
 
     @classmethod
-    def from_settings(cls, settings: Settings, creds: Credentials, *, allow_network: bool) -> "ArtifactSource":
+    def from_settings(cls, settings: Settings, creds: Credentials, *, allow_network: bool) -> 'ArtifactSource':
         # Same URL the jar uses, so cache keys (sha256 of the URL path) match.
-        return cls(settings.source_url, settings.repo_key,
-                   creds.repo_username, creds.repo_password, settings.cache_dir, allow_network)
+        return cls(settings.source_url, settings.repo_key, creds.repo_username, creds.repo_password, settings.cache_dir, allow_network)
 
     def pom(self, gav: Gav) -> bytes | None:
-        return self._get(self.base + gav.with_extension("pom").maven_path)
+        return self._get(self.base + gav.with_extension('pom').maven_path)
 
     def manifest(self, gav: Gav) -> str | None:
-        data = self._get(self.base + gav.maven_path + "!/META-INF/MANIFEST.MF")
-        return data.decode("utf-8", "replace") if data is not None else None
+        data = self._get(self.base + gav.maven_path + '!/META-INF/MANIFEST.MF')
+        return data.decode('utf-8', 'replace') if data is not None else None
 
     def cache_file(self, url: str) -> Path | None:
         if self.cache_dir is None:
             return None
-        digest = hashlib.sha256(urlsplit(url).path.encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(urlsplit(url).path.encode('utf-8')).hexdigest()
         return self.cache_dir / digest[:2] / digest
 
     def _get(self, url: str) -> bytes | None:
@@ -122,31 +123,31 @@ class ArtifactSource:
                 return None
         if not self.allow_network:
             return None
-        request = urllib.request.Request(url, headers={"Authorization": self._auth, "User-Agent": http.USER_AGENT})
+        request = urllib.request.Request(url, headers={'Authorization': self._auth, 'User-Agent': http.USER_AGENT})
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 return response.read()
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 return None
-            raise DoctorError(f"GET {url} failed with HTTP {exc.code}") from exc
+            raise DoctorError(f'GET {url} failed with HTTP {exc.code}') from exc
         except OSError as exc:
-            raise DoctorError(f"GET {url} failed: {exc}") from exc
+            raise DoctorError(f'GET {url} failed: {exc}') from exc
 
 
 def parse_manifest(text: str) -> dict[str, str]:
     """Main section of a JAR manifest, joining 72-column continuation lines."""
     attributes: dict[str, str] = {}
     key: str | None = None
-    for raw in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+    for raw in text.replace('\r\n', '\n').replace('\r', '\n').split('\n'):
         if not raw:
             if attributes:
                 break
             continue
-        if raw.startswith(" ") and key:
+        if raw.startswith(' ') and key:
             attributes[key] += raw[1:]
             continue
-        name, sep, value = raw.partition(": ")
+        name, sep, value = raw.partition(': ')
         key = name if sep else None
         if sep:
             attributes[name] = value
@@ -155,10 +156,10 @@ def parse_manifest(text: str) -> dict[str, str]:
 
 def parse_dependencies(value: str) -> list[tuple[str, str, bool]]:
     dependencies = []
-    for item in filter(None, (part.strip() for part in value.split(","))):
-        spec, _, params = item.partition(";")
-        name, _, version = spec.partition(":")
-        dependencies.append((name, version, "resolution:=optional" in params))
+    for item in filter(None, (part.strip() for part in value.split(','))):
+        spec, _, params = item.partition(';')
+        name, _, version = spec.partition(':')
+        dependencies.append((name, version, 'resolution:=optional' in params))
     return dependencies
 
 
@@ -167,14 +168,14 @@ def is_stub_pom(data: bytes) -> bool:
     if root is None:
         return True
     for child in root:
-        if child.tag.rsplit("}", 1)[-1] == "name" and (child.text or "").strip():
+        if child.tag.rsplit('}', 1)[-1] == 'name' and (child.text or '').strip():
             return False
     return True
 
 
 def analyze(listing: Listing, versions: VersionTool, source: Source) -> DoctorReport:
     report = DoctorReport()
-    report.non_maven = sorted(f"{f.path}/{f.name}" for f in listing.rejected)
+    report.non_maven = sorted(f'{f.path}/{f.name}' for f in listing.rejected)
     report.hpi_without_pom = sorted(g.maven_path for g in listing.plugins_without_pom)
     report.war_without_pom = sorted(g.maven_path for g in listing.wars_without_pom)
     report.cores = versions.sort({g.version for g in listing.wars})
@@ -182,7 +183,7 @@ def analyze(listing: Listing, versions: VersionTool, source: Source) -> DoctorRe
     report.plugins = len(newest)
     latest: dict[str, Gav] = {}
     for gav in listing.plugins:
-        if newest.get(gav.artifact_id) == gav.version and (gav.artifact_id not in latest or gav.extension == "hpi"):
+        if newest.get(gav.artifact_id) == gav.version and (gav.artifact_id not in latest or gav.extension == 'hpi'):
             latest[gav.artifact_id] = gav
 
     checks: list[tuple[str, str, str, str, str]] = []  # plugin, version, dependency, required, available
@@ -191,39 +192,38 @@ def analyze(listing: Listing, versions: VersionTool, source: Source) -> DoctorRe
         if pom is None or manifest is None:
             report.unchecked += 1
         if pom is not None and is_stub_pom(pom):
-            report.stub_poms.append(f"{artifact_id}:{gav.version}")
+            report.stub_poms.append(f'{artifact_id}:{gav.version}')
         if manifest is None:
             continue
-        for name, required, optional in parse_dependencies(parse_manifest(manifest).get("Plugin-Dependencies", "")):
+        for name, required, optional in parse_dependencies(parse_manifest(manifest).get('Plugin-Dependencies', '')):
             if optional:
                 continue
             if name not in latest:
-                report.missing_dependencies.append(
-                    f"{artifact_id}:{gav.version} requires {name} {required} (not in the repository)"
-                )
+                report.missing_dependencies.append(f'{artifact_id}:{gav.version} requires {name} {required} (not in the repository)')
             else:
                 checks.append((artifact_id, gav.version, name, required, latest[name].version))
     results = versions.compare_many([(available, required) for *_, required, available in checks])
     for (artifact_id, version, name, required, available), cmp in zip(checks, results):
         if cmp < 0:
-            report.missing_dependencies.append(
-                f"{artifact_id}:{version} requires {name} >= {required} (newest available: {available})"
-            )
+            report.missing_dependencies.append(f'{artifact_id}:{version} requires {name} >= {required} (newest available: {available})')
     return report
 
 
 def run_doctor(
-    settings: Settings, creds: Credentials, *, fetch: bool, versions: VersionTool,
+    settings: Settings,
+    creds: Credentials,
+    *,
+    fetch: bool,
+    versions: VersionTool,
     query: Callable[..., list[aql.RepoFile]] = aql.query_repository,
 ) -> DoctorReport:
     files = query(settings.source_api_url, settings.repo_key, creds.repo_username, creds.repo_password)
-    report = analyze(aql.classify(files), versions,
-                     ArtifactSource.from_settings(settings, creds, allow_network=fetch))
+    report = analyze(aql.classify(files), versions, ArtifactSource.from_settings(settings, creds, allow_network=fetch))
     attach_adapter_report(report, settings)
-    tiers_file = settings.data_dir / "live" / "tiers.json"
+    tiers_file = settings.data_dir / 'live' / 'tiers.json'
     if tiers_file.is_file():
         try:
-            report.tiers = json.loads(tiers_file.read_text(encoding="utf-8"))
+            report.tiers = json.loads(tiers_file.read_text(encoding='utf-8'))
         except ValueError:
             pass
     return report
@@ -231,46 +231,38 @@ def run_doctor(
 
 def format_report(report: DoctorReport, settings: Settings) -> str:
     lines = [
-        f"Source: {settings.repo_type} repository {settings.repo_key} at {settings.repo_url}"
-        + (" (through repo-adapter)" if settings.repo_adapter else ""),
-        f"Plugins with a POM: {report.plugins}",
-        "Jenkins cores with a POM: "
-        + (", ".join(report.cores) or "none (the site will offer no core and no tiers)"),
+        f'Source: {settings.repo_type} repository {settings.repo_key} at {settings.repo_url}' + (' (through repo-adapter)' if settings.repo_adapter else ''),
+        f'Plugins with a POM: {report.plugins}',
+        'Jenkins cores with a POM: ' + (', '.join(report.cores) or 'none (the site will offer no core and no tiers)'),
     ]
     if report.tiers is not None:
-        lines.append(
-            f"Tiers in the live release: weekly {report.tiers.get('weeklyCores', [])}, "
-            f"stable {report.tiers.get('stableCores', [])}"
-        )
+        lines.append(f'Tiers in the live release: weekly {report.tiers.get("weeklyCores", [])}, stable {report.tiers.get("stableCores", [])}')
 
-    def section(title: str, items: list[str], indent: str = "") -> None:
+    def section(title: str, items: list[str], indent: str = '') -> None:
         if items:
-            lines.append(f"{indent}{title} ({len(items)}):")
-            lines.extend(f"{indent}  {item}" for item in items)
+            lines.append(f'{indent}{title} ({len(items)}):')
+            lines.extend(f'{indent}  {item}' for item in items)
 
-    lines.append("")
+    lines.append('')
     adapter = report.repo_adapter
     if report.dropped:
-        lines.append(f"Dropped by the generator: {report.dropped}")
+        lines.append(f'Dropped by the generator: {report.dropped}')
         if adapter is not None:
-            section("no POM in the repository or the archive: procure the real .pom",
-                    [f"{item['gav']}  {item['url']}" for item in adapter["needs_pom"]], "  ")
-            section("misplaced: move to the path its manifest names",
-                    [f"{item['path']}  ->  {item['correct_path']}" for item in adapter["misplaced"]], "  ")
-            section("skipped", [f"{item['path']}: {item['reason']}" for item in adapter["skipped"]], "  ")
+            section('no POM in the repository or the archive: procure the real .pom', [f'{item["gav"]}  {item["url"]}' for item in adapter['needs_pom']], '  ')
+            section('misplaced: move to the path its manifest names', [f'{item["path"]}  ->  {item["correct_path"]}' for item in adapter['misplaced']], '  ')
+            section('skipped', [f'{item["path"]}: {item["reason"]}' for item in adapter['skipped']], '  ')
         else:
-            section(".hpi/.jpi without a .pom", report.hpi_without_pom, "  ")
-        section("jenkins-war without a .pom", report.war_without_pom, "  ")
-        section("not in Maven layout", report.non_maven, "  ")
+            section('.hpi/.jpi without a .pom', report.hpi_without_pom, '  ')
+        section('jenkins-war without a .pom', report.war_without_pom, '  ')
+        section('not in Maven layout', report.non_maven, '  ')
     else:
-        lines.append("Nothing in the source is dropped by the generator.")
+        lines.append('Nothing in the source is dropped by the generator.')
     if adapter is not None:
-        section("POMs filled in from archives", adapter["derived_poms"])
-        section(".pom files ignored (not usable)", [f"{item['path']}: {item['reason']}" for item in adapter["replaced_poms"]])
-        section("dates from the repository (no usable archive date)",
-                [f"{item['path']}: {item['reason']}" for item in adapter["dates_from_repository"]])
-    section("Stub POMs (degraded names, descriptions, SCM links)", report.stub_poms)
-    section("Dependency problems", report.missing_dependencies)
+        section('POMs filled in from archives', adapter['derived_poms'])
+        section('.pom files ignored (not usable)', [f'{item["path"]}: {item["reason"]}' for item in adapter['replaced_poms']])
+        section('dates from the repository (no usable archive date)', [f'{item["path"]}: {item["reason"]}' for item in adapter['dates_from_repository']])
+    section('Stub POMs (degraded names, descriptions, SCM links)', report.stub_poms)
+    section('Dependency problems', report.missing_dependencies)
     if report.unchecked:
-        lines.append(f"Not checked (POM or manifest unavailable; run with --fetch): {report.unchecked}")
-    return "\n".join(lines)
+        lines.append(f'Not checked (POM or manifest unavailable; run with --fetch): {report.unchecked}')
+    return '\n'.join(lines)

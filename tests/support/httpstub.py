@@ -2,6 +2,7 @@
 
 A route is (status, headers, body), or a callable taking (headers, body) and returning one.
 """
+
 from __future__ import annotations
 
 import re
@@ -11,22 +12,22 @@ from typing import Callable, Union
 
 Reply = tuple[int, dict[str, str], bytes]
 Route = Union[Reply, Callable[[dict[str, str], bytes], Reply]]
-_RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
+_RANGE = re.compile(r'^bytes=(\d*)-(\d*)$')
 
 
 def serve_bytes(data: bytes, *, ranges: bool = True) -> Callable[[dict[str, str], bytes], Reply]:
     """A route serving data, honouring single `Range: bytes=a-b` / `bytes=-n` requests when ranges is set."""
 
     def route(headers: dict[str, str], body: bytes) -> Reply:
-        match = _RANGE.match(headers.get("Range", "")) if ranges else None
+        match = _RANGE.match(headers.get('Range', '')) if ranges else None
         if not match:
             return 200, {}, data
         first, last = match.groups()
-        if first == "":
+        if first == '':
             start, end = max(0, len(data) - int(last)), len(data) - 1
         else:
             start, end = int(first), min(int(last) if last else len(data) - 1, len(data) - 1)
-        return 206, {"Content-Range": f"bytes {start}-{end}/{len(data)}"}, data[start:end + 1]
+        return 206, {'Content-Range': f'bytes {start}-{end}/{len(data)}'}, data[start : end + 1]
 
     return route
 
@@ -39,16 +40,16 @@ class StubServer:
 
         class Handler(BaseHTTPRequestHandler):
             def _handle(self) -> None:
-                length = int(self.headers.get("Content-Length") or 0)
-                body = self.rfile.read(length) if length else b""
+                length = int(self.headers.get('Content-Length') or 0)
+                body = self.rfile.read(length) if length else b''
                 headers = dict(self.headers)
                 stub.requests.append((self.command, self.path, headers, body))
-                route = stub.routes.get((self.command, self.path), (404, {}, b""))
+                route = stub.routes.get((self.command, self.path), (404, {}, b''))
                 status, reply_headers, payload = route(headers, body) if callable(route) else route
                 self.send_response(status)
                 for key, value in reply_headers.items():
                     self.send_header(key, value)
-                self.send_header("Content-Length", str(len(payload)))
+                self.send_header('Content-Length', str(len(payload)))
                 self.end_headers()
                 self.wfile.write(payload)
 
@@ -58,11 +59,11 @@ class StubServer:
             def log_message(self, *args) -> None:
                 pass
 
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+        self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+        self.url = f'http://127.0.0.1:{self.server.server_address[1]}'
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
-    def __enter__(self) -> "StubServer":
+    def __enter__(self) -> 'StubServer':
         self.thread.start()
         return self
 

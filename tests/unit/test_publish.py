@@ -21,48 +21,48 @@ from uc.publish import (
     swap_live,
 )
 
-R1, R2, R3, R4 = "20260922T010000Z", "20260922T020000Z", "20260922T030000Z", "20260922T040000Z"
+R1, R2, R3, R4 = '20260922T010000Z', '20260922T020000Z', '20260922T030000Z', '20260922T040000Z'
 
 
 def make_release(data, rid):
     path = releases_dir(data) / rid
     path.mkdir(parents=True)
-    (path / "marker").write_text(rid)
+    (path / 'marker').write_text(rid)
     return path
 
 
 def test_release_id():
-    assert new_release_id(dt.datetime(2026, 9, 22, 3, 4, 5, tzinfo=dt.timezone.utc)) == "20260922T030405Z"
+    assert new_release_id(dt.datetime(2026, 9, 22, 3, 4, 5, tzinfo=dt.timezone.utc)) == '20260922T030405Z'
 
 
 def test_publish_swaps_live_atomically(tmp_path):
     staging = create_staging(tmp_path, R1)
-    (staging / "marker").write_text("first")
+    (staging / 'marker').write_text('first')
     publish(tmp_path, staging, R1)
-    assert os.readlink(tmp_path / "live") == f"releases/{R1}"
-    assert (tmp_path / "live" / "marker").read_text() == "first"
+    assert os.readlink(tmp_path / 'live') == f'releases/{R1}'
+    assert (tmp_path / 'live' / 'marker').read_text() == 'first'
     assert live_release(tmp_path) == R1
     assert live_path(tmp_path) == releases_dir(tmp_path) / R1
     assert not staging.exists()
 
     second = create_staging(tmp_path, R2)
-    (second / "marker").write_text("second")
+    (second / 'marker').write_text('second')
     publish(tmp_path, second, R2)
-    assert (tmp_path / "live" / "marker").read_text() == "second"
-    assert not (tmp_path / "live.tmp").exists()
+    assert (tmp_path / 'live' / 'marker').read_text() == 'second'
+    assert not (tmp_path / 'live.tmp').exists()
 
 
 def test_create_staging_replaces_leftovers(tmp_path):
-    (create_staging(tmp_path, R1) / "leftover").write_text("x")
-    assert not (create_staging(tmp_path, R1) / "leftover").exists()
+    (create_staging(tmp_path, R1) / 'leftover').write_text('x')
+    assert not (create_staging(tmp_path, R1) / 'leftover').exists()
 
 
 def test_list_releases_ignores_staging_failed_and_junk(tmp_path):
     make_release(tmp_path, R2)
     make_release(tmp_path, R1)
     create_staging(tmp_path, R3)
-    (releases_dir(tmp_path) / f".failed-{R4}").mkdir()
-    (releases_dir(tmp_path) / "junk").mkdir()
+    (releases_dir(tmp_path) / f'.failed-{R4}').mkdir()
+    (releases_dir(tmp_path) / 'junk').mkdir()
     assert list_releases(tmp_path) == [R1, R2]
 
 
@@ -79,24 +79,24 @@ def test_mark_failed_keeps_only_the_latest_failure(tmp_path):
     mark_failed(tmp_path, R1)
     create_staging(tmp_path, R2)
     mark_failed(tmp_path, R2)
-    assert sorted(p.name for p in releases_dir(tmp_path).glob(".failed-*")) == [f".failed-{R2}"]
+    assert sorted(p.name for p in releases_dir(tmp_path).glob('.failed-*')) == [f'.failed-{R2}']
 
 
 def test_reclaim_orphans_removes_stale_staging_and_work(tmp_path):
     create_staging(tmp_path, R1)  # belongs to the current run
     create_staging(tmp_path, R2)  # left by a killed run
-    (tmp_path / "work" / R1).mkdir(parents=True)
-    (tmp_path / "work" / R2).mkdir(parents=True)
-    (releases_dir(tmp_path) / f".failed-{R3}").mkdir(parents=True)
+    (tmp_path / 'work' / R1).mkdir(parents=True)
+    (tmp_path / 'work' / R2).mkdir(parents=True)
+    (releases_dir(tmp_path) / f'.failed-{R3}').mkdir(parents=True)
     make_release(tmp_path, R4)
 
-    assert reclaim_orphans(tmp_path, R1) == [f"releases/{R2}.staging", f"work/{R2}"]
+    assert reclaim_orphans(tmp_path, R1) == [f'releases/{R2}.staging', f'work/{R2}']
 
-    assert (releases_dir(tmp_path) / f"{R1}.staging").is_dir()
-    assert (tmp_path / "work" / R1).is_dir()
-    assert not (releases_dir(tmp_path) / f"{R2}.staging").exists()
-    assert not (tmp_path / "work" / R2).exists()
-    assert (releases_dir(tmp_path) / f".failed-{R3}").is_dir()
+    assert (releases_dir(tmp_path) / f'{R1}.staging').is_dir()
+    assert (tmp_path / 'work' / R1).is_dir()
+    assert not (releases_dir(tmp_path) / f'{R2}.staging').exists()
+    assert not (tmp_path / 'work' / R2).exists()
+    assert (releases_dir(tmp_path) / f'.failed-{R3}').is_dir()
     assert (releases_dir(tmp_path) / R4).is_dir()
 
 
@@ -111,21 +111,21 @@ def test_rollback(tmp_path):
     assert rollback(tmp_path) == R2
     assert live_release(tmp_path) == R2
     assert rollback(tmp_path, R3) == R3
-    with pytest.raises(PublishError, match="unknown release"):
-        rollback(tmp_path, "nope")
+    with pytest.raises(PublishError, match='unknown release'):
+        rollback(tmp_path, 'nope')
     swap_live(tmp_path, R1)
-    with pytest.raises(PublishError, match="no earlier release"):
+    with pytest.raises(PublishError, match='no earlier release'):
         rollback(tmp_path)
 
 
 def test_swap_to_missing_release(tmp_path):
-    with pytest.raises(PublishError, match="does not exist"):
+    with pytest.raises(PublishError, match='does not exist'):
         swap_live(tmp_path, R1)
 
 
 def test_run_lock_is_exclusive(tmp_path):
     with RunLock(tmp_path):
-        with pytest.raises(LockBusy, match="another generation"):
+        with pytest.raises(LockBusy, match='another generation'):
             with RunLock(tmp_path):
                 pass
     with RunLock(tmp_path):

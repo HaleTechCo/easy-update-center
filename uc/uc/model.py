@@ -1,4 +1,5 @@
 """Small value types shared between modules."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -2,6 +2,7 @@
 
 With a certificate chain and key it serves TLS, as a real repository does.
 """
+
 import json
 import ssl
 import sys
@@ -10,10 +11,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 class Echo(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
-        body = json.dumps({"path": self.path, "authorization": self.headers.get("Authorization")}).encode()
+        body = json.dumps({'path': self.path, 'authorization': self.headers.get('Authorization')}).encode()
         self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
@@ -21,7 +22,7 @@ class Echo(BaseHTTPRequestHandler):
         pass
 
 
-server = ThreadingHTTPServer(("0.0.0.0", int(sys.argv[1])), Echo)
+server = ThreadingHTTPServer(('0.0.0.0', int(sys.argv[1])), Echo)
 if len(sys.argv) > 2:
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.load_cert_chain(sys.argv[2], sys.argv[3])
