@@ -1,4 +1,5 @@
 import datetime as dt
+import json
 import os
 
 import pytest
@@ -179,6 +180,30 @@ def test_generate_reclaims_orphaned_staging_and_work(tmp_path, secrets_dir):
     assert f"releases/{stale}.staging" in warning
     assert f"work/{stale}" in warning
     assert live_release(data) == rid
+
+
+def test_generation_through_the_adapter(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER="on")
+    settings.repo_adapter_dir.mkdir(parents=True)
+    settings.repo_adapter_token_file.write_text("adapter-token\n")
+    settings.repo_adapter_report_file.write_text(json.dumps({
+        "derived_poms": ["org.jenkins-ci.plugins:git:5.2.0"],
+        "misplaced": [{"path": "org/jenkins-ci/plugins/caffeine-api/1/caffeine-api-1.hpi",
+                       "correct_path": "io/jenkins/plugins/caffeine-api/1/caffeine-api-1.hpi"}],
+    }))
+    queries = []
+    tools = tools_for(settings)
+    tools.aql_query = lambda *args: queries.append(args) or repo_files()
+    generate(settings, tools=tools, now=T1, base_env={})
+    env = tools.run_jar.envs[-1]
+    assert env["ARTIFACTORY_URL"] == "http://repo-adapter:8081/artifactory/"
+    assert (env["ARTIFACTORY_USERNAME"], env["ARTIFACTORY_PASSWORD"]) == ("uc", "adapter-token")
+    assert queries[0] == ("http://repo-adapter:8081/artifactory/api/", "jenkins", "uc", "adapter-token")
+    status = read_status(settings.data_dir)
+    assert status["doctor"]["repo_adapter"]["derived_poms"] == 1
+    assert status["doctor"]["repo_adapter"]["misplaced"] == 1
+    assert any("dropped by the generator" in w for w in status["warnings"])
+    assert "caffeine-api" not in (settings.data_dir / "status.json").read_text()  # counts only: it is public
 
 
 def test_status_error_omits_raw_exception_text(tmp_path, secrets_dir):

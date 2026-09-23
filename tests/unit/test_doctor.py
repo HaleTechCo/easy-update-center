@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from uc.aql import Gav, RepoFile, classify
 from uc.doctor import (
     ArtifactSource,
     analyze,
+    attach_adapter_report,
     format_report,
     is_stub_pom,
     parse_dependencies,
@@ -138,6 +140,41 @@ def test_run_doctor_includes_live_tiers(tmp_path, secrets_dir):
     assert report.tiers == {"weeklyCores": [], "stableCores": ["2.528.1"]}
     assert report.unchecked == 1
     assert report.exit_code() == 0
+
+
+ADAPTER_REPORT = {
+    "derived_poms": ["io.jenkins.plugins:caffeine-api:3.2.4"],
+    "replaced_poms": [{"path": "org/x/ad/1/ad-1.pom", "reason": "not XML"}],
+    "needs_pom": [{"gav": "org.jenkins-ci.plugins:polaris:1.4.0",
+                   "url": "https://repo.jenkins-ci.org/releases/org/jenkins-ci/plugins/polaris/1.4.0/polaris-1.4.0.pom"}],
+    "misplaced": [{"path": "org/jenkins-ci/plugins/caffeine-api/1/caffeine-api-1.hpi",
+                   "correct_path": "io/jenkins/plugins/caffeine-api/1/caffeine-api-1.hpi"}],
+    "skipped": [{"path": "org/x/big/1/big-1.hpi", "reason": "larger than 512 MiB"}],
+    "dates_from_repository": [{"path": "org/x/cas/1/cas-1.hpi", "reason": "archive date 1980-02-01 is before 2004"}],
+}
+
+
+def test_the_adapter_report_adds_sections_and_counts_its_drops(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER="on")
+    settings.repo_adapter_dir.mkdir(parents=True)
+    settings.repo_adapter_report_file.write_text(json.dumps({"archives": 5, **ADAPTER_REPORT}))
+    listing = classify(plugin("polaris", "1.4.0", "hpi") + plugin("git", "5.2.0", "hpi", "pom"))
+    report = attach_adapter_report(analyze(listing, versions(), FakeSource({}, {})), settings)
+    assert report.dropped == 3  # polaris (no POM at all), the misplaced and the skipped archive
+    assert report.summary()["repo_adapter"] == {name: 1 for name in ADAPTER_REPORT}
+    text = format_report(report, settings)
+    assert "(through repo-adapter)" in text
+    assert "procure the real .pom (1):" in text and ADAPTER_REPORT["needs_pom"][0]["url"] in text
+    assert "-> " + "io/jenkins/plugins/caffeine-api/1/caffeine-api-1.hpi" in text.replace("  ->  ", " -> ")
+    assert "POMs filled in from archives (1):" in text
+    assert "org/x/ad/1/ad-1.pom: not XML" in text
+    assert "archive date 1980-02-01 is before 2004" in text
+
+
+def test_without_the_adapter_there_is_no_adapter_report(tmp_path, secrets_dir):
+    report = attach_adapter_report(analyze(classify([]), versions(), FakeSource({}, {})),
+                                   make_settings(tmp_path, secrets_dir))
+    assert report.repo_adapter is None and report.summary()["repo_adapter"] is None
 
 
 def test_format_report(tmp_path, secrets_dir):

@@ -35,24 +35,47 @@ class DoctorReport:
     missing_dependencies: list[str] = field(default_factory=list)
     unchecked: int = 0  # newest releases whose POM or manifest was unavailable
     tiers: dict | None = None
+    # From the repo-adapter's report.json (repo-adapter spec §7); None when the adapter is off.
+    repo_adapter: dict | None = None
+
+    def _adapter(self, name: str) -> list:
+        return (self.repo_adapter or {}).get(name) or []
 
     @property
     def dropped(self) -> int:
-        return len(self.hpi_without_pom) + len(self.war_without_pom) + len(self.non_maven)
+        # needs_pom archives already count as hpi_without_pom: no POM reaches the listing for them.
+        return (len(self.hpi_without_pom) + len(self.war_without_pom) + len(self.non_maven)
+                + len(self._adapter("misplaced")) + len(self._adapter("skipped")))
 
     def exit_code(self) -> int:
         return 1 if self.dropped or self.missing_dependencies else 0
 
     def summary(self) -> dict:
+        """For the public status.json: counts only, never paths or URLs."""
         return {
             "plugins": self.plugins, "cores": self.cores,
             "hpi_without_pom": len(self.hpi_without_pom), "war_without_pom": len(self.war_without_pom),
             "non_maven": len(self.non_maven), "stub_poms": len(self.stub_poms),
             "missing_dependencies": len(self.missing_dependencies), "unchecked": self.unchecked,
+            "repo_adapter": ({name: len(self._adapter(name)) for name in ADAPTER_SECTIONS}
+                             if self.repo_adapter is not None else None),
         }
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+ADAPTER_SECTIONS = ("derived_poms", "replaced_poms", "needs_pom", "misplaced", "skipped", "dates_from_repository")
+
+
+def attach_adapter_report(report: DoctorReport, settings: Settings) -> DoctorReport:
+    """Add the repo-adapter's report of what it filled in and what it dropped, when the adapter is on."""
+    if settings.repo_adapter:
+        from .repo_adapter.listing import read_report
+
+        data = read_report(settings.repo_adapter_report_file) or {}
+        report.repo_adapter = {name: data.get(name) or [] for name in ADAPTER_SECTIONS}
+    return report
 
 
 class Source(Protocol):
@@ -196,6 +219,7 @@ def run_doctor(
     files = query(settings.source_api_url, settings.repo_key, creds.repo_username, creds.repo_password)
     report = analyze(aql.classify(files), versions,
                      ArtifactSource.from_settings(settings, creds, allow_network=fetch))
+    attach_adapter_report(report, settings)
     tiers_file = settings.data_dir / "live" / "tiers.json"
     if tiers_file.is_file():
         try:
@@ -225,13 +249,26 @@ def format_report(report: DoctorReport, settings: Settings) -> str:
             lines.extend(f"{indent}  {item}" for item in items)
 
     lines.append("")
+    adapter = report.repo_adapter
     if report.dropped:
         lines.append(f"Dropped by the generator: {report.dropped}")
-        section(".hpi/.jpi without a .pom", report.hpi_without_pom, "  ")
+        if adapter is not None:
+            section("no POM in the repository or the archive: procure the real .pom",
+                    [f"{item['gav']}  {item['url']}" for item in adapter["needs_pom"]], "  ")
+            section("misplaced: move to the path its manifest names",
+                    [f"{item['path']}  ->  {item['correct_path']}" for item in adapter["misplaced"]], "  ")
+            section("skipped", [f"{item['path']}: {item['reason']}" for item in adapter["skipped"]], "  ")
+        else:
+            section(".hpi/.jpi without a .pom", report.hpi_without_pom, "  ")
         section("jenkins-war without a .pom", report.war_without_pom, "  ")
         section("not in Maven layout", report.non_maven, "  ")
     else:
         lines.append("Nothing in the source is dropped by the generator.")
+    if adapter is not None:
+        section("POMs filled in from archives", adapter["derived_poms"])
+        section(".pom files ignored (not usable)", [f"{item['path']}: {item['reason']}" for item in adapter["replaced_poms"]])
+        section("dates from the repository (no usable archive date)",
+                [f"{item['path']}: {item['reason']}" for item in adapter["dates_from_repository"]])
     section("Stub POMs (degraded names, descriptions, SCM links)", report.stub_poms)
     section("Dependency problems", report.missing_dependencies)
     if report.unchecked:
