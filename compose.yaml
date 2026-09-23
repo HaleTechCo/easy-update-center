@@ -1,4 +1,4 @@
-# Jenkins update center (spec §4).
+# Jenkins update center (spec §4; repo-adapter spec §3).
 #   online:     docker compose up -d
 #   air-gapped: docker compose -f compose.yaml -f compose.airgapped.yaml up -d
 #   one-shot:   docker compose run --rm uc doctor | generate | rollback | status
@@ -13,6 +13,9 @@ x-uc: &uc
   volumes:
     - uc-data:/data
     - ./config/overlay:/config/overlay:ro
+  networks: [default, repo]
+  depends_on:
+    repo-adapter: {condition: service_healthy}
   secrets:
     - update-center.key
     - update-center.cert
@@ -38,6 +41,29 @@ services:
       - download_proxy_auth
     restart: unless-stopped
 
+  # Answers the generator's Artifactory requests from Artifactory or Artifact Keeper and fills in POMs,
+  # descriptions and release dates from the archives. Idle when REPO_ADAPTER is off (the online default).
+  repo-adapter:
+    image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    env_file: ${UC_ENV_FILE:-.env}
+    command: ["repo-adapter"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - uc-data:/data
+    networks: [default, repo]
+    secrets:
+      - repo_username
+      - repo_password
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    restart: unless-stopped
+
   scheduler:
     <<: *uc
     command: ["schedule"]
@@ -46,6 +72,12 @@ services:
   uc:
     <<: *uc
     profiles: ["tools"]
+
+networks:
+  default: {}
+  # uc, scheduler and the adapter only: the internet-facing web container cannot reach the adapter.
+  repo:
+    internal: true
 
 volumes:
   uc-data:

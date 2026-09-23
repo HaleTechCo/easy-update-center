@@ -8,8 +8,15 @@ x-blocked-hosts: &blocked-hosts
   - "reports.jenkins.io:127.0.0.1"
   - "updates.jenkins.io:127.0.0.1"
 
+# The repo-adapter is on by default in air-gapped mode, so only it gets the repository credentials
+# (repo-adapter spec §5.3): the !override lists leave them out of uc and scheduler. With
+# REPO_ADAPTER=off, add repo_username and repo_password back to both lists.
 services:
   scheduler:
     extra_hosts: *blocked-hosts
+    secrets: !override [update-center.key, update-center.cert, root-ca.crt, github_username, github_token]
   uc:
+    extra_hosts: *blocked-hosts
+    secrets: !override [update-center.key, update-center.cert, root-ca.crt, github_username, github_token]
+  repo-adapter:
     extra_hosts: *blocked-hosts
