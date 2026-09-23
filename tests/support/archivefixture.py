@@ -40,7 +40,8 @@ def make_hpi(
     group: str, artifact: str, version: str, *, layout: str = 'maven', embed_pom: bool = True, pom: bytes | None = None, manifest_group: str | None = '', manifest_artifact: str | None = '', description: bytes | None = b'<div>An excellent plugin.</div>', date: tuple = DATE, unix_time: int | None = None
 ) -> bytes:
     """layout: maven (WEB-INF/lib/<a>.jar), gradle (WEB-INF/lib/<a>-<v>.jar, no META-INF/maven) or
-    classes (index.jelly under WEB-INF/classes). manifest_group/artifact default to the real ones."""
+    classes (index.jelly under WEB-INF/classes). manifest_group/artifact default to the real ones.
+    """
     group_in_manifest = group if manifest_group == '' else manifest_group
     artifact_in_manifest = artifact if manifest_artifact == '' else manifest_artifact
     buffer = io.BytesIO()

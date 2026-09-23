@@ -28,7 +28,7 @@ def test_init_creates_a_valid_chain(pki_material):
 def test_cert_info(pki_material):
     info = cert_info(pki_material / 'update-center.cert')
     assert 'CN=Jenkins Update Center Signing' in info.subject
-    assert 43 <= info.days_left(dt.datetime.now(dt.timezone.utc)) <= 45
+    assert 43 <= info.days_left(dt.datetime.now(dt.UTC)) <= 45
     assert len(info.fingerprint_sha256.split(':')) == 32
 
 

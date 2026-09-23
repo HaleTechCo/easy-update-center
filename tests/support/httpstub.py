@@ -7,11 +7,12 @@ from __future__ import annotations
 
 import re
 import threading
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Callable, Union
+from typing import Self
 
 Reply = tuple[int, dict[str, str], bytes]
-Route = Union[Reply, Callable[[dict[str, str], bytes], Reply]]
+Route = Reply | Callable[[dict[str, str], bytes], Reply]
 _RANGE = re.compile(r'^bytes=(\d*)-(\d*)$')
 
 
@@ -53,8 +54,8 @@ class StubServer:
                 self.end_headers()
                 self.wfile.write(payload)
 
-            do_GET = _handle
-            do_POST = _handle
+            do_GET = _handle  # noqa: N815 - http.server dispatches on the do_<METHOD> name
+            do_POST = _handle  # noqa: N815 - same
 
             def log_message(self, *args) -> None:
                 pass
@@ -63,7 +64,7 @@ class StubServer:
         self.url = f'http://127.0.0.1:{self.server.server_address[1]}'
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
-    def __enter__(self) -> 'StubServer':
+    def __enter__(self) -> Self:
         self.thread.start()
         return self
 

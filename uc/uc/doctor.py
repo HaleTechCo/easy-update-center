@@ -3,22 +3,27 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import json
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Callable, Protocol
+from typing import TYPE_CHECKING, Protocol
 from urllib.parse import urlsplit
 
 from . import aql, http
-from .aql import Gav, Listing
-from .config import Settings
 from .errors import UcError
-from .model import Credentials
 from .pom import safe_root
-from .versions import VersionTool
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from .aql import Gav, Listing
+    from .config import Settings
+    from .model import Credentials
+    from .versions import VersionTool
 
 
 class DoctorError(UcError):
@@ -89,7 +94,7 @@ class Source(Protocol):
 class ArtifactSource:
     """Reads POMs and MANIFEST.MF the way update-center2 does, from its cache first."""
 
-    def __init__(self, artifactory_url: str, repository: str, username: str, password: str, cache_dir: Path | None, allow_network: bool, timeout: float = 60) -> None:
+    def __init__(self, artifactory_url: str, repository: str, username: str, password: str, *, cache_dir: Path | None, allow_network: bool, timeout: float = 60) -> None:
         self.base = f'{artifactory_url}{repository}/'
         self.cache_dir = cache_dir
         self.allow_network = allow_network
@@ -97,9 +102,9 @@ class ArtifactSource:
         self._auth = 'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()
 
     @classmethod
-    def from_settings(cls, settings: Settings, creds: Credentials, *, allow_network: bool) -> 'ArtifactSource':
+    def from_settings(cls, settings: Settings, creds: Credentials, *, allow_network: bool) -> ArtifactSource:
         # Same URL the jar uses, so cache keys (sha256 of the URL path) match.
-        return cls(settings.source_url, settings.repo_key, creds.repo_username, creds.repo_password, settings.cache_dir, allow_network)
+        return cls(settings.source_url, settings.repo_key, creds.repo_username, creds.repo_password, cache_dir=settings.cache_dir, allow_network=allow_network)
 
     def pom(self, gav: Gav) -> bytes | None:
         return self._get(self.base + gav.with_extension('pom').maven_path)
@@ -130,9 +135,11 @@ class ArtifactSource:
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 return None
-            raise DoctorError(f'GET {url} failed with HTTP {exc.code}') from exc
+            msg = f'GET {url} failed with HTTP {exc.code}'
+            raise DoctorError(msg) from exc
         except OSError as exc:
-            raise DoctorError(f'GET {url} failed: {exc}') from exc
+            msg = f'GET {url} failed: {exc}'
+            raise DoctorError(msg) from exc
 
 
 def parse_manifest(text: str) -> dict[str, str]:
@@ -167,10 +174,7 @@ def is_stub_pom(data: bytes) -> bool:
     root = safe_root(data)
     if root is None:
         return True
-    for child in root:
-        if child.tag.rsplit('}', 1)[-1] == 'name' and (child.text or '').strip():
-            return False
-    return True
+    return all(not (child.tag.rsplit('}', 1)[-1] == 'name' and (child.text or '').strip()) for child in root)
 
 
 def analyze(listing: Listing, versions: VersionTool, source: Source) -> DoctorReport:
@@ -203,7 +207,7 @@ def analyze(listing: Listing, versions: VersionTool, source: Source) -> DoctorRe
             else:
                 checks.append((artifact_id, gav.version, name, required, latest[name].version))
     results = versions.compare_many([(available, required) for *_, required, available in checks])
-    for (artifact_id, version, name, required, available), cmp in zip(checks, results):
+    for (artifact_id, version, name, required, available), cmp in zip(checks, results, strict=False):
         if cmp < 0:
             report.missing_dependencies.append(f'{artifact_id}:{version} requires {name} >= {required} (newest available: {available})')
     return report
@@ -222,10 +226,8 @@ def run_doctor(
     attach_adapter_report(report, settings)
     tiers_file = settings.data_dir / 'live' / 'tiers.json'
     if tiers_file.is_file():
-        try:
+        with contextlib.suppress(ValueError):
             report.tiers = json.loads(tiers_file.read_text(encoding='utf-8'))
-        except ValueError:
-            pass
     return report
 
 

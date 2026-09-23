@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import urllib.request
-from typing import Callable, Mapping
+from collections.abc import Callable, Mapping
 
 from .errors import UcError
 
@@ -21,4 +21,5 @@ def get(url: str, headers: Mapping[str, str] | None = None, timeout: float = 60)
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.read()
     except (OSError, ValueError) as exc:  # URLError and HTTPError are OSError subclasses
-        raise HttpError(f'GET {url} failed: {exc}') from exc
+        msg = f'GET {url} failed: {exc}'
+        raise HttpError(msg) from exc

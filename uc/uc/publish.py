@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 from pathlib import Path
+from typing import Self
 
 from .errors import UcError
 
@@ -18,7 +19,7 @@ class PublishError(UcError):
     pass
 
 
-class LockBusy(UcError):
+class LockBusyError(UcError):
     pass
 
 
@@ -29,14 +30,15 @@ class RunLock:
         self.path = data_dir / '.lock'
         self._fd: int | None = None
 
-    def __enter__(self) -> 'RunLock':
+    def __enter__(self) -> Self:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             os.close(fd)
-            raise LockBusy(f'another generation holds {self.path}') from None
+            msg = f'another generation holds {self.path}'
+            raise LockBusyError(msg) from None
         self._fd = fd
         return self
 
@@ -52,7 +54,7 @@ def releases_dir(data_dir: Path) -> Path:
 
 
 def new_release_id(now: dt.datetime) -> str:
-    return now.astimezone(dt.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    return now.astimezone(dt.UTC).strftime('%Y%m%dT%H%M%SZ')
 
 
 def staging_path(data_dir: Path, release_id: str) -> Path:
@@ -88,7 +90,8 @@ def list_releases(data_dir: Path) -> list[str]:
 
 def swap_live(data_dir: Path, release_id: str) -> None:
     if not (releases_dir(data_dir) / release_id).is_dir():
-        raise PublishError(f'release {release_id} does not exist')
+        msg = f'release {release_id} does not exist'
+        raise PublishError(msg)
     tmp = data_dir / 'live.tmp'
     if tmp.is_symlink() or tmp.exists():
         tmp.unlink()
@@ -159,9 +162,11 @@ def rollback(data_dir: Path, target: str | None = None) -> str:
     if target is None:
         earlier = [r for r in releases if live is None or r < live]
         if not earlier:
-            raise PublishError('no earlier release to roll back to')
+            msg = 'no earlier release to roll back to'
+            raise PublishError(msg)
         target = earlier[-1]
     elif target not in releases:
-        raise PublishError(f'unknown release {target}; available: {", ".join(releases) or "none"}')
+        msg = f'unknown release {target}; available: {", ".join(releases) or "none"}'
+        raise PublishError(msg)
     swap_live(data_dir, target)
     return target

@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import os
 import shutil
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Callable, Mapping
+from typing import TYPE_CHECKING
 
 from . import aql, args, doctor, downloadmap, errors, htaccess, http, jar, layout, pki, preflight, publish, resources, status, validate
-from .config import Settings
 from .timeutil import iso, utcnow
 from .versions import VersionTool
+
+if TYPE_CHECKING:
+    import datetime as dt
+    from pathlib import Path
+
+    from .config import Settings
 
 AqlQuery = Callable[[str, str, str, str], list[aql.RepoFile]]
 
@@ -50,7 +54,7 @@ def generate(
         shutil.rmtree(work, ignore_errors=True)
         work.mkdir(parents=True)
         try:
-            _build_and_publish(settings, release_id, now, work, force, tools, base_env, warnings)
+            _build_and_publish(settings, release_id, now, work, force=force, tools=tools, base_env=base_env, warnings=warnings)
         except Exception as exc:
             publish.mark_failed(data, release_id)
             status.update_status(
@@ -75,13 +79,14 @@ def _build_and_publish(
     release_id: str,
     now: dt.datetime,
     work: Path,
+    *,
     force: bool,
     tools: Toolchain,
     base_env: Mapping[str, str],
     warnings: list[str],
 ) -> None:
     data = settings.data_dir
-    warnings += preflight.check_public_url(settings.public_url, settings.allow_local_public_url)
+    warnings += preflight.check_public_url(settings.public_url, allow_local=settings.allow_local_public_url)
     cert = preflight.check_signing(settings, now)
     creds = preflight.load_credentials(settings)
     if creds.github_placeholder:

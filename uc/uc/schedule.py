@@ -5,11 +5,15 @@ from __future__ import annotations
 import os
 import traceback
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING
 
 from . import publish
-from .config import Settings
 from .errors import UcError
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from .config import Settings
 
 CRONTAB = Path('/tmp/uc-crontab')
 
@@ -21,7 +25,8 @@ class ScheduleError(UcError):
 def crontab_line(schedule: str) -> str:
     fields = schedule.split()
     if not (len(fields) == 5 or (len(fields) == 1 and fields[0].startswith('@'))):
-        raise ScheduleError(f'GENERATE_SCHEDULE must be a 5-field cron expression or an @macro (got {schedule!r})')
+        msg = f'GENERATE_SCHEDULE must be a 5-field cron expression or an @macro (got {schedule!r})'
+        raise ScheduleError(msg)
     return f'{" ".join(fields)} uc generate\n'
 
 

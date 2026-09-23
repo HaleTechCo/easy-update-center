@@ -4,7 +4,7 @@ import os
 import pytest
 
 from uc.publish import (
-    LockBusy,
+    LockBusyError,
     PublishError,
     RunLock,
     create_staging,
@@ -32,7 +32,7 @@ def make_release(data, rid):
 
 
 def test_release_id():
-    assert new_release_id(dt.datetime(2026, 9, 22, 3, 4, 5, tzinfo=dt.timezone.utc)) == '20260922T030405Z'
+    assert new_release_id(dt.datetime(2026, 9, 22, 3, 4, 5, tzinfo=dt.UTC)) == '20260922T030405Z'
 
 
 def test_publish_swaps_live_atomically(tmp_path):
@@ -124,9 +124,7 @@ def test_swap_to_missing_release(tmp_path):
 
 
 def test_run_lock_is_exclusive(tmp_path):
-    with RunLock(tmp_path):
-        with pytest.raises(LockBusy, match='another generation'):
-            with RunLock(tmp_path):
-                pass
+    with RunLock(tmp_path), pytest.raises(LockBusyError, match='another generation'), RunLock(tmp_path):
+        pass
     with RunLock(tmp_path):
         pass

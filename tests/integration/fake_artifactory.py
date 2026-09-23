@@ -1,7 +1,8 @@
 """Test-only stand-in for the three Artifactory calls update-center2 makes (spec §13):
 POST /artifactory/api/search/aql, GET /artifactory/<repo>/<path>, GET /artifactory/<repo>/<path>!/<entry>.
 update-center2 answers 401 challenges with credentials, so private reads use WWW-Authenticate: Basic.
-File reads honour a single Range, as Artifactory does (the repo-adapter reads archive dates that way)."""
+File reads honour a single Range, as Artifactory does (the repo-adapter reads archive dates that way).
+"""
 
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ def aql_results(root: Path, repository: str) -> list[dict]:
                 continue
             path = Path(directory) / name
             data = path.read_bytes()
-            stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+            stamp = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.UTC).strftime('%Y-%m-%dT%H:%M:%S.000Z')
             results.append(
                 {
                     'repo': repository,
@@ -62,7 +63,7 @@ def read_artifact(root: Path, relative: str) -> bytes | None:
         return None
 
 
-def make_handler(root: Path, credentials: str, anonymous_read: bool):
+def make_handler(root: Path, credentials: str, *, anonymous_read: bool):
     expected = 'Basic ' + base64.b64encode(credentials.encode()).decode()
 
     class Handler(BaseHTTPRequestHandler):
@@ -95,6 +96,7 @@ def make_handler(root: Path, credentials: str, anonymous_read: bool):
             if not match:
                 return self._send(400, b'unsupported query', 'text/plain')
             self._send(200, json.dumps({'results': aql_results(root, match.group(1))}).encode(), 'application/json')
+            return None
 
         def do_GET(self) -> None:
             if not self.path.startswith(PREFIX):
@@ -114,8 +116,9 @@ def make_handler(root: Path, credentials: str, anonymous_read: bool):
                     start, end = int(first), min(int(last) if last else len(data) - 1, len(data) - 1)
                 return self._send(206, data[start : end + 1], headers={'Content-Range': f'bytes {start}-{end}/{len(data)}', 'Accept-Ranges': 'bytes'})
             self._send(200, data)
+            return None
 
-        do_HEAD = do_GET
+        do_HEAD = do_GET  # noqa: N815 - http.server dispatches on the do_<METHOD> name
 
     return Handler
 
@@ -127,7 +130,7 @@ def main() -> None:
     parser.add_argument('--credentials', required=True, help='username:password')
     parser.add_argument('--anonymous-read', action='store_true', help='allow file reads without credentials')
     args = parser.parse_args()
-    handler = make_handler(args.root, args.credentials, args.anonymous_read)
+    handler = make_handler(args.root, args.credentials, anonymous_read=args.anonymous_read)
     ThreadingHTTPServer(('0.0.0.0', args.port), handler).serve_forever()
 
 

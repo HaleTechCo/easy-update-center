@@ -2,13 +2,13 @@ import base64
 import json
 
 import pytest
-from httpstub import StubServer
 
+from httpstub import StubServer
 from uc.aql import AQL_TEMPLATE, AqlError, Gav, RepoFile, classify, query_repository, to_gav
 
 
 @pytest.mark.parametrize(
-    'path,name,expected',
+    ('path', 'name', 'expected'),
     [
         ('org/jenkins-ci/plugins/git/5.2.0', 'git-5.2.0.hpi', Gav('org.jenkins-ci.plugins', 'git', '5.2.0', 'hpi')),
         ('org/jenkins-ci/main/jenkins-war/2.528.1', 'jenkins-war-2.528.1.war', Gav('org.jenkins-ci.main', 'jenkins-war', '2.528.1', 'war')),
@@ -75,9 +75,8 @@ def test_query_repository_sends_the_upstream_query():
 
 def test_query_repository_http_error():
     routes = {('POST', '/api/search/aql'): (403, {}, b'forbidden')}
-    with StubServer(routes) as stub:
-        with pytest.raises(AqlError, match='HTTP 403: forbidden'):
-            query_repository(stub.url + '/api/', 'jenkins', 'uc', 'secret')
+    with StubServer(routes) as stub, pytest.raises(AqlError, match='HTTP 403: forbidden'):
+        query_repository(stub.url + '/api/', 'jenkins', 'uc', 'secret')
 
 
 def test_query_repository_rejects_odd_repository_names():

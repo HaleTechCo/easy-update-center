@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING
 
 from sitefixture import uc_document, write_site
-
 from uc.jar import JarError
-from uc.model import Tiers
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
+
+    from uc.model import Tiers
 
 
 class SimpleVersions:
@@ -55,7 +58,8 @@ class FakeJar:
             target.write_text(json.dumps({'weeklyCores': list(self.tiers.weekly), 'stableCores': list(self.tiers.stable)}))
             return
         if self.fail_sites:
-            raise JarError('update-center2 exited with status 1; see log')
+            msg = 'update-center2 exited with status 1; see log'
+            raise JarError(msg)
         root = self.url_root or env['DOWNLOADS_ROOT_URL'][: -len('/download')]
         arguments = Path(cmd[cmd.index('--arguments-file') + 1])
         for line in arguments.read_text().splitlines():

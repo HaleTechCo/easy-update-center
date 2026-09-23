@@ -7,17 +7,20 @@ import io
 import struct
 import zipfile
 import zlib
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import BinaryIO, Callable
+from typing import TYPE_CHECKING, BinaryIO
 
-from ..doctor import parse_manifest
-from ..errors import UcError
-from ..pom import Coordinates
+from uc.doctor import parse_manifest
+from uc.errors import UcError
+
+if TYPE_CHECKING:
+    from uc.pom import Coordinates
 
 SMALL_ENTRY_LIMIT = 1024 * 1024  # a POM, MANIFEST.MF or index.jelly
 INNER_JAR_LIMIT = 64 * 1024 * 1024
 CENTRAL_DIRECTORY_LIMIT = 16 * 1024 * 1024
-EARLIEST_RELEASE = dt.datetime(2004, 1, 1, tzinfo=dt.timezone.utc)
+EARLIEST_RELEASE = dt.datetime(2004, 1, 1, tzinfo=dt.UTC)
 MANIFEST = 'META-INF/MANIFEST.MF'
 _EOCD = b'PK\x05\x06'
 _ZIP64_LOCATOR = b'PK\x06\x07'
@@ -49,18 +52,21 @@ def central_directory_size(stream: BinaryIO) -> int:
     tail = stream.read(tail_length)
     at = tail.rfind(_EOCD)
     if at < 0 or len(tail) - at < 22:
-        raise ArchiveError('not a zip archive (no end of central directory record)')
+        msg = 'not a zip archive (no end of central directory record)'
+        raise ArchiveError(msg)
     entries, size = struct.unpack('<HI', tail[at + 10 : at + 16])
     if size != 0xFFFFFFFF and entries != 0xFFFF:
         return size
     locator = tail[at - 20 : at] if at >= 20 else b''
     if not locator.startswith(_ZIP64_LOCATOR):
-        raise ArchiveError('zip64 archive without a zip64 end record locator')
+        msg = 'zip64 archive without a zip64 end record locator'
+        raise ArchiveError(msg)
     (record_offset,) = struct.unpack('<Q', locator[8:16])
     stream.seek(record_offset)
     record = stream.read(56)
     if len(record) < 56 or not record.startswith(_ZIP64_EOCD):
-        raise ArchiveError('zip64 end of central directory record not found')
+        msg = 'zip64 end of central directory record not found'
+        raise ArchiveError(msg)
     (size,) = struct.unpack('<Q', record[40:48])
     return size
 
@@ -69,12 +75,14 @@ def open_archive(stream: BinaryIO) -> zipfile.ZipFile:
     """A ZipFile over a seekable stream, refusing central directories over CENTRAL_DIRECTORY_LIMIT."""
     size = central_directory_size(stream)
     if size > CENTRAL_DIRECTORY_LIMIT:
-        raise ArchiveError(f'central directory of {size} bytes exceeds {CENTRAL_DIRECTORY_LIMIT}')
+        msg = f'central directory of {size} bytes exceeds {CENTRAL_DIRECTORY_LIMIT}'
+        raise ArchiveError(msg)
     stream.seek(0)
     try:
         return zipfile.ZipFile(stream)
     except (zipfile.BadZipFile, zipfile.LargeZipFile, OSError, ValueError) as exc:
-        raise ArchiveError(f'unreadable archive: {exc}') from exc
+        msg = f'unreadable archive: {exc}'
+        raise ArchiveError(msg) from exc
 
 
 def read_entry(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
@@ -84,14 +92,17 @@ def read_entry(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
     except KeyError:
         return None
     if info.file_size > limit:
-        raise ArchiveError(f'{name} is larger than {limit} bytes')
+        msg = f'{name} is larger than {limit} bytes'
+        raise ArchiveError(msg)
     try:
         with archive.open(info) as entry:
             data = entry.read(limit + 1)
     except (zipfile.BadZipFile, OSError, ValueError, NotImplementedError, RuntimeError, zlib.error, EOFError) as exc:
-        raise ArchiveError(f'unreadable entry {name}: {exc}') from exc  # RuntimeError: encrypted
+        msg = f'unreadable entry {name}: {exc}'
+        raise ArchiveError(msg) from exc  # RuntimeError: encrypted
     if len(data) > limit:
-        raise ArchiveError(f'{name} is larger than {limit} bytes')
+        msg = f'{name} is larger than {limit} bytes'
+        raise ArchiveError(msg)
     return data
 
 
@@ -107,7 +118,7 @@ def _extended_mtime(extra: bytes) -> dt.datetime | None:
         body = extra[at + 4 : at + 4 + size]
         if header == 0x5455 and len(body) >= 5 and body[0] & 1:
             (seconds,) = struct.unpack('<i', body[1:5])
-            return dt.datetime.fromtimestamp(seconds, dt.timezone.utc)
+            return dt.datetime.fromtimestamp(seconds, dt.UTC)
         at += 4 + size
     return None
 
@@ -122,7 +133,7 @@ def archive_date(archive: zipfile.ZipFile) -> dt.datetime | None:
     if extended is not None:
         return extended
     try:
-        return dt.datetime(*info.date_time, tzinfo=dt.timezone.utc)
+        return dt.datetime(*info.date_time, tzinfo=dt.UTC)
     except ValueError:
         return None
 

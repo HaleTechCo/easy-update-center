@@ -1,10 +1,10 @@
 """uc repo-adapter: upstream's three Artifactory requests, answered from either repository type
-(repo-adapter spec §3, §4.1, §5.3)."""
+(repo-adapter spec §3, §4.1, §5.3).
+"""
 
 from __future__ import annotations
 
 import base64
-import datetime as dt
 import hmac
 import json
 import os
@@ -13,17 +13,22 @@ import sys
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING
 
-from ..aql import AQL_TEMPLATE, RepoFile, to_gav
-from ..config import Settings, read_secret
-from ..preflight import ADAPTER_USERNAME, load_repository_credentials
-from ..timeutil import utcnow
+from uc.aql import AQL_TEMPLATE, RepoFile, to_gav
+from uc.config import Settings, read_secret
+from uc.preflight import ADAPTER_USERNAME, load_repository_credentials
+from uc.timeutil import utcnow
+
 from .archive import MANIFEST
 from .backends import ArtifactKeeperBackend, ArtifactoryBackend, Backend, Http
 from .cache import Cache
 from .listing import Index, build_index, write_report
+
+if TYPE_CHECKING:
+    import datetime as dt
+    from collections.abc import Callable
+    from pathlib import Path
 
 PREFIX = '/artifactory/'
 QUERY_LIMIT = 64 * 1024
@@ -158,7 +163,7 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 return self._send(502, b'repository error\n', 'text/plain')
             return self._send(200, data) if data is not None else self._send(404)
 
-        do_HEAD = do_GET
+        do_HEAD = do_GET  # noqa: N815 - http.server dispatches on the do_<METHOD> name
 
         def do_POST(self) -> None:
             if self.path.split('?', 1)[0] != PREFIX + 'api/search/aql':
@@ -189,9 +194,9 @@ def create_adapter(settings: Settings) -> Adapter:
     max_bytes = settings.repo_max_archive_mb * 1024 * 1024
     backend: Backend
     if settings.repo_type == 'artifact-keeper':
-        backend = ArtifactKeeperBackend(http, settings.repo_url, settings.repo_key, username, password, settings.repo_adapter_dir / 'tmp', max_bytes)
+        backend = ArtifactKeeperBackend(http, settings.repo_url, settings.repo_key, username=username, token=password, tmp_dir=settings.repo_adapter_dir / 'tmp', max_archive_bytes=max_bytes)
     else:
-        backend = ArtifactoryBackend(http, settings.repo_url, settings.repo_api_url, settings.repo_key, username, password, max_bytes)
+        backend = ArtifactoryBackend(http, settings.repo_url, settings.repo_api_url, settings.repo_key, username=username, password=password, max_archive_bytes=max_bytes)
     return Adapter(backend, Cache(settings.repo_adapter_dir / 'cache'), key=settings.repo_key, report_file=settings.repo_adapter_report_file)
 
 

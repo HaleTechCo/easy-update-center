@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from .errors import UcError
 from .htaccess import absolute_targets
 from .layout import site_dirs
-from .model import Tiers
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
+    from pathlib import Path
+
+    from .model import Tiers
 
 JSONP_PREFIX = 'updateCenter.post('
 SITE_FILES = ('update-center.json', 'update-center.actual.json')
@@ -41,8 +45,7 @@ def load_site_json(path: Path) -> Any:
     text = path.read_text(encoding='utf-8').strip()
     if text.startswith(JSONP_PREFIX):
         text = text[len(JSONP_PREFIX) :].rstrip()
-        if text.endswith(');'):
-            text = text[:-2]
+        text = text.removesuffix(');')
     return json.loads(text)
 
 
@@ -67,7 +70,8 @@ def download_key(url: str, downloads_root: str) -> str | None:
 
 def offers_core(doc: Any) -> bool:
     """With no jenkins-war in the repository, upstream still writes `core`, holding only its defaults
-    (name and size): the site then offers plugins only, which is valid (spec §6 step 9)."""
+    (name and size): the site then offers plugins only, which is valid (spec §6 step 9).
+    """
     core = doc.get('core') if isinstance(doc, dict) else None
     return isinstance(core, dict) and bool(core.get('url') or core.get('version'))
 
@@ -104,7 +108,7 @@ def validate_release(
         if not certificates or certificates[0] != signing_cert_b64:
             problems.append(f'{label} is not signed with the configured signing certificate')
 
-    def check_url(url: Any, label: str, collect: bool) -> None:
+    def check_url(url: Any, label: str, *, collect: bool) -> None:
         key = download_key(url, downloads_root) if isinstance(url, str) else None
         if key is None:
             bad_urls.add(f'{label} {url}')

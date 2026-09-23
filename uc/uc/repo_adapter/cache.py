@@ -8,9 +8,12 @@ import re
 import shutil
 import tempfile
 import time
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from .archive import ArchiveFacts
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _SHA256 = re.compile(r'^[0-9a-f]{64}$')
 PRUNE_AFTER_DAYS = 30
@@ -27,7 +30,8 @@ class Cache:
 
     def _dir(self, sha256: str) -> Path:
         if not _SHA256.match(sha256):
-            raise ValueError(f'not a sha256: {sha256!r}')
+            msg = f'not a sha256: {sha256!r}'
+            raise ValueError(msg)
         return self.root / sha256[:2] / sha256
 
     def _read(self, sha256: str, name: str) -> bytes | None:

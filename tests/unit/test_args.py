@@ -1,8 +1,8 @@
 import pytest
-from ucsupport import make_settings
 
 from uc.args import ArgumentsError, build_argument_lines, write_arguments_file
 from uc.model import Tiers
+from ucsupport import make_settings
 
 
 def test_argument_lines_mirror_upstream(tmp_path, secrets_dir):

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from .config import Settings
 from .errors import UcError
-from .model import Tiers
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from .config import Settings
+    from .model import Tiers
 
 
 class ArgumentsError(UcError):
@@ -59,7 +63,8 @@ def build_argument_lines(settings: Settings, staging: Path, tiers: Tiers) -> lis
         tokens = [*common_arguments(settings), *site]
         bad = [t for t in tokens if not t or any(c.isspace() for c in t)]
         if bad:
-            raise ArgumentsError(f'update-center2 splits argument lines on spaces; these values cannot be used: {bad}')
+            msg = f'update-center2 splits argument lines on spaces; these values cannot be used: {bad}'
+            raise ArgumentsError(msg)
         lines.append(' '.join(tokens))
     return lines
 

@@ -1,6 +1,7 @@
 """Test-only stand-in for the Artifact Keeper 1.10 calls the repo-adapter makes (repo-adapter spec §2):
 GET /api/v1/repositories/<key>/artifacts (Bearer only, at most 100 per page, keyset cursor) and
-GET /maven/<key>/<path> (basic or Bearer; .sha1/.sha256/.md5 side files). Like the real one it ignores Range."""
+GET /maven/<key>/<path> (basic or Bearer; .sha1/.sha256/.md5 side files). Like the real one it ignores Range.
+"""
 
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ def list_items(root: Path, key: str) -> list[dict]:
     for directory, _, names in os.walk(base):
         for name in names:
             path = Path(directory) / name
-            created = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.timezone.utc)
+            created = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.UTC)
             items.append(
                 {
                     'id': hashlib.md5(str(path).encode()).hexdigest(),
@@ -67,7 +68,7 @@ def page(items: list[dict], query: dict[str, list[str]]) -> dict:
     return body
 
 
-def make_handler(root: Path, user: str, token: str, anonymous_read: bool):
+def make_handler(root: Path, user: str, token: str, *, anonymous_read: bool):
     bearer = f'Bearer {token}'
     basic = 'Basic ' + base64.b64encode(f'{user}:{token}'.encode()).decode()
 
@@ -117,7 +118,7 @@ def main() -> None:
     parser.add_argument('--token', required=True)
     parser.add_argument('--anonymous-read', action='store_true', help='allow /maven reads without credentials')
     args = parser.parse_args()
-    handler = make_handler(args.root, args.user, args.token, args.anonymous_read)
+    handler = make_handler(args.root, args.user, args.token, anonymous_read=args.anonymous_read)
     ThreadingHTTPServer(('0.0.0.0', args.port), handler).serve_forever()
 
 

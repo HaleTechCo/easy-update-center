@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import hashlib
 import json
 import os
 import tempfile
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from ..aql import Gav, RepoFile, to_gav
-from ..pom import Coordinates, unusable_reason
-from ..timeutil import iso
+from uc.aql import Gav, RepoFile, to_gav
+from uc.pom import Coordinates, unusable_reason
+from uc.timeutil import iso
+
 from .archive import ArchiveError, ArchiveFacts, plausible
 from .backends import Backend, BackendError, RepoEntry, artifactory_time, parse_time
-from .cache import Cache
+
+if TYPE_CHECKING:
+    import datetime as dt
+    from pathlib import Path
+
+    from .cache import Cache
 
 PUBLIC_RELEASES = 'https://repo.jenkins-ci.org/releases/'
 ARCHIVE_EXTENSIONS = ('hpi', 'jpi', 'war')
@@ -60,7 +65,7 @@ def _row(key: str, directory: str, name: str, *, sha256: str, sha1: str, size: i
     return {'repo': key, 'path': directory, 'name': name, 'created': created, 'modified': modified, 'sha256': sha256, 'actual_sha1': sha1, 'size': size}
 
 
-def _facts(backend: Backend, cache: Cache, entry: RepoEntry, coordinates: Coordinates, plugin: bool) -> ArchiveFacts:
+def _facts(backend: Backend, cache: Cache, entry: RepoEntry, coordinates: Coordinates, *, plugin: bool) -> ArchiveFacts:
     facts = cache.facts(entry.sha256)
     if facts is None:
         facts = backend.facts(entry, coordinates, plugin=plugin)
@@ -108,7 +113,7 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
         coordinates = (gav.group_id, gav.artifact_id, gav.version)
         plugin = entry.extension != 'war'
         try:
-            facts = _facts(backend, cache, entry, coordinates, plugin)
+            facts = _facts(backend, cache, entry, coordinates, plugin=plugin)
             sha1 = _sha1(backend, cache, entry)
         except Exception as exc:  # one bad archive must not stop the listing: it is dropped and reported
             report.skipped.append({'path': entry.path, 'reason': _reason(exc)})

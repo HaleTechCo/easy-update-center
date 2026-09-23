@@ -5,12 +5,15 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import TYPE_CHECKING
 
-from .config import Settings
 from .errors import UcError
 from .model import Credentials, Tiers
+
+if TYPE_CHECKING:
+    from .config import Settings
 
 JarRunner = Callable[[list[str], Mapping[str, str], Path], None]
 
@@ -71,7 +74,8 @@ def run_jar(cmd: list[str], env: Mapping[str, str], log_path: Path) -> None:
             sys.stdout.flush()
             log.write(line)
     if proc.returncode != 0:
-        raise JarError(f'update-center2 exited with status {proc.returncode}; see {log_path}')
+        msg = f'update-center2 exited with status {proc.returncode}; see {log_path}'
+        raise JarError(msg)
 
 
 def generate_tiers(
@@ -80,13 +84,15 @@ def generate_tiers(
     resources: Path,
     out: Path,
     log: Path,
+    *,
     run: JarRunner = run_jar,
 ) -> Tiers:
     run(java_command(settings, '--resources-dir', str(resources), *settings.extra_args, '--dynamic-tier-list-file', str(out)), env, log)
     try:
         data = json.loads(out.read_text(encoding='utf-8'))
     except (OSError, ValueError) as exc:
-        raise JarError(f'tier list {out} is missing or invalid: {exc}') from exc
+        msg = f'tier list {out} is missing or invalid: {exc}'
+        raise JarError(msg) from exc
     return Tiers(tuple(data.get('weeklyCores') or ()), tuple(data.get('stableCores') or ()))
 
 
@@ -96,6 +102,7 @@ def generate_sites(
     resources: Path,
     arguments_file: Path,
     log: Path,
+    *,
     run: JarRunner = run_jar,
 ) -> None:
     run(java_command(settings, '--resources-dir', str(resources), '--arguments-file', str(arguments_file)), env, log)

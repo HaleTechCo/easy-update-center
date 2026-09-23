@@ -6,12 +6,12 @@ import datetime as dt
 
 
 def utcnow() -> dt.datetime:
-    return dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
+    return dt.datetime.now(dt.UTC).replace(microsecond=0)
 
 
 def iso(moment: dt.datetime) -> str:
-    return moment.astimezone(dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    return moment.astimezone(dt.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def parse_iso(value: str) -> dt.datetime:
-    return dt.datetime.fromisoformat(value.replace('Z', '+00:00')).astimezone(dt.timezone.utc)
+    return dt.datetime.fromisoformat(value).astimezone(dt.UTC)

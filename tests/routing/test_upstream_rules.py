@@ -1,6 +1,7 @@
 """Upstream's redirect expectations (site/test/test.sh at 3.18.4), ported so that a mismatch fails."""
 
 import pytest
+
 from helpers import fetch
 
 HOST = 'web-full'
@@ -63,7 +64,7 @@ EXPECTED = [
 ]
 
 
-@pytest.mark.parametrize('path,target', EXPECTED)
+@pytest.mark.parametrize(('path', 'target'), EXPECTED)
 def test_redirect(path, target):
     response = fetch(HOST, path)
     assert response.status in (301, 302), response.status

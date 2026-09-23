@@ -3,10 +3,9 @@ import json
 import os
 
 import pytest
+
 from fakejar import FakeJar, SimpleVersions
 from sitefixture import DEFAULT_PLUGINS
-from ucsupport import make_settings
-
 from uc.aql import AqlError, RepoFile
 from uc.generate import Toolchain, generate
 from uc.htaccess import absolute_targets
@@ -14,12 +13,13 @@ from uc.jar import JarError
 from uc.model import Tiers
 from uc.pki import cert_der_b64
 from uc.preflight import PreflightError
-from uc.publish import LockBusy, RunLock, create_staging, list_releases, live_release
+from uc.publish import LockBusyError, RunLock, create_staging, list_releases, live_release
 from uc.status import read_status
 from uc.validate import ValidationError
+from ucsupport import make_settings
 
-T1 = dt.datetime(2026, 9, 22, 3, 0, tzinfo=dt.timezone.utc)
-T2 = dt.datetime(2026, 9, 22, 9, 0, tzinfo=dt.timezone.utc)
+T1 = dt.datetime(2026, 9, 22, 3, 0, tzinfo=dt.UTC)
+T2 = dt.datetime(2026, 9, 22, 9, 0, tzinfo=dt.UTC)
 TIERS = Tiers(('2.540',), ('2.528.1',))
 
 
@@ -34,11 +34,13 @@ def repo_files():
 
 
 def no_network(url, headers=None, timeout=60):
-    raise AssertionError(f'unexpected network access: {url}')
+    msg = f'unexpected network access: {url}'
+    raise AssertionError(msg)
 
 
 def no_query(*args):
-    raise AssertionError('AQL must not be queried with the mirror backend')
+    msg = 'AQL must not be queried with the mirror backend'
+    raise AssertionError(msg)
 
 
 def tools_for(settings, **jar_options):
@@ -149,9 +151,8 @@ def test_online_generation_uses_mirror_and_tool_installers(tmp_path, secrets_dir
 def test_lock_prevents_concurrent_runs(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     settings.data_dir.mkdir(parents=True)
-    with RunLock(settings.data_dir):
-        with pytest.raises(LockBusy):
-            generate(settings, tools=tools_for(settings), now=T1, base_env={})
+    with RunLock(settings.data_dir), pytest.raises(LockBusyError):
+        generate(settings, tools=tools_for(settings), now=T1, base_env={})
 
 
 def test_old_releases_are_pruned(tmp_path, secrets_dir):
@@ -229,7 +230,8 @@ def test_post_publish_failure_still_reports_the_new_live_release(tmp_path, secre
     settings = make_settings(tmp_path, secrets_dir)
 
     def boom(*args, **kwargs):
-        raise RuntimeError('prune blew up')
+        msg = 'prune blew up'
+        raise RuntimeError(msg)
 
     monkeypatch.setattr('uc.generate.publish.prune', boom)
     with pytest.raises(RuntimeError):

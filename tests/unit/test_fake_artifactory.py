@@ -13,10 +13,9 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'integration'))
 
-from fake_artifactory import aql_results, make_handler  # noqa: E402
-
-from uc.aql import Gav, classify, query_repository  # noqa: E402
-from uc.doctor import ArtifactSource  # noqa: E402
+from fake_artifactory import aql_results, make_handler
+from uc.aql import Gav, classify, query_repository
+from uc.doctor import ArtifactSource
 
 
 def hpi(short_name: str) -> bytes:
@@ -35,7 +34,7 @@ def server(tmp_path):
     (tmp_path / 'jenkins' / 'README.txt').write_text('ignored')
 
     def start(anonymous_read):
-        httpd = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(tmp_path, 'uc:pw', anonymous_read))
+        httpd = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(tmp_path, 'uc:pw', anonymous_read=anonymous_read))
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         servers.append(httpd)
         return f'http://127.0.0.1:{httpd.server_address[1]}/artifactory/'
@@ -65,7 +64,7 @@ def test_our_aql_client_reads_the_fake(server):
 
 def test_archive_entries_and_files(server):
     _, start = server
-    source = ArtifactSource(start(anonymous_read=False), 'jenkins', 'uc', 'pw', None, allow_network=True)
+    source = ArtifactSource(start(anonymous_read=False), 'jenkins', 'uc', 'pw', cache_dir=None, allow_network=True)
     gav = Gav('org.jenkins-ci.plugins', 'git', '5.2.0', 'hpi')
     assert 'Short-Name: git' in source.manifest(gav)
     assert source.pom(gav) == b'<project><name>Git</name></project>'

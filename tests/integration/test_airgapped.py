@@ -1,5 +1,6 @@
 """Air-gapped end to end (spec §13, repo-adapter spec §9): doctor, generate through the repo-adapter, serve,
-and real Jenkins controllers installing plugins. `make it-airgapped` runs it once per repository type."""
+and real Jenkins controllers installing plugins. `make it-airgapped` runs it once per repository type.
+"""
 
 from __future__ import annotations
 
@@ -15,11 +16,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from jenkins import Jenkins  # noqa: E402
-from netutil import fetch, get, wait_for  # noqa: E402
-
-from uc.repo_adapter.archive import archive_date, plausible  # noqa: E402
-from uc.versions import VersionTool  # noqa: E402
+from jenkins import Jenkins
+from netutil import fetch, get, wait_for
+from uc.repo_adapter.archive import archive_date, plausible
+from uc.versions import VersionTool
 
 WEB = 'http://web:8080'
 WEB_PROXY = 'http://web-proxy:8080'
@@ -120,11 +120,11 @@ def test_release_dates_are_read_from_the_archives(release):
         built = archive_date(archive)
     version = path.parent.name
     stamp = json.loads(get(WEB + '/current/plugin-versions.json'))['plugins'][TOP_PLUGIN][version]['releaseTimestamp']
-    released = dt.datetime.strptime(stamp[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=dt.timezone.utc)
-    if plausible(built, dt.datetime.now(dt.timezone.utc)) is None:
+    released = dt.datetime.strptime(stamp[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=dt.UTC)
+    if plausible(built, dt.datetime.now(dt.UTC)) is None:
         assert abs(released - built) < dt.timedelta(minutes=1)  # the build date, not the upload
     else:
-        assert abs(released - dt.datetime.now(dt.timezone.utc)) < dt.timedelta(days=1)  # reported fallback
+        assert abs(released - dt.datetime.now(dt.UTC)) < dt.timedelta(days=1)  # reported fallback
 
 
 def test_every_stored_core_that_plugins_require_gets_a_tier(release):

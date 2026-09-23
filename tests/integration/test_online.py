@@ -13,9 +13,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from netutil import fetch, get, wait_for  # noqa: E402
-
-from uc.timeutil import iso, utcnow  # noqa: E402
+from netutil import fetch, get, wait_for
+from uc.timeutil import iso, utcnow
 
 WEB = 'http://web:8080'
 
@@ -65,7 +64,7 @@ def test_metadata_points_at_the_update_center(release):
 
 def test_downloads_redirect_to_get_jenkins_io(release):
     doc = json.loads(get(WEB + '/current/update-center.actual.json'))
-    plugin_id, plugin = sorted(doc['plugins'].items())[0]
+    plugin_id, plugin = min(doc['plugins'].items())
     response = fetch(plugin['url'])
     assert response.status == 302
     assert response.location == f'https://get.jenkins.io/plugins/{plugin_id}/{plugin["version"]}/{plugin_id}.hpi'

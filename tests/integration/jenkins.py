@@ -24,7 +24,8 @@ class Jenkins:
             except OSError:
                 pass
             if time.monotonic() > deadline:
-                raise TimeoutError(f'{self.base} did not become ready')
+                msg = f'{self.base} did not become ready'
+                raise TimeoutError(msg)
             time.sleep(5)
 
     def version(self) -> str:

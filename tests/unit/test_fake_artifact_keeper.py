@@ -9,15 +9,15 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
+
 from archivefixture import make_hpi, pom_xml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'integration'))
 
-from fake_artifact_keeper import make_handler  # noqa: E402
-
-from uc.repo_adapter.backends import ArtifactKeeperBackend, Http  # noqa: E402
-from uc.repo_adapter.cache import Cache  # noqa: E402
-from uc.repo_adapter.listing import build_index  # noqa: E402
+from fake_artifact_keeper import make_handler
+from uc.repo_adapter.backends import ArtifactKeeperBackend, Http
+from uc.repo_adapter.cache import Cache
+from uc.repo_adapter.listing import build_index
 
 GAV = ('io.jenkins.plugins', 'caffeine-api', '3.2.4')
 BASE = 'io/jenkins/plugins/caffeine-api/3.2.4/caffeine-api-3.2.4'
@@ -40,7 +40,7 @@ def keeper(tmp_path):
 
 
 def backend(url, tmp_path):
-    return ArtifactKeeperBackend(Http(None), url, 'jenkins-prod-local', 'zac', 'tok', tmp_path / 'tmp', 1 << 20)
+    return ArtifactKeeperBackend(Http(None), url, 'jenkins-prod-local', username='zac', token='tok', tmp_dir=tmp_path / 'tmp', max_archive_bytes=1 << 20)
 
 
 def test_the_backend_pages_through_the_fake(keeper, tmp_path):
@@ -61,7 +61,7 @@ def test_the_fake_serves_side_files_and_refuses_anonymous_reads(keeper, tmp_path
 
 
 def test_the_listing_fills_in_the_pom_from_the_fake(keeper, tmp_path):
-    index = build_index(backend(keeper, tmp_path), Cache(tmp_path / 'cache'), key='jenkins-prod-local', now=dt.datetime(2026, 9, 23, tzinfo=dt.timezone.utc))
+    index = build_index(backend(keeper, tmp_path), Cache(tmp_path / 'cache'), key='jenkins-prod-local', now=dt.datetime(2026, 9, 23, tzinfo=dt.UTC))
     assert index.poms[f'{BASE}.pom'] == pom_xml(*GAV)
     assert index.report.derived_poms == [':'.join(GAV)]
     assert len(index.rows) == 152  # the archive, its derived POM and 150 standalone POMs

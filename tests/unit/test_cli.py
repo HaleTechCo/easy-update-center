@@ -2,7 +2,6 @@ import json
 import os
 
 from sitefixture import uc_document, write_site
-
 from uc.cli import EXIT_LOCKED, main
 from uc.publish import RunLock
 from uc.status import read_status, write_status

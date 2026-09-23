@@ -52,7 +52,8 @@ class CertInfo:
 def _openssl(*args: str) -> str:
     proc = subprocess.run(['openssl', *args], capture_output=True, text=True)
     if proc.returncode != 0:
-        raise PkiError(f'openssl {args[0]} failed: {proc.stderr.strip()}')
+        msg = f'openssl {args[0]} failed: {proc.stderr.strip()}'
+        raise PkiError(msg)
     return proc.stdout
 
 
@@ -77,10 +78,11 @@ def cert_info(cert: Path) -> CertInfo:
         if sep:
             fields[key.strip()] = value.strip()
     try:
-        not_after = dt.datetime.strptime(fields['notAfter'], '%Y-%m-%d %H:%M:%SZ').replace(tzinfo=dt.timezone.utc)
+        not_after = dt.datetime.strptime(fields['notAfter'], '%Y-%m-%d %H:%M:%SZ').replace(tzinfo=dt.UTC)
         return CertInfo(fields['subject'], not_after, fields['sha256 Fingerprint'])
     except (KeyError, ValueError) as exc:
-        raise PkiError(f'could not parse certificate {cert}: {out!r}') from exc
+        msg = f'could not parse certificate {cert}: {out!r}'
+        raise PkiError(msg) from exc
 
 
 def key_matches_cert(key: Path, cert: Path) -> bool:
@@ -100,16 +102,18 @@ def cert_der_b64(cert: Path) -> str:
 
 def _check_org(org: str) -> None:
     if not org or '/' in org or '=' in org:
-        raise PkiError(f"org must be non-empty and contain no '/' or '=' (got {org!r})")
+        msg = f"org must be non-empty and contain no '/' or '=' (got {org!r})"
+        raise PkiError(msg)
 
 
 def _refuse_existing(*paths: Path) -> None:
     existing = [str(p) for p in paths if p.exists()]
     if existing:
-        raise PkiError(f'refusing to overwrite existing files: {", ".join(existing)}')
+        msg = f'refusing to overwrite existing files: {", ".join(existing)}'
+        raise PkiError(msg)
 
 
-def _issue_signing(root_key: Path, root_cert: Path, out_dir: Path, days: int, org: str, cnf: Path) -> None:
+def _issue_signing(root_key: Path, root_cert: Path, out_dir: Path, *, days: int, org: str, cnf: Path) -> None:
     key, cert = out_dir / SIGNING_KEY, out_dir / SIGNING_CERT
     csr = cnf.parent / 'signing.csr'
     _openssl(
@@ -184,7 +188,7 @@ def init_pki(out_dir: Path, *, root_days: int = 3650, signing_days: int = 365, o
             str(root_cert),
         )
         root_key.chmod(0o600)
-        _issue_signing(root_key, root_cert, out_dir, signing_days, org, cnf)
+        _issue_signing(root_key, root_cert, out_dir, days=signing_days, org=org, cnf=cnf)
 
 
 def rotate_signing(root_key: Path, root_cert: Path, out_dir: Path, *, days: int = 365, org: str = DEFAULT_ORG) -> None:
@@ -197,4 +201,4 @@ def rotate_signing(root_key: Path, root_cert: Path, out_dir: Path, *, days: int 
     with tempfile.TemporaryDirectory() as tmp:
         cnf = Path(tmp) / 'ext.cnf'
         cnf.write_text(_EXTENSIONS)
-        _issue_signing(root_key, root_cert, out_dir, days, org, cnf)
+        _issue_signing(root_key, root_cert, out_dir, days=days, org=org, cnf=cnf)

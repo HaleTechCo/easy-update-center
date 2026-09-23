@@ -1,6 +1,6 @@
 import pytest
-from archivefixture import pom_xml
 
+from archivefixture import pom_xml
 from uc.pom import pom_coordinates, safe_root, unusable_reason
 
 GIT = ('org.jenkins-ci.plugins', 'git', '5.2.0')
@@ -21,7 +21,7 @@ def test_a_usable_pom_has_no_reason():
 
 
 @pytest.mark.parametrize(
-    'data,reason',
+    ('data', 'reason'),
     [
         (NGINX_404, 'not XML'),  # the saved error page from the operator's test repository
         (b'<html><body>404</body></html>', 'not a POM (root element <html>)'),

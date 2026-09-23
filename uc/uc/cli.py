@@ -55,7 +55,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return _dispatch(args)
-    except publish.LockBusy as exc:
+    except publish.LockBusyError as exc:
         print(f'uc: {exc}', file=sys.stderr)
         return EXIT_LOCKED
     except UcError as exc:
@@ -102,7 +102,8 @@ def _dispatch(args: argparse.Namespace) -> int:
 
         serve(settings, port=args.port)
         return 0
-    raise AssertionError(f'unhandled command {args.command}')
+    msg = f'unhandled command {args.command}'
+    raise AssertionError(msg)
 
 
 def _pki(args: argparse.Namespace) -> int:

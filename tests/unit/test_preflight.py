@@ -2,7 +2,6 @@ import datetime as dt
 import shutil
 
 import pytest
-from ucsupport import make_settings
 
 from uc.pki import init_pki
 from uc.preflight import (
@@ -12,8 +11,9 @@ from uc.preflight import (
     load_credentials,
     load_repository_credentials,
 )
+from ucsupport import make_settings
 
-NOW = dt.datetime.now(dt.timezone.utc)
+NOW = dt.datetime.now(dt.UTC)
 
 
 @pytest.mark.parametrize('url', ['https://uc.example.com', 'https://uc.example.com:8443', 'http://web:8080'])
@@ -27,7 +27,7 @@ def test_plain_http_warns():
 
 
 @pytest.mark.parametrize(
-    'url,message',
+    ('url', 'message'),
     [
         ('https://host.example.com/jenkins', 'bare origin'),
         ('https://host.example.com/?x=1', 'bare origin'),

@@ -14,14 +14,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
-from typing import BinaryIO, Protocol
+from typing import TYPE_CHECKING, BinaryIO, Protocol
 from urllib.parse import urlsplit
 
-from .. import http as uc_http
-from ..aql import AQL_TEMPLATE
-from ..errors import UcError
-from ..pom import Coordinates
+from uc import http as uc_http
+from uc.aql import AQL_TEMPLATE
+from uc.errors import UcError
+
 from .archive import (
     SMALL_ENTRY_LIMIT,
     ArchiveError,
@@ -32,6 +31,11 @@ from .archive import (
     open_archive,
     zip_reader,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from uc.pom import Coordinates
 
 TIMEOUT = 60
 LONG_TIMEOUT = 600
@@ -66,12 +70,12 @@ class RepoEntry:
 
 def artifactory_time(moment: dt.datetime) -> str:
     """The time format Artifactory's AQL uses, which upstream parses: UTC with milliseconds."""
-    utc = moment.astimezone(dt.timezone.utc)
+    utc = moment.astimezone(dt.UTC)
     return utc.strftime('%Y-%m-%dT%H:%M:%S.') + f'{utc.microsecond // 1000:03d}Z'
 
 
 def parse_time(value: str) -> dt.datetime:
-    return dt.datetime.fromisoformat(value.replace('Z', '+00:00'))
+    return dt.datetime.fromisoformat(value)
 
 
 @dataclass
@@ -83,7 +87,8 @@ class Response:
 
 def forwards_credentials(old_url: str, new_url: str) -> bool:
     """Whether a redirect from old_url to new_url may carry the repository credentials: only to the same
-    host, and never from https to http, where they would cross the network in the clear."""
+    host, and never from https to http, where they would cross the network in the clear.
+    """
     old, new = urlsplit(old_url), urlsplit(new_url)
     return new.hostname == old.hostname and not (old.scheme == 'https' and new.scheme != 'https')
 
@@ -91,7 +96,7 @@ def forwards_credentials(old_url: str, new_url: str) -> bool:
 class _NoCredentialsAcrossHosts(urllib.request.HTTPRedirectHandler):
     """Artifactory redirects downloads to object storage; repository credentials must not follow."""
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102 - urllib's signature
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: PLR0917 - urllib.request.HTTPRedirectHandler's signature
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new is not None and not forwards_credentials(req.full_url, newurl):
             new.remove_header('Authorization')
@@ -121,9 +126,11 @@ class Http:
             except (OSError, http.client.HTTPException):
                 body = b''
         except (OSError, ValueError, http.client.HTTPException) as exc:
-            raise BackendError(f'{method or "GET"} {url} failed: {exc!r}') from exc
+            msg = f'{method or "GET"} {url} failed: {exc!r}'
+            raise BackendError(msg) from exc
         if len(body) > limit and not truncate:
-            raise BackendError(f'{url} is larger than {limit} bytes')
+            msg = f'{url} is larger than {limit} bytes'
+            raise BackendError(msg)
         return Response(status, {k.lower(): v for k, v in got.items()}, body[:limit] if truncate else body)
 
     def download(self, url: str, *, headers: dict[str, str], out: BinaryIO, limit: int) -> None:
@@ -134,12 +141,15 @@ class Http:
                 while chunk := response.read(1024 * 1024):
                     total += len(chunk)
                     if total > limit:
-                        raise BackendError(f'{url} is larger than {limit} bytes')
+                        msg = f'{url} is larger than {limit} bytes'
+                        raise BackendError(msg)
                     out.write(chunk)
         except urllib.error.HTTPError as exc:
-            raise BackendError(f'GET {url} failed with HTTP {exc.code}') from exc
+            msg = f'GET {url} failed with HTTP {exc.code}'
+            raise BackendError(msg) from exc
         except (OSError, ValueError, http.client.HTTPException) as exc:
-            raise BackendError(f'GET {url} failed: {exc!r}') from exc
+            msg = f'GET {url} failed: {exc!r}'
+            raise BackendError(msg) from exc
 
 
 class RangeReader(io.RawIOBase):
@@ -175,7 +185,8 @@ class RangeReader(io.RawIOBase):
             end = min(start + RANGE_BLOCK, self.size) - 1
             response = self.http.request(self.url, headers={**self.headers, 'Range': f'bytes={start}-{end}'}, limit=RANGE_BLOCK)
             if response.status != 206:
-                raise BackendError(f'{self.url} answered a Range request with HTTP {response.status}')
+                msg = f'{self.url} answered a Range request with HTTP {response.status}'
+                raise BackendError(msg)
             self.blocks[index] = response.body
         return self.blocks[index]
 
@@ -219,7 +230,7 @@ def _quote(path: str) -> str:
 class ArtifactoryBackend:
     type = 'artifactory'
 
-    def __init__(self, http: Http, url: str, api_url: str, key: str, username: str, password: str, max_archive_bytes: int) -> None:
+    def __init__(self, http: Http, url: str, api_url: str, key: str, *, username: str, password: str, max_archive_bytes: int) -> None:
         self.http, self.api_url, self.key = http, api_url, key
         self.base = f'{url}{key}/'
         self.auth = _basic(username, password)
@@ -235,19 +246,22 @@ class ArtifactoryBackend:
             timeout=LONG_TIMEOUT,
         )
         if response.status != 200:
-            raise BackendError(f'AQL query to {self.api_url} failed with HTTP {response.status}')
+            msg = f'AQL query to {self.api_url} failed with HTTP {response.status}'
+            raise BackendError(msg)
         try:
             results = json.loads(response.body)['results']
             return [RepoEntry(r['path'], r['name'], r['sha256'], r.get('actual_sha1'), int(r.get('size') or 0), r.get('created') or r['modified'], r['modified']) for r in results]
         except (ValueError, KeyError, TypeError) as exc:
-            raise BackendError(f'unexpected AQL response from {self.api_url}: {exc}') from exc
+            msg = f'unexpected AQL response from {self.api_url}: {exc}'
+            raise BackendError(msg) from exc
 
     def get(self, path: str) -> bytes | None:
         response = self.http.request(self.base + _quote(path), headers=self.auth, limit=self.max_archive_bytes, timeout=LONG_TIMEOUT)
         if response.status == 404:
             return None
         if response.status != 200:
-            raise BackendError(f'GET {self.base}{path} failed with HTTP {response.status}')
+            msg = f'GET {self.base}{path} failed with HTTP {response.status}'
+            raise BackendError(msg)
         return response.body
 
     def entry(self, path: str, name: str, limit: int) -> bytes | None:
@@ -255,12 +269,14 @@ class ArtifactoryBackend:
         if response.status == 404:
             return None
         if response.status != 200:
-            raise BackendError(f'GET {self.base}{path}!/{name} failed with HTTP {response.status}')
+            msg = f'GET {self.base}{path}!/{name} failed with HTTP {response.status}'
+            raise BackendError(msg)
         return response.body
 
     def sha1(self, entry: RepoEntry) -> str:
         if not entry.sha1 or not _SHA1.match(entry.sha1):
-            raise BackendError(f'no sha1 for {entry.path} in the AQL listing')
+            msg = f'no sha1 for {entry.path} in the AQL listing'
+            raise BackendError(msg)
         return entry.sha1
 
     def archive_released(self, entry: RepoEntry) -> dt.datetime | None:
@@ -280,7 +296,7 @@ class ArtifactoryBackend:
 class ArtifactKeeperBackend:
     type = 'artifact-keeper'
 
-    def __init__(self, http: Http, url: str, key: str, username: str, token: str, tmp_dir: Path, max_archive_bytes: int) -> None:
+    def __init__(self, http: Http, url: str, key: str, *, username: str, token: str, tmp_dir: Path, max_archive_bytes: int) -> None:
         self.http, self.key, self.tmp_dir = http, key, tmp_dir
         self.api = f'{url}api/v1/repositories/{key}/artifacts'
         self.base = f'{url}maven/{key}/'
@@ -292,11 +308,13 @@ class ArtifactKeeperBackend:
         query = {'per_page': '100', **({'cursor': cursor} if cursor else {'page': str(page)})}
         response = self.http.request(f'{self.api}?{urllib.parse.urlencode(query)}', headers={**self.bearer, 'Accept': 'application/json'}, limit=LISTING_LIMIT)
         if response.status != 200:
-            raise BackendError(f'listing {self.api} failed with HTTP {response.status}')
+            msg = f'listing {self.api} failed with HTTP {response.status}'
+            raise BackendError(msg)
         try:
             return json.loads(response.body)
         except ValueError as exc:
-            raise BackendError(f'unexpected listing response from {self.api}: {exc}') from exc
+            msg = f'unexpected listing response from {self.api}: {exc}'
+            raise BackendError(msg) from exc
 
     def list(self) -> list[RepoEntry]:
         entries: list[RepoEntry] = []
@@ -310,7 +328,8 @@ class ArtifactKeeperBackend:
                         created = artifactory_time(parse_time(item['created_at']))
                         entries.append(RepoEntry(directory, name, item['checksum_sha256'], None, int(item['size_bytes']), created, created))
             except (KeyError, TypeError, ValueError) as exc:
-                raise BackendError(f'unexpected listing response from {self.api}: {exc}') from exc
+                msg = f'unexpected listing response from {self.api}: {exc}'
+                raise BackendError(msg) from exc
             more = body.get('has_more')
             if more is None:
                 pagination = body.get('pagination') or {}
@@ -324,14 +343,16 @@ class ArtifactKeeperBackend:
         if response.status == 404:
             return None
         if response.status != 200:
-            raise BackendError(f'GET {self.base}{path} failed with HTTP {response.status}')
+            msg = f'GET {self.base}{path} failed with HTTP {response.status}'
+            raise BackendError(msg)
         return response.body
 
     def sha1(self, entry: RepoEntry) -> str:
         data = self.get(entry.path + '.sha1')
         value = (data or b'').decode('ascii', 'replace').strip().split(' ')[0].lower()
         if not _SHA1.match(value):
-            raise BackendError(f'no valid sha1 file for {entry.path}')
+            msg = f'no valid sha1 file for {entry.path}'
+            raise BackendError(msg)
         return value
 
     def facts(self, entry: RepoEntry, path_coordinates: Coordinates, *, plugin: bool) -> ArchiveFacts:

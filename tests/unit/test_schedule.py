@@ -1,9 +1,9 @@
 import os
 
 import pytest
-from ucsupport import make_settings
 
 from uc.schedule import ScheduleError, crontab_line, run_schedule
+from ucsupport import make_settings
 
 
 def test_crontab_line():
@@ -40,7 +40,8 @@ def test_failed_first_run_still_schedules(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
 
     def boom():
-        raise RuntimeError('generator crashed')
+        msg = 'generator crashed'
+        raise RuntimeError(msg)
 
     calls = run(settings, tmp_path, boom)
     assert calls[-1][0] == 'supercronic'

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, Sequence
+from typing import TYPE_CHECKING
 
 from .errors import UcError
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+    from pathlib import Path
+
     from .config import Settings
 
 
@@ -27,10 +29,12 @@ class VersionTool:
             return []
         for line in lines:
             if '\n' in line:
-                raise VersionToolError(f'version input contains a newline: {line!r}')
+                msg = f'version input contains a newline: {line!r}'
+                raise VersionToolError(msg)
         proc = subprocess.run([*self._cmd, mode], input='\n'.join(lines) + '\n', capture_output=True, text=True)
         if proc.returncode != 0:
-            raise VersionToolError(f'VersionTool {mode} failed: {proc.stderr.strip()}')
+            msg = f'VersionTool {mode} failed: {proc.stderr.strip()}'
+            raise VersionToolError(msg)
         return proc.stdout.splitlines()
 
     def compare_many(self, pairs: Sequence[tuple[str, str]]) -> list[int]:
@@ -47,5 +51,5 @@ class VersionTool:
         return result
 
     @classmethod
-    def from_settings(cls, settings: 'Settings') -> 'VersionTool':
+    def from_settings(cls, settings: Settings) -> VersionTool:
         return cls(settings.jar_dir, settings.version_tool_dir)

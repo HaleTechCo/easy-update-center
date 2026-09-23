@@ -3,12 +3,12 @@ import sys
 from pathlib import Path
 
 import pytest
-from ucsupport import make_settings
 
 from uc.jar import JarError, generate_sites, generate_tiers, jar_environment, java_command, run_jar
 from uc.model import Credentials, Tiers
+from ucsupport import make_settings
 
-CREDS = Credentials('uc', 'secret', 'uc', 'uc', True)
+CREDS = Credentials('uc', 'secret', 'uc', 'uc', github_placeholder=True)
 
 
 def test_jar_environment(tmp_path, secrets_dir):
@@ -34,7 +34,7 @@ def test_jar_environment_uses_explicit_port(tmp_path, secrets_dir):
 
 def test_jar_environment_points_at_the_adapter_when_it_is_on(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on', CORE_AGE_DAYS='400')
-    env = jar_environment(settings, Credentials('uc', 'token', 'uc', 'uc', True), {})
+    env = jar_environment(settings, Credentials('uc', 'token', 'uc', 'uc', github_placeholder=True), {})
     assert env['ARTIFACTORY_URL'] == 'http://repo-adapter:8081/artifactory/'
     assert env['ARTIFACTORY_API_URL'] == 'http://repo-adapter:8081/artifactory/api/'
     assert env['ARTIFACTORY_REPOSITORY'] == 'jenkins'

@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Mapping
+from typing import TYPE_CHECKING
 
-from .aql import Gav, Listing
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
+
+    from .aql import Gav, Listing
 
 
 def _choose(options: list[Gav], preferred_group: str | None) -> Gav:
     # The groupId the generator offered first, then .hpi over .jpi, then lexical order.
-    return sorted(options, key=lambda g: (g.group_id != preferred_group, g.extension != 'hpi', g.group_id))[0]
+    return min(options, key=lambda g: (g.group_id != preferred_group, g.extension != 'hpi', g.group_id))
 
 
 def build_download_map(listing: Listing, preferred_groups: Mapping[str, str]) -> tuple[dict[str, str], list[str]]:

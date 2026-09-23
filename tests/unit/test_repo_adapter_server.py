@@ -7,17 +7,17 @@ import urllib.request
 from http.server import ThreadingHTTPServer
 
 import pytest
+
 from archivefixture import make_hpi, make_jar, pom_xml
 from fakebackend import FakeBackend
-from ucsupport import make_settings
-
 from uc.aql import AQL_TEMPLATE, Gav, classify, query_repository
 from uc.doctor import ArtifactSource
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import read_report
 from uc.repo_adapter.server import Adapter, ensure_token, make_handler, make_server
+from ucsupport import make_settings
 
-NOW = dt.datetime(2026, 9, 23, tzinfo=dt.timezone.utc)
+NOW = dt.datetime(2026, 9, 23, tzinfo=dt.UTC)
 KEY = 'jenkins-prod-local'
 TOKEN = 't0ken'
 GAV = ('io.jenkins.plugins', 'caffeine-api', '3.2.4')
@@ -28,8 +28,8 @@ BASE = 'io/jenkins/plugins/caffeine-api/3.2.4/caffeine-api-3.2.4'
 def running(tmp_path):
     started = []
 
-    def start(files, *, type='artifact-keeper', adapter_on=True):
-        backend = FakeBackend(files, type=type)
+    def start(files, *, backend_type='artifact-keeper', adapter_on=True):
+        backend = FakeBackend(files, backend_type=backend_type)
         adapter = Adapter(backend, Cache(tmp_path / 'cache'), key=KEY, report_file=tmp_path / 'report.json', clock=lambda: NOW) if adapter_on else None
         server = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(adapter, key=KEY, token=TOKEN))
         threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -93,7 +93,7 @@ def test_upstream_and_uc_read_the_gap_filled_listing(running, tmp_path):
 def test_derived_poms_manifests_and_descriptions_are_served(running):
     _, url = running({f'{BASE}.hpi': make_hpi(*GAV)})
     aql(url)
-    source = ArtifactSource(url, KEY, 'uc', TOKEN, None, allow_network=True)  # what uc doctor reads with
+    source = ArtifactSource(url, KEY, 'uc', TOKEN, cache_dir=None, allow_network=True)  # what uc doctor reads with
     gav = Gav(*GAV, 'hpi')
     assert source.pom(gav) == pom_xml(*GAV)
     assert 'Group-Id: io.jenkins.plugins' in source.manifest(gav)
@@ -108,7 +108,7 @@ def test_a_repository_jar_wins_for_the_description(running):
 
 
 def test_artifactory_descriptions_try_the_repository_jar_first(running):
-    backend, url = running({f'{BASE}.hpi': make_hpi(*GAV)}, type='artifactory')
+    backend, url = running({f'{BASE}.hpi': make_hpi(*GAV)}, backend_type='artifactory')
     aql(url)
     assert fetch(f'{url}{KEY}/{BASE}.jar!/index.jelly')[2] == b'<div>An excellent plugin.</div>'
     assert ('jar', f'{BASE}.jar') in backend.calls
@@ -116,7 +116,7 @@ def test_artifactory_descriptions_try_the_repository_jar_first(running):
 
 def test_repository_poms_are_forwarded_and_archives_are_not_served(running):
     own = pom_xml(*GAV, name='Own')
-    backend, url = running({f'{BASE}.hpi': make_hpi(*GAV), f'{BASE}.pom': own})
+    _backend, url = running({f'{BASE}.hpi': make_hpi(*GAV), f'{BASE}.pom': own})
     aql(url)
     assert fetch(f'{url}{KEY}/{BASE}.pom')[2] == own
     assert fetch(f'{url}{KEY}/{BASE}.hpi')[0] == 404  # upstream never downloads whole archives
@@ -134,7 +134,8 @@ def test_a_listing_that_fails_unexpectedly_answers_502(running):
     backend, url = running({})
 
     def explode():
-        raise RuntimeError('boom')
+        msg = 'boom'
+        raise RuntimeError(msg)
 
     backend.list = explode
     assert aql(url)[0] == 502
@@ -142,7 +143,7 @@ def test_a_listing_that_fails_unexpectedly_answers_502(running):
 
 def test_descriptions_are_only_fetched_for_listed_plugins(running):
     """Forwarding carries the service account, so it must not reach paths the listing does not hold."""
-    backend, url = running({f'{BASE}.hpi': make_hpi(*GAV)}, type='artifactory')
+    backend, url = running({f'{BASE}.hpi': make_hpi(*GAV)}, backend_type='artifactory')
     aql(url)
     assert fetch(f'{url}{KEY}/../other-repo/org/x/a/1/a-1.jar!/index.jelly')[0] == 404
     assert fetch(f'{url}{KEY}/org/x/unlisted/1/unlisted-1.jar!/index.jelly')[0] == 404
@@ -159,7 +160,8 @@ def test_an_idle_adapter_only_answers_health(running):
 def test_ensure_token_creates_a_private_token_once(tmp_path):
     path = tmp_path / 'state' / 'token'
     token = ensure_token(path)
-    assert len(token) == 64 and stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert len(token) == 64
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert ensure_token(path) == token
 
 

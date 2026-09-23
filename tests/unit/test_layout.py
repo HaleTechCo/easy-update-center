@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 
 from sitefixture import write_generator_output
-
 from uc.http import HttpError
 from uc.layout import finalize_layout, mirror_tool_installers, site_dirs
 from uc.model import Tiers
@@ -51,7 +50,8 @@ def test_finalize_layout_is_idempotent(tmp_path):
 def getter(files):
     def get(url, headers=None, timeout=60):
         if url not in files:
-            raise HttpError(f'GET {url} failed: HTTP Error 404')
+            msg = f'GET {url} failed: HTTP Error 404'
+            raise HttpError(msg)
         return files[url]
 
     return get

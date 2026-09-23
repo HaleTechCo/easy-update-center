@@ -5,12 +5,16 @@ from __future__ import annotations
 import os
 import re
 import shutil
-from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urljoin
 
 from . import http
 from .errors import UcError
-from .model import Tiers
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from .model import Tiers
 
 TOP_LEVEL_LINKS = (
     'latest',
@@ -56,12 +60,14 @@ def mirror_tool_installers(index_url: str, dest: Path, previous: Path | None, ge
     try:
         names = sorted(set(_INSTALLER_HREF.findall(get(index_url).decode('utf-8', 'replace'))))
         if not names:
-            raise ToolInstallersError(f'{index_url} lists no tool installer files')
+            msg = f'{index_url} lists no tool installer files'
+            raise ToolInstallersError(msg)
         fetched: dict[str, bytes] = {}
         for name in names:
             body = get(urljoin(index_url, name))
             if name.endswith('.json') and not body.lstrip(b'\xef\xbb\xbf \r\n\t').startswith(_JSONP_PREFIX):
-                raise ToolInstallersError(f'{name} does not look like tool installer metadata')
+                msg = f'{name} does not look like tool installer metadata'
+                raise ToolInstallersError(msg)
             fetched[name] = body
     except (http.HttpError, ToolInstallersError) as exc:
         if previous is not None and previous.is_dir():

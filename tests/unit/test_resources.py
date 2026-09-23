@@ -3,9 +3,8 @@ import hashlib
 import json
 
 import pytest
-from archives import make_tar
-from ucsupport import make_settings
 
+from archives import make_tar
 from uc.http import HttpError
 from uc.resources import (
     INFO_FILE,
@@ -16,8 +15,9 @@ from uc.resources import (
     save_last_good,
 )
 from uc.timeutil import iso
+from ucsupport import make_settings
 
-NOW = dt.datetime(2026, 9, 22, 12, 0, tzinfo=dt.timezone.utc)
+NOW = dt.datetime(2026, 9, 22, 12, 0, tzinfo=dt.UTC)
 SHA = 'ebc2b7754082994393232c08c13230a9c6299435'
 PREFIX = f'update-center2-{SHA}/'
 UPSTREAM = {
@@ -35,13 +35,15 @@ def github_getter(tarball):
             return json.dumps({'sha': SHA, 'commit': {'committer': {'date': '2026-09-16T13:29:23Z'}}}).encode()
         if url == f'https://codeload.github.com/jenkins-infra/update-center2/tar.gz/{SHA}':
             return tarball
-        raise HttpError(f'unexpected GET {url}')
+        msg = f'unexpected GET {url}'
+        raise HttpError(msg)
 
     return get
 
 
 def offline(url, headers=None, timeout=60):
-    raise HttpError(f'GET {url} failed: offline')
+    msg = f'GET {url} failed: offline'
+    raise HttpError(msg)
 
 
 def test_github_source(tmp_path, secrets_dir):
@@ -70,7 +72,7 @@ def test_url_source_checks_sha256(tmp_path, secrets_dir):
     ok = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://art/generic/uc2.tgz', RESOURCES_SHA256=digest)
     info = fetch_upstream(ok, tmp_path / 'ok', NOW, get=get)
     assert info.ref == f'sha256:{digest}'
-    assert info.data_date == iso(dt.datetime.fromtimestamp(1_758_000_000, dt.timezone.utc))
+    assert info.data_date == iso(dt.datetime.fromtimestamp(1_758_000_000, dt.UTC))
 
     bad = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://art/generic/uc2.tgz', RESOURCES_SHA256='0' * 64)
     with pytest.raises(ResourcesError, match='checksum mismatch'):

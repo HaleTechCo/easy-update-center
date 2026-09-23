@@ -1,11 +1,12 @@
 import pytest
+
 from helpers import fetch
 
 UC = '/update-center.json'
 
 
 @pytest.mark.parametrize(
-    'host,path,target',
+    ('host', 'path', 'target'),
     [
         ('web-weekly', UC + '?version=2.540', '/dynamic-2.540/update-center.json'),
         ('web-weekly', UC + '?version=2.500', '/dynamic-2.540/update-center.json'),

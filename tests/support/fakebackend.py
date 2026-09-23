@@ -19,8 +19,8 @@ UPLOADED = '2026-09-22T23:09:48.946Z'
 
 
 class FakeBackend:
-    def __init__(self, files: dict[str, bytes], *, type: str = 'artifact-keeper', uploaded: str = UPLOADED) -> None:
-        self.type = type
+    def __init__(self, files: dict[str, bytes], *, backend_type: str = 'artifact-keeper', uploaded: str = UPLOADED) -> None:
+        self.type = backend_type
         self.files = dict(files)
         self.uploaded = uploaded
         self.failing: set[str] = set()
@@ -46,7 +46,8 @@ class FakeBackend:
     def facts(self, entry: RepoEntry, path_coordinates, *, plugin: bool):
         self.calls.append(('facts', entry.path))
         if entry.path in self.failing:
-            raise BackendError(f'GET {entry.path} failed: connection reset')
+            msg = f'GET {entry.path} failed: connection reset'
+            raise BackendError(msg)
         archive = open_archive(io.BytesIO(self.files[entry.path]))
         return extract_facts(zip_reader(archive), path_coordinates, plugin=plugin, released=archive_date(archive))
 

@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 
 import pytest
-from sitefixture import TEST_CERT_B64, write_generator_output
 
+from sitefixture import TEST_CERT_B64, write_generator_output
 from uc.layout import finalize_layout
 from uc.model import Tiers
 from uc.validate import ValidationError, count_plugins, download_key, load_site_json, validate_release
@@ -25,7 +25,7 @@ def build(staging, tiers=TIERS, public_url=URL, **doc_options):
 
 
 def validate(staging, **overrides):
-    options = dict(tiers=TIERS, downloads_root=ROOT, signing_cert_b64=TEST_CERT_B64, previous_plugin_count=None, min_plugins=1, min_ratio=0.9, force=False, download_map=None)
+    options = {'tiers': TIERS, 'downloads_root': ROOT, 'signing_cert_b64': TEST_CERT_B64, 'previous_plugin_count': None, 'min_plugins': 1, 'min_ratio': 0.9, 'force': False, 'download_map': None}
     options.update(overrides)
     return validate_release(staging, **options)
 
@@ -99,7 +99,7 @@ def test_download_map_must_cover_offered_versions(tmp_path):
     staging = build(tmp_path)
     with pytest.raises(ValidationError, match='no entry for plugins/credentials/1415.v831096eb_5534, war/2.528.1'):
         validate(staging, download_map={'plugins/git/5.2.0': 'a'})
-    validate(staging, download_map={key: 'x' for key in OFFERED})
+    validate(staging, download_map=dict.fromkeys(OFFERED, 'x'))
 
 
 def test_a_site_without_a_core_is_valid(tmp_path):
