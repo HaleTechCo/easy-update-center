@@ -1,10 +1,24 @@
-# local configuration and secrets
+# Local configuration and secrets. Keep these first: nothing below may re-include them.
+# Any copy of .env (.env.backup, .env.airgapped, ...) holds real credentials; only the
+# committed examples are kept.
 .env
+.env.*
+!.env.*.example
 data/
 secrets/*
 !secrets/README.md
-# integration-test scratch
+
+# Integration-test scratch (make it-airgapped, make it-online)
 tests/integration/.versions.env
 tests/integration/.results/
-# agent scratch
+
+# Agent scratch
 .superpowers/
+
+# Python: the parts of github/gitignore's Python.gitignore that apply here. uc is
+# stdlib-only and its tests run in containers; editors and ad-hoc runs on the host
+# still write these.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
