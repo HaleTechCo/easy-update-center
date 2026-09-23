@@ -12,11 +12,12 @@ _SINGLE_BYTE = re.compile(rb"""^\s*<\?xml[^>]*\sencoding=["'](iso-8859-1|latin-?
 
 
 def declares_entities(data: bytes) -> bool:
+    """Return whether the bytes contain a DOCTYPE or ENTITY declaration anywhere."""
     return b'<!DOCTYPE' in data or b'<!ENTITY' in data
 
 
 def safe_root(data: bytes) -> ET.Element | None:
-    """The XML root element, or None for anything that is not plain, well-formed UTF-8 XML.
+    """Return the XML root element, or None for anything that is not plain, well-formed UTF-8 XML.
 
     Real Maven POMs never declare a DOCTYPE or entities; refusing them avoids entity-expansion
     tricks without a third-party parser (ElementTree never resolves external entities). The byte
@@ -31,7 +32,7 @@ def safe_root(data: bytes) -> ET.Element | None:
         if not _SINGLE_BYTE.match(data):
             return None
     try:
-        return ET.fromstring(data)
+        return ET.fromstring(data)  # noqa: S314 - stdlib-only by design; DOCTYPE and ENTITY input is refused above
     except ET.ParseError:
         return None
 

@@ -9,19 +9,27 @@ from pathlib import Path
 
 from . import publish, status
 from .config import load_settings
+from .doctor import format_report, run_doctor
 from .errors import UcError
+from .generate import generate
 from .pki import DEFAULT_ORG, ROOT_CERT, ROOT_KEY, SIGNING_CERT, SIGNING_KEY, cert_info, init_pki, rotate_signing
+from .preflight import load_credentials
+from .repo_adapter.server import serve
+from .schedule import run_schedule
 from .timeutil import iso, utcnow
+from .validate import count_plugins
+from .versions import VersionTool
 
 EXIT_LOCKED = 75
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser for every uc subcommand."""
     parser = argparse.ArgumentParser(prog='uc', description='Self-hosted Jenkins update center')
     sub = parser.add_subparsers(dest='command', required=True)
 
-    generate = sub.add_parser('generate', help='build, validate and publish a new release')
-    generate.add_argument('--force', action='store_true', help='skip the plugin-count ratio check once')
+    generate_cmd = sub.add_parser('generate', help='build, validate and publish a new release')
+    generate_cmd.add_argument('--force', action='store_true', help='skip the plugin-count ratio check once')
 
     doctor = sub.add_parser('doctor', help='report what the generator will see in the source repository')
     doctor.add_argument('--fetch', action='store_true', help='download POMs and manifests missing from the cache')
@@ -52,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the uc command line and return its exit status (EXIT_LOCKED when another run holds the lock)."""
     args = build_parser().parse_args(argv)
     try:
         return _dispatch(args)
@@ -68,21 +77,13 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _pki(args)
     settings = load_settings()
     if args.command == 'generate':
-        from .generate import generate
-
         print(f'published release {generate(settings, force=args.force)}')
         return 0
     if args.command == 'doctor':
-        from .doctor import format_report, run_doctor
-        from .preflight import load_credentials
-        from .versions import VersionTool
-
         report = run_doctor(settings, load_credentials(settings), fetch=args.fetch, versions=VersionTool.from_settings(settings))
         print(json.dumps(report.to_dict(), indent=2) if args.json else format_report(report, settings))
         return report.exit_code()
     if args.command == 'rollback':
-        from .validate import count_plugins
-
         with publish.RunLock(settings.data_dir):
             target = publish.rollback(settings.data_dir, args.release)
             live = publish.live_path(settings.data_dir)
@@ -93,13 +94,9 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(json.dumps(status.read_status(settings.data_dir), indent=2, sort_keys=True))
         return 0
     if args.command == 'schedule':
-        from .schedule import run_schedule
-
         run_schedule(settings)
         return 0
     if args.command == 'repo-adapter':
-        from .repo_adapter.server import serve
-
         serve(settings, port=args.port)
         return 0
     msg = f'unhandled command {args.command}'

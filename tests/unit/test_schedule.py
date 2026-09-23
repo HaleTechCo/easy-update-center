@@ -1,4 +1,4 @@
-import os
+"""Unit tests for uc.schedule: the crontab line and the first run before handing over to supercronic."""
 
 import pytest
 
@@ -18,7 +18,7 @@ def test_crontab_line_rejects_nonsense():
 
 def run(settings, tmp_path, generate_once):
     calls = []
-    run_schedule(settings, generate_once=lambda: (calls.append('generate'), generate_once()), exec_=lambda file, argv: calls.append(argv), crontab=tmp_path / 'crontab')
+    run_schedule(settings, generate_once=lambda: (calls.append('generate'), generate_once()), exec_=lambda _file, argv: calls.append(argv), crontab=tmp_path / 'crontab')
     return calls
 
 
@@ -32,7 +32,7 @@ def test_first_run_generates_then_hands_over_to_supercronic(tmp_path, secrets_di
 def test_existing_release_skips_the_first_run(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     (settings.data_dir / 'releases' / '20260922T000000Z').mkdir(parents=True)
-    os.symlink('releases/20260922T000000Z', settings.data_dir / 'live')
+    (settings.data_dir / 'live').symlink_to('releases/20260922T000000Z')
     assert run(settings, tmp_path, lambda: None) == [['supercronic', '-passthrough-logs', str(tmp_path / 'crontab')]]
 
 

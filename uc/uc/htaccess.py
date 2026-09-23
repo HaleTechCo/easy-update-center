@@ -30,7 +30,7 @@ NO_WEEKLY_FIXES = (('/dynamic-%{REQUEST_URI}?', '/current%{REQUEST_URI}?'),)
 
 
 class HtaccessError(UcError):
-    pass
+    """generate-htaccess.sh failed, or its output no longer has the shape uc edits."""
 
 
 def _changed(detail: str) -> HtaccessError:
@@ -38,6 +38,7 @@ def _changed(detail: str) -> HtaccessError:
 
 
 def strip_download_rules(text: str) -> str:
+    """Remove upstream's download redirects, each of which must appear exactly once."""
     lines = text.split('\n')
     for rule in UPSTREAM_DOWNLOAD_RULES:
         count = lines.count(rule)
@@ -49,6 +50,7 @@ def strip_download_rules(text: str) -> str:
 
 
 def fix_partial_tiers(text: str, *, has_weekly: bool, has_stable: bool) -> str:
+    """Point the targets upstream leaves dangling when the weekly or stable tier list is empty at current/."""
     fixes = (() if has_stable else NO_STABLE_FIXES) + (() if has_weekly else NO_WEEKLY_FIXES)
     for old, new in fixes:
         count = text.count(old)
@@ -60,9 +62,10 @@ def fix_partial_tiers(text: str, *, has_weekly: bool, has_stable: bool) -> str:
 
 
 def render_htaccess(tiers: Tiers, script: Path, template: Path) -> str:
+    """Return the root .htaccess: the static template without tiers, else generate-htaccess.sh's output, fixed up."""
     if tiers.empty:
         return template.read_text(encoding='utf-8')
-    proc = subprocess.run(['bash', str(script), *tiers.weekly, *tiers.stable], capture_output=True, text=True)
+    proc = subprocess.run(['bash', str(script), *tiers.weekly, *tiers.stable], capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         msg = f'generate-htaccess.sh failed ({proc.returncode}): {proc.stderr.strip()}'
         raise HtaccessError(msg)

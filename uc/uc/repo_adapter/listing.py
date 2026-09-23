@@ -7,6 +7,7 @@ import json
 import os
 import tempfile
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from uc.aql import Gav, RepoFile, to_gav
@@ -18,7 +19,6 @@ from .backends import Backend, BackendError, RepoEntry, artifactory_time, parse_
 
 if TYPE_CHECKING:
     import datetime as dt
-    from pathlib import Path
 
     from .cache import Cache
 
@@ -29,6 +29,8 @@ REPORT_LISTS = ('derived_poms', 'replaced_poms', 'needs_pom', 'misplaced', 'skip
 
 @dataclass
 class Report:
+    """What one listing filled in, replaced or left out, for operators and uc doctor (spec §7)."""
+
     generated_at: str
     repo: dict
     archives: int = 0
@@ -40,6 +42,7 @@ class Report:
     dates_from_repository: list[dict] = field(default_factory=list)
 
     def counts(self) -> dict[str, int]:
+        """Return the length of each of the report's lists."""
         return {name: len(getattr(self, name)) for name in REPORT_LISTS}
 
 
@@ -95,6 +98,7 @@ def _pom_verdict(backend: Backend, cache: Cache, entry: RepoEntry, coordinates: 
 
 
 def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -> Index:
+    """List the repository and fill its gaps: archive dates, POMs derived from the archives, and the report."""
     entries = backend.list()
     report = Report(generated_at=iso(now), repo={'type': backend.type, 'key': key})
     index = Index(report=report)
@@ -115,7 +119,7 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
         try:
             facts = _facts(backend, cache, entry, coordinates, plugin=plugin)
             sha1 = _sha1(backend, cache, entry)
-        except Exception as exc:  # one bad archive must not stop the listing: it is dropped and reported
+        except Exception as exc:  # noqa: BLE001 - one bad archive must not stop the listing: it is dropped and reported
             report.skipped.append({'path': entry.path, 'reason': _reason(exc)})
             continue
         if plugin and facts.coordinates and facts.coordinates != coordinates:
@@ -142,7 +146,7 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
             try:
                 verdict = _pom_verdict(backend, cache, real, coordinates)
                 real_sha1 = _sha1(backend, cache, real) if verdict is None else ''
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 - an unreadable POM must not stop the listing: it is replaced and reported
                 verdict = f'unreadable: {_reason(exc)}'
             if verdict is None:
                 index.poms[pom_path] = None
@@ -152,7 +156,7 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
         if facts.pom is not None and unusable_reason(facts.pom, coordinates) is None:
             index.poms[pom_path] = facts.pom
             directory, _, name = pom_path.rpartition('/')
-            index.rows.append(_row(key, directory, name, sha256=hashlib.sha256(facts.pom).hexdigest(), sha1=hashlib.sha1(facts.pom).hexdigest(), size=len(facts.pom), created=created, modified=modified))
+            index.rows.append(_row(key, directory, name, sha256=hashlib.sha256(facts.pom).hexdigest(), sha1=hashlib.sha1(facts.pom, usedforsecurity=False).hexdigest(), size=len(facts.pom), created=created, modified=modified))
             report.derived_poms.append(':'.join(coordinates))
         else:
             report.needs_pom.append({'gav': ':'.join(coordinates), 'url': PUBLIC_RELEASES + pom_path})
@@ -166,7 +170,7 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
         try:
             verdict = _pom_verdict(backend, cache, entry, (gav.group_id, gav.artifact_id, gav.version))
             sha1 = _sha1(backend, cache, entry) if verdict is None else ''
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - an unreadable POM must not stop the listing: it is left out and reported
             verdict, sha1 = f'unreadable: {_reason(exc)}', ''
         if verdict is None:
             index.poms[path] = None
@@ -184,10 +188,11 @@ def write_report(report: Report, path: Path) -> None:
     with os.fdopen(fd, 'w', encoding='utf-8') as out:
         json.dump(asdict(report), out, indent=2, sort_keys=True)
         out.write('\n')
-    os.replace(tmp, path)
+    Path(tmp).replace(path)
 
 
 def read_report(path: Path) -> dict | None:
+    """Return the last report written, None when there is none or it is not a JSON object."""
     try:
         value = json.loads(path.read_text(encoding='utf-8'))
     except (FileNotFoundError, ValueError):

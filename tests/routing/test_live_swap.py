@@ -1,6 +1,5 @@
 """A live symlink swap, and the RewriteMap behind it, take effect without restarting Apache (spec S5)."""
 
-import os
 from pathlib import Path
 
 from helpers import fetch
@@ -14,8 +13,8 @@ def swap(release_id: str) -> None:
     tmp = DATA / 'live.tmp'
     if tmp.is_symlink():
         tmp.unlink()
-    os.symlink(f'releases/{release_id}', tmp)
-    os.replace(tmp, DATA / 'live')
+    tmp.symlink_to(f'releases/{release_id}')
+    tmp.replace(DATA / 'live')
 
 
 def test_live_swap_needs_no_restart():

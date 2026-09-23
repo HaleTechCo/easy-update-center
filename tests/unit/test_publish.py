@@ -1,5 +1,7 @@
+"""Unit tests for uc.publish: staging, the atomic live swap, pruning, rollback and the run lock."""
+
 import datetime as dt
-import os
+from pathlib import Path
 
 import pytest
 
@@ -39,7 +41,7 @@ def test_publish_swaps_live_atomically(tmp_path):
     staging = create_staging(tmp_path, R1)
     (staging / 'marker').write_text('first')
     publish(tmp_path, staging, R1)
-    assert os.readlink(tmp_path / 'live') == f'releases/{R1}'
+    assert (tmp_path / 'live').readlink() == Path(f'releases/{R1}')
     assert (tmp_path / 'live' / 'marker').read_text() == 'first'
     assert live_release(tmp_path) == R1
     assert live_path(tmp_path) == releases_dir(tmp_path) / R1

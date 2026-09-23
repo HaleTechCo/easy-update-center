@@ -1,3 +1,5 @@
+"""Unit tests for uc.aql: Maven path parsing, listing classification and the AQL query sent to Artifactory."""
+
 import base64
 import json
 

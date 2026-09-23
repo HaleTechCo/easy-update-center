@@ -27,22 +27,27 @@ _SHA = re.compile(r'^[0-9a-f]{40}$')
 
 
 class ResourcesError(UcError):
-    pass
+    """Resources could not be fetched, extracted or merged with the overlay."""
 
 
 @dataclass(frozen=True)
 class ResourcesInfo:
+    """Where a resources copy came from and how old its data is; saved beside it as .uc-resources.json."""
+
     source: str
     ref: str
     data_date: str  # when upstream last changed this data (ISO 8601 UTC)
     fetched_at: str
 
     def age_days(self, now: dt.datetime) -> int:
+        """Return the whole days between the upstream data's last change and now."""
         return (now - parse_iso(self.data_date)).days
 
 
 @dataclass(frozen=True)
 class PreparedResources:
+    """Resources ready for the generator: the merged copy, the upstream copy, and what was applied or went wrong."""
+
     path: Path  # merged copy passed to --resources-dir
     upstream: Path  # upstream copy before the overlay; saved as last-good after publish
     info: ResourcesInfo
@@ -58,13 +63,16 @@ def _resources_prefix(members: list[tarfile.TarInfo]) -> str:
     return min(candidates, key=len)  # the top-level resources/, not src/test/resources/
 
 
-def _extract_resources(archive: bytes, dest: Path) -> dt.datetime:
+def _open_tar(archive: bytes) -> tarfile.TarFile:
     try:
-        tar = tarfile.open(fileobj=io.BytesIO(archive), mode='r:*')
+        return tarfile.open(fileobj=io.BytesIO(archive), mode='r:*')
     except tarfile.TarError as exc:
         msg = f'resources archive is not a tar file: {exc}'
         raise ResourcesError(msg) from exc
-    with tar:
+
+
+def _extract_resources(archive: bytes, dest: Path) -> dt.datetime:
+    with _open_tar(archive) as tar:
         members = tar.getmembers()
         prefix = _resources_prefix(members)
         dest.mkdir(parents=True)
@@ -79,13 +87,16 @@ def _extract_resources(archive: bytes, dest: Path) -> dt.datetime:
             target = dest.joinpath(*relative.parts)
             target.parent.mkdir(parents=True, exist_ok=True)
             extracted = tar.extractfile(member)
-            assert extracted is not None
+            if extracted is None:  # never for a regular file
+                msg = f'cannot read {member.name} from the resources archive'
+                raise RuntimeError(msg)
             target.write_bytes(extracted.read())
             newest = max(newest, float(member.mtime))
     return dt.datetime.fromtimestamp(newest, dt.UTC)
 
 
 def fetch_upstream(settings: Settings, dest: Path, now: dt.datetime, get: http.Getter = http.get) -> ResourcesInfo:
+    """Put upstream's resources/ into dest from RESOURCES_SOURCE (bundled, a GitHub ref or a URL) and return where they came from."""
     if settings.resources_source == 'bundled':
         shutil.copytree(settings.bundled_resources, dest)
         meta = json.loads((dest / INFO_FILE).read_text(encoding='utf-8'))
@@ -138,8 +149,10 @@ def _merge_warnings(base: object, extra: object) -> list:
 
 
 def merge_overlay(upstream: Path, overlay: Path, dest: Path) -> list[str]:
-    """Copy upstream to dest and apply the overlay: .properties append (later keys win),
-    warnings.json merges by id, any other file replaces upstream's.
+    """Copy upstream to dest, apply the overlay and return the overlay files applied.
+
+    .properties files append (later keys win), warnings.json merges by id, and any other file
+    replaces upstream's.
     """
     shutil.copytree(upstream, dest)
     applied: list[str] = []
@@ -168,6 +181,7 @@ def merge_overlay(upstream: Path, overlay: Path, dest: Path) -> list[str]:
 
 
 def prepare_resources(settings: Settings, work: Path, now: dt.datetime, get: http.Getter = http.get) -> PreparedResources:
+    """Fetch upstream resources into work, falling back to the last-good copy, and merge the operator overlay."""
     upstream = work / 'upstream-resources'
     last_good = settings.data_dir / 'resources' / 'last-good'
     warnings: list[str] = []
@@ -187,7 +201,10 @@ def prepare_resources(settings: Settings, work: Path, now: dt.datetime, get: htt
 
 
 def save_last_good(prepared: PreparedResources, data_dir: Path) -> None:
-    """Called only after a successful publish, so a bad upstream change never becomes the fallback."""
+    """Replace the last-good copy with this run's upstream resources.
+
+    Called only after a successful publish, so a bad upstream change never becomes the fallback.
+    """
     target = data_dir / 'resources' / 'last-good'
     staging = target.with_name('last-good.tmp')
     shutil.rmtree(staging, ignore_errors=True)

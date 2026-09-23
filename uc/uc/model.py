@@ -14,6 +14,7 @@ class Tiers:
 
     @property
     def empty(self) -> bool:
+        """True when update-center2 listed neither weekly nor stable cores."""
         return not self.weekly and not self.stable
 
 

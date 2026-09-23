@@ -17,9 +17,9 @@ _RANGE = re.compile(r'^bytes=(\d*)-(\d*)$')
 
 
 def serve_bytes(data: bytes, *, ranges: bool = True) -> Callable[[dict[str, str], bytes], Reply]:
-    """A route serving data, honouring single `Range: bytes=a-b` / `bytes=-n` requests when ranges is set."""
+    """Return a route serving data, honouring single `Range: bytes=a-b` / `bytes=-n` requests when ranges is set."""
 
-    def route(headers: dict[str, str], body: bytes) -> Reply:
+    def route(headers: dict[str, str], _body: bytes) -> Reply:
         match = _RANGE.match(headers.get('Range', '')) if ranges else None
         if not match:
             return 200, {}, data
@@ -34,7 +34,10 @@ def serve_bytes(data: bytes, *, ranges: bool = True) -> Callable[[dict[str, str]
 
 
 class StubServer:
+    """Serves routes keyed by (method, path) on 127.0.0.1 while in a with block; unknown routes get a 404."""
+
     def __init__(self, routes: dict[tuple[str, str], Route]) -> None:
+        """Bind an ephemeral port (see url) without serving yet; every request is appended to requests."""
         self.routes = routes
         self.requests: list[tuple[str, str, dict[str, str], bytes]] = []
         stub = self
@@ -65,9 +68,11 @@ class StubServer:
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
     def __enter__(self) -> Self:
+        """Start serving in a daemon thread."""
         self.thread.start()
         return self
 
     def __exit__(self, *exc) -> None:
+        """Stop serving and close the socket."""
         self.server.shutdown()
         self.server.server_close()

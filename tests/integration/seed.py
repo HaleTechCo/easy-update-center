@@ -47,8 +47,9 @@ def put(root: Path, group: str, artifact: str, version: str, extension: str, *, 
 
 
 def synthetic_hpi(artifact: str, jenkins_version: str, *, embed_pom: bool = False) -> bytes:
-    """A plugin laid out like a pre-2015 build (index.jelly under WEB-INF/classes), optionally with an
-    embedded POM the repo-adapter can serve.
+    """Build a plugin laid out like a pre-2015 build (index.jelly under WEB-INF/classes).
+
+    With embed_pom, the archive also carries a POM the repo-adapter can serve.
     """
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w') as archive:

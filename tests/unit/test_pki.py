@@ -1,3 +1,5 @@
+"""Unit tests for uc.pki: the root/signing certificate chain, its validity checks and rotation."""
+
 import base64
 import datetime as dt
 import shutil

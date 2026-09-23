@@ -19,7 +19,7 @@ ADAPTER_USERNAME = 'uc'
 
 
 class PreflightError(UcError):
-    pass
+    """The configuration, signing material or credentials are not fit to generate a release."""
 
 
 def _is_local(host: str) -> bool:
@@ -32,6 +32,7 @@ def _is_local(host: str) -> bool:
 
 
 def check_public_url(url: str, *, allow_local: bool) -> list[str]:
+    """Require PUBLIC_URL to be a bare http(s) origin that controllers can reach; return warnings (plain http)."""
     parts = urlsplit(url)
     if parts.scheme not in ('http', 'https') or not parts.hostname:
         msg = f'PUBLIC_URL must be an http(s) URL with a host (got {url!r})'
@@ -51,6 +52,7 @@ def check_public_url(url: str, *, allow_local: bool) -> list[str]:
 
 
 def check_signing(settings: Settings, now: dt.datetime) -> CertInfo:
+    """Require a matching key and certificate, issued by the root CA and valid long enough; return the certificate's info."""
     for path in (settings.signing_key_file, settings.signing_cert_file, settings.root_ca_file):
         if not path.is_file():
             msg = f"missing signing material: {path} (see 'uc pki init')"
@@ -70,7 +72,7 @@ def check_signing(settings: Settings, now: dt.datetime) -> CertInfo:
 
 
 def load_repository_credentials(settings: Settings) -> tuple[str, str]:
-    """The repository account; with the adapter on, only the adapter needs it."""
+    """Return the repository account (username, password); with the adapter on, only the adapter needs it."""
     user = read_secret(settings.repo_username_file)
     password = read_secret(settings.repo_password_file)
     if not user or not password:
@@ -80,6 +82,7 @@ def load_repository_credentials(settings: Settings) -> tuple[str, str]:
 
 
 def load_adapter_token(settings: Settings) -> str:
+    """Return the token the repo-adapter service writes when it starts."""
     token = read_secret(settings.repo_adapter_token_file)
     if not token:
         msg = f'repo-adapter token missing: {settings.repo_adapter_token_file}; the repo-adapter service creates it when it starts'
@@ -88,6 +91,7 @@ def load_adapter_token(settings: Settings) -> str:
 
 
 def load_credentials(settings: Settings) -> Credentials:
+    """Return the credentials for the repository (or the adapter) and GitHub, with placeholders when GitHub has none."""
     if settings.repo_adapter:
         user, password = ADAPTER_USERNAME, load_adapter_token(settings)
     else:

@@ -1,3 +1,5 @@
+"""Unit tests for uc.timeutil: the one UTC timestamp format, its parsing and utcnow."""
+
 import datetime as dt
 
 from uc.timeutil import iso, parse_iso, utcnow

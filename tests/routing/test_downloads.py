@@ -1,3 +1,5 @@
+"""Web-tier download routing: mirror, Artifactory and Artifact Keeper redirects, proxy mode, headers and private files."""
+
 import base64
 import json
 

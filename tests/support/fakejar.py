@@ -24,9 +24,11 @@ class SimpleVersions:
         return tuple((0, int(p), '') if p.isdigit() else (1, 0, p) for p in re.split(r'[.-]', version))
 
     def sort(self, versions: Iterable[str]) -> list[str]:
+        """Return the versions in ascending order."""
         return sorted(versions, key=self._key)
 
     def max_by_key(self, items: Iterable[tuple[str, str]]) -> dict[str, str]:
+        """Return the highest version for each key among (key, version) items."""
         best: dict[str, str] = {}
         for key, version in items:
             if key not in best or self._key(version) > self._key(best[key]):
@@ -34,11 +36,18 @@ class SimpleVersions:
         return best
 
     def compare_many(self, pairs: Sequence[tuple[str, str]]) -> list[int]:
+        """Compare each (a, b) pair; return -1, 0 or 1 for each, in order."""
         return [(self._key(a) > self._key(b)) - (self._key(a) < self._key(b)) for a, b in pairs]
 
 
 class FakeJar:
+    """A JarRunner that writes the tier list or fixture sites where update-center2 would, and records each call."""
+
     def __init__(self, tiers: Tiers, cert_b64: str, *, url_root: str | None = None, fail_sites: bool = False, **doc_options) -> None:
+        """Report tiers; list cert_b64 in each site's signature and root URLs at url_root (default: DOWNLOADS_ROOT_URL minus /download).
+
+        fail_sites makes the site run fail; doc_options go to sitefixture.uc_document.
+        """
         self.tiers = tiers
         self.cert_b64 = cert_b64
         self.url_root = url_root
@@ -48,6 +57,7 @@ class FakeJar:
         self.envs: list[dict[str, str]] = []
 
     def __call__(self, cmd: list[str], env: Mapping[str, str], log: Path) -> None:
+        """Stand in for one update-center2 run: the tier list for --dynamic-tier-list-file, else every site in --arguments-file."""
         self.calls.append(list(cmd))
         self.envs.append(dict(env))
         log.parent.mkdir(parents=True, exist_ok=True)

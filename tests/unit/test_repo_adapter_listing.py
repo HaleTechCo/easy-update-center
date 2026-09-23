@@ -1,3 +1,5 @@
+"""Unit tests for uc.repo_adapter.listing: the gap-filled listing (derived and replaced POMs, dates) and its report."""
+
 import datetime as dt
 import hashlib
 import json
@@ -39,7 +41,7 @@ def test_the_operators_test_repository(tmp_path):
     assert report.counts()['needs_pom'] == 0
     derived = rows[AD.rsplit('/', 1)[1] + '.pom']
     assert derived['sha256'] == hashlib.sha256(pom_xml(*AD_GAV)).hexdigest()
-    assert derived['actual_sha1'] == hashlib.sha1(pom_xml(*AD_GAV)).hexdigest()
+    assert derived['actual_sha1'] == hashlib.sha1(pom_xml(*AD_GAV), usedforsecurity=False).hexdigest()
     assert derived['size'] == len(pom_xml(*AD_GAV))
 
 

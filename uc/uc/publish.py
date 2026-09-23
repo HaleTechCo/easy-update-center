@@ -7,30 +7,34 @@ import fcntl
 import os
 import re
 import shutil
-from pathlib import Path
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from .errors import UcError
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 RELEASE_RE = re.compile(r'^\d{8}T\d{6}Z$')
 
 
 class PublishError(UcError):
-    pass
+    """A release could not be published or rolled back to."""
 
 
 class LockBusyError(UcError):
-    pass
+    """Another generation or rollback holds the run lock."""
 
 
 class RunLock:
     """Exclusive, non-blocking lock on DATA/.lock held for a whole generation."""
 
     def __init__(self, data_dir: Path) -> None:
+        """Prepare the lock on data_dir/.lock; it is taken on entering the context."""
         self.path = data_dir / '.lock'
         self._fd: int | None = None
 
     def __enter__(self) -> Self:
+        """Take the lock, or raise LockBusyError at once if another process holds it."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
         try:
@@ -43,25 +47,32 @@ class RunLock:
         return self
 
     def __exit__(self, *exc: object) -> None:
-        assert self._fd is not None
+        """Release the lock."""
+        if self._fd is None:
+            msg = f'{self.path} is not held'
+            raise RuntimeError(msg)
         fcntl.flock(self._fd, fcntl.LOCK_UN)
         os.close(self._fd)
         self._fd = None
 
 
 def releases_dir(data_dir: Path) -> Path:
+    """Return the directory holding every release."""
     return data_dir / 'releases'
 
 
 def new_release_id(now: dt.datetime) -> str:
+    """Return the release id for now: its UTC time as YYYYMMDDTHHMMSSZ."""
     return now.astimezone(dt.UTC).strftime('%Y%m%dT%H%M%SZ')
 
 
 def staging_path(data_dir: Path, release_id: str) -> Path:
+    """Return where release_id is built before it is published."""
     return releases_dir(data_dir) / f'{release_id}.staging'
 
 
 def create_staging(data_dir: Path, release_id: str) -> Path:
+    """Create an empty staging directory for release_id, replacing any leftover one, and return it."""
     path = staging_path(data_dir, release_id)
     if path.exists():
         shutil.rmtree(path)
@@ -70,18 +81,21 @@ def create_staging(data_dir: Path, release_id: str) -> Path:
 
 
 def live_release(data_dir: Path) -> str | None:
+    """Return the id of the release the live symlink points at, or None when there is no live release."""
     link = data_dir / 'live'
     if not link.is_symlink():
         return None
-    return Path(os.readlink(link)).name
+    return link.readlink().name
 
 
 def live_path(data_dir: Path) -> Path | None:
+    """Return the live release's directory, or None when there is no live release."""
     release_id = live_release(data_dir)
     return releases_dir(data_dir) / release_id if release_id else None
 
 
 def list_releases(data_dir: Path) -> list[str]:
+    """Return the ids of the published releases, oldest first (staging and failed trees excluded)."""
     root = releases_dir(data_dir)
     if not root.is_dir():
         return []
@@ -89,24 +103,27 @@ def list_releases(data_dir: Path) -> list[str]:
 
 
 def swap_live(data_dir: Path, release_id: str) -> None:
+    """Point the live symlink at release_id atomically."""
     if not (releases_dir(data_dir) / release_id).is_dir():
         msg = f'release {release_id} does not exist'
         raise PublishError(msg)
     tmp = data_dir / 'live.tmp'
     if tmp.is_symlink() or tmp.exists():
         tmp.unlink()
-    os.symlink(f'releases/{release_id}', tmp)
-    os.replace(tmp, data_dir / 'live')  # rename(2): readers see the old or the new release, never neither
+    tmp.symlink_to(f'releases/{release_id}')
+    tmp.replace(data_dir / 'live')  # rename(2): readers see the old or the new release, never neither
 
 
 def publish(data_dir: Path, staging: Path, release_id: str) -> Path:
+    """Move staging into place as release_id, make it live and return its directory."""
     final = releases_dir(data_dir) / release_id
-    os.rename(staging, final)
+    staging.rename(final)
     swap_live(data_dir, release_id)
     return final
 
 
 def prune(data_dir: Path, retain: int) -> list[str]:
+    """Delete all but the newest retain releases, always keeping the live one; return the ids removed."""
     releases = list_releases(data_dir)
     live = live_release(data_dir)
     keep = set(releases[-retain:]) | ({live} if live else set())
@@ -153,10 +170,11 @@ def mark_failed(data_dir: Path, release_id: str) -> None:
         shutil.rmtree(old, ignore_errors=True)
     staging = staging_path(data_dir, release_id)
     if staging.exists():
-        os.rename(staging, root / f'.failed-{release_id}')
+        staging.rename(root / f'.failed-{release_id}')
 
 
 def rollback(data_dir: Path, target: str | None = None) -> str:
+    """Make target live and return its id; by default the newest release before the live one (the newest of all when none is live)."""
     releases = list_releases(data_dir)
     live = live_release(data_dir)
     if target is None:

@@ -1,3 +1,5 @@
+"""Unit tests for uc.args: the update-center2 arguments file, one update site per line."""
+
 import pytest
 
 from uc.args import ArgumentsError, build_argument_lines, write_arguments_file

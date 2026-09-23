@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 import shutil
 from typing import TYPE_CHECKING
@@ -30,20 +29,22 @@ _JSONP_PREFIX = b'downloadService.post('
 
 
 class ToolInstallersError(UcError):
-    pass
+    """The tool-installer index lists nothing, or a listed file is not tool installer metadata."""
 
 
 def site_dirs(root: Path, tiers: Tiers) -> list[Path]:
+    """Return every update site directory under root: one per weekly and stable tier, experimental, current."""
     return [root / f'dynamic-{v}' for v in tiers.weekly] + [root / f'dynamic-stable-{v}' for v in tiers.stable] + [root / 'experimental', root / 'current']
 
 
 def _symlink(target: str, link: Path) -> None:
     if link.is_symlink() or link.is_file():
         link.unlink()
-    os.symlink(target, link)
+    link.symlink_to(target)
 
 
 def finalize_layout(staging: Path, tiers: Tiers, templates: Path) -> None:
+    """Add the shared updates/ directory, the stable and top-level symlinks, uctest.json and index.html."""
     (staging / 'updates').mkdir(exist_ok=True)
     for site in site_dirs(staging, tiers):
         _symlink('../updates', site / 'updates')
@@ -54,21 +55,27 @@ def finalize_layout(staging: Path, tiers: Tiers, templates: Path) -> None:
     shutil.copyfile(templates / 'index.html', staging / 'index.html')
 
 
+def _fetch_tool_installers(index_url: str, get: http.Getter) -> dict[str, bytes]:
+    """Return every file the index links to, by name; raise ToolInstallersError if it lists none or a .json is not JSONP."""
+    names = sorted(set(_INSTALLER_HREF.findall(get(index_url).decode('utf-8', 'replace'))))
+    if not names:
+        msg = f'{index_url} lists no tool installer files'
+        raise ToolInstallersError(msg)
+    fetched: dict[str, bytes] = {}
+    for name in names:
+        body = get(urljoin(index_url, name))
+        if name.endswith('.json') and not body.lstrip(b'\xef\xbb\xbf \r\n\t').startswith(_JSONP_PREFIX):
+            msg = f'{name} does not look like tool installer metadata'
+            raise ToolInstallersError(msg)
+        fetched[name] = body
+    return fetched
+
+
 def mirror_tool_installers(index_url: str, dest: Path, previous: Path | None, get: http.Getter = http.get) -> list[str]:
     """Copy upstream's signed tool-installer metadata unmodified; fall back to the previous copy."""
     dest.mkdir(parents=True, exist_ok=True)
     try:
-        names = sorted(set(_INSTALLER_HREF.findall(get(index_url).decode('utf-8', 'replace'))))
-        if not names:
-            msg = f'{index_url} lists no tool installer files'
-            raise ToolInstallersError(msg)
-        fetched: dict[str, bytes] = {}
-        for name in names:
-            body = get(urljoin(index_url, name))
-            if name.endswith('.json') and not body.lstrip(b'\xef\xbb\xbf \r\n\t').startswith(_JSONP_PREFIX):
-                msg = f'{name} does not look like tool installer metadata'
-                raise ToolInstallersError(msg)
-            fetched[name] = body
+        fetched = _fetch_tool_installers(index_url, get)
     except (http.HttpError, ToolInstallersError) as exc:
         if previous is not None and previous.is_dir():
             for item in previous.iterdir():

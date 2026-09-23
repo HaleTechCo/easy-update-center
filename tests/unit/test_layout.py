@@ -1,4 +1,5 @@
-import os
+"""Unit tests for uc.layout: the site layout around the generator output and tool installer mirroring."""
+
 from pathlib import Path
 
 from sitefixture import write_generator_output
@@ -24,11 +25,11 @@ def test_finalize_layout_matches_upstream(tmp_path):
         'current',
     ]
     for site in site_dirs(tmp_path, tiers):
-        assert os.readlink(site / 'updates') == '../updates'
+        assert (site / 'updates').readlink() == Path('../updates')
     assert (tmp_path / 'updates').is_dir()
-    assert os.readlink(tmp_path / 'stable') == 'dynamic-stable-2.528.3'
-    assert os.readlink(tmp_path / 'update-center.json') == 'current/update-center.json'
-    assert os.readlink(tmp_path / 'latest') == 'current/latest'
+    assert (tmp_path / 'stable').readlink() == Path('dynamic-stable-2.528.3')
+    assert (tmp_path / 'update-center.json').readlink() == Path('current/update-center.json')
+    assert (tmp_path / 'latest').readlink() == Path('current/latest')
     assert (tmp_path / 'latestCore.txt').read_text() == '2.528.1'
     assert (tmp_path / 'uctest.json').read_bytes() == b'{}\n'
     assert 'Jenkins Update Center' in (tmp_path / 'index.html').read_text()
@@ -37,18 +38,18 @@ def test_finalize_layout_matches_upstream(tmp_path):
 def test_without_stable_tiers_stable_is_current(tmp_path):
     write_generator_output(tmp_path, URL, Tiers())
     finalize_layout(tmp_path, Tiers(), TEMPLATES)
-    assert os.readlink(tmp_path / 'stable') == 'current'
+    assert (tmp_path / 'stable').readlink() == Path('current')
 
 
 def test_finalize_layout_is_idempotent(tmp_path):
     write_generator_output(tmp_path, URL, Tiers())
     finalize_layout(tmp_path, Tiers(), TEMPLATES)
     finalize_layout(tmp_path, Tiers(), TEMPLATES)
-    assert os.readlink(tmp_path / 'current' / 'updates') == '../updates'
+    assert (tmp_path / 'current' / 'updates').readlink() == Path('../updates')
 
 
 def getter(files):
-    def get(url, headers=None, timeout=60):
+    def get(url, _headers=None, _timeout=60):
         if url not in files:
             msg = f'GET {url} failed: HTTP Error 404'
             raise HttpError(msg)

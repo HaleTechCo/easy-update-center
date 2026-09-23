@@ -24,7 +24,7 @@ def manifest(group: str | None, artifact: str | None, version: str, extra: str =
 
 
 def extended_timestamp(seconds: int) -> bytes:
-    """A 0x5455 extra field carrying a UTC mtime."""
+    """Return a 0x5455 (extended timestamp) extra field carrying a UTC mtime."""
     return struct.pack('<HHB', 0x5455, 5, 1) + struct.pack('<i', seconds)
 
 
@@ -39,7 +39,9 @@ def _jar(entries: dict[str, bytes]) -> bytes:
 def make_hpi(
     group: str, artifact: str, version: str, *, layout: str = 'maven', embed_pom: bool = True, pom: bytes | None = None, manifest_group: str | None = '', manifest_artifact: str | None = '', description: bytes | None = b'<div>An excellent plugin.</div>', date: tuple = DATE, unix_time: int | None = None
 ) -> bytes:
-    """layout: maven (WEB-INF/lib/<a>.jar), gradle (WEB-INF/lib/<a>-<v>.jar, no META-INF/maven) or
+    """Build a plugin archive (.hpi) in one of three layouts.
+
+    layout: maven (WEB-INF/lib/<a>.jar), gradle (WEB-INF/lib/<a>-<v>.jar, no META-INF/maven) or
     classes (index.jelly under WEB-INF/classes). manifest_group/artifact default to the real ones.
     """
     group_in_manifest = group if manifest_group == '' else manifest_group

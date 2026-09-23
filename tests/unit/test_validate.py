@@ -1,4 +1,7 @@
+"""Unit tests for uc.validate: the checks a staged release must pass before it goes live."""
+
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -62,7 +65,7 @@ def test_missing_files(tmp_path):
 
 def test_missing_tier_directory(tmp_path):
     staging = build(tmp_path, tiers=Tiers())
-    with pytest.raises(ValidationError, match='dynamic-2.540/ is missing update-center.json'):
+    with pytest.raises(ValidationError, match=re.escape('dynamic-2.540/ is missing update-center.json')):
         validate(staging)
 
 
@@ -72,7 +75,7 @@ def test_wrong_signing_certificate(tmp_path):
 
 
 def test_download_urls_must_use_public_url(tmp_path):
-    with pytest.raises(ValidationError, match='download URLs outside https://uc.example.com/download/'):
+    with pytest.raises(ValidationError, match=re.escape('download URLs outside https://uc.example.com/download/')):
         validate(build(tmp_path, public_url='https://updates.jenkins.io'))
 
 
@@ -85,7 +88,7 @@ def test_htaccess_must_not_redirect_elsewhere(tmp_path):
 
 def test_plugin_count_ratio_and_force(tmp_path):
     staging = build(tmp_path)
-    with pytest.raises(ValidationError, match='plugin count 2 < 0.9 × 10'):
+    with pytest.raises(ValidationError, match=re.escape('plugin count 2 < 0.9 \N{MULTIPLICATION SIGN} 10')):
         validate(staging, previous_plugin_count=10)
     assert validate(staging, previous_plugin_count=10, force=True).plugin_count == 2
 
@@ -97,7 +100,7 @@ def test_min_plugins(tmp_path):
 
 def test_download_map_must_cover_offered_versions(tmp_path):
     staging = build(tmp_path)
-    with pytest.raises(ValidationError, match='no entry for plugins/credentials/1415.v831096eb_5534, war/2.528.1'):
+    with pytest.raises(ValidationError, match=re.escape('no entry for plugins/credentials/1415.v831096eb_5534, war/2.528.1')):
         validate(staging, download_map={'plugins/git/5.2.0': 'a'})
     validate(staging, download_map=dict.fromkeys(OFFERED, 'x'))
 

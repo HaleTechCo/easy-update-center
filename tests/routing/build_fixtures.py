@@ -51,13 +51,15 @@ def scenario(root: Path, name: str, public_url: str, tiers: Tiers, releases=(R1,
         release(data, release_id, public_url, tiers)
         stamp = 1_767_225_600 + index * 60  # distinct map mtimes, so RewriteMap reloads after a swap
         os.utime(data / 'releases' / release_id / '.htdownload-map', (stamp, stamp))
-    os.symlink(f'releases/{releases[0]}', data / 'live')
+    (data / 'live').symlink_to(f'releases/{releases[0]}')
     (data / 'status.json').write_text(json.dumps({'live_release': releases[0]}) + '\n')
 
 
 def tls_backend(tls: Path, hostname: str) -> None:
-    """A root CA, an intermediate and a leaf for hostname: public CAs sign through an intermediate,
-    so a real repository sends leaf + intermediate and is trusted through the root alone.
+    """Create a root CA, an intermediate and a leaf certificate for hostname.
+
+    Public CAs sign through an intermediate, so a real repository sends leaf + intermediate and is
+    trusted through the root alone.
     """
     shutil.rmtree(tls, ignore_errors=True)
     tls.mkdir(parents=True)

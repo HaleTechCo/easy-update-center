@@ -24,11 +24,13 @@ _REPOSITORY = re.compile(r'^[A-Za-z0-9._-]+$')
 
 
 class AqlError(UcError):
-    pass
+    """The AQL query failed or returned something other than a results list."""
 
 
 @dataclass(frozen=True)
 class RepoFile:
+    """One file from the AQL listing: its repository path, name, checksums, size and modification time."""
+
     path: str
     name: str
     sha256: str | None = None
@@ -39,6 +41,8 @@ class RepoFile:
 
 @dataclass(frozen=True)
 class Gav:
+    """Maven coordinates of one artifact file: groupId, artifactId, version and extension."""
+
     group_id: str
     artifact_id: str
     version: str
@@ -46,9 +50,11 @@ class Gav:
 
     @property
     def maven_path(self) -> str:
+        """Return the file's path in Maven repository layout."""
         return f'{self.group_id.replace(".", "/")}/{self.artifact_id}/{self.version}/{self.artifact_id}-{self.version}.{self.extension}'
 
     def with_extension(self, extension: str) -> Gav:
+        """Return the same coordinates with another extension (the .pom beside an .hpi, say)."""
         return Gav(self.group_id, self.artifact_id, self.version, extension)
 
 
@@ -74,6 +80,7 @@ def to_gav(f: RepoFile) -> Gav | None:
 
 
 def query_repository(api_url: str, repository: str, username: str, password: str, timeout: float = 600) -> list[RepoFile]:
+    """Run the AQL query against api_url with basic auth and return every .hpi, .jpi, .war and .pom in repository."""
     if not _REPOSITORY.match(repository):
         msg = f'unsupported repository name {repository!r}'
         raise AqlError(msg)
@@ -103,6 +110,8 @@ def query_repository(api_url: str, repository: str, username: str, password: str
 
 @dataclass(frozen=True)
 class Listing:
+    """The repository listing sorted into what the generator uses and what it drops."""
+
     plugins: tuple[Gav, ...]  # .hpi/.jpi with a matching .pom
     plugins_without_pom: tuple[Gav, ...]
     wars: tuple[Gav, ...]  # org.jenkins-ci.main:jenkins-war with a matching .pom
@@ -111,6 +120,7 @@ class Listing:
 
 
 def classify(files: Iterable[RepoFile]) -> Listing:
+    """Split files into plugins and jenkins-war cores, each with or without a matching .pom, plus the files not in Maven layout."""
     gavs: list[Gav] = []
     rejected: list[RepoFile] = []
     for f in files:

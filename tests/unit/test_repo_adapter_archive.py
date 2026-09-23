@@ -1,3 +1,5 @@
+"""Unit tests for uc.repo_adapter.archive: bounded zip reads, archive dates, descriptions and extracted facts."""
+
 import datetime as dt
 import io
 import struct

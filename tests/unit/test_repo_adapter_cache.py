@@ -1,3 +1,5 @@
+"""Unit tests for uc.repo_adapter.cache: the sha256-keyed cache of archive facts and its pruning."""
+
 import datetime as dt
 import os
 import time
@@ -49,7 +51,7 @@ def test_sha1_verdict_and_description(tmp_path):
 
 
 def test_rejects_keys_that_are_not_sha256(tmp_path):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='not a sha256'):
         Cache(tmp_path).facts('../../etc/passwd')
 
 

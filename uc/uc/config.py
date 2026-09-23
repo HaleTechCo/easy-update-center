@@ -31,6 +31,8 @@ _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 
 @dataclass(frozen=True)
 class Settings:
+    """Validated configuration for one uc run, with the paths derived from it."""
+
     mode: str
     public_url: str
     uc_id: str
@@ -76,37 +78,46 @@ class Settings:
 
     @property
     def downloads_root_url(self) -> str:
+        """Public URL under which the site's download links live."""
         return f'{self.public_url}/download'
 
     @property
     def jar_dir(self) -> Path:
+        """Directory holding the update-center2 generator."""
         return self.app_dir / 'generator'
 
     @property
     def jar(self) -> Path:
+        """The update-center2 jar."""
         return self.jar_dir / 'update-center2.jar'
 
     @property
     def htaccess_script(self) -> Path:
+        """Upstream's generate-htaccess.sh."""
         return self.app_dir / 'site' / 'generate-htaccess.sh'
 
     @property
     def bundled_resources(self) -> Path:
+        """Resources shipped in the image, used when RESOURCES_SOURCE=bundled."""
         return self.app_dir / 'resources'
 
     @property
     def templates_dir(self) -> Path:
+        """Directory of the site templates (static .htaccess rules, index.html)."""
         return self.app_dir / 'templates'
 
     @property
     def version_tool_dir(self) -> Path:
+        """Directory holding the compiled VersionTool class (Jenkins version comparisons)."""
         return self.app_dir / 'tools'
 
     @property
     def cache_dir(self) -> Path:
-        """The generator's download cache. Its keys are URL paths, and /artifactory/<key>/... is the same
-        with the adapter on or off, so each gets its own directory: toggling REPO_ADAPTER never reuses what
-        the other one cached (an HTML "POM" fetched directly, say).
+        """The generator's download cache, one per source.
+
+        Its keys are URL paths, and /artifactory/<key>/... is the same with the adapter on or off, so each
+        gets its own directory: toggling REPO_ADAPTER never reuses what the other one cached (an HTML "POM"
+        fetched directly, say).
         """
         return self.data_dir / 'cache' / ('repo-adapter' if self.repo_adapter else 'artifactory')
 
@@ -117,14 +128,17 @@ class Settings:
 
     @property
     def source_api_url(self) -> str:
+        """Artifactory-style API base URL for AQL queries: the adapter's, or the repository's."""
         return self.repo_adapter_url + 'api/' if self.repo_adapter else self.repo_api_url
 
     @property
     def repo_adapter_token_file(self) -> Path:
+        """File in the repo-adapter's directory holding its access token."""
         return self.repo_adapter_dir / 'token'
 
     @property
     def repo_adapter_report_file(self) -> Path:
+        """The repo-adapter's report.json of what it filled in and dropped."""
         return self.repo_adapter_dir / 'report.json'
 
 
@@ -178,6 +192,7 @@ def _bool(env: Mapping[str, str], name: str, *, default: bool) -> bool:
 
 
 def with_trailing_slash(url: str) -> str:
+    """Return url with a '/' appended unless it already ends in one."""
     return url if url.endswith('/') else url + '/'
 
 
@@ -206,6 +221,7 @@ def read_secret(path: Path) -> str | None:
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
+    """Build Settings from env (default: os.environ), applying the mode's defaults; raise ConfigError on bad values."""
     env = os.environ if env is None else env
     mode = _choice(env, 'MODE', '', MODES)
     online = mode == 'online'

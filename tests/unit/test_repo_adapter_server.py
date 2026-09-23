@@ -1,3 +1,5 @@
+"""Unit tests for uc.repo_adapter.server: the adapter's HTTP endpoints, the credentials they need and its token."""
+
 import base64
 import datetime as dt
 import stat

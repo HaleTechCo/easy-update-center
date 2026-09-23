@@ -12,10 +12,11 @@ Getter = Callable[..., bytes]
 
 
 class HttpError(UcError):
-    pass
+    """A GET failed: connection error, timeout, invalid URL or an HTTP error status."""
 
 
 def get(url: str, headers: Mapping[str, str] | None = None, timeout: float = 60) -> bytes:
+    """Return the body of url, sent with the uc User-Agent and any extra headers."""
     request = urllib.request.Request(url, headers={'User-Agent': USER_AGENT, **(headers or {})})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:

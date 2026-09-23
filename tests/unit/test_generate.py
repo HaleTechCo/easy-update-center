@@ -1,6 +1,9 @@
+"""Unit tests for uc.generate: whole generate runs against a fake jar, their failure handling and pruning."""
+
 import datetime as dt
 import json
-import os
+import re
+from pathlib import Path
 
 import pytest
 
@@ -24,21 +27,17 @@ TIERS = Tiers(('2.540',), ('2.528.1',))
 
 
 def repo_files():
-    files = []
-    for plugin_id, version in DEFAULT_PLUGINS.items():
-        for ext in ('hpi', 'pom'):
-            files.append(RepoFile(f'org/jenkins-ci/plugins/{plugin_id}/{version}', f'{plugin_id}-{version}.{ext}'))
-    for ext in ('war', 'pom'):
-        files.append(RepoFile('org/jenkins-ci/main/jenkins-war/2.528.1', f'jenkins-war-2.528.1.{ext}'))
-    return files
+    plugins = [RepoFile(f'org/jenkins-ci/plugins/{plugin_id}/{version}', f'{plugin_id}-{version}.{ext}') for plugin_id, version in DEFAULT_PLUGINS.items() for ext in ('hpi', 'pom')]
+    wars = [RepoFile('org/jenkins-ci/main/jenkins-war/2.528.1', f'jenkins-war-2.528.1.{ext}') for ext in ('war', 'pom')]
+    return plugins + wars
 
 
-def no_network(url, headers=None, timeout=60):
+def no_network(url, _headers=None, _timeout=60):
     msg = f'unexpected network access: {url}'
     raise AssertionError(msg)
 
 
-def no_query(*args):
+def no_query(*_args):
     msg = 'AQL must not be queried with the mirror backend'
     raise AssertionError(msg)
 
@@ -46,7 +45,7 @@ def no_query(*args):
 def tools_for(settings, **jar_options):
     return Toolchain(
         run_jar=FakeJar(TIERS, cert_der_b64(settings.signing_cert_file), **jar_options),
-        aql_query=lambda *args: repo_files(),
+        aql_query=lambda *_args: repo_files(),
         http_get=no_network,
         versions=SimpleVersions(),
     )
@@ -60,7 +59,7 @@ def test_airgapped_generation_publishes(tmp_path, secrets_dir):
     assert rid == '20260922T030000Z'
     assert live_release(data) == rid
     assert (live / 'current' / 'update-center.json').is_file()
-    assert os.readlink(live / 'stable') == 'dynamic-stable-2.528.1'
+    assert (live / 'stable').readlink() == Path('dynamic-stable-2.528.1')
     assert absolute_targets((live / '.htaccess').read_text()) == []
     mapping = (live / '.htdownload-map').read_text()
     assert 'plugins/git/5.2.0 org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.hpi\n' in mapping
@@ -124,7 +123,7 @@ def test_plugin_count_drop_needs_force(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     generate(settings, tools=tools_for(settings), now=T1, base_env={})
     shrunk = {'plugins': {'git': '5.2.0'}}
-    with pytest.raises(ValidationError, match='plugin count 1 < 0.9'):
+    with pytest.raises(ValidationError, match=re.escape('plugin count 1 < 0.9')):
         generate(settings, tools=tools_for(settings, **shrunk), now=T2, base_env={})
     rid = generate(settings, force=True, tools=tools_for(settings, **shrunk), now=T2 + dt.timedelta(minutes=1), base_env={})
     assert live_release(settings.data_dir) == rid
@@ -136,7 +135,7 @@ def test_online_generation_uses_mirror_and_tool_installers(tmp_path, secrets_dir
         'https://updates.example/updates/': b'<a href="hudson.tasks.Maven.MavenInstaller.json">m</a>',
         'https://updates.example/updates/hudson.tasks.Maven.MavenInstaller.json': b"downloadService.post('m',{})",
     }
-    tools = Toolchain(run_jar=FakeJar(TIERS, cert_der_b64(settings.signing_cert_file)), aql_query=no_query, http_get=lambda url, headers=None, timeout=60: files[url])
+    tools = Toolchain(run_jar=FakeJar(TIERS, cert_der_b64(settings.signing_cert_file)), aql_query=no_query, http_get=lambda url, _headers=None, _timeout=60: files[url])
     generate(settings, tools=tools, now=T1, base_env={})
     live = settings.data_dir / 'live'
     assert (live / '.htdownload-map').read_text() == ''
@@ -211,7 +210,7 @@ def test_status_error_omits_raw_exception_text(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     secret = 'AQL query to https://artifactory.corp.internal/artifactory/api/ failed with HTTP 401: topsecret-body'
 
-    def boom(*args):
+    def boom(*_args):
         raise AqlError(secret)
 
     tools = tools_for(settings)
@@ -229,7 +228,7 @@ def test_status_error_omits_raw_exception_text(tmp_path, secrets_dir):
 def test_post_publish_failure_still_reports_the_new_live_release(tmp_path, secrets_dir, monkeypatch):
     settings = make_settings(tmp_path, secrets_dir)
 
-    def boom(*args, **kwargs):
+    def boom(*_args, **_kwargs):
         msg = 'prune blew up'
         raise RuntimeError(msg)
 

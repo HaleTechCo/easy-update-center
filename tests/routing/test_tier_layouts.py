@@ -1,3 +1,5 @@
+"""Web-tier version routing when only weekly, only stable or no core tiers exist."""
+
 import pytest
 
 from helpers import fetch

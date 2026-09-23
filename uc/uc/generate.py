@@ -39,6 +39,11 @@ def generate(
     now: dt.datetime | None = None,
     base_env: Mapping[str, str] | None = None,
 ) -> str:
+    """Build, validate and publish one release under the run lock; return its release id.
+
+    On failure the staging directory is kept for debugging, status.json records the failed run, and the
+    error is re-raised.
+    """
     tools = tools or Toolchain()
     now = now or utcnow()
     base_env = os.environ if base_env is None else base_env

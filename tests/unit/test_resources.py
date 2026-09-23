@@ -1,6 +1,9 @@
+"""Unit tests for uc.resources: fetching upstream resources, the operator overlay and the last-good fallback."""
+
 import datetime as dt
 import hashlib
 import json
+import re
 
 import pytest
 
@@ -30,7 +33,7 @@ UPSTREAM = {
 
 
 def github_getter(tarball):
-    def get(url, headers=None, timeout=60):
+    def get(url, _headers=None, _timeout=60):
         if url == 'https://api.github.com/repos/jenkins-infra/update-center2/commits/master':
             return json.dumps({'sha': SHA, 'commit': {'committer': {'date': '2026-09-16T13:29:23Z'}}}).encode()
         if url == f'https://codeload.github.com/jenkins-infra/update-center2/tar.gz/{SHA}':
@@ -41,7 +44,7 @@ def github_getter(tarball):
     return get
 
 
-def offline(url, headers=None, timeout=60):
+def offline(url, _headers=None, _timeout=60):
     msg = f'GET {url} failed: offline'
     raise HttpError(msg)
 
@@ -66,7 +69,7 @@ def test_url_source_checks_sha256(tmp_path, secrets_dir):
     tarball = make_tar({name[len(PREFIX) :]: data for name, data in UPSTREAM.items()})
     digest = hashlib.sha256(tarball).hexdigest()
 
-    def get(url, headers=None, timeout=60):
+    def get(_url, _headers=None, _timeout=60):
         return tarball
 
     ok = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://art/generic/uc2.tgz', RESOURCES_SHA256=digest)
@@ -89,21 +92,21 @@ def test_bundled_source(tmp_path, secrets_dir):
 def test_missing_required_file(tmp_path, secrets_dir):
     tarball = make_tar({'resources/warnings.json': b'[]'})
     settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz')
-    with pytest.raises(ResourcesError, match='missing artifact-ignores.properties, index-template.html'):
-        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *a, **k: tarball)
+    with pytest.raises(ResourcesError, match=re.escape('missing artifact-ignores.properties, index-template.html')):
+        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *_a, **_k: tarball)
 
 
 def test_unsafe_archive_path(tmp_path, secrets_dir):
     tarball = make_tar({'resources/warnings.json': b'[]', 'resources/../../evil': b'x'})
     settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz')
     with pytest.raises(ResourcesError, match='unsafe path'):
-        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *a, **k: tarball)
+        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *_a, **_k: tarball)
 
 
 def test_not_a_tarball(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz')
     with pytest.raises(ResourcesError, match='not a tar'):
-        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *a, **k: b'<html>')
+        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *_a, **_k: b'<html>')
 
 
 def test_overlay_merge(tmp_path):

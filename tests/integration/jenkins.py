@@ -10,11 +10,15 @@ import urllib.request
 
 
 class Jenkins:
+    """One Jenkins controller, reached over HTTP with a cookie-keeping opener."""
+
     def __init__(self, base_url: str) -> None:
+        """Talk to the controller at base_url."""
         self.base = base_url.rstrip('/')
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 
     def wait_ready(self, timeout: float = 600) -> None:
+        """Poll /login until it answers 200; raise TimeoutError after timeout seconds."""
         deadline = time.monotonic() + timeout
         while True:
             try:
@@ -29,10 +33,12 @@ class Jenkins:
             time.sleep(5)
 
     def version(self) -> str:
+        """Return the core version from the X-Jenkins header."""
         with self.opener.open(self.base + '/login', timeout=10) as response:
             return response.headers['X-Jenkins']
 
     def script(self, groovy: str, timeout: float = 900) -> str:
+        """Run groovy in the script console and return its output, sending a fresh CSRF crumb."""
         with self.opener.open(self.base + '/crumbIssuer/api/json', timeout=30) as response:
             crumb = json.loads(response.read())
         request = urllib.request.Request(

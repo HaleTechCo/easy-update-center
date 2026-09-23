@@ -36,21 +36,24 @@ authorityKeyIdentifier = keyid
 
 
 class PkiError(UcError):
-    pass
+    """An openssl step failed, or its input or output was unusable."""
 
 
 @dataclass(frozen=True)
 class CertInfo:
+    """A certificate's subject (RFC 2253), expiry and SHA-256 fingerprint."""
+
     subject: str
     not_after: dt.datetime
     fingerprint_sha256: str
 
     def days_left(self, now: dt.datetime) -> int:
+        """Return the whole days from now until the certificate expires (negative once expired)."""
         return (self.not_after - now).days
 
 
 def _openssl(*args: str) -> str:
-    proc = subprocess.run(['openssl', *args], capture_output=True, text=True)
+    proc = subprocess.run(['openssl', *args], capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         msg = f'openssl {args[0]} failed: {proc.stderr.strip()}'
         raise PkiError(msg)
@@ -58,6 +61,7 @@ def _openssl(*args: str) -> str:
 
 
 def cert_info(cert: Path) -> CertInfo:
+    """Return the subject, expiry and fingerprint of the PEM certificate at cert."""
     out = _openssl(
         'x509',
         '-in',
@@ -86,11 +90,13 @@ def cert_info(cert: Path) -> CertInfo:
 
 
 def key_matches_cert(key: Path, cert: Path) -> bool:
+    """Return True when the private key and the certificate share the same public key."""
     return _openssl('pkey', '-in', str(key), '-pubout') == _openssl('x509', '-in', str(cert), '-noout', '-pubkey')
 
 
 def verify_chain(root: Path, cert: Path) -> bool:
-    proc = subprocess.run(['openssl', 'verify', '-CAfile', str(root), str(cert)], capture_output=True, text=True)
+    """Return True when openssl verifies cert against the root CA certificate."""
+    proc = subprocess.run(['openssl', 'verify', '-CAfile', str(root), str(cert)], capture_output=True, text=True, check=False)
     return proc.returncode == 0
 
 

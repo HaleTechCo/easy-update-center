@@ -1,3 +1,5 @@
+"""Unit tests for uc.pom: POM coordinates and the reasons a repository POM is unusable."""
+
 import pytest
 
 from archivefixture import pom_xml

@@ -1,6 +1,4 @@
-"""uc repo-adapter: upstream's three Artifactory requests, answered from either repository type
-(repo-adapter spec §3, §4.1, §5.3).
-"""
+"""uc repo-adapter: upstream's three Artifactory requests, answered from either repository type (repo-adapter spec §3, §4.1, §5.3)."""
 
 from __future__ import annotations
 
@@ -36,7 +34,7 @@ PORT = 8081
 
 
 def ensure_token(path: Path) -> str:
-    """The generator's credential for the adapter: 32 random bytes, created once, mode 0600."""
+    """Return the generator's credential for the adapter: 32 random bytes, created once, mode 0600."""
     existing = read_secret(path)
     if existing:
         return existing
@@ -46,29 +44,36 @@ def ensure_token(path: Path) -> str:
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, 'w', encoding='utf-8') as out:
         out.write(token + '\n')
-    os.replace(tmp, path)
+    tmp.replace(path)
     return token
 
 
 class Adapter:
+    """Upstream's requests, answered from the latest listing of one repository."""
+
     def __init__(self, backend: Backend, cache: Cache, *, key: str, report_file: Path, clock: Callable[[], dt.datetime] = utcnow) -> None:
+        """Serve repository key from backend; each listing's report goes to report_file."""
         self.backend, self.cache, self.key, self.report_file, self.clock = backend, cache, key, report_file, clock
         self.index: Index | None = None
         self.lock = threading.Lock()
 
     def refresh(self) -> Index:
+        """Build a new listing, one at a time, write its report and serve GETs from it."""
         with self.lock:
             index = build_index(self.backend, self.cache, key=self.key, now=self.clock())
-            assert index.report is not None
+            if index.report is None:
+                msg = 'build_index returned a listing without a report'
+                raise RuntimeError(msg)
             write_report(index.report, self.report_file)
             self.index = index
             return index
 
     def current(self) -> Index:
-        """The latest listing; after a restart, the first GET builds one (spec §4.1)."""
+        """Return the latest listing; after a restart, the first GET builds one (spec §4.1)."""
         return self.index or self.refresh()
 
     def pom(self, path: str) -> bytes | None:
+        """Return a listed POM: the one derived from its archive, else the repository's; None when not listed."""
         index = self.current()
         if path not in index.poms:
             return None
@@ -76,6 +81,7 @@ class Adapter:
         return derived if derived is not None else self.backend.get(path)
 
     def manifest(self, archive_path: str) -> bytes | None:
+        """Return a listed archive's MANIFEST.MF, None when the listing has none."""
         return self.current().manifests.get(archive_path)
 
     def description(self, jar_path: str) -> bytes | None:
@@ -103,6 +109,7 @@ class Adapter:
 
 
 def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
+    """Return the request handler class; with adapter None, it answers the repository requests with 503."""
     expected = ('Basic ' + base64.b64encode(f'{ADAPTER_USERNAME}:{token}'.encode()).decode()) if token else ''
     repo_prefix = f'{PREFIX}{key}/'
 
@@ -121,7 +128,7 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 self.wfile.write(body)
 
         def _refuse(self, *, authenticate: bool) -> bool:
-            """True when the request was answered already: idle adapter, or no valid credentials.
+            """Return True when the request was answered already: idle adapter, or no valid credentials.
 
             Only the listing is authenticated. Upstream cannot answer an authentication challenge for
             file reads: its Authenticator dereferences the requesting site, which Java's HttpClient
@@ -144,7 +151,9 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 return self._send(200, b'ok\n', 'text/plain')
             if self._refuse(authenticate=False):
                 return None
-            assert adapter is not None
+            if adapter is None:
+                msg = '_refuse answers every request while the adapter is idle'
+                raise RuntimeError(msg)
             if not path.startswith(repo_prefix):
                 return self._send(404)
             archive, separator, entry = urllib.parse.unquote(path[len(repo_prefix) :]).partition('!/')
@@ -170,7 +179,9 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 return self._send(404)
             if self._refuse(authenticate=True):
                 return None
-            assert adapter is not None
+            if adapter is None:
+                msg = '_refuse answers every request while the adapter is idle'
+                raise RuntimeError(msg)
             length = int(self.headers.get('Content-Length') or 0)
             if length > QUERY_LIMIT:
                 return self._send(413)
@@ -189,6 +200,7 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
 
 
 def create_adapter(settings: Settings) -> Adapter:
+    """Build the adapter for the configured repository type and credentials."""
     username, password = load_repository_credentials(settings)
     http = Http(settings.repo_ca_file)
     max_bytes = settings.repo_max_archive_mb * 1024 * 1024
@@ -200,7 +212,8 @@ def create_adapter(settings: Settings) -> Adapter:
     return Adapter(backend, Cache(settings.repo_adapter_dir / 'cache'), key=settings.repo_key, report_file=settings.repo_adapter_report_file)
 
 
-def make_server(settings: Settings, port: int = PORT, host: str = '0.0.0.0') -> ThreadingHTTPServer:
+def make_server(settings: Settings, port: int = PORT, host: str = '0.0.0.0') -> ThreadingHTTPServer:  # noqa: S104 - the repo-adapter listens on every interface of its container by design
+    """Bind the repo-adapter's HTTP server; it stays idle, answering 503, while REPO_ADAPTER is off."""
     if not settings.repo_adapter:
         return ThreadingHTTPServer((host, port), make_handler(None, key=settings.repo_key, token=None))
     adapter = create_adapter(settings)
@@ -209,6 +222,7 @@ def make_server(settings: Settings, port: int = PORT, host: str = '0.0.0.0') -> 
 
 
 def serve(settings: Settings, port: int = PORT) -> None:
+    """Run the repo-adapter on port until the process stops."""
     server = make_server(settings, port)
     state = f'{settings.repo_type} repository {settings.repo_key} at {settings.repo_url}' if settings.repo_adapter else 'idle (REPO_ADAPTER is off)'
     print(f'repo-adapter: listening on :{port}, {state}', flush=True)

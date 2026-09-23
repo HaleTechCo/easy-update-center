@@ -1,5 +1,7 @@
+"""Unit tests for uc.cli: exit codes, status output, rollback, the run lock and the pki subcommands."""
+
 import json
-import os
+from pathlib import Path
 
 from sitefixture import uc_document, write_site
 from uc.cli import EXIT_LOCKED, main
@@ -40,7 +42,7 @@ def test_rollback_updates_status(monkeypatch, tmp_path, secrets_dir, capsys):
     data = use_env(monkeypatch, tmp_path, secrets_dir)
     for rid in ('20260922T010000Z', '20260922T020000Z'):
         write_site(data / 'releases' / rid / 'current', uc_document('https://uc.example.com'))
-    os.symlink('releases/20260922T020000Z', data / 'live')
+    (data / 'live').symlink_to('releases/20260922T020000Z')
     assert main(['rollback']) == 0
     assert '20260922T010000Z' in capsys.readouterr().out
     assert read_status(data)['live_release'] == '20260922T010000Z'
@@ -58,11 +60,11 @@ def test_rollback_reports_a_held_lock(monkeypatch, tmp_path, secrets_dir):
     data = use_env(monkeypatch, tmp_path, secrets_dir)
     for rid in ('20260922T010000Z', '20260922T020000Z'):
         write_site(data / 'releases' / rid / 'current', uc_document('https://uc.example.com'))
-    os.symlink('releases/20260922T020000Z', data / 'live')
+    (data / 'live').symlink_to('releases/20260922T020000Z')
     with RunLock(data):
         assert main(['rollback']) == EXIT_LOCKED
     assert read_status(data).get('live_release') != '20260922T010000Z'
-    assert os.readlink(data / 'live') == 'releases/20260922T020000Z'
+    assert (data / 'live').readlink() == Path('releases/20260922T020000Z')
 
 
 def test_repo_adapter_refuses_to_start_without_repository_credentials(monkeypatch, tmp_path, secrets_dir, capsys):

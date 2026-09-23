@@ -25,13 +25,17 @@ if TYPE_CHECKING:
     from .model import Credentials
     from .versions import VersionTool
 
+HTTP_NOT_FOUND = 404
+
 
 class DoctorError(UcError):
-    pass
+    """Fetching a POM or manifest from the repository failed."""
 
 
 @dataclass
 class DoctorReport:
+    """What the generator will publish from the source repository, what it drops, and why."""
+
     plugins: int = 0
     cores: list[str] = field(default_factory=list)
     hpi_without_pom: list[str] = field(default_factory=list)
@@ -49,10 +53,12 @@ class DoctorReport:
 
     @property
     def dropped(self) -> int:
+        """Number of files in the source that the generator will not publish."""
         # needs_pom archives already count as hpi_without_pom: no POM reaches the listing for them.
         return len(self.hpi_without_pom) + len(self.war_without_pom) + len(self.non_maven) + len(self._adapter('misplaced')) + len(self._adapter('skipped'))
 
     def exit_code(self) -> int:
+        """Return 1 when anything is dropped or a dependency is missing, else 0."""
         return 1 if self.dropped or self.missing_dependencies else 0
 
     def summary(self) -> dict:
@@ -70,6 +76,7 @@ class DoctorReport:
         }
 
     def to_dict(self) -> dict:
+        """Return the full report as a JSON-serializable dict (uc doctor --json)."""
         return asdict(self)
 
 
@@ -79,7 +86,7 @@ ADAPTER_SECTIONS = ('derived_poms', 'replaced_poms', 'needs_pom', 'misplaced', '
 def attach_adapter_report(report: DoctorReport, settings: Settings) -> DoctorReport:
     """Add the repo-adapter's report of what it filled in and what it dropped, when the adapter is on."""
     if settings.repo_adapter:
-        from .repo_adapter.listing import read_report
+        from .repo_adapter.listing import read_report  # noqa: PLC0415 - circular: repo_adapter.archive imports parse_manifest from this module
 
         data = read_report(settings.repo_adapter_report_file) or {}
         report.repo_adapter = {name: data.get(name) or [] for name in ADAPTER_SECTIONS}
@@ -87,14 +94,20 @@ def attach_adapter_report(report: DoctorReport, settings: Settings) -> DoctorRep
 
 
 class Source(Protocol):
-    def pom(self, gav: Gav) -> bytes | None: ...
-    def manifest(self, gav: Gav) -> str | None: ...
+    """Where analyze reads a plugin release's POM and manifest from."""
+
+    def pom(self, gav: Gav) -> bytes | None:
+        """Return the release's POM, or None when it is unavailable."""
+
+    def manifest(self, gav: Gav) -> str | None:
+        """Return the text of the archive's META-INF/MANIFEST.MF, or None when it is unavailable."""
 
 
 class ArtifactSource:
     """Reads POMs and MANIFEST.MF the way update-center2 does, from its cache first."""
 
     def __init__(self, artifactory_url: str, repository: str, username: str, password: str, *, cache_dir: Path | None, allow_network: bool, timeout: float = 60) -> None:
+        """Read from repository at artifactory_url; with allow_network False, only what cache_dir already holds."""
         self.base = f'{artifactory_url}{repository}/'
         self.cache_dir = cache_dir
         self.allow_network = allow_network
@@ -103,17 +116,21 @@ class ArtifactSource:
 
     @classmethod
     def from_settings(cls, settings: Settings, creds: Credentials, *, allow_network: bool) -> ArtifactSource:
+        """Build a source reading the repository and cache the generator uses."""
         # Same URL the jar uses, so cache keys (sha256 of the URL path) match.
         return cls(settings.source_url, settings.repo_key, creds.repo_username, creds.repo_password, cache_dir=settings.cache_dir, allow_network=allow_network)
 
     def pom(self, gav: Gav) -> bytes | None:
+        """Return the .pom beside gav, or None when it is neither cached nor fetchable."""
         return self._get(self.base + gav.with_extension('pom').maven_path)
 
     def manifest(self, gav: Gav) -> str | None:
+        """Return the archive's META-INF/MANIFEST.MF as text, or None when it is neither cached nor fetchable."""
         data = self._get(self.base + gav.maven_path + '!/META-INF/MANIFEST.MF')
         return data.decode('utf-8', 'replace') if data is not None else None
 
     def cache_file(self, url: str) -> Path | None:
+        """Return where update-center2's cache keeps url (keyed by the sha256 of its path), or None with no cache."""
         if self.cache_dir is None:
             return None
         digest = hashlib.sha256(urlsplit(url).path.encode('utf-8')).hexdigest()
@@ -133,7 +150,7 @@ class ArtifactSource:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 return response.read()
         except urllib.error.HTTPError as exc:
-            if exc.code == 404:
+            if exc.code == HTTP_NOT_FOUND:
                 return None
             msg = f'GET {url} failed with HTTP {exc.code}'
             raise DoctorError(msg) from exc
@@ -143,7 +160,7 @@ class ArtifactSource:
 
 
 def parse_manifest(text: str) -> dict[str, str]:
-    """Main section of a JAR manifest, joining 72-column continuation lines."""
+    """Return the main section of a JAR manifest, joining 72-column continuation lines."""
     attributes: dict[str, str] = {}
     key: str | None = None
     for raw in text.replace('\r\n', '\n').replace('\r', '\n').split('\n'):
@@ -162,6 +179,7 @@ def parse_manifest(text: str) -> dict[str, str]:
 
 
 def parse_dependencies(value: str) -> list[tuple[str, str, bool]]:
+    """Parse a Plugin-Dependencies value into (name, version, optional) tuples."""
     dependencies = []
     for item in filter(None, (part.strip() for part in value.split(','))):
         spec, _, params = item.partition(';')
@@ -171,6 +189,7 @@ def parse_dependencies(value: str) -> list[tuple[str, str, bool]]:
 
 
 def is_stub_pom(data: bytes) -> bool:
+    """Return True when the POM does not parse or has no non-empty top-level <name>."""
     root = safe_root(data)
     if root is None:
         return True
@@ -178,6 +197,7 @@ def is_stub_pom(data: bytes) -> bool:
 
 
 def analyze(listing: Listing, versions: VersionTool, source: Source) -> DoctorReport:
+    """Report what the listing drops, and check each plugin's newest release for a stub POM and unmet required dependencies."""
     report = DoctorReport()
     report.non_maven = sorted(f'{f.path}/{f.name}' for f in listing.rejected)
     report.hpi_without_pom = sorted(g.maven_path for g in listing.plugins_without_pom)
@@ -221,6 +241,7 @@ def run_doctor(
     versions: VersionTool,
     query: Callable[..., list[aql.RepoFile]] = aql.query_repository,
 ) -> DoctorReport:
+    """List the source repository and analyze it, adding the repo-adapter's report and the live release's tiers when present."""
     files = query(settings.source_api_url, settings.repo_key, creds.repo_username, creds.repo_password)
     report = analyze(aql.classify(files), versions, ArtifactSource.from_settings(settings, creds, allow_network=fetch))
     attach_adapter_report(report, settings)
@@ -232,6 +253,7 @@ def run_doctor(
 
 
 def format_report(report: DoctorReport, settings: Settings) -> str:
+    """Render the report as the human-readable text uc doctor prints."""
     lines = [
         f'Source: {settings.repo_type} repository {settings.repo_key} at {settings.repo_url}' + (' (through repo-adapter)' if settings.repo_adapter else ''),
         f'Plugins with a POM: {report.plugins}',

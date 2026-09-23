@@ -1,4 +1,5 @@
-"""Test-only stand-in for the three Artifactory calls update-center2 makes (spec §13):
+"""Test-only stand-in for the three Artifactory calls update-center2 makes (spec §13).
+
 POST /artifactory/api/search/aql, GET /artifactory/<repo>/<path>, GET /artifactory/<repo>/<path>!/<entry>.
 update-center2 answers 401 challenges with credentials, so private reads use WWW-Authenticate: Basic.
 File reads honour a single Range, as Artifactory does (the repo-adapter reads archive dates that way).
@@ -42,7 +43,7 @@ def aql_results(root: Path, repository: str) -> list[dict]:
                     'modified': stamp,
                     'created': stamp,
                     'sha256': hashlib.sha256(data).hexdigest(),
-                    'actual_sha1': hashlib.sha1(data).hexdigest(),
+                    'actual_sha1': hashlib.sha1(data, usedforsecurity=False).hexdigest(),
                     'size': len(data),
                 }
             )

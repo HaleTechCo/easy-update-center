@@ -1,3 +1,5 @@
+"""Unit tests for uc.config: per-mode defaults, overrides and the rejection of invalid settings."""
+
 from pathlib import Path
 
 import pytest

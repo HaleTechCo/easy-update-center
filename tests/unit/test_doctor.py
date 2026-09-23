@@ -1,7 +1,8 @@
+"""Unit tests for uc.doctor: manifest and dependency parsing, repository analysis and the report."""
+
 import base64
 import hashlib
 import json
-import os
 from pathlib import Path
 
 from httpstub import StubServer
@@ -33,13 +34,18 @@ def plugin(artifact, version, *extensions, group='org/jenkins-ci/plugins'):
 
 
 class FakeSource:
+    """Stands in for ArtifactSource: POMs and manifests looked up by artifactId."""
+
     def __init__(self, poms, manifests):
+        """Serve the given POM bytes and manifest texts, keyed by artifactId."""
         self.poms, self.manifests = poms, manifests
 
     def pom(self, gav):
+        """Return the POM for gav, or None."""
         return self.poms.get(gav.artifact_id)
 
     def manifest(self, gav):
+        """Return the manifest text for gav, or None."""
         return self.manifests.get(gav.artifact_id)
 
 
@@ -130,9 +136,9 @@ def test_run_doctor_includes_live_tiers(tmp_path, secrets_dir):
     release = settings.data_dir / 'releases' / '20260922T000000Z'
     release.mkdir(parents=True)
     (release / 'tiers.json').write_text('{"weeklyCores": [], "stableCores": ["2.528.1"]}')
-    os.symlink('releases/20260922T000000Z', settings.data_dir / 'live')
+    (settings.data_dir / 'live').symlink_to('releases/20260922T000000Z')
     files = plugin('git', '5.2.0', 'hpi', 'pom') + plugin('jenkins-war', '2.528.1', 'war', 'pom', group='org/jenkins-ci/main')
-    report = run_doctor(settings, CREDS, fetch=False, versions=VersionTool.from_settings(settings), query=lambda *args: files)
+    report = run_doctor(settings, CREDS, fetch=False, versions=VersionTool.from_settings(settings), query=lambda *_args: files)
     assert report.tiers == {'weeklyCores': [], 'stableCores': ['2.528.1']}
     assert report.unchecked == 1
     assert report.exit_code() == 0
