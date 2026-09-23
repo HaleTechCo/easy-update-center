@@ -1,4 +1,5 @@
 """Settings from environment variables with per-mode defaults (spec §7.1, §11)."""
+
 from __future__ import annotations
 
 import os
@@ -10,22 +11,19 @@ from urllib.parse import urlsplit, urlunsplit
 
 from .errors import ConfigError
 
-MODES = ("online", "airgapped")
-REPO_TYPES = ("artifactory", "artifact-keeper")
-BACKENDS = ("mirror", "artifactory")
-ACCESS_MODES = ("redirect", "proxy")
-RESOURCE_SOURCES = ("github", "url", "bundled")
+MODES = ('online', 'airgapped')
+REPO_TYPES = ('artifactory', 'artifact-keeper')
+BACKENDS = ('mirror', 'artifactory')
+ACCESS_MODES = ('redirect', 'proxy')
+RESOURCE_SOURCES = ('github', 'url', 'bundled')
 
-PUBLIC_ARTIFACTORY_URL = "https://repo.jenkins-ci.org/"
-UPSTREAM_MIRROR_URL = "https://get.jenkins.io"
-UPSTREAM_POPULARITY_URL = (
-    "https://raw.githubusercontent.com/jenkins-infra/infra-statistics/gh-pages/"
-    "plugin-installation-trend/latestNumbers.json"
-)
-UPSTREAM_TOOL_INSTALLERS_URL = "https://updates.jenkins.io/updates/"
-DEFAULT_ADAPTER_URL = "http://repo-adapter:8081/artifactory/"
+PUBLIC_ARTIFACTORY_URL = 'https://repo.jenkins-ci.org/'
+UPSTREAM_MIRROR_URL = 'https://get.jenkins.io'
+UPSTREAM_POPULARITY_URL = 'https://raw.githubusercontent.com/jenkins-infra/infra-statistics/gh-pages/plugin-installation-trend/latestNumbers.json'
+UPSTREAM_TOOL_INSTALLERS_URL = 'https://updates.jenkins.io/updates/'
+DEFAULT_ADAPTER_URL = 'http://repo-adapter:8081/artifactory/'
 UPSTREAM_CORE_AGE_DAYS = 400
-_REPOSITORY_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+_REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 
 
 @dataclass(frozen=True)
@@ -75,38 +73,38 @@ class Settings:
 
     @property
     def downloads_root_url(self) -> str:
-        return f"{self.public_url}/download"
+        return f'{self.public_url}/download'
 
     @property
     def jar_dir(self) -> Path:
-        return self.app_dir / "generator"
+        return self.app_dir / 'generator'
 
     @property
     def jar(self) -> Path:
-        return self.jar_dir / "update-center2.jar"
+        return self.jar_dir / 'update-center2.jar'
 
     @property
     def htaccess_script(self) -> Path:
-        return self.app_dir / "site" / "generate-htaccess.sh"
+        return self.app_dir / 'site' / 'generate-htaccess.sh'
 
     @property
     def bundled_resources(self) -> Path:
-        return self.app_dir / "resources"
+        return self.app_dir / 'resources'
 
     @property
     def templates_dir(self) -> Path:
-        return self.app_dir / "templates"
+        return self.app_dir / 'templates'
 
     @property
     def version_tool_dir(self) -> Path:
-        return self.app_dir / "tools"
+        return self.app_dir / 'tools'
 
     @property
     def cache_dir(self) -> Path:
         """The generator's download cache. Its keys are URL paths, and /artifactory/<key>/... is the same
         with the adapter on or off, so each gets its own directory: toggling REPO_ADAPTER never reuses what
         the other one cached (an HTML "POM" fetched directly, say)."""
-        return self.data_dir / "cache" / ("repo-adapter" if self.repo_adapter else "artifactory")
+        return self.data_dir / 'cache' / ('repo-adapter' if self.repo_adapter else 'artifactory')
 
     @property
     def source_url(self) -> str:
@@ -115,26 +113,26 @@ class Settings:
 
     @property
     def source_api_url(self) -> str:
-        return self.repo_adapter_url + "api/" if self.repo_adapter else self.repo_api_url
+        return self.repo_adapter_url + 'api/' if self.repo_adapter else self.repo_api_url
 
     @property
     def repo_adapter_token_file(self) -> Path:
-        return self.repo_adapter_dir / "token"
+        return self.repo_adapter_dir / 'token'
 
     @property
     def repo_adapter_report_file(self) -> Path:
-        return self.repo_adapter_dir / "report.json"
+        return self.repo_adapter_dir / 'report.json'
 
 
-def _get(env: Mapping[str, str], name: str, default: str = "") -> str:
-    value = env.get(name, "").strip()
+def _get(env: Mapping[str, str], name: str, default: str = '') -> str:
+    value = env.get(name, '').strip()
     return value if value else default
 
 
 def _choice(env: Mapping[str, str], name: str, default: str, choices: Sequence[str]) -> str:
     value = _get(env, name, default)
     if value not in choices:
-        raise ConfigError(f"{name} must be one of {', '.join(choices)} (got {value!r})")
+        raise ConfigError(f'{name} must be one of {", ".join(choices)} (got {value!r})')
     return value
 
 
@@ -143,9 +141,9 @@ def _int(env: Mapping[str, str], name: str, default: int, minimum: int = 0) -> i
     try:
         value = int(raw)
     except ValueError:
-        raise ConfigError(f"{name} must be an integer (got {raw!r})") from None
+        raise ConfigError(f'{name} must be an integer (got {raw!r})') from None
     if value < minimum:
-        raise ConfigError(f"{name} must be >= {minimum} (got {value})")
+        raise ConfigError(f'{name} must be >= {minimum} (got {value})')
     return value
 
 
@@ -154,43 +152,43 @@ def _ratio(env: Mapping[str, str], name: str, default: float) -> float:
     try:
         value = float(raw)
     except ValueError:
-        raise ConfigError(f"{name} must be a number (got {raw!r})") from None
+        raise ConfigError(f'{name} must be a number (got {raw!r})') from None
     if not 0 <= value <= 1:
-        raise ConfigError(f"{name} must be between 0 and 1 (got {value})")
+        raise ConfigError(f'{name} must be between 0 and 1 (got {value})')
     return value
 
 
 def _bool(env: Mapping[str, str], name: str, default: bool) -> bool:
-    raw = _get(env, name, "true" if default else "false").lower()
-    if raw in ("1", "true", "yes", "on"):
+    raw = _get(env, name, 'true' if default else 'false').lower()
+    if raw in ('1', 'true', 'yes', 'on'):
         return True
-    if raw in ("0", "false", "no", "off"):
+    if raw in ('0', 'false', 'no', 'off'):
         return False
-    raise ConfigError(f"{name} must be true or false (got {raw!r})")
+    raise ConfigError(f'{name} must be true or false (got {raw!r})')
 
 
 def with_trailing_slash(url: str) -> str:
-    return url if url.endswith("/") else url + "/"
+    return url if url.endswith('/') else url + '/'
 
 
 def with_explicit_port(url: str) -> str:
     """Add :443/:80 when missing, so update-center2's Authenticator port check matches (spec §10)."""
     parts = urlsplit(url)
     if parts.username or parts.password:
-        raise ConfigError("URLs must not contain credentials; use the secret files instead")
-    if parts.port is not None or parts.scheme not in ("http", "https"):
+        raise ConfigError('URLs must not contain credentials; use the secret files instead')
+    if parts.port is not None or parts.scheme not in ('http', 'https'):
         return url
-    host = parts.hostname or ""
-    if ":" in host:
-        host = f"[{host}]"
-    port = 443 if parts.scheme == "https" else 80
-    return urlunsplit((parts.scheme, f"{host}:{port}", parts.path, parts.query, parts.fragment))
+    host = parts.hostname or ''
+    if ':' in host:
+        host = f'[{host}]'
+    port = 443 if parts.scheme == 'https' else 80
+    return urlunsplit((parts.scheme, f'{host}:{port}', parts.path, parts.query, parts.fragment))
 
 
 def read_secret(path: Path) -> str | None:
     """Contents of a secret file, stripped; None when the file is missing or empty."""
     try:
-        value = path.read_text(encoding="utf-8").strip()
+        value = path.read_text(encoding='utf-8').strip()
     except FileNotFoundError:
         return None
     return value or None
@@ -198,52 +196,47 @@ def read_secret(path: Path) -> str | None:
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     env = os.environ if env is None else env
-    mode = _choice(env, "MODE", "", MODES)
-    online = mode == "online"
+    mode = _choice(env, 'MODE', '', MODES)
+    online = mode == 'online'
 
-    public_url = _get(env, "PUBLIC_URL").rstrip("/")
+    public_url = _get(env, 'PUBLIC_URL').rstrip('/')
     if not public_url:
-        raise ConfigError("PUBLIC_URL must be set")
+        raise ConfigError('PUBLIC_URL must be set')
 
-    repo_type = _choice(env, "REPO_TYPE", "artifactory", REPO_TYPES)
-    public_repo = online and repo_type == "artifactory"
-    repo_url = _get(env, "REPO_URL", PUBLIC_ARTIFACTORY_URL if public_repo else "")
-    repo_key = _get(env, "REPO_KEY", "releases" if public_repo else "")
+    repo_type = _choice(env, 'REPO_TYPE', 'artifactory', REPO_TYPES)
+    public_repo = online and repo_type == 'artifactory'
+    repo_url = _get(env, 'REPO_URL', PUBLIC_ARTIFACTORY_URL if public_repo else '')
+    repo_key = _get(env, 'REPO_KEY', 'releases' if public_repo else '')
     if not repo_url or not repo_key:
-        raise ConfigError(
-            "REPO_URL and REPO_KEY must be set (they default to repo.jenkins-ci.org "
-            "only in online mode with REPO_TYPE=artifactory)"
-        )
+        raise ConfigError('REPO_URL and REPO_KEY must be set (they default to repo.jenkins-ci.org only in online mode with REPO_TYPE=artifactory)')
     if not _REPOSITORY_RE.match(repo_key):
-        raise ConfigError(f"REPO_KEY contains unsupported characters: {repo_key!r}")
+        raise ConfigError(f'REPO_KEY contains unsupported characters: {repo_key!r}')
     repo_url = with_trailing_slash(repo_url)
     repo_url_with_port = with_explicit_port(repo_url)
-    api_url = with_trailing_slash(_get(env, "REPO_API_URL", repo_url_with_port + "api/"))
+    api_url = with_trailing_slash(_get(env, 'REPO_API_URL', repo_url_with_port + 'api/'))
 
-    adapter_default = not online or repo_type == "artifact-keeper"
-    repo_adapter = _bool(env, "REPO_ADAPTER", adapter_default)
-    if repo_type == "artifact-keeper" and not repo_adapter:
-        raise ConfigError("REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on")
-    repo_ca = _get(env, "REPO_CA_FILE")
+    adapter_default = not online or repo_type == 'artifact-keeper'
+    repo_adapter = _bool(env, 'REPO_ADAPTER', adapter_default)
+    if repo_type == 'artifact-keeper' and not repo_adapter:
+        raise ConfigError('REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on')
+    repo_ca = _get(env, 'REPO_CA_FILE')
 
-    backend = _choice(env, "DOWNLOAD_BACKEND", "mirror" if online else "artifactory", BACKENDS)
-    if backend == "mirror":
+    backend = _choice(env, 'DOWNLOAD_BACKEND', 'mirror' if online else 'artifactory', BACKENDS)
+    if backend == 'mirror':
         default_backend_url = UPSTREAM_MIRROR_URL
-    elif repo_type == "artifact-keeper":
-        default_backend_url = f"{repo_url.rstrip('/')}/maven/{repo_key}"
+    elif repo_type == 'artifact-keeper':
+        default_backend_url = f'{repo_url.rstrip("/")}/maven/{repo_key}'
     else:
         default_backend_url = repo_url + repo_key
-    backend_url = _get(env, "DOWNLOAD_BACKEND_URL", default_backend_url).rstrip("/")
-    data_dir = Path(_get(env, "UC_DATA_DIR", "/data"))
+    backend_url = _get(env, 'DOWNLOAD_BACKEND_URL', default_backend_url).rstrip('/')
+    data_dir = Path(_get(env, 'UC_DATA_DIR', '/data'))
 
-    resources_source = _choice(
-        env, "RESOURCES_SOURCE", "github" if online else "bundled", RESOURCE_SOURCES
-    )
-    resources_url = _get(env, "RESOURCES_URL")
-    if resources_source == "url" and not resources_url:
-        raise ConfigError("RESOURCES_URL must be set when RESOURCES_SOURCE=url")
+    resources_source = _choice(env, 'RESOURCES_SOURCE', 'github' if online else 'bundled', RESOURCE_SOURCES)
+    resources_url = _get(env, 'RESOURCES_URL')
+    if resources_source == 'url' and not resources_url:
+        raise ConfigError('RESOURCES_URL must be set when RESOURCES_SOURCE=url')
 
-    secrets_dir = Path(_get(env, "SECRETS_DIR", "/run/secrets"))
+    secrets_dir = Path(_get(env, 'SECRETS_DIR', '/run/secrets'))
 
     def secret(var: str, name: str) -> Path:
         return Path(_get(env, var, str(secrets_dir / name)))
@@ -251,49 +244,45 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     return Settings(
         mode=mode,
         public_url=public_url,
-        uc_id=_get(env, "UC_ID", "default"),
-        generate_schedule=_get(env, "GENERATE_SCHEDULE", "0 */6 * * *"),
+        uc_id=_get(env, 'UC_ID', 'default'),
+        generate_schedule=_get(env, 'GENERATE_SCHEDULE', '0 */6 * * *'),
         resources_source=resources_source,
-        resources_ref=_get(env, "RESOURCES_REF", "master"),
+        resources_ref=_get(env, 'RESOURCES_REF', 'master'),
         resources_url=resources_url,
-        resources_sha256=_get(env, "RESOURCES_SHA256").lower(),
+        resources_sha256=_get(env, 'RESOURCES_SHA256').lower(),
         # For these two an explicitly empty value means "disabled", so unset and empty differ.
-        popularity_json_url=env.get(
-            "POPULARITY_JSON_URL", UPSTREAM_POPULARITY_URL if online else ""
-        ).strip(),
-        tool_installers_url=env.get(
-            "TOOL_INSTALLERS_URL", UPSTREAM_TOOL_INSTALLERS_URL if online else ""
-        ).strip(),
+        popularity_json_url=env.get('POPULARITY_JSON_URL', UPSTREAM_POPULARITY_URL if online else '').strip(),
+        tool_installers_url=env.get('TOOL_INSTALLERS_URL', UPSTREAM_TOOL_INSTALLERS_URL if online else '').strip(),
         repo_type=repo_type,
         repo_url=repo_url,
         repo_url_with_port=repo_url_with_port,
         repo_api_url=api_url,
         repo_key=repo_key,
         repo_adapter=repo_adapter,
-        repo_adapter_url=with_trailing_slash(_get(env, "REPO_ADAPTER_URL", DEFAULT_ADAPTER_URL)),
-        repo_adapter_dir=Path(_get(env, "REPO_ADAPTER_DIR", str(data_dir / "repo-adapter"))),
+        repo_adapter_url=with_trailing_slash(_get(env, 'REPO_ADAPTER_URL', DEFAULT_ADAPTER_URL)),
+        repo_adapter_dir=Path(_get(env, 'REPO_ADAPTER_DIR', str(data_dir / 'repo-adapter'))),
         repo_ca_file=Path(repo_ca) if repo_ca else None,
-        repo_max_archive_mb=_int(env, "REPO_MAX_ARCHIVE_MB", 512, minimum=1),
-        core_age_days=_int(env, "CORE_AGE_DAYS", UPSTREAM_CORE_AGE_DAYS if online else 0),
+        repo_max_archive_mb=_int(env, 'REPO_MAX_ARCHIVE_MB', 512, minimum=1),
+        core_age_days=_int(env, 'CORE_AGE_DAYS', UPSTREAM_CORE_AGE_DAYS if online else 0),
         download_backend=backend,
         download_backend_url=backend_url,
-        download_access=_choice(env, "DOWNLOAD_ACCESS", "redirect", ACCESS_MODES),
-        retain_releases=_int(env, "RETAIN_RELEASES", 5, minimum=1),
-        min_plugins=_int(env, "MIN_PLUGINS", 1),
-        min_plugin_ratio=_ratio(env, "MIN_PLUGIN_RATIO", 0.9),
-        certificate_minimum_valid_days=_int(env, "CERTIFICATE_MINIMUM_VALID_DAYS", 30),
-        signing_cert_days=_int(env, "SIGNING_CERT_DAYS", 365, minimum=1),
-        stale_after_days=_int(env, "STALE_AFTER_DAYS", 30),
-        allow_local_public_url=_bool(env, "ALLOW_LOCAL_PUBLIC_URL", False),
-        extra_args=tuple(_get(env, "UC_EXTRA_ARGS").split()),
+        download_access=_choice(env, 'DOWNLOAD_ACCESS', 'redirect', ACCESS_MODES),
+        retain_releases=_int(env, 'RETAIN_RELEASES', 5, minimum=1),
+        min_plugins=_int(env, 'MIN_PLUGINS', 1),
+        min_plugin_ratio=_ratio(env, 'MIN_PLUGIN_RATIO', 0.9),
+        certificate_minimum_valid_days=_int(env, 'CERTIFICATE_MINIMUM_VALID_DAYS', 30),
+        signing_cert_days=_int(env, 'SIGNING_CERT_DAYS', 365, minimum=1),
+        stale_after_days=_int(env, 'STALE_AFTER_DAYS', 30),
+        allow_local_public_url=_bool(env, 'ALLOW_LOCAL_PUBLIC_URL', False),
+        extra_args=tuple(_get(env, 'UC_EXTRA_ARGS').split()),
         data_dir=data_dir,
-        overlay_dir=Path(_get(env, "UC_OVERLAY_DIR", "/config/overlay")),
-        app_dir=Path(_get(env, "UC_APP_DIR", "/opt/uc")),
-        signing_key_file=secret("SIGNING_KEY_FILE", "update-center.key"),
-        signing_cert_file=secret("SIGNING_CERT_FILE", "update-center.cert"),
-        root_ca_file=secret("ROOT_CA_FILE", "root-ca.crt"),
-        repo_username_file=secret("REPO_USERNAME_FILE", "repo_username"),
-        repo_password_file=secret("REPO_PASSWORD_FILE", "repo_password"),
-        github_username_file=secret("GITHUB_USERNAME_FILE", "github_username"),
-        github_token_file=secret("GITHUB_TOKEN_FILE", "github_token"),
+        overlay_dir=Path(_get(env, 'UC_OVERLAY_DIR', '/config/overlay')),
+        app_dir=Path(_get(env, 'UC_APP_DIR', '/opt/uc')),
+        signing_key_file=secret('SIGNING_KEY_FILE', 'update-center.key'),
+        signing_cert_file=secret('SIGNING_CERT_FILE', 'update-center.cert'),
+        root_ca_file=secret('ROOT_CA_FILE', 'root-ca.crt'),
+        repo_username_file=secret('REPO_USERNAME_FILE', 'repo_username'),
+        repo_password_file=secret('REPO_PASSWORD_FILE', 'repo_password'),
+        github_username_file=secret('GITHUB_USERNAME_FILE', 'github_username'),
+        github_token_file=secret('GITHUB_TOKEN_FILE', 'github_token'),
     )

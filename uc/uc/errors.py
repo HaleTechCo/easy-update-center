@@ -14,4 +14,4 @@ def public_summary(exc: BaseException) -> str:
 
     The full text reaches the container log, since generate() re-raises.
     """
-    return f"{type(exc).__name__}: see the generator log"
+    return f'{type(exc).__name__}: see the generator log'

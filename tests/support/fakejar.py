@@ -1,4 +1,5 @@
 """Stand-ins for update-center2 and VersionTool in generate() tests."""
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,7 @@ class SimpleVersions:
 
     @staticmethod
     def _key(version: str) -> tuple:
-        return tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in re.split(r"[.-]", version))
+        return tuple((0, int(p), '') if p.isdigit() else (1, 0, p) for p in re.split(r'[.-]', version))
 
     def sort(self, versions: Iterable[str]) -> list[str]:
         return sorted(versions, key=self._key)
@@ -34,8 +35,7 @@ class SimpleVersions:
 
 
 class FakeJar:
-    def __init__(self, tiers: Tiers, cert_b64: str, *, url_root: str | None = None,
-                 fail_sites: bool = False, **doc_options) -> None:
+    def __init__(self, tiers: Tiers, cert_b64: str, *, url_root: str | None = None, fail_sites: bool = False, **doc_options) -> None:
         self.tiers = tiers
         self.cert_b64 = cert_b64
         self.url_root = url_root
@@ -48,26 +48,25 @@ class FakeJar:
         self.calls.append(list(cmd))
         self.envs.append(dict(env))
         log.parent.mkdir(parents=True, exist_ok=True)
-        with log.open("a") as out:
-            out.write("fake update-center2\n")
-        if "--dynamic-tier-list-file" in cmd:
-            target = Path(cmd[cmd.index("--dynamic-tier-list-file") + 1])
-            target.write_text(json.dumps({"weeklyCores": list(self.tiers.weekly),
-                                          "stableCores": list(self.tiers.stable)}))
+        with log.open('a') as out:
+            out.write('fake update-center2\n')
+        if '--dynamic-tier-list-file' in cmd:
+            target = Path(cmd[cmd.index('--dynamic-tier-list-file') + 1])
+            target.write_text(json.dumps({'weeklyCores': list(self.tiers.weekly), 'stableCores': list(self.tiers.stable)}))
             return
         if self.fail_sites:
-            raise JarError("update-center2 exited with status 1; see log")
-        root = self.url_root or env["DOWNLOADS_ROOT_URL"][: -len("/download")]
-        arguments = Path(cmd[cmd.index("--arguments-file") + 1])
+            raise JarError('update-center2 exited with status 1; see log')
+        root = self.url_root or env['DOWNLOADS_ROOT_URL'][: -len('/download')]
+        arguments = Path(cmd[cmd.index('--arguments-file') + 1])
         for line in arguments.read_text().splitlines():
-            if not line or line.startswith("#"):
+            if not line or line.startswith('#'):
                 continue
-            tokens = line.split(" ")
-            www = Path(tokens[tokens.index("--www-dir") + 1])
+            tokens = line.split(' ')
+            www = Path(tokens[tokens.index('--www-dir') + 1])
             doc = uc_document(root, cert_b64=self.cert_b64, **self.doc_options)
-            write_site(www, doc, current=www.name == "current")
-            if "--download-links-directory" in tokens:
-                links = Path(tokens[tokens.index("--download-links-directory") + 1])
-                for plugin_id in doc["plugins"]:
-                    (links / "plugins" / plugin_id).mkdir(parents=True, exist_ok=True)
-                    (links / "plugins" / plugin_id / "index.html").write_text(plugin_id)
+            write_site(www, doc, current=www.name == 'current')
+            if '--download-links-directory' in tokens:
+                links = Path(tokens[tokens.index('--download-links-directory') + 1])
+                for plugin_id in doc['plugins']:
+                    (links / 'plugins' / plugin_id).mkdir(parents=True, exist_ok=True)
+                    (links / 'plugins' / plugin_id / 'index.html').write_text(plugin_id)

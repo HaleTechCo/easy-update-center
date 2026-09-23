@@ -1,4 +1,5 @@
 """The gap-filled listing the adapter serves, and its report (repo-adapter spec §4.2, §7)."""
+
 from __future__ import annotations
 
 import datetime as dt
@@ -16,9 +17,9 @@ from .archive import ArchiveError, ArchiveFacts, plausible
 from .backends import Backend, BackendError, RepoEntry, artifactory_time, parse_time
 from .cache import Cache
 
-PUBLIC_RELEASES = "https://repo.jenkins-ci.org/releases/"
-ARCHIVE_EXTENSIONS = ("hpi", "jpi", "war")
-REPORT_LISTS = ("derived_poms", "replaced_poms", "needs_pom", "misplaced", "skipped", "dates_from_repository")
+PUBLIC_RELEASES = 'https://repo.jenkins-ci.org/releases/'
+ARCHIVE_EXTENSIONS = ('hpi', 'jpi', 'war')
+REPORT_LISTS = ('derived_poms', 'replaced_poms', 'needs_pom', 'misplaced', 'skipped', 'dates_from_repository')
 
 
 @dataclass
@@ -52,13 +53,11 @@ class Index:
 
 def _reason(exc: Exception) -> str:
     """Our errors carry their own message; anything else also names its type."""
-    return str(exc) if isinstance(exc, (BackendError, ArchiveError)) else f"{type(exc).__name__}: {exc}"
+    return str(exc) if isinstance(exc, (BackendError, ArchiveError)) else f'{type(exc).__name__}: {exc}'
 
 
-def _row(key: str, directory: str, name: str, *, sha256: str, sha1: str, size: int, created: str,
-         modified: str) -> dict:
-    return {"repo": key, "path": directory, "name": name, "created": created, "modified": modified,
-            "sha256": sha256, "actual_sha1": sha1, "size": size}
+def _row(key: str, directory: str, name: str, *, sha256: str, sha1: str, size: int, created: str, modified: str) -> dict:
+    return {'repo': key, 'path': directory, 'name': name, 'created': created, 'modified': modified, 'sha256': sha256, 'actual_sha1': sha1, 'size': size}
 
 
 def _facts(backend: Backend, cache: Cache, entry: RepoEntry, coordinates: Coordinates, plugin: bool) -> ArchiveFacts:
@@ -85,39 +84,38 @@ def _pom_verdict(backend: Backend, cache: Cache, entry: RepoEntry, coordinates: 
     if cached is not None:
         return cached or None
     data = backend.get(entry.path)
-    reason = "missing from the repository" if data is None else unusable_reason(data, coordinates)
+    reason = 'missing from the repository' if data is None else unusable_reason(data, coordinates)
     cache.store_pom_verdict(entry.sha256, reason)
     return reason
 
 
 def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -> Index:
     entries = backend.list()
-    report = Report(generated_at=iso(now), repo={"type": backend.type, "key": key})
+    report = Report(generated_at=iso(now), repo={'type': backend.type, 'key': key})
     index = Index(report=report)
-    poms = {e.path: e for e in entries if e.extension == "pom"}
-    index.jars = {e.path: e for e in entries if e.extension == "jar"}
+    poms = {e.path: e for e in entries if e.extension == 'pom'}
+    index.jars = {e.path: e for e in entries if e.extension == 'jar'}
     consumed: set[str] = set()
 
     for entry in sorted((e for e in entries if e.extension in ARCHIVE_EXTENSIONS), key=lambda e: e.path):
         report.archives += 1
         gav = to_gav(RepoFile(entry.directory, entry.name))
         if gav is None:  # not in Maven layout: upstream rejects it, and uc doctor reports it
-            index.rows.append(_row(key, entry.directory, entry.name, sha256=entry.sha256, sha1=entry.sha1 or "",
-                                   size=entry.size, created=entry.created, modified=entry.modified))
+            index.rows.append(_row(key, entry.directory, entry.name, sha256=entry.sha256, sha1=entry.sha1 or '', size=entry.size, created=entry.created, modified=entry.modified))
             continue
-        pom_path = gav.with_extension("pom").maven_path
+        pom_path = gav.with_extension('pom').maven_path
         consumed.add(pom_path)
         coordinates = (gav.group_id, gav.artifact_id, gav.version)
-        plugin = entry.extension != "war"
+        plugin = entry.extension != 'war'
         try:
             facts = _facts(backend, cache, entry, coordinates, plugin)
             sha1 = _sha1(backend, cache, entry)
         except Exception as exc:  # one bad archive must not stop the listing: it is dropped and reported
-            report.skipped.append({"path": entry.path, "reason": _reason(exc)})
+            report.skipped.append({'path': entry.path, 'reason': _reason(exc)})
             continue
         if plugin and facts.coordinates and facts.coordinates != coordinates:
             correct = Gav(*facts.coordinates, entry.extension).maven_path
-            report.misplaced.append({"path": entry.path, "correct_path": correct})
+            report.misplaced.append({'path': entry.path, 'correct_path': correct})
             continue
 
         reason = plausible(facts.released, parse_time(entry.modified))
@@ -125,9 +123,8 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
             created = modified = artifactory_time(facts.released)
         else:
             created, modified = entry.created, entry.modified
-            report.dates_from_repository.append({"path": entry.path, "reason": reason})
-        index.rows.append(_row(key, entry.directory, entry.name, sha256=entry.sha256, sha1=sha1, size=entry.size,
-                               created=created, modified=modified))
+            report.dates_from_repository.append({'path': entry.path, 'reason': reason})
+        index.rows.append(_row(key, entry.directory, entry.name, sha256=entry.sha256, sha1=sha1, size=entry.size, created=created, modified=modified))
         if plugin:
             index.plugins.add(coordinates)
         if facts.manifest is not None:
@@ -139,24 +136,21 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
         if real is not None:
             try:
                 verdict = _pom_verdict(backend, cache, real, coordinates)
-                real_sha1 = _sha1(backend, cache, real) if verdict is None else ""
+                real_sha1 = _sha1(backend, cache, real) if verdict is None else ''
             except Exception as exc:
-                verdict = f"unreadable: {_reason(exc)}"
+                verdict = f'unreadable: {_reason(exc)}'
             if verdict is None:
                 index.poms[pom_path] = None
-                index.rows.append(_row(key, real.directory, real.name, sha256=real.sha256, sha1=real_sha1,
-                                       size=real.size, created=created, modified=modified))
+                index.rows.append(_row(key, real.directory, real.name, sha256=real.sha256, sha1=real_sha1, size=real.size, created=created, modified=modified))
                 continue
-            report.replaced_poms.append({"path": pom_path, "reason": verdict})
+            report.replaced_poms.append({'path': pom_path, 'reason': verdict})
         if facts.pom is not None and unusable_reason(facts.pom, coordinates) is None:
             index.poms[pom_path] = facts.pom
-            directory, _, name = pom_path.rpartition("/")
-            index.rows.append(_row(key, directory, name, sha256=hashlib.sha256(facts.pom).hexdigest(),
-                                   sha1=hashlib.sha1(facts.pom).hexdigest(), size=len(facts.pom),
-                                   created=created, modified=modified))
-            report.derived_poms.append(":".join(coordinates))
+            directory, _, name = pom_path.rpartition('/')
+            index.rows.append(_row(key, directory, name, sha256=hashlib.sha256(facts.pom).hexdigest(), sha1=hashlib.sha1(facts.pom).hexdigest(), size=len(facts.pom), created=created, modified=modified))
+            report.derived_poms.append(':'.join(coordinates))
         else:
-            report.needs_pom.append({"gav": ":".join(coordinates), "url": PUBLIC_RELEASES + pom_path})
+            report.needs_pom.append({'gav': ':'.join(coordinates), 'url': PUBLIC_RELEASES + pom_path})
 
     for path, entry in sorted(poms.items()):  # POMs without an archive: parent POMs and the like
         if path in consumed:
@@ -166,15 +160,14 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
             continue
         try:
             verdict = _pom_verdict(backend, cache, entry, (gav.group_id, gav.artifact_id, gav.version))
-            sha1 = _sha1(backend, cache, entry) if verdict is None else ""
+            sha1 = _sha1(backend, cache, entry) if verdict is None else ''
         except Exception as exc:
-            verdict, sha1 = f"unreadable: {_reason(exc)}", ""
+            verdict, sha1 = f'unreadable: {_reason(exc)}', ''
         if verdict is None:
             index.poms[path] = None
-            index.rows.append(_row(key, entry.directory, entry.name, sha256=entry.sha256, sha1=sha1,
-                                   size=entry.size, created=entry.created, modified=entry.modified))
+            index.rows.append(_row(key, entry.directory, entry.name, sha256=entry.sha256, sha1=sha1, size=entry.size, created=entry.created, modified=entry.modified))
         else:
-            report.replaced_poms.append({"path": path, "reason": verdict})
+            report.replaced_poms.append({'path': path, 'reason': verdict})
     cache.prune()
     return index
 
@@ -182,16 +175,16 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
 def write_report(report: Report, path: Path) -> None:
     """Atomically, mode 0600: the paths and URLs in it are for operators, not the public (spec §7)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".report-")
-    with os.fdopen(fd, "w", encoding="utf-8") as out:
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.report-')
+    with os.fdopen(fd, 'w', encoding='utf-8') as out:
         json.dump(asdict(report), out, indent=2, sort_keys=True)
-        out.write("\n")
+        out.write('\n')
     os.replace(tmp, path)
 
 
 def read_report(path: Path) -> dict | None:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(path.read_text(encoding='utf-8'))
     except (FileNotFoundError, ValueError):
         return None
     return value if isinstance(value, dict) else None
