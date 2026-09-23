@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -60,7 +61,38 @@ def scenario(root: Path, name: str, public_url: str, tiers: Tiers, releases=(R1,
     (data / "status.json").write_text(json.dumps({"live_release": releases[0]}) + "\n")
 
 
+def tls_backend(tls: Path, hostname: str) -> None:
+    """A root CA, an intermediate and a leaf for hostname: public CAs sign through an intermediate,
+    so a real repository sends leaf + intermediate and is trusted through the root alone."""
+    shutil.rmtree(tls, ignore_errors=True)
+    tls.mkdir(parents=True)
+
+    def openssl(*args: str) -> None:
+        subprocess.run(["openssl", *args], cwd=tls, check=True, capture_output=True)
+
+    def extensions(name: str, text: str) -> str:
+        (tls / name).write_text(text)
+        return name
+
+    openssl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", "root.key", "-out", "root.crt",
+            "-days", "30", "-subj", "/CN=Routing Root CA",
+            "-addext", "basicConstraints=critical,CA:TRUE", "-addext", "keyUsage=critical,keyCertSign,cRLSign")
+    openssl("req", "-newkey", "rsa:2048", "-nodes", "-keyout", "intermediate.key", "-out", "intermediate.csr",
+            "-subj", "/CN=Routing Intermediate CA")
+    openssl("x509", "-req", "-in", "intermediate.csr", "-CA", "root.crt", "-CAkey", "root.key",
+            "-CAcreateserial", "-days", "30", "-out", "intermediate.crt", "-extfile",
+            extensions("intermediate.ext", "basicConstraints=critical,CA:TRUE,pathlen:0\n"
+                                           "keyUsage=critical,keyCertSign,cRLSign\n"))
+    openssl("req", "-newkey", "rsa:2048", "-nodes", "-keyout", "leaf.key", "-out", "leaf.csr", "-subj", f"/CN={hostname}")
+    openssl("x509", "-req", "-in", "leaf.csr", "-CA", "intermediate.crt", "-CAkey", "intermediate.key",
+            "-CAcreateserial", "-days", "30", "-out", "leaf.crt", "-extfile",
+            extensions("leaf.ext", f"subjectAltName=DNS:{hostname}\nbasicConstraints=CA:FALSE\n"
+                                   "extendedKeyUsage=serverAuth\n"))
+    (tls / "chain.pem").write_text((tls / "leaf.crt").read_text() + (tls / "intermediate.crt").read_text())
+
+
 def main(root: Path) -> None:
+    tls_backend(root / "tls", "backend-tls")
     scenario(root, "full", "http://web-full:8080", UPSTREAM_TEST_TIERS)
     scenario(root, "artifactory", "http://web-artifactory:8080", SMALL, releases=(R1, R2))
     scenario(root, "weekly", "http://web-weekly:8080", Tiers(("2.540", "2.541"), ()))

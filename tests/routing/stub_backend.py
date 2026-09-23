@@ -1,5 +1,9 @@
-"""Echo backend for proxy-mode tests: answers with the request path and Authorization header."""
+"""Echo backend for proxy-mode tests: answers with the request path and Authorization header.
+
+With a certificate chain and key it serves TLS, as a real repository does.
+"""
 import json
+import ssl
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -17,4 +21,9 @@ class Echo(BaseHTTPRequestHandler):
         pass
 
 
-ThreadingHTTPServer(("0.0.0.0", int(sys.argv[1])), Echo).serve_forever()
+server = ThreadingHTTPServer(("0.0.0.0", int(sys.argv[1])), Echo)
+if len(sys.argv) > 2:
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(sys.argv[2], sys.argv[3])
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+server.serve_forever()

@@ -60,6 +60,21 @@ def test_proxy_mode_streams_with_credentials():
     assert fetch("web-proxy", "/download/plugins/git/9.9.9/git.hpi").status == 404
 
 
+def test_proxy_mode_verifies_a_backend_signed_through_an_intermediate():
+    """Public CAs sign through an intermediate; the backend is trusted through the root alone."""
+    response = fetch("web-proxy-tls", "/download/plugins/git/5.2.0/git.hpi")
+    assert response.status == 200
+    assert json.loads(response.body)["path"] == "/repo/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.hpi"
+
+
+@pytest.mark.parametrize("path", ["/update-center.json?version=2.240", "/download/plugins/git/latest/git.hpi"])
+def test_redirects_use_the_public_address(path):
+    """Controllers follow these redirects, so they must name PUBLIC_URL, not the container's own port."""
+    internal = fetch("web-full", path).location
+    assert internal.startswith("http://web-full:8080/")
+    assert fetch("web-public", path).location == internal.replace("http://web-full:8080", "https://updates.example.com", 1)
+
+
 def test_download_index_pages_are_served():
     assert fetch("web-full", "/download/plugins/git/").status == 200
 

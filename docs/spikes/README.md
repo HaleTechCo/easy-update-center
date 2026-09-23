@@ -54,6 +54,11 @@ half of S1b and S2 against the operator's own Artifactory. Still open: the downl
   web tier's redirect without credentials, so either grant anonymous read on the repository or set
   `DOWNLOAD_ACCESS=proxy` with `secrets/download_proxy_auth` (`user:API token`). The doctor also
   caught a real gap: active-directory needs `ionicons-api` and `mailer`, which were not procured.
+  With proxy mode both plugins downloaded through the web tier, checksums matching the site, after
+  two web-tier fixes S8 found: redirects named the container's port instead of `PUBLIC_URL`, and
+  proxy mode refused any backend certificate signed through an intermediate (almost all of them).
+  Cloudflare in front of that instance blocks Python's default User-Agent (`error code: 1010`); the
+  Java and Jenkins user agents controllers send are allowed.
 
 - **Embedded files (for the repo-adapter), 2026-09-22:** in a sample of 29 plugins from 2012 to 2026
   plus core 2.583, the POM inside each archive was byte-identical to the published one in all but one
