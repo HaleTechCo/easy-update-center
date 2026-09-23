@@ -1,4 +1,4 @@
-Exactly — and your clarification makes it much clearer. You want to **self-host the Jenkins update-site infrastructure itself**, not merely put a copy of `update-center.json` behind Nginx.
+Exactly - and your clarification makes it much clearer. You want to **self-host the Jenkins update-site infrastructure itself**, not merely put a copy of `update-center.json` behind Nginx.
 
  I checked the current Jenkins implementation, and fortunately Jenkins actually provides the generator we need: [`jenkins-infra/update-center2`](<https://github.com/jenkins-infra/update-center2>). It is the same project used to generate the public `updates.jenkins.io` site.  GitHub+1
 

@@ -118,7 +118,7 @@ central directory):
   exactly as before. That is the online default because the public repo.jenkins-ci.org is complete and
   its full listing is too large to route through the adapter for no benefit.
 - Compose starts `repo-adapter` before `uc` and `scheduler` (`depends_on` with a healthcheck on
-  `GET /healthz`, which needs no authentication and returns 200), and `docker compose run --rm uc …`
+  `GET /healthz`, which needs no authentication and returns 200), and `docker compose run --rm uc ...`
   starts it too.
 
 ## 4. Behaviour
@@ -182,7 +182,7 @@ built, so the listing never advertises a file the adapter cannot serve.
    bytes.
 5. **No POM at all** (for example, Gradle builds): nothing is added, the generator drops the archive
    as it does today, and it is reported under "needs a real `.pom`" with its repo.jenkins-ci.org URL.
-6. **Descriptions.** `GET …/<artifactId>-<version>.jar!/index.jelly` is served from the repository's
+6. **Descriptions.** `GET .../<artifactId>-<version>.jar!/index.jelly` is served from the repository's
    `.jar` when there is one. For Artifactory the request is forwarded, and only a 404 falls through;
    for Artifact Keeper the index says whether the `.jar` exists, and the adapter extracts from it.
    Otherwise the adapter serves `index.jelly` from the `.hpi` of the same coordinates, trying
@@ -312,11 +312,11 @@ After each listing, the adapter writes `/data/repo-adapter/report.json` atomical
   "repo": {"type": "artifact-keeper", "key": "jenkins-prod-local"},
   "archives": 3,
   "derived_poms": ["io.jenkins.plugins:caffeine-api:3.2.4-208.v7e2da_a_7db_82b_"],
-  "replaced_poms": [{"path": "org/…/active-directory-2.967.vf4e254546a_b_3.pom", "reason": "not XML"}],
-  "needs_pom": [{"gav": "…", "url": "https://repo.jenkins-ci.org/releases/…/….pom"}],
-  "misplaced": [{"path": "org/jenkins-ci/plugins/caffeine-api/…", "correct_path": "io/jenkins/plugins/caffeine-api/…"}],
-  "skipped": [{"path": "…", "reason": "archive larger than REPO_MAX_ARCHIVE_MB"}],
-  "dates_from_repository": [{"path": "…/cas-plugin-1.9.0.hpi", "reason": "archive date 1980-02-01 is before 2004"}]
+  "replaced_poms": [{"path": "org/.../active-directory-2.967.vf4e254546a_b_3.pom", "reason": "not XML"}],
+  "needs_pom": [{"gav": "...", "url": "https://repo.jenkins-ci.org/releases/.../....pom"}],
+  "misplaced": [{"path": "org/jenkins-ci/plugins/caffeine-api/...", "correct_path": "io/jenkins/plugins/caffeine-api/..."}],
+  "skipped": [{"path": "...", "reason": "archive larger than REPO_MAX_ARCHIVE_MB"}],
+  "dates_from_repository": [{"path": ".../cas-plugin-1.9.0.hpi", "reason": "archive date 1980-02-01 is before 2004"}]
 }
 ```
 

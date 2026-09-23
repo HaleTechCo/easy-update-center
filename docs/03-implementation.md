@@ -745,7 +745,7 @@ environment:
 
  ## One thing I'd change before calling this "production ready"
 
- I don't want to leave you with a subtly broken implementation: **the upstream `site/generate.sh` contains quite a bit of logic beyond simply invoking the Java generator**—including obtaining the dynamic tier list, generating the official rewrite rules, generating all the different site variants, and creating compatibility links.  GitHub+1
+ I don't want to leave you with a subtly broken implementation: **the upstream `site/generate.sh` contains quite a bit of logic beyond simply invoking the Java generator**-including obtaining the dynamic tier list, generating the official rewrite rules, generating all the different site variants, and creating compatibility links.  GitHub+1
 
  So my recommendation is to make the final image **package the upstream `site/generate.sh` and `generate-htaccess.sh` directly**, then add a very small wrapper that changes the Jenkins-specific URLs/download behavior. That gets us much closer to "the Jenkins Update Center, but self-hosted" instead of "an implementation inspired by it."
 

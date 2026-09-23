@@ -1,4 +1,4 @@
-# Self-Hosted Jenkins Update Center — Design
+# Self-Hosted Jenkins Update Center - Design
 
 - **Date:** 2026-09-22
 - **Status:** Draft for review
@@ -24,7 +24,7 @@ Two modes:
 |---|---|---|
 | Generator reads plugins from | `repo.jenkins-ci.org` (or any Artifactory) | the internal Artifactory |
 | `/download/...` redirects to | `get.jenkins.io` | the internal Artifactory |
-| External enrichment (GitHub, reports.jenkins.io, popularity) | used | skipped — the run degrades instead of failing |
+| External enrichment (GitHub, reports.jenkins.io, popularity) | used | skipped - the run degrades instead of failing |
 
 In air-gapped mode the stack does everything it can and drops what it cannot (§7.3).
 
@@ -86,14 +86,14 @@ Everything below was checked against `update-center2` at `update-center2-3.18.4`
   controllers (`TieredUpdateSitesGenerator.java:154`). `generate-htaccess.sh`
   turns the tier list into `mod_rewrite` rules. The script exits with an error when given no
   tiers, and emits broken targets when only weekly tiers or only LTS tiers exist.
-- **`updates/`** (32 tool-installer JSON files: JDK, Maven, Gradle, NodeJS…) is produced by a
+- **`updates/`** (32 tool-installer JSON files: JDK, Maven, Gradle, NodeJS...) is produced by a
   separate upstream project (`jenkins-infra/crawler`) and is already signed by the Jenkins project.
 - **`jenkins-plugin-cli`** reads `JENKINS_UC`, `JENKINS_UC_EXPERIMENTAL` and
   `JENKINS_PLUGIN_INFO`. `JENKINS_UC_DOWNLOAD` is deprecated in favour of
   `JENKINS_UC_DOWNLOAD_URL`. With neither set, it builds download URLs from the host of
   `JENKINS_UC` and ignores any path.
 
-## 3. Corrections to `docs/01`–`docs/05`
+## 3. Corrections to `docs/01`-`docs/05`
 
 The ChatGPT transcripts stay in the repo unchanged as a record of that conversation. Their overall
 direction (upstream generator, `dynamic-*` tiers, `.htaccess` routing, own signing key) is correct.
@@ -113,11 +113,11 @@ These specifics are not:
 | 10 | 05 | Use 3.18.3 to match upstream's script | 3.18.4 fixes SECURITY-4038. Use 3.18.4. |
 | 11 | 03, 05 | Clone upstream at a tag | That freezes security warnings and suspensions at build time. Pin the jar; refresh `resources/` every run. |
 | 12 | 04, 05 | Run upstream `site/generate.sh` as-is | It pins 3.18.3, hardcodes Jenkins' root CA, fetches jenkins.io templates and `index.html` (failing the run if that fetch fails), wipes its output dir, and enforces a 1.5 MB size check that vetted catalogs fail. |
-| 13 | all | — | `--connection-check-url` defaults to `https://www.google.com/`, which Jenkins uses for its "internet connection" check. |
+| 13 | all | - | `--connection-check-url` defaults to `https://www.google.com/`, which Jenkins uses for its "internet connection" check. |
 | 14 | 03, 05 | `RECENT_RELEASES_MAX_AGE_HOURS` controls tier retention or regeneration | It only affects `recent-releases.json`, which upstream uses for mirror rsync. |
 | 15 | 03, README | `JENKINS_UC_DOWNLOAD` | Deprecated; see §2. |
 | 16 | 03, 05 | 10-year self-signed cert used as both signer and root | Can't be rotated without touching every controller. Use an offline root CA plus a short-lived signing cert (§9). |
-| 17 | 01–05 | "versioned proxy" | Means the `?version=` tier routing. No request is proxied to `updates.jenkins.io`. |
+| 17 | 01-05 | "versioned proxy" | Means the `?version=` tier routing. No request is proxied to `updates.jenkins.io`. |
 | 18 | repo | `.gitignore` = `.env` only | `secrets/*.key` is tracked (currently an empty placeholder). Ignore `secrets/*` except its README, and `data/`. |
 
 ## 4. Architecture
@@ -215,7 +215,7 @@ failed run leaves the current site untouched. The last failed staging directory 
    - `-Dfile.encoding=UTF-8`, `CERTIFICATE_MINIMUM_VALID_DAYS`, `JAVA_TOOL_OPTIONS` passed through
    - `UC_EXTRA_ARGS`, appended to every argument line and the tier run (like upstream's
      `EXTRA_ARGS`); used by tests, e.g. `--max-plugins 20`
-4. **Tiers.** `java -jar … --dynamic-tier-list-file <staging>/tiers.json`. Empty weekly and/or
+4. **Tiers.** `java -jar ... --dynamic-tier-list-file <staging>/tiers.json`. Empty weekly and/or
    stable lists are legal.
 5. **`.htaccess`.**
    - **Both lists non-empty:** run upstream `generate-htaccess.sh` unmodified on weekly + stable.
@@ -242,7 +242,7 @@ failed run leaves the current site untouched. The last failed staging directory 
 
    Deliberately omitted: `--downloads-directory` (never stage binaries) and
    `--index-template-url` (use `resources/index-template.html`; no jenkins.io fetch).
-7. **Run** `java … -jar update-center2.jar --resources-dir <merged resources> --arguments-file <args>`.
+7. **Run** `java ... -jar update-center2.jar --resources-dir <merged resources> --arguments-file <args>`.
    The jar checks each signature it produces, including the chain to the root CA.
 8. **Layout**, the same as upstream `site/generate.sh:135-166`:
    - `updates → ../updates` links in every site
@@ -313,7 +313,7 @@ subject to spike S1. A GitHub token is recommended; without one, GitHub-topic la
 private online Artifactory works by overriding the `ARTIFACTORY_*` settings and setting
 `DOWNLOAD_BACKEND=artifactory`.
 
-### 7.3 Air-gapped mode — what is kept and dropped
+### 7.3 Air-gapped mode - what is kept and dropped
 
 | Output or source | Behaviour |
 |---|---|
@@ -375,7 +375,7 @@ source build. The pinned clone stays either way: the `-bin` assembly contains on
 
 1. `^/download/war/latest/jenkins\.war$` → 302 `/latest/jenkins.war`, and
    `^/download/plugins/[^/]+/latest/([^/]+)\.hpi$` → 302 `/latest/$1.hpi`. `/latest/` is the
-   generated `current/latest/.htaccess`, which redirects to versioned `${PUBLIC_URL}/download/…`
+   generated `current/latest/.htaccess`, which redirects to versioned `${PUBLIC_URL}/download/...`
    URLs. This replaces upstream's `updates.jenkins.io/latest` workaround.
 2. `^/download/plugins/([^/]+)/([^/]+)/[^/]+\.hpi$` and `^/download/war/([^/]+)/jenkins\.war$`:
    - **`mirror`:** `plugins/$1/$2/$1.hpi`; war to `war-stable/$1/jenkins.war` when `$1` has three
@@ -414,8 +414,8 @@ source build. The pinned clone stays either way: the `-bin` assembly contains on
     "last_run": {"id": "20260922T060000Z", "result": "failed", "error": "plugin count 412 < 0.9 × 520"},
     "generated_at": "2026-09-22T03:04:12Z",
     "update_center2": "3.18.4+popularity-patch",
-    "resources": {"source": "url", "ref": "sha256:…", "fetched_at": "…", "age_days": 12, "stale": false},
-    "signing_cert": {"subject": "…", "not_after": "…", "days_left": 301},
+    "resources": {"source": "url", "ref": "sha256:...", "fetched_at": "...", "age_days": 12, "stale": false},
+    "signing_cert": {"subject": "...", "not_after": "...", "days_left": 301},
     "tiers": {"weekly": ["2.540"], "stable": ["2.528.1"]},
     "plugin_count": 520,
     "warnings": ["GitHub unavailable: labels from topics omitted"],
@@ -481,7 +481,7 @@ environment, never through Compose `environment:`.
   ```
   No download variable is needed.
 - **`PUBLIC_URL` must be a bare origin.** Upstream's rules redirect to absolute paths like
-  `/current/…`, and the plugin CLI strips paths from `JENKINS_UC`. Use a dedicated hostname.
+  `/current/...`, and the plugin CLI strips paths from `JENKINS_UC`. Use a dedicated hostname.
 - `DOWNLOAD_ACCESS=redirect` requires controllers to be able to read `DOWNLOAD_BACKEND_URL` without
   authentication. Otherwise use `proxy`.
 
@@ -527,8 +527,8 @@ It exits non-zero when anything will be dropped. `uc generate` includes a summar
 
 | Setting | Default | Notes |
 |---|---|---|
-| `MODE` | — | `online` \| `airgapped` (required) |
-| `PUBLIC_URL` | — | bare origin (required) |
+| `MODE` | - | `online` \| `airgapped` (required) |
+| `PUBLIC_URL` | - | bare origin (required) |
 | `UC_ID` | `default` | must match the controllers' update site id |
 | `GENERATE_SCHEDULE` | `0 */6 * * *` | cron, used by the scheduler |
 | `RESOURCES_SOURCE`, `RESOURCES_REF`, `RESOURCES_URL`, `RESOURCES_SHA256` | §6, §7.1 | |
@@ -544,8 +544,8 @@ It exits non-zero when anything will be dropped. `uc generate` includes a summar
 | `SIGNING_CERT_DAYS` | `365` | `uc pki` |
 | `STALE_AFTER_DAYS` | `30` | resources age |
 | `ALLOW_LOCAL_PUBLIC_URL` | `false` | tests only |
-| `JAVA_TOOL_OPTIONS` | — | heap (`-Xmx`), egress proxy (`-Dhttps.proxyHost` …) |
-| `TLS_CERT_FILE`, `TLS_KEY_FILE` | — | enables 8443 |
+| `JAVA_TOOL_OPTIONS` | - | heap (`-Xmx`), egress proxy (`-Dhttps.proxyHost` ...) |
+| `TLS_CERT_FILE`, `TLS_KEY_FILE` | - | enables 8443 |
 
 ## 12. Repository layout
 
@@ -576,7 +576,7 @@ tests/
   routing/               fixture tree + generated .htaccess against the web image
   integration/           compose files, fake Artifactory and Artifact Keeper, seed script, Jenkins controllers
 docs/
-  01–05 (ChatGPT, unchanged) · operations.md · superpowers/specs/
+  01-05 (ChatGPT, unchanged) · operations.md · superpowers/specs/
 secrets/README.md        everything else in secrets/ is gitignored
 ```
 
@@ -635,7 +635,7 @@ All tests run in containers through `make`, so no local Python or Java is needed
 1. Bump `UC2_VERSION`, the tag's commit SHA and (once the patch is upstream) the zip's SHA-256.
 2. Run `make upstream-diff`, which shows changes to `site/generate.sh`, `site/generate-htaccess.sh`,
    `site/test/test.sh` and `Main.java` options between the old and new tags. Review them against
-   §6.5–6.8.
+   §6.5-6.8.
 3. Run `make test it-airgapped`, then `it-online`.
 
 Security releases of update-center2 affect generated HTML and JSON, so upgrade promptly. The
@@ -651,9 +651,9 @@ operator checkpoint once those commands exist.
 |---|---|---|
 | S1 | Can a community account (online) and a non-admin service account (internal) run the generator's AQL query? | Online mode requires a private Artifactory mirror; document the required permissions. |
 | S2 | Does AQL work on virtual repositories? | Require a single local repository (already the documented contract). |
-| S3 | ~~Artifactory OSS for tests~~ Replaced by the test-only fake Artifactory (§13). | — |
+| S3 | ~~Artifactory OSS for tests~~ Replaced by the test-only fake Artifactory (§13). | - |
 | S4 | Do the popularity patch and `extra_hosts` fast-fail produce a clean air-gapped run with only warnings? (Covered by `it-airgapped`.) | Extend the patch or the blocked-host list. |
-| S5 | ~~Apache symlink swap~~ **Resolved during planning (2026-09-22):** a `live` swap and the `RewriteMap` behind it are picked up with no restart. Kept as a routing test. | — |
+| S5 | ~~Apache symlink swap~~ **Resolved during planning (2026-09-22):** a `live` swap and the `RewriteMap` behind it are picked up with no restart. Kept as a routing test. | - |
 | S6 | Full-catalog first-run duration, heap and cache size. | Tune `JAVA_TOOL_OPTIONS` defaults; document sizing. |
 | S7 | Does GitHub GraphQL accept username plus token over basic auth (upstream's method)? | Document the token type needed. |
 | S8 | Does the repo-adapter publish from the operator's real Artifact Keeper (repo-adapter spec §9)? | Fix the Artifact Keeper backend against what the real server returns. |

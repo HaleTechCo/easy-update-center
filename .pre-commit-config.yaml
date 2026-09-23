@@ -66,12 +66,16 @@ repos:
           # update-center2's source at image build time: a blank context line in a patch is a
           # single space, and every context line has to match upstream byte for byte, so
           # "cleaning" one makes `git apply` refuse it.
+          #
+          # trailing-whitespace also skips docs/superpowers/plans/, for the same reason one level
+          # removed: the implementation plans quote their changes as ```diff blocks, and stripping
+          # the single-space blank context lines inside them leaves diffs that no longer apply.
           - id: trailing-whitespace
             name: trim trailing whitespace
             entry: trailing-whitespace-fixer
             language: system
             types: [text]
-            exclude: '^uc/patches/'
+            exclude: '^(uc/patches|docs/superpowers/plans)/'
 
           - id: end-of-file-fixer
             name: fix end of files

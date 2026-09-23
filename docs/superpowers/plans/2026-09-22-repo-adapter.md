@@ -267,8 +267,8 @@ index d4d0547..265c6e2 100644
 -def test_credentials_in_artifactory_url_are_rejected():
 +def test_credentials_in_repo_url_are_rejected():
      with pytest.raises(ConfigError, match="credentials"):
--        load_settings({**AIRGAPPED, "ARTIFACTORY_URL": "https://u:p@artifactory.corp/"})
-+        load_settings({**AIRGAPPED, "REPO_URL": "https://u:p@artifactory.corp/"})
+-        load_settings({**AIRGAPPED, "ARTIFACTORY_URL": "https://u:p@artifactory.corp/"})  # pragma: allowlist secret
++        load_settings({**AIRGAPPED, "REPO_URL": "https://u:p@artifactory.corp/"})  # pragma: allowlist secret
  
  
  def test_read_secret(tmp_path):
@@ -922,12 +922,12 @@ index d0e3cf3..c028aba 100644
  ```bash
  make secrets-placeholders
 -printf '%s' 'svc-jenkins-uc' > secrets/artifactory_username
--printf '%s' '…password or API token…' > secrets/artifactory_password
+-printf '%s' '...password or API token...' > secrets/artifactory_password
 +printf '%s' 'svc-jenkins-uc' > secrets/repo_username
-+printf '%s' '…password or API token…' > secrets/repo_password
++printf '%s' '...password or API token...' > secrets/repo_password
  # online, recommended: GitHub user and a token without scopes
  printf '%s' 'my-bot' > secrets/github_username
- printf '%s' 'ghp_…' > secrets/github_token
+ printf '%s' 'ghp_...' > secrets/github_token
 @@ -57,8 +57,8 @@ Compose mounts secret files with their host ownership. The uc containers run as
  container as uid 33:
  
@@ -956,13 +956,13 @@ index 175d7c4..84d42d4 100644
  
  | # | Question | Procedure | Result (date, who, outcome) |
  |---|---|---|---|
--| S1a | Can a Jenkins community account run the generator's AQL query on repo.jenkins-ci.org? | `export ARTIFACTORY_USERNAME=… ARTIFACTORY_PASSWORD=…; make it-online`. The first test fails with `HTTP 403` if not. | **Yes** — 2026-09-22, operator's community account. `make it-online` passed (6 passed, 1 skipped; the skip is S7). Anonymous AQL returns 403, the same account authenticated returns 200. Online mode needs no private Artifactory mirror. |
-+| S1a | Can a Jenkins community account run the generator's AQL query on repo.jenkins-ci.org? | `export REPO_USERNAME=… REPO_PASSWORD=…; make it-online`. The first test fails with `HTTP 403` if not. | **Yes** — 2026-09-22, operator's community account. `make it-online` passed (6 passed, 1 skipped; the skip is S7). Anonymous AQL returns 403, the same account authenticated returns 200. Online mode needs no private Artifactory mirror. |
- | S1b | Can a **non-admin** service account run it on the internal Artifactory? | With `.env` from `.env.airgapped.example` and the service account in `secrets/`: `docker compose run --rm uc doctor --fetch`. An AQL error names the HTTP status. | **Yes for AQL; downloads not yet checked** — 2026-09-22, operator's own non-admin account (not yet a dedicated service account), local repository. The hand probe below returned 3 results with `repo`, `path` and `name` populated. Still to run: `uc doctor --fetch`, which also downloads POMs and reads files inside each `.hpi`. |
--| S2 | Does AQL work against a **virtual** repository? | Repeat S1b with `ARTIFACTORY_REPOSITORY=<virtual repo>`; compare `Plugins with a POM` with the local repository's count. | **Yes for AQL; count and downloads not yet checked** — 2026-09-22, same account: the hand probe against a virtual repository returned correct results. Still to run: the count comparison (a virtual can aggregate several repositories, remote caches included) and downloads through the virtual, both via `uc doctor --fetch`. |
-+| S2 | Does AQL work against a **virtual** repository? | Repeat S1b with `REPO_KEY=<virtual repo>`; compare `Plugins with a POM` with the local repository's count. | **Yes for AQL; count and downloads not yet checked** — 2026-09-22, same account: the hand probe against a virtual repository returned correct results. Still to run: the count comparison (a virtual can aggregate several repositories, remote caches included) and downloads through the virtual, both via `uc doctor --fetch`. |
+-| S1a | Can a Jenkins community account run the generator's AQL query on repo.jenkins-ci.org? | `export ARTIFACTORY_USERNAME=... ARTIFACTORY_PASSWORD=...; make it-online`. The first test fails with `HTTP 403` if not. | **Yes** - 2026-09-22, operator's community account. `make it-online` passed (6 passed, 1 skipped; the skip is S7). Anonymous AQL returns 403, the same account authenticated returns 200. Online mode needs no private Artifactory mirror. |
++| S1a | Can a Jenkins community account run the generator's AQL query on repo.jenkins-ci.org? | `export REPO_USERNAME=... REPO_PASSWORD=...; make it-online`. The first test fails with `HTTP 403` if not. | **Yes** - 2026-09-22, operator's community account. `make it-online` passed (6 passed, 1 skipped; the skip is S7). Anonymous AQL returns 403, the same account authenticated returns 200. Online mode needs no private Artifactory mirror. |
+ | S1b | Can a **non-admin** service account run it on the internal Artifactory? | With `.env` from `.env.airgapped.example` and the service account in `secrets/`: `docker compose run --rm uc doctor --fetch`. An AQL error names the HTTP status. | **Yes for AQL; downloads not yet checked** - 2026-09-22, operator's own non-admin account (not yet a dedicated service account), local repository. The hand probe below returned 3 results with `repo`, `path` and `name` populated. Still to run: `uc doctor --fetch`, which also downloads POMs and reads files inside each `.hpi`. |
+-| S2 | Does AQL work against a **virtual** repository? | Repeat S1b with `ARTIFACTORY_REPOSITORY=<virtual repo>`; compare `Plugins with a POM` with the local repository's count. | **Yes for AQL; count and downloads not yet checked** - 2026-09-22, same account: the hand probe against a virtual repository returned correct results. Still to run: the count comparison (a virtual can aggregate several repositories, remote caches included) and downloads through the virtual, both via `uc doctor --fetch`. |
++| S2 | Does AQL work against a **virtual** repository? | Repeat S1b with `REPO_KEY=<virtual repo>`; compare `Plugins with a POM` with the local repository's count. | **Yes for AQL; count and downloads not yet checked** - 2026-09-22, same account: the hand probe against a virtual repository returned correct results. Still to run: the count comparison (a virtual can aggregate several repositories, remote caches included) and downloads through the virtual, both via `uc doctor --fetch`. |
  | S6 | Full-catalog first run: duration, heap, cache and site size. | `make it-full` (hours); copy `tests/integration/.results/online-*.json` here. If it fails with `OutOfMemoryError`, raise `-Xmx` in the `it-full` target and rerun. | |
- | S7 | Does GitHub GraphQL accept username + token over basic auth? | `export GITHUB_USERNAME=… GITHUB_TOKEN=…` (a token with no scopes), then `make it-online`; `test_github_labels_when_a_token_is_given` must pass rather than skip. | **Yes** — 2026-09-22, operator's account with a scopeless classic token. `make it-online` passed 7/7 with no skip. A direct `POST https://api.github.com/graphql` with `--user name:token` returned 200 and real `repositoryTopics`. |
+ | S7 | Does GitHub GraphQL accept username + token over basic auth? | `export GITHUB_USERNAME=... GITHUB_TOKEN=...` (a token with no scopes), then `make it-online`; `test_github_labels_when_a_token_is_given` must pass rather than skip. | **Yes** - 2026-09-22, operator's account with a scopeless classic token. `make it-online` passed 7/7 with no skip. A direct `POST https://api.github.com/graphql` with `--user name:token` returned 200 and real `repositoryTopics`. |
  
 @@ -26,7 +26,7 @@ half of S1b and S2 against the operator's own Artifactory. Still open: the downl
    labels landing in the JSON.
@@ -5117,12 +5117,12 @@ index c028aba..80bcb69 100644
  ```bash
  make secrets-placeholders
  printf '%s' 'svc-jenkins-uc' > secrets/repo_username
--printf '%s' '…password or API token…' > secrets/repo_password
-+printf '%s' '…password or API token…' > secrets/repo_password   # Artifact Keeper: an API token
+-printf '%s' '...password or API token...' > secrets/repo_password
++printf '%s' '...password or API token...' > secrets/repo_password   # Artifact Keeper: an API token
  # online, recommended: GitHub user and a token without scopes
  printf '%s' 'my-bot' > secrets/github_username
- printf '%s' 'ghp_…' > secrets/github_token
-@@ -49,7 +62,9 @@ printf '%s' 'svc-read:…' > secrets/download_proxy_auth
+ printf '%s' 'ghp_...' > secrets/github_token
+@@ -49,7 +62,9 @@ printf '%s' 'svc-read:...' > secrets/download_proxy_auth
  ```
  
  Online mode uses a free Jenkins community account (https://accounts.jenkins.io) for
@@ -5196,12 +5196,12 @@ index c028aba..80bcb69 100644
  ### Keeping upstream data fresh
  
 @@ -210,3 +262,8 @@ available for a proxy in front.
- | Plugin downloads fail with 404 | The version is not in the download map; check `uc doctor` and the Artifactory contents. Also check `status.json`'s `download_backend` against the current `DOWNLOAD_BACKEND`: if it changed since the live release was generated, the release's download map matches the old backend and every lookup misses — run `docker compose run --rm uc generate`. |
- | `/download/…` returns 502 with `DOWNLOAD_ACCESS=proxy` | The backend's TLS certificate does not verify against `DOWNLOAD_PROXY_CA_FILE` (section 7). |
+ | Plugin downloads fail with 404 | The version is not in the download map; check `uc doctor` and the Artifactory contents. Also check `status.json`'s `download_backend` against the current `DOWNLOAD_BACKEND`: if it changed since the live release was generated, the release's download map matches the old backend and every lookup misses - run `docker compose run --rm uc generate`. |
+ | `/download/...` returns 502 with `DOWNLOAD_ACCESS=proxy` | The backend's TLS certificate does not verify against `DOWNLOAD_PROXY_CA_FILE` (section 7). |
  | web container keeps logging "waiting for the first published release" | No release is live yet; check `docker compose logs scheduler`. |
 +| `repo-adapter token missing: /data/repo-adapter/token` | The repo-adapter has not started; check `docker compose logs repo-adapter`. |
 +| `REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on` | Only the adapter speaks to Artifact Keeper; remove `REPO_ADAPTER=off`. |
-+| repo-adapter logs `listing failed: … HTTP 401` | Wrong repository credentials. For Artifact Keeper, `repo_password` must be an API token. |
++| repo-adapter logs `listing failed: ... HTTP 401` | Wrong repository credentials. For Artifact Keeper, `repo_password` must be an API token. |
 +| A plugin is missing and `uc doctor` lists it as misplaced | It is stored under another group than its manifest's `Group-Id`; move it to the path shown. |
 +| `uc doctor`: "no POM in the repository or the archive" | A Gradle-built plugin: procure its real `.pom` from the URL shown and store it beside the `.hpi`. |
 diff --git a/docs/spikes/README.md b/docs/spikes/README.md
@@ -5209,10 +5209,10 @@ index 84d42d4..669460c 100644
 --- a/docs/spikes/README.md
 +++ b/docs/spikes/README.md
 @@ -12,6 +12,7 @@ half of S1b and S2 against the operator's own Artifactory. Still open: the downl
- | S2 | Does AQL work against a **virtual** repository? | Repeat S1b with `REPO_KEY=<virtual repo>`; compare `Plugins with a POM` with the local repository's count. | **Yes for AQL; count and downloads not yet checked** — 2026-09-22, same account: the hand probe against a virtual repository returned correct results. Still to run: the count comparison (a virtual can aggregate several repositories, remote caches included) and downloads through the virtual, both via `uc doctor --fetch`. |
+ | S2 | Does AQL work against a **virtual** repository? | Repeat S1b with `REPO_KEY=<virtual repo>`; compare `Plugins with a POM` with the local repository's count. | **Yes for AQL; count and downloads not yet checked** - 2026-09-22, same account: the hand probe against a virtual repository returned correct results. Still to run: the count comparison (a virtual can aggregate several repositories, remote caches included) and downloads through the virtual, both via `uc doctor --fetch`. |
  | S6 | Full-catalog first run: duration, heap, cache and site size. | `make it-full` (hours); copy `tests/integration/.results/online-*.json` here. If it fails with `OutOfMemoryError`, raise `-Xmx` in the `it-full` target and rerun. | |
- | S7 | Does GitHub GraphQL accept username + token over basic auth? | `export GITHUB_USERNAME=… GITHUB_TOKEN=…` (a token with no scopes), then `make it-online`; `test_github_labels_when_a_token_is_given` must pass rather than skip. | **Yes** — 2026-09-22, operator's account with a scopeless classic token. `make it-online` passed 7/7 with no skip. A direct `POST https://api.github.com/graphql` with `--user name:token` returned 200 and real `repositoryTopics`. |
-+| S8 | Does the repo-adapter publish from a real Artifact Keeper? | `.env` from `.env.airgapped.example` with `REPO_TYPE=artifact-keeper`, `REPO_URL`, `REPO_KEY`, and `secrets/repo_username` / `secrets/repo_password` (an API token); `docker compose -f compose.yaml -f compose.airgapped.yaml up -d repo-adapter`, then `docker compose -f compose.yaml -f compose.airgapped.yaml run --rm uc doctor` and `… run --rm uc generate`. | |
+ | S7 | Does GitHub GraphQL accept username + token over basic auth? | `export GITHUB_USERNAME=... GITHUB_TOKEN=...` (a token with no scopes), then `make it-online`; `test_github_labels_when_a_token_is_given` must pass rather than skip. | **Yes** - 2026-09-22, operator's account with a scopeless classic token. `make it-online` passed 7/7 with no skip. A direct `POST https://api.github.com/graphql` with `--user name:token` returned 200 and real `repositoryTopics`. |
++| S8 | Does the repo-adapter publish from a real Artifact Keeper? | `.env` from `.env.airgapped.example` with `REPO_TYPE=artifact-keeper`, `REPO_URL`, `REPO_KEY`, and `secrets/repo_username` / `secrets/repo_password` (an API token); `docker compose -f compose.yaml -f compose.airgapped.yaml up -d repo-adapter`, then `docker compose -f compose.yaml -f compose.airgapped.yaml run --rm uc doctor` and `... run --rm uc generate`. | |
  
  ## Notes from answered spikes
  
@@ -5350,7 +5350,7 @@ index c272565..8cd792a 100644
 -   The generator sends the AQL query with credentials up front, but it answers file-download
 -   challenges only when the port in `ARTIFACTORY_URL` equals the connection's port
 -   (`ArtifactoryRepositoryImpl.java`, `AuthenticatorImpl`). `URI.getPort()` is -1 for a URL
--   without an explicit port, so `https://artifactory.corp/…` would never send credentials for
+-   without an explicit port, so `https://artifactory.corp/...` would never send credentials for
 -   manifests and POMs. `uc` therefore always passes `ARTIFACTORY_URL` to the jar with an explicit
 -   port (`:443` / `:80` added when missing). Redirects to `DOWNLOAD_BACKEND_URL` still use the URL
 -   as configured.
@@ -5405,7 +5405,7 @@ index c272565..8cd792a 100644
 -  integration/           compose files, fake Artifactory, seed script, Jenkins controllers
 +  integration/           compose files, fake Artifactory and Artifact Keeper, seed script, Jenkins controllers
  docs/
-   01–05 (ChatGPT, unchanged) · operations.md · superpowers/specs/
+   01-05 (ChatGPT, unchanged) · operations.md · superpowers/specs/
  secrets/README.md        everything else in secrets/ is gitignored
 @@ -601,6 +621,8 @@ All tests run in containers through `make`, so no local Python or Java is needed
      routed to has `requiredCore` ≤ that controller's version. `jenkins-plugin-cli` installs the
@@ -5417,7 +5417,7 @@ index c272565..8cd792a 100644
    duration, heap use, cache size and site size.
  
 @@ -630,6 +652,7 @@ operator checkpoint once those commands exist.
- | S5 | ~~Apache symlink swap~~ **Resolved during planning (2026-09-22):** a `live` swap and the `RewriteMap` behind it are picked up with no restart. Kept as a routing test. | — |
+ | S5 | ~~Apache symlink swap~~ **Resolved during planning (2026-09-22):** a `live` swap and the `RewriteMap` behind it are picked up with no restart. Kept as a routing test. | - |
  | S6 | Full-catalog first-run duration, heap and cache size. | Tune `JAVA_TOOL_OPTIONS` defaults; document sizing. |
  | S7 | Does GitHub GraphQL accept username plus token over basic auth (upstream's method)? | Document the token type needed. |
 +| S8 | Does the repo-adapter publish from the operator's real Artifact Keeper (repo-adapter spec §9)? | Fix the Artifact Keeper backend against what the real server returns. |

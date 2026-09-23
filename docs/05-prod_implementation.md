@@ -1,6 +1,6 @@
 Yes. I checked the upstream scripts directly, and there is a much cleaner implementation than the prototype I gave you.
 
- One important correction first: **the current upstream `site/generate.sh` is pinned to `update-center2` 3.18.3**, not 3.18.4. I’m going to follow the upstream script rather than inventing a version/CLI combination. The upstream script itself downloads the generator, determines the weekly/LTS tiers, generates the `.htaccess`, produces the experimental/current/tiered sites, generates `plugin-versions.json` and the other metadata, and performs sanity checks.  GitHub+1
+ One important correction first: **the current upstream `site/generate.sh` is pinned to `update-center2` 3.18.3**, not 3.18.4. I'm going to follow the upstream script rather than inventing a version/CLI combination. The upstream script itself downloads the generator, determines the weekly/LTS tiers, generates the `.htaccess`, produces the experimental/current/tiered sites, generates `plugin-versions.json` and the other metadata, and performs sanity checks.  GitHub+1
 
  There is also a nice detail we can exploit: **we don't need to reimplement the version routing at all.** The upstream `generate-htaccess.sh` generates exactly the `?version=` routing rules you're interested in.  GitHub
 
@@ -838,7 +838,7 @@ Apache immediately serves new site
 
  There's one remaining issue I'd like to solve rather than sweep under the rug:
 
- **the upstream generator itself talks to Jenkins infrastructure—Artifactory, GitHub, usage statistics, reports, etc.—while generating the metadata.** The upstream README explicitly documents those information sources.  GitHub
+ **the upstream generator itself talks to Jenkins infrastructure-Artifactory, GitHub, usage statistics, reports, etc.-while generating the metadata.** The upstream README explicitly documents those information sources.  GitHub
 
  That's perfectly reasonable for a **connected mirror**, but if your eventual goal is:
 

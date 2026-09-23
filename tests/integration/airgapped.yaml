@@ -1,3 +1,4 @@
+---
 # Air-gapped integration test (spec §13, repo-adapter spec §9). Run with `make it-airgapped`, which runs it
 # once per repository type; tests/integration/types/<type>.env supplies the IT_* values for each.
 name: uc-it-airgapped

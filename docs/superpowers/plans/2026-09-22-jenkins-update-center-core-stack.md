@@ -43,8 +43,8 @@ The planning session checked these against real systems. Rely on them rather tha
 - supercronic v0.2.49 SHA-256 checksums:
   - `linux-amd64`: `a53ae236602c7338aba3fbaff40bda6300eae3b9fedb8261eb06cfe3724430c1`
   - `linux-arm64`: `02aa0cb229ba09050cba6638059dadb9eedc2276632ea43d6a57a2f8c1629dd5`
-- OpenSSL `x509 -noout -subject -enddate -fingerprint -sha256 -nameopt RFC2253 -dateopt iso_8601` prints `subject=CN=…,O=…`, `notAfter=2027-09-22 16:22:19Z` and `sha256 Fingerprint=2A:91:…`. `req -newkey` writes PKCS#8 (`BEGIN PRIVATE KEY`), which update-center2's signer accepts.
-- `docker compose config --quiet` succeeds even when secret files are missing, and accepts `volume: {subpath: …}`.
+- OpenSSL `x509 -noout -subject -enddate -fingerprint -sha256 -nameopt RFC2253 -dateopt iso_8601` prints `subject=CN=...,O=...`, `notAfter=2027-09-22 16:22:19Z` and `sha256 Fingerprint=2A:91:...`. `req -newkey` writes PKCS#8 (a PEM `PRIVATE KEY` block), which update-center2's signer accepts.
+- `docker compose config --quiet` succeeds even when secret files are missing, and accepts `volume: {subpath: ...}`.
 - `eclipse-temurin:21-jre` cannot run single-file Java source programs (`jdk.compiler` is missing), so `VersionTool` is compiled in the `jar-build` stage.
 - `jenkins-plugin-cli` takes `--plugin-download-directory` (alias `-d`); there is no `--download-directory` option.
 
@@ -226,7 +226,7 @@ index 71e8a07..d55e520 100644
          }
 ```
 
-The patch file must end with a newline. `git apply --check` in the Dockerfile rejects it if the whitespace is altered, so do not reformat the context lines, including the blank line that contains only a space after `package …;`.
+The patch file must end with a newline. `git apply --check` in the Dockerfile rejects it if the whitespace is altered, so do not reformat the context lines, including the blank line that contains only a space after `package ...;`.
 
 - [ ] **Step 3: Add the version helper, launcher and package skeleton**
 
@@ -741,7 +741,7 @@ def test_with_explicit_port(url, expected):
 
 def test_credentials_in_artifactory_url_are_rejected():
     with pytest.raises(ConfigError, match="credentials"):
-        load_settings({**AIRGAPPED, "ARTIFACTORY_URL": "https://u:p@artifactory.corp/"})
+        load_settings({**AIRGAPPED, "ARTIFACTORY_URL": "https://u:p@artifactory.corp/"})  # pragma: allowlist secret
 
 
 def test_read_secret(tmp_path):
@@ -1508,7 +1508,7 @@ def test_plain_http_warns():
         ("https://host.example.com/jenkins", "bare origin"),
         ("https://host.example.com/?x=1", "bare origin"),
         ("ftp://host", "http\\(s\\) URL"),
-        ("https://user:pw@host", "credentials"),
+        ("https://user:pw@host", "credentials"),  # pragma: allowlist secret
         ("http://localhost:8080", "cannot reach"),
         ("http://127.0.0.1:8080", "cannot reach"),
     ],
@@ -3542,7 +3542,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `ValidationError(UcError)`, which carries `.problems: list[str]`
   - `ValidationResult(plugin_count: int, offered: frozenset[str])`
   - `ROOT_FILES`, `SITE_FILES`, `CURRENT_FILES`
-  - `load_site_json(path) -> Any`, which strips the `updateCenter.post(…);` wrapper
+  - `load_site_json(path) -> Any`, which strips the `updateCenter.post(...);` wrapper
   - `count_plugins(site_dir) -> int | None`
   - `download_key(url, downloads_root) -> str | None`, which returns `"plugins/<id>/<ver>"` or `"war/<ver>"`
   - `validate_release(staging, *, tiers, downloads_root, signing_cert_b64, previous_plugin_count, min_plugins, min_ratio, force, download_map) -> ValidationResult`
@@ -4679,7 +4679,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Test: `tests/unit/test_generate.py`, `tests/unit/test_cli.py`
 
 **Interfaces:**
-- Consumes: everything from Tasks 2–12
+- Consumes: everything from Tasks 2-12
 - Produces:
   - `uc.generate.Toolchain(run_jar=jar.run_jar, aql_query=aql.query_repository, http_get=http.get, versions=None)`
   - `uc.generate.generate(settings, *, force=False, tools=None, now=None, base_env=None) -> str`, which returns the release id
@@ -5474,7 +5474,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 - Modify: `Makefile` (add `build-web`, `test-web`; `build` depends on both images)
 
 **Interfaces:**
-- Consumes: the data-volume layout from Tasks 9–11: `/data/live` (symlink), `/data/live/.htdownload-map`, `/data/status.json`
+- Consumes: the data-volume layout from Tasks 9-11: `/data/live` (symlink), `/data/live/.htdownload-map`, `/data/status.json`
 - Produces:
   - a web image listening on 8080, plus 8443 when TLS is configured
   - environment contract:
@@ -6637,12 +6637,12 @@ expiring certificate stops publication before Jenkins would reject the signature
 ```bash
 make secrets-placeholders
 printf '%s' 'svc-jenkins-uc' > secrets/artifactory_username
-printf '%s' '…password or API token…' > secrets/artifactory_password
+printf '%s' '...password or API token...' > secrets/artifactory_password
 # online, recommended: GitHub user and a token without scopes
 printf '%s' 'my-bot' > secrets/github_username
-printf '%s' 'ghp_…' > secrets/github_token
+printf '%s' 'ghp_...' > secrets/github_token
 # only with DOWNLOAD_ACCESS=proxy: a read-only account for streaming downloads
-printf '%s' 'svc-read:…' > secrets/download_proxy_auth
+printf '%s' 'svc-read:...' > secrets/download_proxy_auth
 ```
 
 Online mode uses a free Jenkins community account (https://accounts.jenkins.io) for
@@ -6857,7 +6857,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
     - `read_artifact(root, relative) -> bytes | None`
     - `make_handler(root, credentials, anonymous_read)`
     - CLI: `fake_artifactory.py --root DIR --port N --credentials user:pass [--anonymous-read]`
-  - `seed.py versions` prints the three lines `LTS_OLD=…`, `LTS_NEW=…` and `WEEKLY=…`
+  - `seed.py versions` prints the three lines `LTS_OLD=...`, `LTS_NEW=...` and `WEEKLY=...`
   - `seed.py repo --downloads DIR --out ROOT --repository NAME --cores A,B,C --jenkins-version V` writes a Maven tree under `ROOT/NAME/` plus `ROOT/seeded.json`
   - `netutil`:
     - `fetch(url, headers=None) -> Response(status, headers, body)`, which never follows redirects
@@ -7992,7 +7992,7 @@ export ARTIFACTORY_USERNAME=... ARTIFACTORY_PASSWORD=...
 make it-online
 ```
 
-Expected: `7 passed`, or `6 passed, 1 skipped` without a GitHub token. If the first test fails with `AQL query … failed with HTTP 403`, community accounts cannot run AQL. That answers spike S1 negatively: record it in `docs/spikes/README.md` (Task 21) and stop, because online mode then needs a private Artifactory.
+Expected: `7 passed`, or `6 passed, 1 skipped` without a GitHub token. If the first test fails with `AQL query ... failed with HTTP 403`, community accounts cannot run AQL. That answers spike S1 negatively: record it in `docs/spikes/README.md` (Task 21) and stop, because online mode then needs a private Artifactory.
 
 If you have no credentials, mark this step blocked, record it in `docs/spikes/README.md` under S1, and continue.
 
@@ -8031,11 +8031,11 @@ during planning. The rest need real systems.
 
 | # | Question | Procedure | Result (date, who, outcome) |
 |---|---|---|---|
-| S1a | Can a Jenkins community account run the generator's AQL query on repo.jenkins-ci.org? | `export ARTIFACTORY_USERNAME=… ARTIFACTORY_PASSWORD=…; make it-online`. The first test fails with `HTTP 403` if not. | |
+| S1a | Can a Jenkins community account run the generator's AQL query on repo.jenkins-ci.org? | `export ARTIFACTORY_USERNAME=... ARTIFACTORY_PASSWORD=...; make it-online`. The first test fails with `HTTP 403` if not. | |
 | S1b | Can a **non-admin** service account run it on the internal Artifactory? | With `.env` from `.env.airgapped.example` and the service account in `secrets/`: `docker compose run --rm uc doctor --fetch`. An AQL error names the HTTP status. | |
 | S2 | Does AQL work against a **virtual** repository? | Repeat S1b with `ARTIFACTORY_REPOSITORY=<virtual repo>`; compare `Plugins with a POM` with the local repository's count. | |
 | S6 | Full-catalog first run: duration, heap, cache and site size. | `make it-full` (hours); copy `tests/integration/.results/online-*.json` here. If it fails with `OutOfMemoryError`, raise `-Xmx` in the `it-full` target and rerun. | |
-| S7 | Does GitHub GraphQL accept username + token over basic auth? | `export GITHUB_USERNAME=… GITHUB_TOKEN=…` (a token with no scopes), then `make it-online`; `test_github_labels_when_a_token_is_given` must pass rather than skip. | |
+| S7 | Does GitHub GraphQL accept username + token over basic auth? | `export GITHUB_USERNAME=... GITHUB_TOKEN=...` (a token with no scopes), then `make it-online`; `test_github_labels_when_a_token_is_given` must pass rather than skip. | |
 
 ## If an answer is "no"
 
@@ -8072,14 +8072,14 @@ Stop here and ask the operator to run S1a, S1b, S2, S6 and S7 and fill in the ta
 | §4 architecture | Tasks 1, 11, 15, 17 |
 | §5 CLI | Tasks 13, 14 |
 | §6 pipeline | step 1 preflight and lock: Tasks 4, 11 · step 2 resources: Task 5 · steps 3, 4, 6, 7 jar environment, tiers, arguments, run: Task 7 · step 5 `.htaccess`: Task 6 · step 8 layout and download map: Tasks 9, 8 · step 9 validation: Task 10 · step 10 publish: Task 11 · all joined up in Task 13 |
-| §7.1–7.3 modes, air-gapped behaviour | Tasks 2, 13, 17 (`compose.airgapped.yaml`), 19 |
+| §7.1-7.3 modes, air-gapped behaviour | Tasks 2, 13, 17 (`compose.airgapped.yaml`), 19 |
 | §7.4 patch | Task 1 |
 | §8 web tier | Tasks 15, 16 |
 | §9 PKI, secrets, Jenkins setup | Tasks 3, 4, 17 (docs), 19 (proved with real controllers) |
 | §10 ingest contract, `uc doctor` | Tasks 2 (explicit port), 12, 17 (docs), 19 |
 | §11 configuration | Task 2 |
 | §12 repository layout | all tasks; File Structure above |
-| §13 testing | Tasks 1–14 (unit), 15–16 (web and routing), 18–20 (integration) |
+| §13 testing | Tasks 1-14 (unit), 15-16 (web and routing), 18-20 (integration) |
 | §14 upgrades | Task 20 |
 | §15 spikes | Tasks 16 (S5), 19 (S4), 21 (S1, S2, S6, S7) |
 | §16 later sub-projects | out of scope for this plan |

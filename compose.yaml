@@ -1,3 +1,4 @@
+---
 # Jenkins update center (spec §4; repo-adapter spec §3).
 #   online:     docker compose up -d
 #   air-gapped: docker compose -f compose.yaml -f compose.airgapped.yaml up -d

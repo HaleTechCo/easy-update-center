@@ -53,12 +53,12 @@ expiring certificate stops publication before Jenkins would reject the signature
 ```bash
 make secrets-placeholders
 printf '%s' 'svc-jenkins-uc' > secrets/repo_username
-printf '%s' '…password or API token…' > secrets/repo_password   # Artifact Keeper: an API token
+printf '%s' '...password or API token...' > secrets/repo_password   # Artifact Keeper: an API token
 # online, recommended: GitHub user and a token without scopes
 printf '%s' 'my-bot' > secrets/github_username
-printf '%s' 'ghp_…' > secrets/github_token
+printf '%s' 'ghp_...' > secrets/github_token
 # only with DOWNLOAD_ACCESS=proxy: a read-only account for streaming downloads
-printf '%s' 'svc-read:…' > secrets/download_proxy_auth
+printf '%s' 'svc-read:...' > secrets/download_proxy_auth
 ```
 
 Online mode uses a free Jenkins community account (https://accounts.jenkins.io) for
@@ -260,11 +260,11 @@ available for a proxy in front.
 | `plugin count N < 0.9 × M` | The source shrank. Check `uc doctor`; if intended, `uc generate --force`. |
 | `upstream generate-htaccess.sh changed` | An upgrade changed upstream's routing script; follow docs/upgrading.md. |
 | Jenkins: "signature verification failed" | `root-ca.crt` missing from `update-center-rootCAs/`, or controller clock skew. |
-| Plugin downloads fail with 404 | The version is not in the download map; check `uc doctor` and the Artifactory contents. Also check `status.json`'s `download_backend` against the current `DOWNLOAD_BACKEND`: if it changed since the live release was generated, the release's download map matches the old backend and every lookup misses — run `docker compose run --rm uc generate`. |
-| `/download/…` returns 502 with `DOWNLOAD_ACCESS=proxy` | The backend's TLS certificate does not verify against `DOWNLOAD_PROXY_CA_FILE` (section 7). |
+| Plugin downloads fail with 404 | The version is not in the download map; check `uc doctor` and the Artifactory contents. Also check `status.json`'s `download_backend` against the current `DOWNLOAD_BACKEND`: if it changed since the live release was generated, the release's download map matches the old backend and every lookup misses - run `docker compose run --rm uc generate`. |
+| `/download/...` returns 502 with `DOWNLOAD_ACCESS=proxy` | The backend's TLS certificate does not verify against `DOWNLOAD_PROXY_CA_FILE` (section 7). |
 | web container keeps logging "waiting for the first published release" | No release is live yet; check `docker compose logs scheduler`. |
 | `repo-adapter token missing: /data/repo-adapter/token` | The repo-adapter has not started; check `docker compose logs repo-adapter`. |
 | `REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on` | Only the adapter speaks to Artifact Keeper; remove `REPO_ADAPTER=off`. |
-| repo-adapter logs `listing failed: … HTTP 401` | Wrong repository credentials. For Artifact Keeper, `repo_password` must be an API token. |
+| repo-adapter logs `listing failed: ... HTTP 401` | Wrong repository credentials. For Artifact Keeper, `repo_password` must be an API token. |
 | A plugin is missing and `uc doctor` lists it as misplaced | It is stored under another group than its manifest's `Group-Id`; move it to the path shown. |
 | `uc doctor`: "no POM in the repository or the archive" | A Gradle-built plugin: procure its real `.pom` from the URL shown and store it beside the `.hpi`. |
