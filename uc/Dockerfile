@@ -58,7 +58,7 @@ RUN chmod 0755 /usr/local/bin/uc /opt/uc/site/generate-htaccess.sh \
 ENV PYTHONPATH=/opt/uc/python \
     PYTHONDONTWRITEBYTECODE=1 \
     UC_APP_DIR=/opt/uc \
-    UC2_VERSION=${UC2_VERSION}+popularity-patch
+    UC2_VERSION=${UC2_VERSION}+patches
 USER 10001:10001
 WORKDIR /data
 ENTRYPOINT ["/usr/bin/tini", "--", "uc"]

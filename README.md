@@ -2,7 +2,7 @@
 
 The same update center Jenkins uses (`updates.jenkins.io`), in two containers:
 
-- **uc**: runs the upstream `update-center2` generator (3.18.4, one small patch), signs everything
+- **uc**: runs the upstream `update-center2` generator (3.18.4, two small patches), signs everything
   with your own PKI, validates each release and publishes it atomically. It keeps the last five
   releases for rollback.
 - **web**: Apache serving the result, including the `?version=` routing to `dynamic-*` tiers, every

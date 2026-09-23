@@ -19,11 +19,13 @@ every online run regardless.
    | `site/test/test.sh` | port new expectations into `tests/routing/test_upstream_rules.py` |
    | `Main.java`, `DirectoryTreeBuilder.java`, `MetadataWriter.java`, `Signer.java` | removed or renamed options used in `args.py` (`--connection-check-url` is the one upstream's own script does not use) |
    | `MavenArtifact.java` | `DOWNLOADS_ROOT_URL` still controls download URLs |
-   | `ArtifactoryRepositoryImpl.java` | AQL query (`uc/uc/aql.py`), cache layout (`uc/uc/doctor.py`), the Authenticator port check (§10) |
-   | `Popularities.java` | whether the patch still applies, or is no longer needed |
+   | `ArtifactoryRepositoryImpl.java` | AQL query (`uc/uc/aql.py`), cache layout (`uc/uc/doctor.py`), the Authenticator port check (§10), and the three requests the repo-adapter answers (repo-adapter spec §2) |
+   | `HPI.java` | the archive entries the repo-adapter serves: `META-INF/MANIFEST.MF` and `<artifactId>-<version>.jar!/index.jelly` (repo-adapter spec §4.2) |
+   | `Popularities.java` | whether `0001-popularity-configurable-and-optional.patch` still applies, or is no longer needed |
+   | `json/TieredUpdateSitesGenerator.java` | whether `0002-core-age-configurable.patch` still applies, or is no longer needed |
 
 2. Update `uc/Dockerfile`: set `UC2_VERSION`, and set `UC2_COMMIT` to `git rev-parse update-center2-<version>^{commit}`.
-   If upstream has merged the popularity change, delete the patch and drop the `git apply` step; the
+   If upstream has merged both changes, delete the patches and drop the `git apply` step; the
    `jar-build` stage can then take the generator jar from the released
    `update-center2-<version>-bin.zip` on `repo.jenkins-ci.org`, pinned by SHA-256, instead of running
    `mvn verify`. Keep the pinned `git clone` in that stage regardless: it is still where
