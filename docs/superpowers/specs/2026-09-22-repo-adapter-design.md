@@ -24,7 +24,8 @@ the main-spec sections this design amends.
 
 **Done means:** against an Artifactory or an Artifact Keeper repository that holds only `.hpi`/`.war`
 files in Maven layout, `uc generate` publishes every Maven-built plugin with its display name,
-description and links, and `uc doctor` names everything it could not include, with the fix.
+description, links and **release date** (as upstream does), and `uc doctor` names everything it could
+not include, with the fix.
 
 ## 2. Verified facts
 
@@ -70,6 +71,19 @@ was skipped for size):
   `WEB-INF/lib/<artifactId>.jar` (Maven), `WEB-INF/lib/<artifactId>-<version>.jar` (Gradle) or
   `WEB-INF/classes/` (plugins from before about 2015).
 - **Group:** the manifest's `Group-Id` matched the published group in every plugin.
+
+**Archive dates** (a second sample, of 30 plugins plus core 2.583, reading only each archive's zip
+central directory):
+
+- The `META-INF/MANIFEST.MF` entry's time was within 8 hours of the catalogue's real
+  `releaseTimestamp` in **30 of 31**, and within minutes in many. The offsets are whole hours because zip
+  (DOS) times carry no time zone, so an archive built at 14:00 in UTC−5 records 14:00. The worst case
+  is ±14 hours.
+- Reproducible builds, where every entry has the same time, stamped the commit time (6 of 6 within an
+  hour), except `cas-plugin 1.9.0`, stamped **1980-02-01**: a placeholder, not a date.
+- repo.jenkins-ci.org answers `Range` requests (206, after a redirect to its object store), so an
+  Artifactory's central directory can be read without downloading the archive: 2 to 3 requests each,
+  even for the 51 MB WAR.
 
 ## 3. Architecture
 
@@ -125,13 +139,14 @@ once before answering 404, so an adapter restart between upstream's listing and 
 **Artifact Keeper listing fields**, mapped into Artifactory's result shape:
 
 - `path`: split into directory and file name.
-- `created` and `modified`: both from `created_at`, formatted as `%Y-%m-%dT%H:%M:%S.%fZ`, truncated
-  to milliseconds.
+- `created` and `modified`: the archive's release date (§4.2 rule 9), or `created_at` as its fallback,
+  formatted as `%Y-%m-%dT%H:%M:%S.%fZ`, truncated to milliseconds.
 - `sha256`: from `checksum_sha256`.
 - `actual_sha1`: from the `.sha1` side-file, cached by sha256. Accepted only if it is 40 hex digits.
 - `size`: from `size_bytes`.
 
-**Artifactory timestamps** pass through unchanged.
+**Artifactory timestamps** are replaced the same way (§4.2 rule 9), falling back to the listing's own
+`created`/`modified`.
 
 ### 4.2 Filling gaps
 
@@ -169,13 +184,29 @@ built, so the listing never advertises a file the adapter cannot serve.
 8. **Parent POMs** (`org/jenkins-ci/plugins/plugin/<v>/plugin-<v>.pom` and others) are forwarded when
    the repository has them, and return 404 otherwise. They are not derivable, and the main spec already
    makes them optional.
+9. **Release dates, as upstream uses them.** In an operator's repository the listing's times are upload
+   times. Upstream reads them as release dates (§2), so the adapter replaces them with each archive's
+   own date: the `META-INF/MANIFEST.MF` entry's time in the zip central directory. It takes the UTC
+   extended timestamp (`0x5455`) when present, and otherwise the DOS time read as UTC.
+   - **Where it applies:** the archive's `created` and `modified`, and those of its `.pom` entry, real or
+     derived. That covers plugins and cores alike, so it drives release dates, recent releases, release
+     history and the tier age gate (§12).
+   - **Plausibility check:** the date is used only if it is on or after 2004-01-01 and no more than one
+     day after the repository's time. The day covers the time-zone error; a build cannot follow its
+     upload. Otherwise, or when the date cannot be read, the repository's time is used and the archive
+     is reported under "dates from the repository".
+   - **Reading it:** from Artifactory, with `Range` requests for the central directory. A server that
+     ignores `Range` falls back to the repository's time, rather than downloading whole archives. From
+     Artifact Keeper, it is read from the archive the adapter already downloads.
 
 ## 5. Caching, limits, security
 
 ### 5.1 Cache
 
 - **Layout.** `/data/repo-adapter/cache/<sha256[:2]>/<sha256>/`, keyed by the archive's sha256, holds
-  `MANIFEST.MF`, `pom.xml` or the marker `pom.none`, `index.jelly` or `index.none`, and `sha1`.
+  `MANIFEST.MF`, `pom.xml` or the marker `pom.none`, `index.jelly` or `index.none`, `sha1`, and
+  `released` or `released.none`. `released` holds rule 9's archive date before the plausibility check;
+  the check depends on the repository's time, so it runs on every listing.
   Verdicts on the repository's own POMs are kept at `/data/repo-adapter/cache/poms/<sha256>`. Content
   addressed by sha256 never changes, so entries never go stale.
 - **Writes** go to a temporary file followed by `os.replace`, so concurrent requests are safe.
@@ -196,6 +227,8 @@ Archives are treated as untrusted input.
 - Entry caps: 1 MiB for a POM, manifest or `index.jelly`, and 64 MiB for an inner jar. Reads are
   bounded at the cap plus one byte whatever the declared size, so a zip bomb or a lying header cannot
   exhaust memory or disk.
+- A zip central directory (rule 9) is read only up to 16 MiB. A larger one falls back to the
+  repository's time.
 - Only named entries are read. Nothing is extracted to a path taken from an archive.
 - Every backend request has a timeout: 60 s, or 600 s for archive downloads and the AQL forward.
 - Every fetched file must return HTTP 200 and pass its own check (XML rules for POMs, a zip central
@@ -232,6 +265,7 @@ no compatibility aliases.
 | `REPO_ADAPTER` | `off` | `on` | new; forced `on` for `artifact-keeper` |
 | `REPO_CA_FILE` | system bundle | system bundle | new |
 | `REPO_MAX_ARCHIVE_MB` | `512` | `512` | new |
+| `CORE_AGE_DAYS` | `400` | `0` (no age limit) | new (§12) |
 | secrets `repo_username`, `repo_password` | Jenkins community account | service account | `artifactory_username`, `artifactory_password` |
 
 - `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is a configuration error: the preflight fails and
@@ -260,14 +294,16 @@ After each listing, the adapter writes `/data/repo-adapter/report.json` atomical
   "replaced_poms": [{"path": "org/…/active-directory-2.967.vf4e254546a_b_3.pom", "reason": "not XML"}],
   "needs_pom": [{"gav": "…", "url": "https://repo.jenkins-ci.org/releases/…/….pom"}],
   "misplaced": [{"path": "org/jenkins-ci/plugins/caffeine-api/…", "correct_path": "io/jenkins/plugins/caffeine-api/…"}],
-  "skipped": [{"path": "…", "reason": "archive larger than REPO_MAX_ARCHIVE_MB"}]
+  "skipped": [{"path": "…", "reason": "archive larger than REPO_MAX_ARCHIVE_MB"}],
+  "dates_from_repository": [{"path": "…/cas-plugin-1.9.0.hpi", "reason": "archive date 1980-02-01 is before 2004"}]
 }
 ```
 
-- `uc doctor` reads it after its listing and adds four sections: POMs filled in from archives, **needs
-  a real `.pom`** (with URLs), `.pom` files ignored, and **misplaced** (with correct paths).
+- `uc doctor` reads it after its listing and adds five sections: POMs filled in from archives, **needs
+  a real `.pom`** (with URLs), `.pom` files ignored, **misplaced** (with correct paths), and dates taken
+  from the repository.
 - The exit code stays non-zero when anything is dropped. That now includes misplaced, needs-a-POM and
-  skipped archives. Derived and replaced POMs are informational.
+  skipped archives. Derived and replaced POMs, and repository dates, are informational.
 - `status.json` is public (main spec §8.4), so it gets **counts only**, under `doctor.repo_adapter`,
   plus one warning line when anything was dropped. Paths and URLs stay in `report.json` and `uc doctor`.
 - With `REPO_ADAPTER=off` there is no report. `uc doctor` behaves exactly as today and says the adapter
@@ -289,6 +325,9 @@ After each listing, the adapter writes `/data/repo-adapter/report.json` atomical
   - every rule in §4.2, with generated fixtures: a Maven `.hpi`, a Gradle-style `.hpi` (versioned
     inner jar, no `META-INF/maven/`), a pre-2015 `.hpi` (`WEB-INF/classes/index.jelly`), an HTML
     "POM", a POM for another artifact, and a misplaced group;
+  - rule 9: an extended timestamp, a DOS-only time, the 1980-02-01 placeholder, a date more than a
+    day after the upload, an oversized central directory, and an Artifactory stub that ignores
+    `Range`, each with the expected date or fallback;
   - the §5.2 limits (oversized archive, oversized entry, a lying size header, DOCTYPE), token
     authentication, the 401 challenge, the query-shape check, and cache reuse and pruning.
 - **A fake Artifact Keeper,** `tests/integration/fake_artifact_keeper.py`, beside the fake Artifactory.
@@ -299,15 +338,18 @@ After each listing, the adapter writes `/data/repo-adapter/report.json` atomical
   one Gradle-style plugin. Assertions:
   - the derived plugins publish and install;
   - the misplaced and Gradle-style plugins are absent and reported;
-  - `update-center.json` has a non-empty `excerpt` for plugins seeded without a `.jar`.
+  - `update-center.json` has a non-empty `excerpt` for plugins seeded without a `.jar`;
+  - `plugin-versions.json` gives each seeded plugin its archive's release date, not the time it was
+    seeded.
 - **Spike S8**, needing an operator: `uc doctor`, then `uc generate`, against the operator's real
   Artifact Keeper (`jenkins-prod-local`). Expected: caffeine-api's POM derived, active-directory's HTML
   POM replaced, and both plugins published.
 
 ## 10. Amendments to the main spec and docs
 
-- **§2:** descriptions come from the POM and `<artifactId>-<version>.jar!/index.jelly`; artifact
-  timestamps come from the listing's `modified` and gate tiers at 400 days.
+- **§2:** descriptions come from the POM and `<artifactId>-<version>.jar!/index.jelly`. Artifact
+  timestamps come from the listing's `modified`, which in an operator's repository is the upload time;
+  the adapter substitutes each archive's own date. Timestamps gate tiers at `CORE_AGE_DAYS`.
 - **§4, §12:** the `repo-adapter` service, the `repo` network, `uc/uc/repo_adapter/` and the new tests.
 - **§7.1, §9.2, §11:** the §6 keys and secrets.
 - **§7.3:** the blocked-hosts override also covers `repo-adapter`.
@@ -322,12 +364,10 @@ After each listing, the adapter writes `/data/repo-adapter/report.json` atomical
 
 ## 11. Known limitations
 
-- **Timestamps are upload times** in operator repositories, for both types (§2), with or without the
-  adapter. Plugin release dates show as upload dates. Tiers no longer depend on them at the air-gapped
-  default `CORE_AGE_DAYS=0` (§12). A later change could take release dates from each archive's
-  `META-INF/MANIFEST.MF` entry time. In a sample of 31 archives on 2026-09-22, 30 were within 8 hours
-  of the real release: zip times carry no time zone, and reproducible builds stamp the commit time.
-  The exception was stamped 1980-02-01 by a reproducible build.
+- **Release dates are accurate to within about a day.** Zip times carry no time zone (±14 hours).
+  Archives without a usable date, such as the 1980-02-01 placeholder, fall back to the upload time and
+  are reported. With `REPO_ADAPTER=off`, dates are whatever the repository reports: correct for the
+  public repo.jenkins-ci.org, upload times for an operator's repository.
 - **Parent POMs are not derivable.** Plugins that inherit `<scm>` from a parent POM the repository
   lacks miss their SCM link, as in the main spec.
 - **Gradle-built plugins** still need their real `.pom` procured.
@@ -345,8 +385,9 @@ stops.
   whose WAR is in the repository gets a tier.
   - **Online default `400`,** upstream's value. With `0`, the public repository's full history would
     produce a tier for every baseline ever declared.
-  - **Air-gapped default `0`.** The operator chose which WARs to store, their timestamps are upload
-    times anyway, and the number of tiers cannot exceed the number of WARs stored.
+  - **Air-gapped default `0`.** The operator chose which WARs to store, air-gapped installations often
+    trail the current LTS line by more than 400 days, and the number of tiers cannot exceed the number
+    of WARs stored. Set `400` to match updates.jenkins.io exactly.
 - **A second upstream patch,** `uc/patches/0002-core-age-configurable.patch`, in
   `json/TieredUpdateSitesGenerator.java`, adding the import of
   `io.jenkins.update_center.util.Environment`:
@@ -364,10 +405,10 @@ stops.
   and `make upstream-diff` also watches `TieredUpdateSitesGenerator.java`.
 - **Testing.**
   - The unit tests cover validation and the per-mode defaults.
-  - `make it-airgapped` seeds two cores that plugins declare as their minimum, each with its WAR's
-    timestamp set to its real release date, more than 400 days ago. It asserts that the default `0`
-    gives both a tier, and that the tier step run with `CORE_AGE_DAYS=400` keeps only the newest of
-    the two, as the floor.
+  - `make it-airgapped` seeds two real LTS cores, both released more than 400 days ago, that plugins
+    declare as their minimum. Their dates come from the WARs themselves (§4.2 rule 9). It asserts that
+    the default `0` gives both a tier, and that the tier step run with `CORE_AGE_DAYS=400` keeps only
+    the newer of the two, as the floor.
 
 ## 13. Out of scope
 
