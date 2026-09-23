@@ -1,14 +1,16 @@
+"""Unit tests for uc.jar: the update-center2 environment, its java command line and the jar runner."""
+
 import os
 import sys
 from pathlib import Path
 
 import pytest
-from ucsupport import make_settings
 
 from uc.jar import JarError, generate_sites, generate_tiers, jar_environment, java_command, run_jar
 from uc.model import Credentials, Tiers
+from ucsupport import make_settings
 
-CREDS = Credentials('uc', 'secret', 'uc', 'uc', True)
+CREDS = Credentials('uc', 'secret', 'uc', 'uc', github_placeholder=True)
 
 
 def test_jar_environment(tmp_path, secrets_dir):
@@ -34,7 +36,7 @@ def test_jar_environment_uses_explicit_port(tmp_path, secrets_dir):
 
 def test_jar_environment_points_at_the_adapter_when_it_is_on(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on', CORE_AGE_DAYS='400')
-    env = jar_environment(settings, Credentials('uc', 'token', 'uc', 'uc', True), {})
+    env = jar_environment(settings, Credentials('uc', 'token', 'uc', 'uc', github_placeholder=True), {})
     assert env['ARTIFACTORY_URL'] == 'http://repo-adapter:8081/artifactory/'
     assert env['ARTIFACTORY_API_URL'] == 'http://repo-adapter:8081/artifactory/api/'
     assert env['ARTIFACTORY_REPOSITORY'] == 'jenkins'
@@ -69,7 +71,7 @@ def test_generate_tiers_reads_upstream_json(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     calls = []
 
-    def fake(cmd, env, log):
+    def fake(cmd, _env, _log):
         calls.append(cmd)
         out = Path(cmd[cmd.index('--dynamic-tier-list-file') + 1])
         out.write_text('{"stableCores": ["2.528.1"], "weeklyCores": ["2.540", "2.541"]}')
@@ -87,13 +89,13 @@ def test_generate_tiers_reads_upstream_json(tmp_path, secrets_dir):
 def test_generate_tiers_without_output_fails(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     with pytest.raises(JarError, match='tier list'):
-        generate_tiers(settings, {}, tmp_path / 'res', tmp_path / 'tiers.json', tmp_path / 'log', run=lambda cmd, env, log: None)
+        generate_tiers(settings, {}, tmp_path / 'res', tmp_path / 'tiers.json', tmp_path / 'log', run=lambda _cmd, _env, _log: None)
 
 
 def test_generate_sites_command(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     calls = []
-    generate_sites(settings, {'A': '1'}, tmp_path / 'res', tmp_path / 'args.lst', tmp_path / 'log', run=lambda cmd, env, log: calls.append((cmd, env)))
+    generate_sites(settings, {'A': '1'}, tmp_path / 'res', tmp_path / 'args.lst', tmp_path / 'log', run=lambda cmd, env, _log: calls.append((cmd, env)))
     cmd, env = calls[0]
     assert cmd[-4:] == ['--resources-dir', str(tmp_path / 'res'), '--arguments-file', str(tmp_path / 'args.lst')]
     assert env == {'A': '1'}

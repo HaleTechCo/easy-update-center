@@ -1,12 +1,11 @@
+"""Unit tests for uc.doctor: manifest and dependency parsing, repository analysis and the report."""
+
 import base64
 import hashlib
 import json
-import os
 from pathlib import Path
 
 from httpstub import StubServer
-from ucsupport import make_settings
-
 from uc.aql import Gav, RepoFile, classify
 from uc.doctor import (
     ArtifactSource,
@@ -20,8 +19,9 @@ from uc.doctor import (
 )
 from uc.model import Credentials
 from uc.versions import VersionTool
+from ucsupport import make_settings
 
-CREDS = Credentials('uc', 'secret', 'uc', 'uc', True)
+CREDS = Credentials('uc', 'secret', 'uc', 'uc', github_placeholder=True)
 GIT = Gav('org.jenkins-ci.plugins', 'git', '5.2.0', 'hpi')
 
 
@@ -34,13 +34,18 @@ def plugin(artifact, version, *extensions, group='org/jenkins-ci/plugins'):
 
 
 class FakeSource:
+    """Stands in for ArtifactSource: POMs and manifests looked up by artifactId."""
+
     def __init__(self, poms, manifests):
+        """Serve the given POM bytes and manifest texts, keyed by artifactId."""
         self.poms, self.manifests = poms, manifests
 
     def pom(self, gav):
+        """Return the POM for gav, or None."""
         return self.poms.get(gav.artifact_id)
 
     def manifest(self, gav):
+        """Return the manifest text for gav, or None."""
         return self.manifests.get(gav.artifact_id)
 
 
@@ -103,7 +108,7 @@ def test_analyze_reports_every_defect():
 
 
 def test_artifact_source_reads_the_update_center2_cache(tmp_path):
-    source = ArtifactSource('http://artifactory:8081/artifactory/', 'jenkins', 'uc', 'secret', tmp_path / 'cache', allow_network=False)
+    source = ArtifactSource('http://artifactory:8081/artifactory/', 'jenkins', 'uc', 'secret', cache_dir=tmp_path / 'cache', allow_network=False)
     manifest_path = '/artifactory/jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.hpi!/META-INF/MANIFEST.MF'
     digest = hashlib.sha256(manifest_path.encode()).hexdigest()
     cached = tmp_path / 'cache' / digest[:2] / digest
@@ -120,7 +125,7 @@ def test_artifact_source_reads_the_update_center2_cache(tmp_path):
 def test_artifact_source_fetches_with_basic_auth():
     routes = {('GET', '/artifactory/jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom'): (200, {}, b'<project/>')}
     with StubServer(routes) as stub:
-        source = ArtifactSource(stub.url + '/artifactory/', 'jenkins', 'uc', 'secret', None, allow_network=True)
+        source = ArtifactSource(stub.url + '/artifactory/', 'jenkins', 'uc', 'secret', cache_dir=None, allow_network=True)
         assert source.pom(GIT) == b'<project/>'
         assert source.manifest(GIT) is None  # 404
     assert stub.requests[0][2]['Authorization'] == 'Basic ' + base64.b64encode(b'uc:secret').decode()
@@ -131,9 +136,9 @@ def test_run_doctor_includes_live_tiers(tmp_path, secrets_dir):
     release = settings.data_dir / 'releases' / '20260922T000000Z'
     release.mkdir(parents=True)
     (release / 'tiers.json').write_text('{"weeklyCores": [], "stableCores": ["2.528.1"]}')
-    os.symlink('releases/20260922T000000Z', settings.data_dir / 'live')
+    (settings.data_dir / 'live').symlink_to('releases/20260922T000000Z')
     files = plugin('git', '5.2.0', 'hpi', 'pom') + plugin('jenkins-war', '2.528.1', 'war', 'pom', group='org/jenkins-ci/main')
-    report = run_doctor(settings, CREDS, fetch=False, versions=VersionTool.from_settings(settings), query=lambda *args: files)
+    report = run_doctor(settings, CREDS, fetch=False, versions=VersionTool.from_settings(settings), query=lambda *_args: files)
     assert report.tiers == {'weeklyCores': [], 'stableCores': ['2.528.1']}
     assert report.unchecked == 1
     assert report.exit_code() == 0
@@ -156,10 +161,11 @@ def test_the_adapter_report_adds_sections_and_counts_its_drops(tmp_path, secrets
     listing = classify(plugin('polaris', '1.4.0', 'hpi') + plugin('git', '5.2.0', 'hpi', 'pom'))
     report = attach_adapter_report(analyze(listing, versions(), FakeSource({}, {})), settings)
     assert report.dropped == 3  # polaris (no POM at all), the misplaced and the skipped archive
-    assert report.summary()['repo_adapter'] == {name: 1 for name in ADAPTER_REPORT}
+    assert report.summary()['repo_adapter'] == dict.fromkeys(ADAPTER_REPORT, 1)
     text = format_report(report, settings)
     assert '(through repo-adapter)' in text
-    assert 'procure the real .pom (1):' in text and ADAPTER_REPORT['needs_pom'][0]['url'] in text
+    assert 'procure the real .pom (1):' in text
+    assert ADAPTER_REPORT['needs_pom'][0]['url'] in text
     assert '-> ' + 'io/jenkins/plugins/caffeine-api/1/caffeine-api-1.hpi' in text.replace('  ->  ', ' -> ')
     assert 'POMs filled in from archives (1):' in text
     assert 'org/x/ad/1/ad-1.pom: not XML' in text
@@ -168,7 +174,8 @@ def test_the_adapter_report_adds_sections_and_counts_its_drops(tmp_path, secrets
 
 def test_without_the_adapter_there_is_no_adapter_report(tmp_path, secrets_dir):
     report = attach_adapter_report(analyze(classify([]), versions(), FakeSource({}, {})), make_settings(tmp_path, secrets_dir))
-    assert report.repo_adapter is None and report.summary()['repo_adapter'] is None
+    assert report.repo_adapter is None
+    assert report.summary()['repo_adapter'] is None
 
 
 def test_format_report(tmp_path, secrets_dir):

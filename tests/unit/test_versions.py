@@ -1,3 +1,5 @@
+"""Unit tests for uc.versions, plus the image's pinned generator jar and bundled resources."""
+
 import zipfile
 from pathlib import Path
 

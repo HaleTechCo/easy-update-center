@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import urllib.request
-from typing import Callable, Mapping
+from collections.abc import Callable, Mapping
 
 from .errors import UcError
 
@@ -12,13 +12,15 @@ Getter = Callable[..., bytes]
 
 
 class HttpError(UcError):
-    pass
+    """A GET failed: connection error, timeout, invalid URL or an HTTP error status."""
 
 
 def get(url: str, headers: Mapping[str, str] | None = None, timeout: float = 60) -> bytes:
+    """Return the body of url, sent with the uc User-Agent and any extra headers."""
     request = urllib.request.Request(url, headers={'User-Agent': USER_AGENT, **(headers or {})})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return response.read()
     except (OSError, ValueError) as exc:  # URLError and HTTPError are OSError subclasses
-        raise HttpError(f'GET {url} failed: {exc}') from exc
+        msg = f'GET {url} failed: {exc}'
+        raise HttpError(msg) from exc

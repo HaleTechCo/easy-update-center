@@ -1,3 +1,5 @@
+"""Unit tests for uc.repo_adapter.backends: Artifactory and Artifact Keeper listings, reads, redirects and TLS trust."""
+
 import base64
 import datetime as dt
 import hashlib
@@ -8,9 +10,9 @@ import threading
 import zipfile
 
 import pytest
+
 from archivefixture import make_hpi, make_jar
 from httpstub import StubServer, serve_bytes
-
 from uc.aql import AQL_TEMPLATE
 from uc.repo_adapter.backends import (
     ArtifactKeeperBackend,
@@ -22,18 +24,18 @@ from uc.repo_adapter.backends import (
     forwards_credentials,
 )
 
-UTC = dt.timezone.utc
+UTC = dt.UTC
 GIT = ('org.jenkins-ci.plugins', 'git', '5.2.0')
 HPI_PATH = 'org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.hpi'
 BASIC = 'Basic ' + base64.b64encode(b'svc:pw').decode()
 
 
 def artifactory(stub, max_archive=1024 * 1024):
-    return ArtifactoryBackend(Http(None), stub.url + '/artifactory/', stub.url + '/artifactory/api/', 'jenkins', 'svc', 'pw', max_archive)
+    return ArtifactoryBackend(Http(None), stub.url + '/artifactory/', stub.url + '/artifactory/api/', 'jenkins', username='svc', password='pw', max_archive_bytes=max_archive)
 
 
 def keeper(stub, tmp_path, max_archive=1024 * 1024):
-    return ArtifactKeeperBackend(Http(None), stub.url + '/', 'jenkins-prod-local', 'zac', 'tok', tmp_path / 'tmp', max_archive)
+    return ArtifactKeeperBackend(Http(None), stub.url + '/', 'jenkins-prod-local', username='zac', token='tok', tmp_dir=tmp_path / 'tmp', max_archive_bytes=max_archive)
 
 
 def entry(data, path=HPI_PATH):
@@ -51,15 +53,14 @@ def test_artifactory_listing_sends_the_upstream_query_with_basic_auth():
     with StubServer(routes) as stub:
         listed = artifactory(stub).list()
     assert listed == [RepoEntry('org/jenkins-ci/plugins/git/5.2.0', 'git-5.2.0.hpi', 'a' * 64, 'b' * 40, 12, '2026-09-01T00:00:00.000Z', '2026-09-02T00:00:00.000Z')]
-    method, path, headers, body = stub.requests[0]
+    _method, _path, headers, body = stub.requests[0]
     assert body == (AQL_TEMPLATE % 'jenkins').encode()
     assert headers['Authorization'] == BASIC
 
 
 def test_artifactory_listing_failures_are_backend_errors():
-    with StubServer({('POST', '/artifactory/api/search/aql'): (403, {}, b'denied')}) as stub:
-        with pytest.raises(BackendError, match='HTTP 403'):
-            artifactory(stub).list()
+    with StubServer({('POST', '/artifactory/api/search/aql'): (403, {}, b'denied')}) as stub, pytest.raises(BackendError, match='HTTP 403'):
+        artifactory(stub).list()
 
 
 def test_artifactory_files_entries_and_sha1():
@@ -129,7 +130,7 @@ def test_a_private_ca_is_added_to_the_system_bundle(pki_material):
 
 
 @pytest.mark.parametrize(
-    'old,new,expected',
+    ('old', 'new', 'expected'),
     [
         ('https://art.corp/a', 'https://art.corp/b', True),
         ('http://art.corp/a', 'https://art.corp/b', True),  # an upgrade
@@ -198,6 +199,5 @@ def test_keeper_facts_download_the_archive_once(tmp_path):
 
 def test_keeper_refuses_archives_over_the_cap(tmp_path):
     data = make_hpi(*GIT)
-    with StubServer({('GET', f'/maven/jenkins-prod-local/{HPI_PATH}'): (200, {}, data)}) as stub:
-        with pytest.raises(BackendError, match='larger than 100 bytes'):
-            keeper(stub, tmp_path, max_archive=100).facts(entry(data), GIT, plugin=True)
+    with StubServer({('GET', f'/maven/jenkins-prod-local/{HPI_PATH}'): (200, {}, data)}) as stub, pytest.raises(BackendError, match='larger than 100 bytes'):
+        keeper(stub, tmp_path, max_archive=100).facts(entry(data), GIT, plugin=True)

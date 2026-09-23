@@ -1,3 +1,5 @@
+"""Unit tests for uc.repo_adapter.listing: the gap-filled listing (derived and replaced POMs, dates) and its report."""
+
 import datetime as dt
 import hashlib
 import json
@@ -5,11 +7,10 @@ import stat
 
 from archivefixture import make_hpi, make_war, pom_xml
 from fakebackend import FakeBackend
-
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import build_index, read_report, write_report
 
-NOW = dt.datetime(2026, 9, 23, 0, 0, tzinfo=dt.timezone.utc)
+NOW = dt.datetime(2026, 9, 23, 0, 0, tzinfo=dt.UTC)
 AD = 'org/jenkins-ci/plugins/active-directory/2.967.vf4e254546a_b_3/active-directory-2.967.vf4e254546a_b_3'
 CAFFEINE = 'io/jenkins/plugins/caffeine-api/3.2.4-208.v7e2da_a_7db_82b_/caffeine-api-3.2.4-208.v7e2da_a_7db_82b_'
 AD_GAV = ('org.jenkins-ci.plugins', 'active-directory', '2.967.vf4e254546a_b_3')
@@ -40,7 +41,7 @@ def test_the_operators_test_repository(tmp_path):
     assert report.counts()['needs_pom'] == 0
     derived = rows[AD.rsplit('/', 1)[1] + '.pom']
     assert derived['sha256'] == hashlib.sha256(pom_xml(*AD_GAV)).hexdigest()
-    assert derived['actual_sha1'] == hashlib.sha1(pom_xml(*AD_GAV)).hexdigest()
+    assert derived['actual_sha1'] == hashlib.sha1(pom_xml(*AD_GAV), usedforsecurity=False).hexdigest()
     assert derived['size'] == len(pom_xml(*AD_GAV))
 
 
@@ -48,7 +49,8 @@ def test_a_usable_repository_pom_wins(tmp_path):
     own = pom_xml(*AD_GAV, name="The repository's own POM")
     _, index = index_of({f'{AD}.hpi': make_hpi(*AD_GAV), f'{AD}.pom': own}, tmp_path)
     assert index.poms[f'{AD}.pom'] is None  # forwarded to the repository, not derived
-    assert index.report.derived_poms == [] and index.report.replaced_poms == []
+    assert index.report.derived_poms == []
+    assert index.report.replaced_poms == []
 
 
 def test_a_pom_for_another_artifact_is_replaced(tmp_path):
@@ -117,7 +119,8 @@ def test_an_unexpected_failure_skips_only_that_archive(tmp_path):
     class Exploding(FakeBackend):
         def facts(self, entry, path_coordinates, *, plugin):
             if entry.path == f'{AD}.hpi':
-                raise RuntimeError('File is encrypted, password required for extraction')
+                msg = 'File is encrypted, password required for extraction'
+                raise RuntimeError(msg)
             return super().facts(entry, path_coordinates, plugin=plugin)
 
     backend = Exploding({f'{AD}.hpi': make_hpi(*AD_GAV), f'{CAFFEINE}.hpi': make_hpi(*CAFFEINE_GAV)})
@@ -130,7 +133,8 @@ def test_an_unreadable_repository_pom_is_replaced_not_fatal(tmp_path):
     class Flaky(FakeBackend):
         def get(self, path):
             if path.endswith('.pom'):
-                raise RuntimeError('connection reset')
+                msg = 'connection reset'
+                raise RuntimeError(msg)
             return super().get(path)
 
     backend = Flaky({f'{AD}.hpi': make_hpi(*AD_GAV), f'{AD}.pom': pom_xml(*AD_GAV)})
@@ -184,6 +188,7 @@ def test_report_is_written_privately(tmp_path):
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     report = read_report(path)
     assert report['repo'] == {'type': 'artifact-keeper', 'key': 'jenkins-prod-local'}
-    assert report['archives'] == 1 and report['derived_poms'] == [':'.join(CAFFEINE_GAV)]
+    assert report['archives'] == 1
+    assert report['derived_poms'] == [':'.join(CAFFEINE_GAV)]
     assert json.loads(path.read_text())['generated_at'] == '2026-09-23T00:00:00Z'
     assert read_report(tmp_path / 'missing.json') is None

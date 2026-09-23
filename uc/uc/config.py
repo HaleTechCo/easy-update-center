@@ -6,10 +6,13 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping, Sequence
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
 from .errors import ConfigError
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 MODES = ('online', 'airgapped')
 REPO_TYPES = ('artifactory', 'artifact-keeper')
@@ -28,6 +31,8 @@ _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 
 @dataclass(frozen=True)
 class Settings:
+    """Validated configuration for one uc run, with the paths derived from it."""
+
     mode: str
     public_url: str
     uc_id: str
@@ -73,37 +78,47 @@ class Settings:
 
     @property
     def downloads_root_url(self) -> str:
+        """Public URL under which the site's download links live."""
         return f'{self.public_url}/download'
 
     @property
     def jar_dir(self) -> Path:
+        """Directory holding the update-center2 generator."""
         return self.app_dir / 'generator'
 
     @property
     def jar(self) -> Path:
+        """The update-center2 jar."""
         return self.jar_dir / 'update-center2.jar'
 
     @property
     def htaccess_script(self) -> Path:
+        """Upstream's generate-htaccess.sh."""
         return self.app_dir / 'site' / 'generate-htaccess.sh'
 
     @property
     def bundled_resources(self) -> Path:
+        """Resources shipped in the image, used when RESOURCES_SOURCE=bundled."""
         return self.app_dir / 'resources'
 
     @property
     def templates_dir(self) -> Path:
+        """Directory of the site templates (static .htaccess rules, index.html)."""
         return self.app_dir / 'templates'
 
     @property
     def version_tool_dir(self) -> Path:
+        """Directory holding the compiled VersionTool class (Jenkins version comparisons)."""
         return self.app_dir / 'tools'
 
     @property
     def cache_dir(self) -> Path:
-        """The generator's download cache. Its keys are URL paths, and /artifactory/<key>/... is the same
-        with the adapter on or off, so each gets its own directory: toggling REPO_ADAPTER never reuses what
-        the other one cached (an HTML "POM" fetched directly, say)."""
+        """The generator's download cache, one per source.
+
+        Its keys are URL paths, and /artifactory/<key>/... is the same with the adapter on or off, so each
+        gets its own directory: toggling REPO_ADAPTER never reuses what the other one cached (an HTML "POM"
+        fetched directly, say).
+        """
         return self.data_dir / 'cache' / ('repo-adapter' if self.repo_adapter else 'artifactory')
 
     @property
@@ -113,26 +128,30 @@ class Settings:
 
     @property
     def source_api_url(self) -> str:
+        """Artifactory-style API base URL for AQL queries: the adapter's, or the repository's."""
         return self.repo_adapter_url + 'api/' if self.repo_adapter else self.repo_api_url
 
     @property
     def repo_adapter_token_file(self) -> Path:
+        """File in the repo-adapter's directory holding its access token."""
         return self.repo_adapter_dir / 'token'
 
     @property
     def repo_adapter_report_file(self) -> Path:
+        """The repo-adapter's report.json of what it filled in and dropped."""
         return self.repo_adapter_dir / 'report.json'
 
 
 def _get(env: Mapping[str, str], name: str, default: str = '') -> str:
     value = env.get(name, '').strip()
-    return value if value else default
+    return value or default
 
 
 def _choice(env: Mapping[str, str], name: str, default: str, choices: Sequence[str]) -> str:
     value = _get(env, name, default)
     if value not in choices:
-        raise ConfigError(f'{name} must be one of {", ".join(choices)} (got {value!r})')
+        msg = f'{name} must be one of {", ".join(choices)} (got {value!r})'
+        raise ConfigError(msg)
     return value
 
 
@@ -141,9 +160,11 @@ def _int(env: Mapping[str, str], name: str, default: int, minimum: int = 0) -> i
     try:
         value = int(raw)
     except ValueError:
-        raise ConfigError(f'{name} must be an integer (got {raw!r})') from None
+        msg = f'{name} must be an integer (got {raw!r})'
+        raise ConfigError(msg) from None
     if value < minimum:
-        raise ConfigError(f'{name} must be >= {minimum} (got {value})')
+        msg = f'{name} must be >= {minimum} (got {value})'
+        raise ConfigError(msg)
     return value
 
 
@@ -152,22 +173,26 @@ def _ratio(env: Mapping[str, str], name: str, default: float) -> float:
     try:
         value = float(raw)
     except ValueError:
-        raise ConfigError(f'{name} must be a number (got {raw!r})') from None
+        msg = f'{name} must be a number (got {raw!r})'
+        raise ConfigError(msg) from None
     if not 0 <= value <= 1:
-        raise ConfigError(f'{name} must be between 0 and 1 (got {value})')
+        msg = f'{name} must be between 0 and 1 (got {value})'
+        raise ConfigError(msg)
     return value
 
 
-def _bool(env: Mapping[str, str], name: str, default: bool) -> bool:
+def _bool(env: Mapping[str, str], name: str, *, default: bool) -> bool:
     raw = _get(env, name, 'true' if default else 'false').lower()
     if raw in ('1', 'true', 'yes', 'on'):
         return True
     if raw in ('0', 'false', 'no', 'off'):
         return False
-    raise ConfigError(f'{name} must be true or false (got {raw!r})')
+    msg = f'{name} must be true or false (got {raw!r})'
+    raise ConfigError(msg)
 
 
 def with_trailing_slash(url: str) -> str:
+    """Return url with a '/' appended unless it already ends in one."""
     return url if url.endswith('/') else url + '/'
 
 
@@ -175,7 +200,8 @@ def with_explicit_port(url: str) -> str:
     """Add :443/:80 when missing, so update-center2's Authenticator port check matches (spec §10)."""
     parts = urlsplit(url)
     if parts.username or parts.password:
-        raise ConfigError('URLs must not contain credentials; use the secret files instead')
+        msg = 'URLs must not contain credentials; use the secret files instead'
+        raise ConfigError(msg)
     if parts.port is not None or parts.scheme not in ('http', 'https'):
         return url
     host = parts.hostname or ''
@@ -195,30 +221,35 @@ def read_secret(path: Path) -> str | None:
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
+    """Build Settings from env (default: os.environ), applying the mode's defaults; raise ConfigError on bad values."""
     env = os.environ if env is None else env
     mode = _choice(env, 'MODE', '', MODES)
     online = mode == 'online'
 
     public_url = _get(env, 'PUBLIC_URL').rstrip('/')
     if not public_url:
-        raise ConfigError('PUBLIC_URL must be set')
+        msg = 'PUBLIC_URL must be set'
+        raise ConfigError(msg)
 
     repo_type = _choice(env, 'REPO_TYPE', 'artifactory', REPO_TYPES)
     public_repo = online and repo_type == 'artifactory'
     repo_url = _get(env, 'REPO_URL', PUBLIC_ARTIFACTORY_URL if public_repo else '')
     repo_key = _get(env, 'REPO_KEY', 'releases' if public_repo else '')
     if not repo_url or not repo_key:
-        raise ConfigError('REPO_URL and REPO_KEY must be set (they default to repo.jenkins-ci.org only in online mode with REPO_TYPE=artifactory)')
+        msg = 'REPO_URL and REPO_KEY must be set (they default to repo.jenkins-ci.org only in online mode with REPO_TYPE=artifactory)'
+        raise ConfigError(msg)
     if not _REPOSITORY_RE.match(repo_key):
-        raise ConfigError(f'REPO_KEY contains unsupported characters: {repo_key!r}')
+        msg = f'REPO_KEY contains unsupported characters: {repo_key!r}'
+        raise ConfigError(msg)
     repo_url = with_trailing_slash(repo_url)
     repo_url_with_port = with_explicit_port(repo_url)
     api_url = with_trailing_slash(_get(env, 'REPO_API_URL', repo_url_with_port + 'api/'))
 
     adapter_default = not online or repo_type == 'artifact-keeper'
-    repo_adapter = _bool(env, 'REPO_ADAPTER', adapter_default)
+    repo_adapter = _bool(env, 'REPO_ADAPTER', default=adapter_default)
     if repo_type == 'artifact-keeper' and not repo_adapter:
-        raise ConfigError('REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on')
+        msg = 'REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on'
+        raise ConfigError(msg)
     repo_ca = _get(env, 'REPO_CA_FILE')
 
     backend = _choice(env, 'DOWNLOAD_BACKEND', 'mirror' if online else 'artifactory', BACKENDS)
@@ -234,7 +265,8 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     resources_source = _choice(env, 'RESOURCES_SOURCE', 'github' if online else 'bundled', RESOURCE_SOURCES)
     resources_url = _get(env, 'RESOURCES_URL')
     if resources_source == 'url' and not resources_url:
-        raise ConfigError('RESOURCES_URL must be set when RESOURCES_SOURCE=url')
+        msg = 'RESOURCES_URL must be set when RESOURCES_SOURCE=url'
+        raise ConfigError(msg)
 
     secrets_dir = Path(_get(env, 'SECRETS_DIR', '/run/secrets'))
 
@@ -273,7 +305,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         certificate_minimum_valid_days=_int(env, 'CERTIFICATE_MINIMUM_VALID_DAYS', 30),
         signing_cert_days=_int(env, 'SIGNING_CERT_DAYS', 365, minimum=1),
         stale_after_days=_int(env, 'STALE_AFTER_DAYS', 30),
-        allow_local_public_url=_bool(env, 'ALLOW_LOCAL_PUBLIC_URL', False),
+        allow_local_public_url=_bool(env, 'ALLOW_LOCAL_PUBLIC_URL', default=False),
         extra_args=tuple(_get(env, 'UC_EXTRA_ARGS').split()),
         data_dir=data_dir,
         overlay_dir=Path(_get(env, 'UC_OVERLAY_DIR', '/config/overlay')),

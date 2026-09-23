@@ -1,3 +1,5 @@
+"""Unit tests for uc.config: per-mode defaults, overrides and the rejection of invalid settings."""
+
 from pathlib import Path
 
 import pytest
@@ -143,7 +145,7 @@ def test_resources_url_required_for_url_source():
 
 
 @pytest.mark.parametrize(
-    'name,value,message',
+    ('name', 'value', 'message'),
     [
         ('MIN_PLUGIN_RATIO', '1.5', 'between 0 and 1'),
         ('RETAIN_RELEASES', 'abc', 'must be an integer'),
@@ -184,7 +186,7 @@ def test_secret_paths_follow_secrets_dir_and_overrides():
 
 
 @pytest.mark.parametrize(
-    'url,expected',
+    ('url', 'expected'),
     [
         ('https://a.b/x/', 'https://a.b:443/x/'),
         ('http://a.b/', 'http://a.b:80/'),

@@ -1,11 +1,13 @@
+"""Unit tests for uc.repo_adapter.archive: bounded zip reads, archive dates, descriptions and extracted facts."""
+
 import datetime as dt
 import io
 import struct
 import zipfile
 
 import pytest
-from archivefixture import make_hpi, make_war, pom_xml
 
+from archivefixture import make_hpi, make_war, pom_xml
 from uc.repo_adapter.archive import (
     ArchiveError,
     archive_date,
@@ -19,7 +21,7 @@ from uc.repo_adapter.archive import (
     zip_reader,
 )
 
-UTC = dt.timezone.utc
+UTC = dt.UTC
 GIT = ('org.jenkins-ci.plugins', 'git', '5.2.0')
 
 
@@ -104,7 +106,7 @@ def test_archive_date_prefers_the_extended_timestamp():
 
 
 @pytest.mark.parametrize(
-    'released,reason',
+    ('released', 'reason'),
     [
         (dt.datetime(2024, 5, 1, tzinfo=UTC), None),
         (dt.datetime(2026, 9, 23, 6, tzinfo=UTC), None),  # up to a day after the upload: time zones

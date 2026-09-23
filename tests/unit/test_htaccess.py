@@ -1,3 +1,6 @@
+"""Unit tests for uc.htaccess: the root .htaccess rendered from upstream's script, minus its download redirects."""
+
+import re
 from pathlib import Path
 
 import pytest
@@ -54,7 +57,7 @@ def test_zero_tiers_use_the_static_template():
 
 
 def test_upstream_changes_are_detected():
-    with pytest.raises(HtaccessError, match='upstream generate-htaccess.sh changed'):
+    with pytest.raises(HtaccessError, match=re.escape('upstream generate-htaccess.sh changed')):
         strip_download_rules('RewriteEngine on\n' + '\n'.join(UPSTREAM_DOWNLOAD_RULES[:4]))
     with pytest.raises(HtaccessError, match='found 2'):
         strip_download_rules('\n'.join(UPSTREAM_DOWNLOAD_RULES + UPSTREAM_DOWNLOAD_RULES[:1]))

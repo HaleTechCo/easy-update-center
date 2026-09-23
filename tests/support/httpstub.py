@@ -7,18 +7,19 @@ from __future__ import annotations
 
 import re
 import threading
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Callable, Union
+from typing import Self
 
 Reply = tuple[int, dict[str, str], bytes]
-Route = Union[Reply, Callable[[dict[str, str], bytes], Reply]]
+Route = Reply | Callable[[dict[str, str], bytes], Reply]
 _RANGE = re.compile(r'^bytes=(\d*)-(\d*)$')
 
 
 def serve_bytes(data: bytes, *, ranges: bool = True) -> Callable[[dict[str, str], bytes], Reply]:
-    """A route serving data, honouring single `Range: bytes=a-b` / `bytes=-n` requests when ranges is set."""
+    """Return a route serving data, honouring single `Range: bytes=a-b` / `bytes=-n` requests when ranges is set."""
 
-    def route(headers: dict[str, str], body: bytes) -> Reply:
+    def route(headers: dict[str, str], _body: bytes) -> Reply:
         match = _RANGE.match(headers.get('Range', '')) if ranges else None
         if not match:
             return 200, {}, data
@@ -33,7 +34,10 @@ def serve_bytes(data: bytes, *, ranges: bool = True) -> Callable[[dict[str, str]
 
 
 class StubServer:
+    """Serves routes keyed by (method, path) on 127.0.0.1 while in a with block; unknown routes get a 404."""
+
     def __init__(self, routes: dict[tuple[str, str], Route]) -> None:
+        """Bind an ephemeral port (see url) without serving yet; every request is appended to requests."""
         self.routes = routes
         self.requests: list[tuple[str, str, dict[str, str], bytes]] = []
         stub = self
@@ -53,8 +57,8 @@ class StubServer:
                 self.end_headers()
                 self.wfile.write(payload)
 
-            do_GET = _handle
-            do_POST = _handle
+            do_GET = _handle  # noqa: N815 - http.server dispatches on the do_<METHOD> name
+            do_POST = _handle  # noqa: N815 - same
 
             def log_message(self, *args) -> None:
                 pass
@@ -63,10 +67,12 @@ class StubServer:
         self.url = f'http://127.0.0.1:{self.server.server_address[1]}'
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
-    def __enter__(self) -> 'StubServer':
+    def __enter__(self) -> Self:
+        """Start serving in a daemon thread."""
         self.thread.start()
         return self
 
     def __exit__(self, *exc) -> None:
+        """Stop serving and close the socket."""
         self.server.shutdown()
         self.server.server_close()

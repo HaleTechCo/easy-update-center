@@ -1,3 +1,5 @@
+"""Unit tests for uc.repo_adapter.cache: the sha256-keyed cache of archive facts and its pruning."""
+
 import datetime as dt
 import os
 import time
@@ -8,7 +10,7 @@ from uc.repo_adapter.archive import ArchiveFacts
 from uc.repo_adapter.cache import Cache
 
 SHA = 'ab' + '0' * 62
-FACTS = ArchiveFacts(b'Manifest-Version: 1.0\n', ('io.jenkins.plugins', 'caffeine-api', '3.2.4'), b'<project/>', b'<div>d</div>', dt.datetime(2024, 5, 1, 12, 30, tzinfo=dt.timezone.utc))
+FACTS = ArchiveFacts(b'Manifest-Version: 1.0\n', ('io.jenkins.plugins', 'caffeine-api', '3.2.4'), b'<project/>', b'<div>d</div>', dt.datetime(2024, 5, 1, 12, 30, tzinfo=dt.UTC))
 
 
 def test_facts_round_trip(tmp_path):
@@ -44,11 +46,12 @@ def test_sha1_verdict_and_description(tmp_path):
     assert cache.pom_verdict(SHA) == 'not XML'
     assert not cache.has_description(SHA)
     cache.store_description(SHA, None)
-    assert cache.has_description(SHA) and cache.description(SHA) is None
+    assert cache.has_description(SHA)
+    assert cache.description(SHA) is None
 
 
 def test_rejects_keys_that_are_not_sha256(tmp_path):
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match='not a sha256'):
         Cache(tmp_path).facts('../../etc/passwd')
 
 
@@ -60,4 +63,5 @@ def test_prune_removes_entries_untouched_for_30_days(tmp_path):
     long_ago = time.time() - 31 * 86400
     os.utime(tmp_path / 'cd' / old, (long_ago, long_ago))
     assert cache.prune() == 1
-    assert cache.facts(old) is None and cache.facts(fresh) == FACTS
+    assert cache.facts(old) is None
+    assert cache.facts(fresh) == FACTS

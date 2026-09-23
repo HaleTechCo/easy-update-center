@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from typing import Mapping
+from typing import TYPE_CHECKING
 
-from uc.model import Tiers
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
+
+    from uc.model import Tiers
 
 DEFAULT_PLUGINS: Mapping[str, str] = {'git': '5.2.0', 'credentials': '1415.v831096eb_5534'}
 TEST_CERT_B64 = 'VEVTVC1DRVJU'

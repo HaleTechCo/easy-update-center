@@ -13,9 +13,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from netutil import fetch, get, wait_for  # noqa: E402
-
-from uc.timeutil import iso, utcnow  # noqa: E402
+from netutil import fetch, get, wait_for
+from uc.timeutil import iso, utcnow
 
 WEB = 'http://web:8080'
 
@@ -27,7 +26,7 @@ def tree_size(root: Path) -> int:
 @pytest.fixture(scope='module')
 def release() -> dict:
     started = time.monotonic()
-    result = subprocess.run([sys.executable, '-m', 'uc', 'generate'])
+    result = subprocess.run([sys.executable, '-m', 'uc', 'generate'], check=False)
     duration = round(time.monotonic() - started)
     assert result.returncode == 0
     wait_for(WEB + '/uctest.json')
@@ -57,27 +56,31 @@ def test_published_from_the_public_repository(release):
         assert 1 <= release['plugin_count'] <= 25
 
 
-def test_metadata_points_at_the_update_center(release):
+@pytest.mark.usefixtures('release')
+def test_metadata_points_at_the_update_center():
     doc = json.loads(get(WEB + '/current/update-center.actual.json'))
     assert all(p['url'].startswith(WEB + '/download/plugins/') for p in doc['plugins'].values())
     assert doc['core']['url'].startswith(WEB + '/download/war/')
 
 
-def test_downloads_redirect_to_get_jenkins_io(release):
+@pytest.mark.usefixtures('release')
+def test_downloads_redirect_to_get_jenkins_io():
     doc = json.loads(get(WEB + '/current/update-center.actual.json'))
-    plugin_id, plugin = sorted(doc['plugins'].items())[0]
+    plugin_id, plugin = min(doc['plugins'].items())
     response = fetch(plugin['url'])
     assert response.status == 302
     assert response.location == f'https://get.jenkins.io/plugins/{plugin_id}/{plugin["version"]}/{plugin_id}.hpi'
     assert fetch(response.location).status in (200, 302)
 
 
-def test_popularity_is_included_online(release):
+@pytest.mark.usefixtures('release')
+def test_popularity_is_included_online():
     doc = json.loads(get(WEB + '/current/update-center.actual.json'))
     assert any(p.get('popularity', 0) > 0 for p in doc['plugins'].values())
 
 
-def test_tool_installers_are_mirrored(release):
+@pytest.mark.usefixtures('release')
+def test_tool_installers_are_mirrored():
     body = get(WEB + '/updates/hudson.tasks.Maven.MavenInstaller.json')
     assert body.lstrip(b'\xef\xbb\xbf').startswith(b'downloadService.post(')
 

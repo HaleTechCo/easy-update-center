@@ -1,5 +1,8 @@
-"""Air-gapped end to end (spec §13, repo-adapter spec §9): doctor, generate through the repo-adapter, serve,
-and real Jenkins controllers installing plugins. `make it-airgapped` runs it once per repository type."""
+"""Air-gapped end to end (spec §13, repo-adapter spec §9).
+
+Doctor, generate through the repo-adapter, serve, and real Jenkins controllers installing plugins.
+`make it-airgapped` runs it once per repository type.
+"""
 
 from __future__ import annotations
 
@@ -15,11 +18,10 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from jenkins import Jenkins  # noqa: E402
-from netutil import fetch, get, wait_for  # noqa: E402
-
-from uc.repo_adapter.archive import archive_date, plausible  # noqa: E402
-from uc.versions import VersionTool  # noqa: E402
+from jenkins import Jenkins
+from netutil import fetch, get, wait_for
+from uc.repo_adapter.archive import archive_date, plausible
+from uc.versions import VersionTool
 
 WEB = 'http://web:8080'
 WEB_PROXY = 'http://web-proxy:8080'
@@ -56,7 +58,7 @@ println("INSTALL=" + futures.collect { it.get().status.getClass().simpleName }.j
 
 
 def uc(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, '-m', 'uc', *args], env={**os.environ, **(env or {})}, capture_output=True, text=True)
+    return subprocess.run([sys.executable, '-m', 'uc', *args], env={**os.environ, **(env or {})}, capture_output=True, text=True, check=False)
 
 
 def parse(output: str) -> dict[str, str]:
@@ -108,30 +110,33 @@ def test_generation_succeeds_offline_with_only_warnings(release):
     assert release['plugin_count'] == release['doctor']['plugins'] == len(plugins)
 
 
-def test_descriptions_are_read_from_inside_the_archives(release):
+@pytest.mark.usefixtures('release')
+def test_descriptions_are_read_from_inside_the_archives():
     plugins = json.loads(get(WEB + '/current/update-center.actual.json'))['plugins']
     assert plugins[TOP_PLUGIN]['excerpt']  # no .jar in the repository: index.jelly from the .hpi
     assert 'integration-test plugin' in plugins['uc-test-old-a']['excerpt']  # WEB-INF/classes/index.jelly
 
 
-def test_release_dates_are_read_from_the_archives(release):
+@pytest.mark.usefixtures('release')
+def test_release_dates_are_read_from_the_archives():
     path = Path('/seed/repo/jenkins') / SEEDED['paths'][TOP_PLUGIN]
     with zipfile.ZipFile(path) as archive:
         built = archive_date(archive)
     version = path.parent.name
     stamp = json.loads(get(WEB + '/current/plugin-versions.json'))['plugins'][TOP_PLUGIN][version]['releaseTimestamp']
-    released = dt.datetime.strptime(stamp[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=dt.timezone.utc)
-    if plausible(built, dt.datetime.now(dt.timezone.utc)) is None:
+    released = dt.datetime.strptime(stamp[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=dt.UTC)
+    if plausible(built, dt.datetime.now(dt.UTC)) is None:
         assert abs(released - built) < dt.timedelta(minutes=1)  # the build date, not the upload
     else:
-        assert abs(released - dt.datetime.now(dt.timezone.utc)) < dt.timedelta(days=1)  # reported fallback
+        assert abs(released - dt.datetime.now(dt.UTC)) < dt.timedelta(days=1)  # reported fallback
 
 
 def test_every_stored_core_that_plugins_require_gets_a_tier(release):
     assert set(SEEDED['old_cores']) <= set(release['tiers']['stable'])  # CORE_AGE_DAYS=0, the default
 
 
-def test_core_age_400_keeps_at_most_one_old_core(release):
+@pytest.mark.usefixtures('release')
+def test_core_age_400_keeps_at_most_one_old_core():
     result = uc('generate', env={'CORE_AGE_DAYS': '400', 'UC_DATA_DIR': '/data-age', **ADAPTER_DIR})
     assert result.returncode == 0, result.stdout[-4000:] + result.stderr[-4000:]
     stable = json.loads(Path('/data-age/status.json').read_text())['tiers']['stable']
@@ -139,14 +144,16 @@ def test_core_age_400_keeps_at_most_one_old_core(release):
     assert oldest not in stable  # upstream keeps one core older than 400 days as the floor, then stops
 
 
-def test_signed_metadata_points_at_the_update_center(release):
+@pytest.mark.usefixtures('release')
+def test_signed_metadata_points_at_the_update_center():
     doc = json.loads(get(WEB + '/current/update-center.actual.json'))
     urls = [doc['core']['url']] + [p['url'] for p in doc['plugins'].values()]
     assert all(url.startswith(WEB + '/download/') for url in urls)
     assert doc['connectionCheckUrl'] == WEB + '/uctest.json'
 
 
-def test_downloads_redirect_into_artifactory(release):
+@pytest.mark.usefixtures('release')
+def test_downloads_redirect_into_artifactory():
     doc = json.loads(get(WEB + '/current/update-center.actual.json'))
     plugin = doc['plugins'][TOP_PLUGIN]
     response = fetch(plugin['url'])
@@ -155,8 +162,9 @@ def test_downloads_redirect_into_artifactory(release):
     assert len(get(response.location)) > 0
 
 
+@pytest.mark.usefixtures('release')
 @pytest.mark.parametrize('controller', sorted(CONTROLLERS))
-def test_routing_offers_only_compatible_plugins(release, controller):
+def test_routing_offers_only_compatible_plugins(controller):
     version = CONTROLLERS[controller]
     response = fetch(f'{WEB}/update-center.actual.json?version={version}')
     assert response.status in (301, 302)
@@ -166,8 +174,9 @@ def test_routing_offers_only_compatible_plugins(release, controller):
     assert all(c <= 0 for c in VERSIONS.compare_many([(r, version) for r in required]))
 
 
+@pytest.mark.usefixtures('release')
 @pytest.mark.parametrize('controller', ['jenkins-lts-old', 'jenkins-lts-new'])
-def test_controller_trusts_the_signature_and_installs(release, controller):
+def test_controller_trusts_the_signature_and_installs(controller):
     version = CONTROLLERS[controller]
     jenkins = Jenkins(f'http://{controller}:8080')
     jenkins.wait_ready()
@@ -177,10 +186,12 @@ def test_controller_trusts_the_signature_and_installs(release, controller):
     tier = json.loads(get(fetch(f'{WEB}/update-center.actual.json?version={version}').location))
     assert int(configured['PLUGINS']) == len(tier['plugins'])  # Jenkins loaded the tier for its version
     installed = parse(jenkins.script(INSTALL % {'plugin': TOP_PLUGIN}))['INSTALL'].split(',')
-    assert installed and all(status.startswith('Success') for status in installed), installed
+    assert installed, installed
+    assert all(status.startswith('Success') for status in installed), installed
 
 
-def test_proxy_mode_installs_without_anonymous_artifactory_access(release):
+@pytest.mark.usefixtures('release')
+def test_proxy_mode_installs_without_anonymous_artifactory_access():
     result = uc('generate', env={'PUBLIC_URL': WEB_PROXY, 'UC_DATA_DIR': '/data-proxy', **ADAPTER_DIR})
     assert result.returncode == 0, result.stdout[-4000:] + result.stderr[-4000:]
     wait_for(WEB_PROXY + '/uctest.json')
@@ -189,7 +200,8 @@ def test_proxy_mode_installs_without_anonymous_artifactory_access(release):
     configured = parse(jenkins.script(CONFIGURE % {'site': WEB_PROXY}))
     assert configured['UPDATE'] == 'OK', configured.get('MESSAGE')
     installed = parse(jenkins.script(INSTALL % {'plugin': TOP_PLUGIN}))['INSTALL'].split(',')
-    assert installed and all(status.startswith('Success') for status in installed), installed
+    assert installed, installed
+    assert all(status.startswith('Success') for status in installed), installed
 
 
 def test_rollback_restores_the_previous_release(release):
@@ -200,4 +212,4 @@ def test_rollback_restores_the_previous_release(release):
     assert second != first
     assert uc('rollback').returncode == 0
     assert json.loads(Path('/data/status.json').read_text())['live_release'] == first
-    assert os.readlink('/data/live') == f'releases/{first}'
+    assert Path('/data/live').readlink() == Path(f'releases/{first}')

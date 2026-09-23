@@ -1,7 +1,10 @@
+"""Web-tier download routing: mirror, Artifactory and Artifact Keeper redirects, proxy mode, headers and private files."""
+
 import base64
 import json
 
 import pytest
+
 from helpers import fetch
 
 ARTIFACTORY = 'http://artifactory.internal/artifactory/jenkins'
@@ -15,7 +18,7 @@ def test_mirror_plugin_redirect():
 
 
 @pytest.mark.parametrize(
-    'version,target',
+    ('version', 'target'),
     [
         ('2.222.1', 'https://get.jenkins.io/war-stable/2.222.1/jenkins.war'),
         ('2.240', 'https://get.jenkins.io/war/2.240/jenkins.war'),

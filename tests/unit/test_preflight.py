@@ -1,8 +1,9 @@
+"""Unit tests for uc.preflight: PUBLIC_URL checks, signing material checks and credential loading."""
+
 import datetime as dt
 import shutil
 
 import pytest
-from ucsupport import make_settings
 
 from uc.pki import init_pki
 from uc.preflight import (
@@ -12,8 +13,9 @@ from uc.preflight import (
     load_credentials,
     load_repository_credentials,
 )
+from ucsupport import make_settings
 
-NOW = dt.datetime.now(dt.timezone.utc)
+NOW = dt.datetime.now(dt.UTC)
 
 
 @pytest.mark.parametrize('url', ['https://uc.example.com', 'https://uc.example.com:8443', 'http://web:8080'])
@@ -27,7 +29,7 @@ def test_plain_http_warns():
 
 
 @pytest.mark.parametrize(
-    'url,message',
+    ('url', 'message'),
     [
         ('https://host.example.com/jenkins', 'bare origin'),
         ('https://host.example.com/?x=1', 'bare origin'),
@@ -59,7 +61,7 @@ def test_check_signing_missing_file(tmp_path, secrets_dir):
 
 def test_check_signing_expiring_cert(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, CERTIFICATE_MINIMUM_VALID_DAYS='50')
-    with pytest.raises(PreflightError, match='expires in 4[45] days \\(minimum 50\\)'):
+    with pytest.raises(PreflightError, match=r'expires in 4[45] days \(minimum 50\)'):
         check_signing(settings, NOW)
 
 
@@ -109,7 +111,7 @@ def test_load_credentials_uses_the_adapter_token_when_the_adapter_is_on(tmp_path
 
 def test_load_credentials_explains_a_missing_adapter_token(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on')
-    with pytest.raises(PreflightError, match='repo-adapter token missing: .*repo-adapter.token'):
+    with pytest.raises(PreflightError, match=r'repo-adapter token missing: .*repo-adapter.token'):
         load_credentials(settings)
 
 

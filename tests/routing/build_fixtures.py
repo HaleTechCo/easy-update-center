@@ -11,12 +11,11 @@ from pathlib import Path
 
 sys.path.insert(0, '/tests/support')
 
-from sitefixture import write_generator_output  # noqa: E402
-
-from uc.downloadmap import write_download_map  # noqa: E402
-from uc.htaccess import render_htaccess  # noqa: E402
-from uc.layout import finalize_layout  # noqa: E402
-from uc.model import Tiers  # noqa: E402
+from sitefixture import write_generator_output
+from uc.downloadmap import write_download_map
+from uc.htaccess import render_htaccess
+from uc.layout import finalize_layout
+from uc.model import Tiers
 
 APP = Path('/opt/uc')
 R1, R2 = '20260101T000000Z', '20260102T000000Z'
@@ -52,13 +51,16 @@ def scenario(root: Path, name: str, public_url: str, tiers: Tiers, releases=(R1,
         release(data, release_id, public_url, tiers)
         stamp = 1_767_225_600 + index * 60  # distinct map mtimes, so RewriteMap reloads after a swap
         os.utime(data / 'releases' / release_id / '.htdownload-map', (stamp, stamp))
-    os.symlink(f'releases/{releases[0]}', data / 'live')
+    (data / 'live').symlink_to(f'releases/{releases[0]}')
     (data / 'status.json').write_text(json.dumps({'live_release': releases[0]}) + '\n')
 
 
 def tls_backend(tls: Path, hostname: str) -> None:
-    """A root CA, an intermediate and a leaf for hostname: public CAs sign through an intermediate,
-    so a real repository sends leaf + intermediate and is trusted through the root alone."""
+    """Create a root CA, an intermediate and a leaf certificate for hostname.
+
+    Public CAs sign through an intermediate, so a real repository sends leaf + intermediate and is
+    trusted through the root alone.
+    """
     shutil.rmtree(tls, ignore_errors=True)
     tls.mkdir(parents=True)
 

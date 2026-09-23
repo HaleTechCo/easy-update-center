@@ -8,10 +8,13 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Iterable
+from typing import TYPE_CHECKING
 
 from . import http
 from .errors import UcError
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 AQL_TEMPLATE = 'items.find({"repo":{"$eq":"%s"},"$or":[{"name":{"$match":"*.hpi"}},{"name":{"$match":"*.jpi"}},{"name":{"$match":"*.war"}},{"name":{"$match":"*.pom"}}]}).include("repo", "path", "name", "modified", "created", "sha256", "actual_sha1", "size")'
 WAR_GROUP = 'org.jenkins-ci.main'
@@ -21,11 +24,13 @@ _REPOSITORY = re.compile(r'^[A-Za-z0-9._-]+$')
 
 
 class AqlError(UcError):
-    pass
+    """The AQL query failed or returned something other than a results list."""
 
 
 @dataclass(frozen=True)
 class RepoFile:
+    """One file from the AQL listing: its repository path, name, checksums, size and modification time."""
+
     path: str
     name: str
     sha256: str | None = None
@@ -36,6 +41,8 @@ class RepoFile:
 
 @dataclass(frozen=True)
 class Gav:
+    """Maven coordinates of one artifact file: groupId, artifactId, version and extension."""
+
     group_id: str
     artifact_id: str
     version: str
@@ -43,9 +50,11 @@ class Gav:
 
     @property
     def maven_path(self) -> str:
+        """Return the file's path in Maven repository layout."""
         return f'{self.group_id.replace(".", "/")}/{self.artifact_id}/{self.version}/{self.artifact_id}-{self.version}.{self.extension}'
 
-    def with_extension(self, extension: str) -> 'Gav':
+    def with_extension(self, extension: str) -> Gav:
+        """Return the same coordinates with another extension (the .pom beside an .hpi, say)."""
         return Gav(self.group_id, self.artifact_id, self.version, extension)
 
 
@@ -71,8 +80,10 @@ def to_gav(f: RepoFile) -> Gav | None:
 
 
 def query_repository(api_url: str, repository: str, username: str, password: str, timeout: float = 600) -> list[RepoFile]:
+    """Run the AQL query against api_url with basic auth and return every .hpi, .jpi, .war and .pom in repository."""
     if not _REPOSITORY.match(repository):
-        raise AqlError(f'unsupported repository name {repository!r}')
+        msg = f'unsupported repository name {repository!r}'
+        raise AqlError(msg)
     token = base64.b64encode(f'{username}:{password}'.encode()).decode()
     request = urllib.request.Request(
         api_url + 'search/aql',
@@ -85,17 +96,22 @@ def query_repository(api_url: str, repository: str, username: str, password: str
             payload = json.loads(response.read())
     except urllib.error.HTTPError as exc:
         detail = exc.read()[:300].decode('utf-8', 'replace')
-        raise AqlError(f'AQL query to {api_url} failed with HTTP {exc.code}: {detail}') from exc
+        msg = f'AQL query to {api_url} failed with HTTP {exc.code}: {detail}'
+        raise AqlError(msg) from exc
     except (OSError, ValueError) as exc:
-        raise AqlError(f'AQL query to {api_url} failed: {exc}') from exc
+        msg = f'AQL query to {api_url} failed: {exc}'
+        raise AqlError(msg) from exc
     results = payload.get('results') if isinstance(payload, dict) else None
     if not isinstance(results, list):
-        raise AqlError('AQL response has no results list')
+        msg = 'AQL response has no results list'
+        raise AqlError(msg)
     return [RepoFile(r.get('path', ''), r.get('name', ''), r.get('sha256'), r.get('actual_sha1'), int(r.get('size') or 0), r.get('modified') or '') for r in results]
 
 
 @dataclass(frozen=True)
 class Listing:
+    """The repository listing sorted into what the generator uses and what it drops."""
+
     plugins: tuple[Gav, ...]  # .hpi/.jpi with a matching .pom
     plugins_without_pom: tuple[Gav, ...]
     wars: tuple[Gav, ...]  # org.jenkins-ci.main:jenkins-war with a matching .pom
@@ -104,6 +120,7 @@ class Listing:
 
 
 def classify(files: Iterable[RepoFile]) -> Listing:
+    """Split files into plugins and jenkins-war cores, each with or without a matching .pom, plus the files not in Maven layout."""
     gavs: list[Gav] = []
     rejected: list[RepoFile] = []
     for f in files:

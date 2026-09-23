@@ -36,27 +36,32 @@ authorityKeyIdentifier = keyid
 
 
 class PkiError(UcError):
-    pass
+    """An openssl step failed, or its input or output was unusable."""
 
 
 @dataclass(frozen=True)
 class CertInfo:
+    """A certificate's subject (RFC 2253), expiry and SHA-256 fingerprint."""
+
     subject: str
     not_after: dt.datetime
     fingerprint_sha256: str
 
     def days_left(self, now: dt.datetime) -> int:
+        """Return the whole days from now until the certificate expires (negative once expired)."""
         return (self.not_after - now).days
 
 
 def _openssl(*args: str) -> str:
-    proc = subprocess.run(['openssl', *args], capture_output=True, text=True)
+    proc = subprocess.run(['openssl', *args], capture_output=True, text=True, check=False)
     if proc.returncode != 0:
-        raise PkiError(f'openssl {args[0]} failed: {proc.stderr.strip()}')
+        msg = f'openssl {args[0]} failed: {proc.stderr.strip()}'
+        raise PkiError(msg)
     return proc.stdout
 
 
 def cert_info(cert: Path) -> CertInfo:
+    """Return the subject, expiry and fingerprint of the PEM certificate at cert."""
     out = _openssl(
         'x509',
         '-in',
@@ -77,18 +82,21 @@ def cert_info(cert: Path) -> CertInfo:
         if sep:
             fields[key.strip()] = value.strip()
     try:
-        not_after = dt.datetime.strptime(fields['notAfter'], '%Y-%m-%d %H:%M:%SZ').replace(tzinfo=dt.timezone.utc)
+        not_after = dt.datetime.strptime(fields['notAfter'], '%Y-%m-%d %H:%M:%SZ').replace(tzinfo=dt.UTC)
         return CertInfo(fields['subject'], not_after, fields['sha256 Fingerprint'])
     except (KeyError, ValueError) as exc:
-        raise PkiError(f'could not parse certificate {cert}: {out!r}') from exc
+        msg = f'could not parse certificate {cert}: {out!r}'
+        raise PkiError(msg) from exc
 
 
 def key_matches_cert(key: Path, cert: Path) -> bool:
+    """Return True when the private key and the certificate share the same public key."""
     return _openssl('pkey', '-in', str(key), '-pubout') == _openssl('x509', '-in', str(cert), '-noout', '-pubkey')
 
 
 def verify_chain(root: Path, cert: Path) -> bool:
-    proc = subprocess.run(['openssl', 'verify', '-CAfile', str(root), str(cert)], capture_output=True, text=True)
+    """Return True when openssl verifies cert against the root CA certificate."""
+    proc = subprocess.run(['openssl', 'verify', '-CAfile', str(root), str(cert)], capture_output=True, text=True, check=False)
     return proc.returncode == 0
 
 
@@ -100,16 +108,18 @@ def cert_der_b64(cert: Path) -> str:
 
 def _check_org(org: str) -> None:
     if not org or '/' in org or '=' in org:
-        raise PkiError(f"org must be non-empty and contain no '/' or '=' (got {org!r})")
+        msg = f"org must be non-empty and contain no '/' or '=' (got {org!r})"
+        raise PkiError(msg)
 
 
 def _refuse_existing(*paths: Path) -> None:
     existing = [str(p) for p in paths if p.exists()]
     if existing:
-        raise PkiError(f'refusing to overwrite existing files: {", ".join(existing)}')
+        msg = f'refusing to overwrite existing files: {", ".join(existing)}'
+        raise PkiError(msg)
 
 
-def _issue_signing(root_key: Path, root_cert: Path, out_dir: Path, days: int, org: str, cnf: Path) -> None:
+def _issue_signing(root_key: Path, root_cert: Path, out_dir: Path, *, days: int, org: str, cnf: Path) -> None:
     key, cert = out_dir / SIGNING_KEY, out_dir / SIGNING_CERT
     csr = cnf.parent / 'signing.csr'
     _openssl(
@@ -184,7 +194,7 @@ def init_pki(out_dir: Path, *, root_days: int = 3650, signing_days: int = 365, o
             str(root_cert),
         )
         root_key.chmod(0o600)
-        _issue_signing(root_key, root_cert, out_dir, signing_days, org, cnf)
+        _issue_signing(root_key, root_cert, out_dir, days=signing_days, org=org, cnf=cnf)
 
 
 def rotate_signing(root_key: Path, root_cert: Path, out_dir: Path, *, days: int = 365, org: str = DEFAULT_ORG) -> None:
@@ -197,4 +207,4 @@ def rotate_signing(root_key: Path, root_cert: Path, out_dir: Path, *, days: int 
     with tempfile.TemporaryDirectory() as tmp:
         cnf = Path(tmp) / 'ext.cnf'
         cnf.write_text(_EXTENSIONS)
-        _issue_signing(root_key, root_cert, out_dir, days, org, cnf)
+        _issue_signing(root_key, root_cert, out_dir, days=days, org=org, cnf=cnf)

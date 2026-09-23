@@ -136,7 +136,12 @@ ignore = [
 # test functions also skip D103 (missing docstring): the test name already states the expectation
 # ("test_edge_defaults_to_hard"), so a docstring would just restate it. The module still
 # carries its own docstring (D100 applies as normal).
-"tests/**/*.py" = ["INP001", "S101", "PLR2004", "D103"]
+#
+# The audit-only security rules are noise in tests for the same reason they are in tools/: the
+# suites open URLs of stub servers they started themselves (S310), drive docker and openssl by
+# name (S603, S607), hand fixture credentials to the fakes (S105, S106), and the fakes that run
+# inside the test compose networks listen on every interface of their container (S104).
+"tests/**/*.py" = ["INP001", "S101", "PLR2004", "D103", "S104", "S105", "S106", "S310", "S603", "S607"]
 
 ### Ruff recommended if using `ruff format`
 [tool.ruff.lint.isort]

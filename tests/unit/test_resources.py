@@ -1,11 +1,13 @@
+"""Unit tests for uc.resources: fetching upstream resources, the operator overlay and the last-good fallback."""
+
 import datetime as dt
 import hashlib
 import json
+import re
 
 import pytest
-from archives import make_tar
-from ucsupport import make_settings
 
+from archives import make_tar
 from uc.http import HttpError
 from uc.resources import (
     INFO_FILE,
@@ -16,8 +18,9 @@ from uc.resources import (
     save_last_good,
 )
 from uc.timeutil import iso
+from ucsupport import make_settings
 
-NOW = dt.datetime(2026, 9, 22, 12, 0, tzinfo=dt.timezone.utc)
+NOW = dt.datetime(2026, 9, 22, 12, 0, tzinfo=dt.UTC)
 SHA = 'ebc2b7754082994393232c08c13230a9c6299435'
 PREFIX = f'update-center2-{SHA}/'
 UPSTREAM = {
@@ -30,18 +33,20 @@ UPSTREAM = {
 
 
 def github_getter(tarball):
-    def get(url, headers=None, timeout=60):
+    def get(url, _headers=None, _timeout=60):
         if url == 'https://api.github.com/repos/jenkins-infra/update-center2/commits/master':
             return json.dumps({'sha': SHA, 'commit': {'committer': {'date': '2026-09-16T13:29:23Z'}}}).encode()
         if url == f'https://codeload.github.com/jenkins-infra/update-center2/tar.gz/{SHA}':
             return tarball
-        raise HttpError(f'unexpected GET {url}')
+        msg = f'unexpected GET {url}'
+        raise HttpError(msg)
 
     return get
 
 
-def offline(url, headers=None, timeout=60):
-    raise HttpError(f'GET {url} failed: offline')
+def offline(url, _headers=None, _timeout=60):
+    msg = f'GET {url} failed: offline'
+    raise HttpError(msg)
 
 
 def test_github_source(tmp_path, secrets_dir):
@@ -64,13 +69,13 @@ def test_url_source_checks_sha256(tmp_path, secrets_dir):
     tarball = make_tar({name[len(PREFIX) :]: data for name, data in UPSTREAM.items()})
     digest = hashlib.sha256(tarball).hexdigest()
 
-    def get(url, headers=None, timeout=60):
+    def get(_url, _headers=None, _timeout=60):
         return tarball
 
     ok = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://art/generic/uc2.tgz', RESOURCES_SHA256=digest)
     info = fetch_upstream(ok, tmp_path / 'ok', NOW, get=get)
     assert info.ref == f'sha256:{digest}'
-    assert info.data_date == iso(dt.datetime.fromtimestamp(1_758_000_000, dt.timezone.utc))
+    assert info.data_date == iso(dt.datetime.fromtimestamp(1_758_000_000, dt.UTC))
 
     bad = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://art/generic/uc2.tgz', RESOURCES_SHA256='0' * 64)
     with pytest.raises(ResourcesError, match='checksum mismatch'):
@@ -87,21 +92,21 @@ def test_bundled_source(tmp_path, secrets_dir):
 def test_missing_required_file(tmp_path, secrets_dir):
     tarball = make_tar({'resources/warnings.json': b'[]'})
     settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz')
-    with pytest.raises(ResourcesError, match='missing artifact-ignores.properties, index-template.html'):
-        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *a, **k: tarball)
+    with pytest.raises(ResourcesError, match=re.escape('missing artifact-ignores.properties, index-template.html')):
+        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *_a, **_k: tarball)
 
 
 def test_unsafe_archive_path(tmp_path, secrets_dir):
     tarball = make_tar({'resources/warnings.json': b'[]', 'resources/../../evil': b'x'})
     settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz')
     with pytest.raises(ResourcesError, match='unsafe path'):
-        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *a, **k: tarball)
+        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *_a, **_k: tarball)
 
 
 def test_not_a_tarball(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz')
     with pytest.raises(ResourcesError, match='not a tar'):
-        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *a, **k: b'<html>')
+        fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *_a, **_k: b'<html>')
 
 
 def test_overlay_merge(tmp_path):

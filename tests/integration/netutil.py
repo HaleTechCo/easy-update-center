@@ -11,12 +11,15 @@ from urllib.parse import urlsplit
 
 @dataclass
 class Response:
+    """A response read in full: status, lower-cased headers and body."""
+
     status: int
     headers: dict[str, str]
     body: bytes
 
     @property
     def location(self) -> str | None:
+        """The Location header, if any."""
         return self.headers.get('location')
 
 
@@ -48,5 +51,6 @@ def wait_for(url: str, timeout: float = 300) -> None:
         except OSError:
             pass
         if time.monotonic() > deadline:
-            raise TimeoutError(f'{url} did not answer 200 within {timeout}s')
+            msg = f'{url} did not answer 200 within {timeout}s'
+            raise TimeoutError(msg)
         time.sleep(2)

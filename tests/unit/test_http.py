@@ -1,6 +1,8 @@
-import pytest
-from httpstub import StubServer
+"""Unit tests for uc.http: redirects, the User-Agent and error wrapping of the GET helper."""
 
+import pytest
+
+from httpstub import StubServer
 from uc.http import HttpError, get
 
 
@@ -15,6 +17,5 @@ def test_get_follows_redirects():
 
 
 def test_get_wraps_errors():
-    with StubServer({}) as stub:
-        with pytest.raises(HttpError, match='GET .*/missing failed: HTTP Error 404'):
-            get(stub.url + '/missing')
+    with StubServer({}) as stub, pytest.raises(HttpError, match=r'GET .*/missing failed: HTTP Error 404'):
+        get(stub.url + '/missing')

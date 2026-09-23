@@ -1,3 +1,5 @@
+"""Unit tests for uc.downloadmap: building, writing and reading the .htdownload-map RewriteMap."""
+
 from uc.aql import RepoFile, classify
 from uc.downloadmap import build_download_map, preferred_groups, read_download_map, write_download_map
 
