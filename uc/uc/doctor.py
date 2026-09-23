@@ -6,7 +6,6 @@ import hashlib
 import json
 import urllib.error
 import urllib.request
-import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable, Protocol
@@ -17,6 +16,7 @@ from .aql import Gav, Listing
 from .config import Settings
 from .errors import UcError
 from .model import Credentials
+from .pom import safe_root
 from .versions import VersionTool
 
 
@@ -140,13 +140,8 @@ def parse_dependencies(value: str) -> list[tuple[str, str, bool]]:
 
 
 def is_stub_pom(data: bytes) -> bool:
-    # Real Maven POMs never declare a DOCTYPE or entities; refusing them avoids entity-expansion
-    # tricks without a third-party parser (ElementTree never resolves external entities).
-    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
-        return True
-    try:
-        root = ET.fromstring(data)
-    except ET.ParseError:
+    root = safe_root(data)
+    if root is None:
         return True
     for child in root:
         if child.tag.rsplit("}", 1)[-1] == "name" and (child.text or "").strip():

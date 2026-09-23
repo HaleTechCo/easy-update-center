@@ -1,0 +1,69 @@
+"""Reading untrusted POMs safely, and deciding whether one belongs to a path (repo-adapter spec §4.2 rule 3)."""
+from __future__ import annotations
+
+import xml.etree.ElementTree as ET
+
+Coordinates = tuple[str, str, str]  # groupId, artifactId, version
+
+
+def declares_entities(data: bytes) -> bool:
+    return b"<!DOCTYPE" in data or b"<!ENTITY" in data
+
+
+def safe_root(data: bytes) -> ET.Element | None:
+    """The XML root element, or None for anything that is not plain, well-formed UTF-8 XML.
+
+    Real Maven POMs never declare a DOCTYPE or entities; refusing them avoids entity-expansion
+    tricks without a third-party parser (ElementTree never resolves external entities). The byte
+    check only sees declarations in an ASCII-compatible encoding, so NUL bytes and anything that is
+    not valid UTF-8 (UTF-16, for one) are refused before it.
+    """
+    if b"\x00" in data or declares_entities(data):
+        return None
+    try:
+        data.decode("utf-8")
+        return ET.fromstring(data)
+    except (UnicodeDecodeError, ET.ParseError):
+        return None
+
+
+def _local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1]
+
+
+def _child_text(element: ET.Element, name: str) -> str | None:
+    for child in element:
+        if _local(child.tag) == name:
+            return (child.text or "").strip() or None
+    return None
+
+
+def pom_coordinates(data: bytes) -> Coordinates | None:
+    """(groupId, artifactId, version) a POM declares; groupId and version may come from <parent>."""
+    root = safe_root(data)
+    if root is None or _local(root.tag) != "project":
+        return None
+    parent = next((child for child in root if _local(child.tag) == "parent"), None)
+    group = _child_text(root, "groupId") or (_child_text(parent, "groupId") if parent is not None else None)
+    version = _child_text(root, "version") or (_child_text(parent, "version") if parent is not None else None)
+    artifact = _child_text(root, "artifactId")
+    if not group or not artifact or not version:
+        return None
+    return group, artifact, version
+
+
+def unusable_reason(data: bytes, expected: Coordinates) -> str | None:
+    """None when the POM is usable for the expected coordinates; otherwise a short reason for the report."""
+    if declares_entities(data):
+        return "declares a DOCTYPE or entities"
+    root = safe_root(data)
+    if root is None:
+        return "not XML"
+    if _local(root.tag) != "project":
+        return f"not a POM (root element <{_local(root.tag)}>)"
+    declared = pom_coordinates(data)
+    if declared is None:
+        return "does not declare groupId, artifactId and version"
+    if declared != expected:
+        return f"declares {':'.join(declared)}, not {':'.join(expected)}"
+    return None
