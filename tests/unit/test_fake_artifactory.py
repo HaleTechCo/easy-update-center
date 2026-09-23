@@ -70,6 +70,16 @@ def test_archive_entries_and_files(server):
     assert source.pom(gav) == b"<project><name>Git</name></project>"
 
 
+def test_file_reads_honour_range(server):
+    _, start = server
+    url = start(anonymous_read=True) + "jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom"
+    request = urllib.request.Request(url, headers={"Range": "bytes=1-7"})
+    with urllib.request.urlopen(request) as response:
+        assert response.status == 206
+        assert response.headers["Content-Range"] == "bytes 1-7/35"
+        assert response.read() == b"project"
+
+
 def test_private_reads_challenge_for_basic_auth(server):
     _, start = server
     url = start(anonymous_read=False) + "jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom"

@@ -1,4 +1,5 @@
-# Air-gapped integration test (spec §13). Run with `make it-airgapped`.
+# Air-gapped integration test (spec §13, repo-adapter spec §9). Run with `make it-airgapped`, which runs it
+# once per repository type; tests/integration/types/<type>.env supplies the IT_* values for each.
 name: uc-it-airgapped
 
 networks:
@@ -23,6 +24,14 @@ x-jenkins: &jenkins
     timeout: 5s
     retries: 60
     start_period: 20s
+
+x-blocked-hosts: &blocked-hosts
+  - "api.github.com:127.0.0.1"
+  - "github.com:127.0.0.1"
+  - "codeload.github.com:127.0.0.1"
+  - "raw.githubusercontent.com:127.0.0.1"
+  - "reports.jenkins.io:127.0.0.1"
+  - "updates.jenkins.io:127.0.0.1"
 
 services:
   # ---- seeding: profile "seed", internet access ----
@@ -50,7 +59,8 @@ services:
     networks: [internet]
     entrypoint: ["python3", "/tests/integration/seed.py", "repo", "--downloads", "/seed/downloads",
                  "--out", "/seed/repo", "--repository", "jenkins",
-                 "--cores", "${LTS_OLD:-x},${LTS_NEW:-x},${WEEKLY:-x}", "--jenkins-version", "${LTS_OLD:-x}"]
+                 "--cores", "${LTS_OLD:-x},${LTS_NEW:-x},${WEEKLY:-x}", "--jenkins-version", "${LTS_OLD:-x}",
+                 "--top-plugin", "${SEED_TOP_PLUGIN:-timestamper}"]
     volumes:
       - seed:/seed
       - ../../tests:/tests:ro
@@ -91,13 +101,58 @@ services:
       - seed:/seed:ro
       - ../../tests:/tests:ro
 
+  keeper:
+    <<: *uc-test
+    networks: [airgap]
+    entrypoint: ["python3", "/tests/integration/fake_artifact_keeper.py", "--root", "/seed/repo", "--port", "8081",
+                 "--user", "uc", "--token", "uc-secret", "--anonymous-read"]
+    volumes:
+      - seed:/seed:ro
+      - ../../tests:/tests:ro
+
+  keeper-private:
+    <<: *uc-test
+    networks: [airgap]
+    entrypoint: ["python3", "/tests/integration/fake_artifact_keeper.py", "--root", "/seed/repo", "--port", "8081",
+                 "--user", "uc", "--token", "uc-secret"]
+    volumes:
+      - seed:/seed:ro
+      - ../../tests:/tests:ro
+
+  repo-adapter:
+    <<: *uc-test
+    networks: [airgap]
+    extra_hosts: *blocked-hosts
+    entrypoint: ["python3", "-m", "uc", "repo-adapter"]
+    environment:
+      MODE: airgapped
+      PUBLIC_URL: "http://web:8080"
+      REPO_TYPE: ${IT_REPO_TYPE:-artifactory}
+      REPO_URL: ${IT_ADAPTER_BACKEND_URL:-http://artifactory-private:8081/artifactory/}
+      REPO_KEY: jenkins
+      SECRETS_DIR: /pki
+      UC_DATA_DIR: /data
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=3)"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    depends_on:
+      artifactory-private: {condition: service_started}
+      keeper-private: {condition: service_started}
+    volumes:
+      - uc-data:/data
+      - pki:/pki:ro
+      - ../../uc/uc:/opt/uc/python/uc:ro
+
   web:
     image: ${WEB_IMAGE:-jenkins-uc/web:local}
     networks: [airgap]
     environment:
       MODE: airgapped
       PUBLIC_URL: "http://web:8080"
-      REPO_URL: "http://artifactory:8081/artifactory/"
+      REPO_TYPE: ${IT_REPO_TYPE:-artifactory}
+      REPO_URL: ${IT_REPO_URL:-http://artifactory:8081/artifactory/}
       REPO_KEY: jenkins
     volumes:
       - uc-data:/data:ro
@@ -109,7 +164,7 @@ services:
       MODE: airgapped
       PUBLIC_URL: "http://web-proxy:8080"
       DOWNLOAD_ACCESS: proxy
-      DOWNLOAD_BACKEND_URL: "http://artifactory-private:8081/artifactory/jenkins"
+      DOWNLOAD_BACKEND_URL: ${IT_PROXY_BACKEND_URL:-http://artifactory-private:8081/artifactory/jenkins}
       DOWNLOAD_PROXY_AUTH_FILE: /pki/download_proxy_auth
     volumes:
       - uc-data-proxy:/data:ro
@@ -130,21 +185,17 @@ services:
   driver:
     <<: *uc-test
     networks: [airgap]
-    extra_hosts:
-      - "api.github.com:127.0.0.1"
-      - "github.com:127.0.0.1"
-      - "codeload.github.com:127.0.0.1"
-      - "raw.githubusercontent.com:127.0.0.1"
-      - "reports.jenkins.io:127.0.0.1"
-      - "updates.jenkins.io:127.0.0.1"
+    extra_hosts: *blocked-hosts
     environment:
       MODE: airgapped
       PUBLIC_URL: "http://web:8080"
-      REPO_URL: "http://artifactory:8081/artifactory/"
+      REPO_TYPE: ${IT_REPO_TYPE:-artifactory}
+      REPO_URL: ${IT_ADAPTER_BACKEND_URL:-http://artifactory-private:8081/artifactory/}
       REPO_KEY: jenkins
-      REPO_ADAPTER: "off"  # until the repo-adapter service exists (plan Task 11)
+      REPO_ADAPTER_DIR: /data/repo-adapter  # also for runs with another UC_DATA_DIR
       SECRETS_DIR: /pki
       UC_DATA_DIR: /data
+      DOWNLOAD_PREFIX: ${IT_DOWNLOAD_PREFIX:-http://artifactory:8081/artifactory/jenkins/}
       LTS_OLD: ${LTS_OLD:-x}
       LTS_NEW: ${LTS_NEW:-x}
       WEEKLY: ${WEEKLY:-x}
@@ -152,7 +203,8 @@ services:
     entrypoint: ["python3", "-m", "pytest", "-p", "no:cacheprovider", "-q", "-x", "/tests/integration/test_airgapped.py"]
     depends_on:
       artifactory: {condition: service_started}
-      artifactory-private: {condition: service_started}
+      keeper: {condition: service_started}
+      repo-adapter: {condition: service_healthy}
       web: {condition: service_started}
       web-proxy: {condition: service_started}
       jenkins-lts-old: {condition: service_healthy}
@@ -161,6 +213,7 @@ services:
     volumes:
       - uc-data:/data
       - uc-data-proxy:/data-proxy
+      - uc-data-age:/data-age
       - pki:/pki:ro
       - seed:/seed:ro
       - ../../tests:/tests:ro
@@ -183,3 +236,4 @@ volumes:
   trust:
   uc-data:
   uc-data-proxy:
+  uc-data-age:
