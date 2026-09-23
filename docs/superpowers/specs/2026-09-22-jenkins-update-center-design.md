@@ -267,6 +267,10 @@ failed run leaves the current site untouched. The last failed staging directory 
      `update-center.json`); a directory exists for every tier in `tiers.json`.
    - Every `url` in every site's `update-center.actual.json` (`core.url`, `plugins.*.url`) and in
      `current/plugin-versions.json` starts with `${PUBLIC_URL}/download/`.
+   - A site offers a core only when the repository holds a `jenkins-war`. Without one, upstream
+     writes a `core` holding only its defaults (`name`, `size`) and no `latestCore.txt`: the release
+     offers plugins only, with no tiers, and is valid (`uc doctor` warns). A site that offers a core
+     needs its `core.url`, and `current/` its `latestCore.txt`.
    - Every `signature` block is present and names our signing cert.
    - `.htaccess` contains no absolute `http(s)://` targets.
    - Plugin count ≥ `MIN_PLUGINS` (default 1), and ≥ `MIN_PLUGIN_RATIO` (default 0.9) × the live
