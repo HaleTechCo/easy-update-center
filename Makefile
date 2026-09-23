@@ -97,7 +97,9 @@ UPSTREAM_FILES = site/generate.sh site/generate-htaccess.sh site/test/test.sh \
   src/main/java/io/jenkins/update_center/Signer.java \
   src/main/java/io/jenkins/update_center/Popularities.java \
   src/main/java/io/jenkins/update_center/ArtifactoryRepositoryImpl.java \
-  src/main/java/io/jenkins/update_center/MavenArtifact.java
+  src/main/java/io/jenkins/update_center/MavenArtifact.java \
+  src/main/java/io/jenkins/update_center/HPI.java \
+  src/main/java/io/jenkins/update_center/json/TieredUpdateSitesGenerator.java
 
 # Usage: make upstream-diff TO=3.19   (compares the pinned UC2_VERSION with TO; see docs/upgrading.md)
 upstream-diff: build-uc
@@ -109,5 +111,5 @@ upstream-diff: build-uc
 	  echo "== files uc depends on"; \
 	  git diff update-center2-$(UC2_VERSION) update-center2-$(TO) -- $(UPSTREAM_FILES); \
 	  git checkout -q update-center2-$(TO); \
-	  if git apply --check /patches/*.patch 2>/dev/null; then echo "== patch applies to $(TO)"; \
-	  else echo "== PATCH DOES NOT APPLY to $(TO); check whether Popularities.java already reads POPULARITY_JSON_URL"; fi'
+	  if git apply --check /patches/*.patch 2>/dev/null; then echo "== patches apply to $(TO)"; \
+	  else echo "== PATCHES DO NOT APPLY to $(TO); check whether upstream already reads POPULARITY_JSON_URL (Popularities.java) and CORE_AGE_DAYS (TieredUpdateSitesGenerator.java)"; fi'

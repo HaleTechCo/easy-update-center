@@ -1,0 +1,29 @@
+diff --git a/src/main/java/io/jenkins/update_center/json/TieredUpdateSitesGenerator.java b/src/main/java/io/jenkins/update_center/json/TieredUpdateSitesGenerator.java
+index 1a7e36c..e3eef9f 100644
+--- a/src/main/java/io/jenkins/update_center/json/TieredUpdateSitesGenerator.java
++++ b/src/main/java/io/jenkins/update_center/json/TieredUpdateSitesGenerator.java
+@@ -28,6 +28,7 @@ import hudson.util.VersionNumber;
+ import io.jenkins.update_center.HPI;
+ import io.jenkins.update_center.JenkinsWar;
+ import io.jenkins.update_center.MavenRepository;
++import io.jenkins.update_center.util.Environment;
+ 
+ import java.io.IOException;
+ import java.time.Instant;
+@@ -77,6 +78,9 @@ public class TieredUpdateSitesGenerator extends WithoutSignature {
+ 
+     private static boolean isReleaseRecentEnough(JenkinsWar war) throws IOException {
+         Objects.requireNonNull(war, "war");
++        if (CORE_AGE_DAYS == 0) {
++            return true;
++        }
+         return war.getTimestampAsDate().toInstant().isAfter(Instant.now().minus(CORE_AGE_DAYS, ChronoUnit.DAYS));
+     }
+ 
+@@ -151,5 +155,5 @@ public class TieredUpdateSitesGenerator extends WithoutSignature {
+ 
+     public static final Logger LOGGER = Logger.getLogger(TieredUpdateSitesGenerator.class.getName());
+ 
+-    private static final int CORE_AGE_DAYS = 400;
++    private static final int CORE_AGE_DAYS = Environment.getInteger("CORE_AGE_DAYS", 400);
+ }

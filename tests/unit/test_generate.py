@@ -51,7 +51,7 @@ def tools_for(settings, **jar_options):
 
 def test_airgapped_generation_publishes(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
-    rid = generate(settings, tools=tools_for(settings), now=T1, base_env={"UC2_VERSION": "3.18.4+popularity-patch"})
+    rid = generate(settings, tools=tools_for(settings), now=T1, base_env={"UC2_VERSION": "3.18.4+patches"})
     data = settings.data_dir
     live = data / "live"
     assert rid == "20260922T030000Z"
@@ -65,7 +65,7 @@ def test_airgapped_generation_publishes(tmp_path, secrets_dir):
     status = read_status(data)
     assert status["live_release"] == rid
     assert status["last_run"]["result"] == "success"
-    assert status["update_center2"] == "3.18.4+popularity-patch"
+    assert status["update_center2"] == "3.18.4+patches"
     assert status["resources"]["source"] == "bundled"
     assert status["tiers"] == {"weekly": ["2.540"], "stable": ["2.528.1"]}
     assert status["plugin_count"] == 2
