@@ -1,3 +1,4 @@
+---
 # Online integration test (spec §13). Run with `make it-online` (capped) or `make it-full`.
 name: uc-it-online
 

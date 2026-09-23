@@ -7,6 +7,10 @@ ARG SUPERCRONIC_VERSION=v0.2.49
 FROM maven:3.9-eclipse-temurin-21 AS jar-build
 ARG UC2_VERSION
 ARG UC2_COMMIT
+# Distribution packages are not version-pinned (DL3008) in any stage: the base images track their
+# upstream tags, and the Ubuntu archive drops superseded versions, so a pin breaks the build the
+# day the base moves to a newer release.
+# hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git \
  && rm -rf /var/lib/apt/lists/*
@@ -32,9 +36,12 @@ FROM eclipse-temurin:21-jre AS runtime
 ARG UC2_VERSION
 ARG SUPERCRONIC_VERSION
 ARG TARGETARCH
+# hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 openssl tini ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
+# pipefail, so a failed download cannot hide behind the checksum pipe below.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN set -eu; \
     arch="${TARGETARCH:-amd64}"; \
     case "${arch}" in \
@@ -65,7 +72,8 @@ ENTRYPOINT ["/usr/bin/tini", "--", "uc"]
 CMD ["status"]
 
 FROM runtime AS test
-USER root
+USER 0:0
+# hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3-pytest git \
  && rm -rf /var/lib/apt/lists/*

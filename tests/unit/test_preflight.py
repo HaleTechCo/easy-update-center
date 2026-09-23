@@ -34,7 +34,7 @@ def test_plain_http_warns():
         ("https://host.example.com/jenkins", "bare origin"),
         ("https://host.example.com/?x=1", "bare origin"),
         ("ftp://host", "http\\(s\\) URL"),
-        ("https://user:pw@host", "credentials"),
+        ("https://user:pw@host", "credentials"),  # pragma: allowlist secret
         ("http://localhost:8080", "cannot reach"),
         ("http://127.0.0.1:8080", "cannot reach"),
     ],

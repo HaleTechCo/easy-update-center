@@ -192,7 +192,7 @@ def test_with_explicit_port(url, expected):
 
 def test_credentials_in_repo_url_are_rejected():
     with pytest.raises(ConfigError, match="credentials"):
-        load_settings({**AIRGAPPED, "REPO_URL": "https://u:p@artifactory.corp/"})
+        load_settings({**AIRGAPPED, "REPO_URL": "https://u:p@artifactory.corp/"})  # pragma: allowlist secret
 
 
 def test_read_secret(tmp_path):
