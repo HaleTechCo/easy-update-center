@@ -1,0 +1,42 @@
+# Default: normalize text files to LF in the index and check out as LF on all platforms.
+# Everything here runs in Linux containers, so a single canonical convention eliminates the
+# Windows/Linux CRLF drift that otherwise produces whole-file diffs on one-identifier
+# changes. This is the durable fix; the mixed-line-ending pre-commit hook is the second
+# line of defense.
+* text=auto eol=lf
+
+# Unix shell scripts: CRLF breaks the shebang line, so force LF.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# PowerShell stays LF like every other text file here, rather than the CRLF that Windows
+# tooling often pins it to. Both pwsh and Windows PowerShell 5.1 execute LF fine, and the
+# mixed-line-ending hook rewrites everything to LF anyway - pinning CRLF would make the two
+# fight on every commit. Change both together if you ever want CRLF back.
+*.ps1 text eol=lf
+*.bat text eol=lf
+*.cmd text eol=lf
+
+# Secret env files: keep byte-exact rather than line-ending-normalized.
+*.env -text
+
+# Common binary types - declared defensively so they're never mangled if added later. Jenkins
+# plugins (.hpi/.jpi) and the core war are the likely ones in a test fixture.
+*.hpi binary
+*.jpi binary
+*.jar binary
+*.war binary
+*.whl binary
+*.zip binary
+*.tar.gz binary
+*.tgz binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.xlsx binary
+*.docx binary
+*.pptx binary
