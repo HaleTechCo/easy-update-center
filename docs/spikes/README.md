@@ -12,6 +12,7 @@ half of S1b and S2 against the operator's own Artifactory. Still open: the downl
 | S2 | Does AQL work against a **virtual** repository? | Repeat S1b with `REPO_KEY=<virtual repo>`; compare `Plugins with a POM` with the local repository's count. | **Yes for AQL; count and downloads not yet checked** — 2026-09-22, same account: the hand probe against a virtual repository returned correct results. Still to run: the count comparison (a virtual can aggregate several repositories, remote caches included) and downloads through the virtual, both via `uc doctor --fetch`. |
 | S6 | Full-catalog first run: duration, heap, cache and site size. | `make it-full` (hours); copy `tests/integration/.results/online-*.json` here. If it fails with `OutOfMemoryError`, raise `-Xmx` in the `it-full` target and rerun. | |
 | S7 | Does GitHub GraphQL accept username + token over basic auth? | `export GITHUB_USERNAME=… GITHUB_TOKEN=…` (a token with no scopes), then `make it-online`; `test_github_labels_when_a_token_is_given` must pass rather than skip. | **Yes** — 2026-09-22, operator's account with a scopeless classic token. `make it-online` passed 7/7 with no skip. A direct `POST https://api.github.com/graphql` with `--user name:token` returned 200 and real `repositoryTopics`. |
+| S8 | Does the repo-adapter publish from a real Artifact Keeper? | `.env` from `.env.airgapped.example` with `REPO_TYPE=artifact-keeper`, `REPO_URL`, `REPO_KEY`, and `secrets/repo_username` / `secrets/repo_password` (an API token); `docker compose -f compose.yaml -f compose.airgapped.yaml up -d repo-adapter`, then `docker compose -f compose.yaml -f compose.airgapped.yaml run --rm uc doctor` and `… run --rm uc generate`. | |
 
 ## Notes from answered spikes
 
@@ -48,6 +49,11 @@ half of S1b and S2 against the operator's own Artifactory. Still open: the downl
 - Capped reference runs (25 plugins, `-Xmx2g`): 247 s without GitHub, 316 s with; 466 KB cache,
   ~23.5 MB site, 5 stable and 5 weekly tiers. Not a substitute for S6, which measures the full
   catalogue.
+
+- **Embedded files (for the repo-adapter), 2026-09-22:** in a sample of 29 plugins from 2012 to 2026
+  plus core 2.583, the POM inside each archive was byte-identical to the published one in all but one
+  Gradle-built plugin, and every `index.jelly` matched. Each archive's `META-INF/MANIFEST.MF` time was
+  within 8 hours of the real release in 30 of 31. Details: repo-adapter spec §2.
 
 ## If an answer is "no"
 

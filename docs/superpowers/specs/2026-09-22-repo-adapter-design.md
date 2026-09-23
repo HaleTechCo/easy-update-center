@@ -35,6 +35,11 @@ Upstream is update-center2 3.18.4 (`b2c8ad2b`); paths below are under `src/main/
   sent with preemptive basic auth), files at `<url><repo>/<path>` (`:55`, `:338`), and archive entries
   at `<url><repo>/<path>!/<entry>` (`:54`, `:327`), of which it reads `META-INF/MANIFEST.MF` of each
   `.hpi` (`:53`, `:248`) and `index.jelly` of each plugin's `.jar`.
+- **It cannot authenticate file reads.** Only the listing carries credentials (preemptive basic auth).
+  Files and archive entries are requested without them, and a `401` challenge crashes the run:
+  `AuthenticatorImpl` (`:343-367`) calls `getRequestingSite().getHostName()`, and Java's `HttpClient`
+  always passes a null requesting site. Anything upstream reads files from must therefore answer
+  unauthenticated reads. repo.jenkins-ci.org does; a private repository may not.
 - **Pairing happens in the listing.** A `.hpi`/`.jpi`/`.war` without a `.pom` entry of the same
   coordinates in the AQL result is discarded (`:179-183`). Serving a POM on request is not enough.
 - **Descriptions** come from the POM's `/project/description`, replaced by the sanitised text of
@@ -125,16 +130,20 @@ port matters: main spec §10 item 4.
 | Request | `REPO_TYPE=artifactory` | `REPO_TYPE=artifact-keeper` |
 |---|---|---|
 | `POST /artifactory/api/search/aql` | forwarded verbatim to `REPO_API_URL`, then gap-filled | pages through `/api/v1/repositories/<REPO_KEY>/artifacts`, returns `.hpi`/`.jpi`/`.war`/`.pom` (and records `.jar` entries in the index for §4.2 rule 6), then gap-filled |
-| `GET /artifactory/<REPO_KEY>/<path>` | forwarded | `GET /maven/<REPO_KEY>/<path>` |
+| `GET /artifactory/<REPO_KEY>/<path>`, POMs only | forwarded | `GET /maven/<REPO_KEY>/<path>` |
 | `GET /artifactory/<REPO_KEY>/<path>!/<entry>` | forwarded (Artifactory extracts) | served from the cache (§5.1) |
 | `GET /healthz` | 200 | 200 |
 
-Anything else returns 404. The AQL endpoint accepts only the query shape upstream and `uc` send (a
-`repo` `$eq` plus the four extension matches), and only for `REPO_KEY`; any other query gets 400.
+Anything else returns 404, including whole archives: upstream fetches whole files only for POMs
+(`resolve()`, for a plugin's POM and its parent), so the adapter never buffers an archive for a client.
+The AQL endpoint accepts only the exact query upstream and `uc` send (`uc/uc/aql.py`'s `AQL_TEMPLATE`
+for `REPO_KEY`); any other query gets 400.
 
-**The index.** Each listing leaves an in-memory index (path to sha256 and size, plus the derived
-files) that GETs are resolved against. A GET for a path the index does not know rebuilds the listing
-once before answering 404, so an adapter restart between upstream's listing and its GETs is harmless.
+**The index.** Each listing leaves an in-memory index (the rows, derived POMs, manifests and
+descriptions) that GETs are resolved against. A GET that arrives before any listing, as after an
+adapter restart, builds one first. Otherwise a path the index does not know is a 404: upstream asks
+for a parent POM for nearly every plugin, and most are absent, so rebuilding on a miss would mean a
+full listing per plugin.
 
 **Artifact Keeper listing fields**, mapped into Artifactory's result shape:
 
@@ -203,12 +212,14 @@ built, so the listing never advertises a file the adapter cannot serve.
 
 ### 5.1 Cache
 
-- **Layout.** `/data/repo-adapter/cache/<sha256[:2]>/<sha256>/`, keyed by the archive's sha256, holds
-  `MANIFEST.MF`, `pom.xml` or the marker `pom.none`, `index.jelly` or `index.none`, `sha1`, and
-  `released` or `released.none`. `released` holds rule 9's archive date before the plausibility check;
-  the check depends on the repository's time, so it runs on every listing.
-  Verdicts on the repository's own POMs are kept at `/data/repo-adapter/cache/poms/<sha256>`. Content
-  addressed by sha256 never changes, so entries never go stale.
+- **Layout.** `/data/repo-adapter/cache/<sha256[:2]>/<sha256>/` holds what is known about that
+  content. For an archive: `MANIFEST.MF`, `coordinates`, `pom.xml`, `index.jelly` and `released`, each
+  replaced by an empty marker (`MANIFEST.none`, `coordinates.none`, `pom.none`, `index.none`,
+  `released.none`) when absent. `released`, written last, marks the entry complete; it holds rule 9's
+  archive date before the plausibility check, which depends on the repository's time and so runs on
+  every listing. For any file whose listing has no sha1: `sha1`. For a repository `.pom`:
+  `pom-verdict` (empty when usable, else the reason). For a repository `.jar`: `jar-index.jelly` or
+  `jar-index.none`. Content addressed by sha256 never changes, so entries never go stale.
 - **Writes** go to a temporary file followed by `os.replace`, so concurrent requests are safe.
 - **Artifact Keeper.** An archive whose sha256 is not cached is streamed to a temporary file under
   `/data/repo-adapter/tmp/`, its entries are extracted in one pass, and the temporary file is deleted.
@@ -236,15 +247,21 @@ Archives are treated as untrusted input.
 
 ### 5.3 Security
 
-- **Credentials.** Only the adapter holds the repository credentials: `repo_username` and
-  `repo_password`, via the existing `*_FILE` convention. For Artifact Keeper the password is the API
-  token, sent as `Bearer` to `/api/v1` and as basic auth to `/maven`.
-- **The generator's credentials** are a random 32-byte token that the adapter creates on first start at
-  `/data/repo-adapter/token`, mode 0600, owned by the `uc` user. `uc` passes it to the jar as
-  `ARTIFACTORY_PASSWORD` with username `uc`. The web container runs as uid 33 and cannot read it. The
-  implementation verifies that the `uc` image's uid differs from 33.
-- **Unauthenticated requests** other than `/healthz` get `401` with `WWW-Authenticate: Basic`, which
-  upstream needs before it sends credentials for files.
+- **Credentials.** The adapter reads the repository credentials, `repo_username` and `repo_password`,
+  via the existing `*_FILE` convention. For Artifact Keeper the password is the API token, sent as
+  `Bearer` to `/api/v1` and as basic auth to `/maven`. With the adapter on, `uc` never reads them, and
+  `compose.airgapped.yaml` (where the adapter is on by default) does not mount them into `uc` or the
+  scheduler at all.
+- **The listing needs a token:** a random 32-byte token that the adapter creates on first start at
+  `/data/repo-adapter/token`, mode 0600, owned by the `uc` user (uid 10001). `uc` passes it to the jar
+  as `ARTIFACTORY_PASSWORD` with username `uc`, and the jar sends it preemptively with the listing. A
+  listing without it gets `401` with `WWW-Authenticate: Basic`. The web container runs as uid 33 and
+  cannot read the token.
+- **File reads need none**, because upstream cannot answer a challenge (§2). They serve only POMs,
+  manifests and descriptions, never archives, and only on the internal `repo` network, which the
+  internet-facing web container is not attached to.
+- **Redirects** from the repository to another host (Artifactory's object storage) are followed
+  without the `Authorization` header.
 - **TLS** to the repository is verified against the system CA bundle, or `REPO_CA_FILE` when set.
 - **Logging.** Credentials are never logged. URLs are logged without userinfo.
 - **Trust is unchanged.** The adapter never adds content from outside the repository. Every derived
@@ -265,6 +282,7 @@ no compatibility aliases.
 | `REPO_ADAPTER` | `off` | `on` | new; forced `on` for `artifact-keeper` |
 | `REPO_CA_FILE` | system bundle | system bundle | new |
 | `REPO_MAX_ARCHIVE_MB` | `512` | `512` | new |
+| `REPO_ADAPTER_URL`, `REPO_ADAPTER_DIR` | `http://repo-adapter:8081/artifactory/`, `/data/repo-adapter` | same | new: where uc finds the adapter and its state (tests and non-default layouts) |
 | `CORE_AGE_DAYS` | `400` | `0` (no age limit) | new (§12) |
 | secrets `repo_username`, `repo_password` | Jenkins community account | service account | `artifactory_username`, `artifactory_password` |
 
@@ -407,8 +425,9 @@ stops.
   - The unit tests cover validation and the per-mode defaults.
   - `make it-airgapped` seeds two real LTS cores, both released more than 400 days ago, that plugins
     declare as their minimum. Their dates come from the WARs themselves (§4.2 rule 9). It asserts that
-    the default `0` gives both a tier, and that the tier step run with `CORE_AGE_DAYS=400` keeps only
-    the newer of the two, as the floor.
+    the default `0` gives both a tier, and that a run with `CORE_AGE_DAYS=400` drops the older one:
+    upstream keeps at most one core older than 400 days per line, as the floor, and which one depends on
+    the other cores present.
 
 ## 13. Out of scope
 

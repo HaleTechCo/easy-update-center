@@ -46,8 +46,11 @@ Everything below was checked against `update-center2` at `update-center2-3.18.4`
   `url` written in the signed JSON.
 - **The generator reads only small pieces of each artifact** when it builds metadata. It lists
   artifacts with an Artifactory AQL query (`ArtifactoryRepositoryImpl.java:56,166`), then fetches
-  `META-INF/MANIFEST.MF` and `index.jelly` out of each `.hpi` through Artifactory's archive-entry
-  URLs, plus the `.pom` and optionally the parent POM. It downloads whole files only when
+  each `.hpi`'s `META-INF/MANIFEST.MF` and each plugin `.jar`'s `index.jelly` (its description)
+  through Artifactory's archive-entry URLs, plus the `.pom` and optionally the parent POM. Only the
+  listing carries credentials; a `401` on a file read crashes the generator, so a repository it reads
+  directly must allow anonymous reads (repo-adapter spec §2, which removes that requirement).
+  Each artifact's timestamp is the listing's `modified`, an upload time in an operator's repository. It downloads whole files only when
   `--downloads-directory` is passed (`DirectoryTreeBuilder.java:151`). Upstream passes that flag
   to feed its mirror network (`site/publish.sh` rsyncs new releases to get.jenkins.io); this
   design does not.
@@ -147,7 +150,11 @@ These specifics are not:
 - **`web` image:** `httpd:2.4` with our config (§8). Mounts `/data` read-only and never sees the
   signing key.
 - **`scheduler`:** the `uc` image running `uc schedule`. Runs in both modes, because air-gapped
-  sites regenerate from the internal Artifactory.
+  sites regenerate from the internal repository.
+- **`repo-adapter`:** the `uc` image running `uc repo-adapter`, on an internal `repo` network with
+  `uc` and the scheduler. It answers the generator's Artifactory requests from Artifactory or
+  Artifact Keeper, and fills in POMs, descriptions and release dates from the archives. On by
+  default in air-gapped mode; see `2026-09-22-repo-adapter-design.md`.
 - **One volume:** all releases, the cache and `live` share a filesystem, so each publish is a
   single `rename(2)`.
 - **Release ids** are UTC timestamps, `YYYYMMDDTHHMMSSZ`.
@@ -161,6 +168,7 @@ These specifics are not:
 | `uc rollback [id]` | Point `live` at the previous release, or at `id`. |
 | `uc status` | Print `status.json`. |
 | `uc schedule` | Run `uc generate` once immediately if no release is live, then run `supercronic` with `GENERATE_SCHEDULE` → `uc generate`. |
+| `uc repo-adapter [--port 8081]` | The repo-adapter service (repo-adapter spec §3); idle when `REPO_ADAPTER` is off. |
 | `uc pki init \| rotate \| show` | Signing PKI (§9). |
 
 The CLI is Python 3, standard library only. All logic that isn't glue is unit-tested (§13).
@@ -280,11 +288,14 @@ requests) and caches them. Later runs fetch only what's new (spike S6 measures t
 
 | Setting | `online` default | `airgapped` default |
 |---|---|---|
-| `ARTIFACTORY_URL` | `https://repo.jenkins-ci.org/` | **required** |
-| `ARTIFACTORY_API_URL` | `${ARTIFACTORY_URL}api/` | same |
-| `ARTIFACTORY_REPOSITORY` | `releases` | **required** |
-| `DOWNLOAD_BACKEND` | `mirror` | `artifactory` |
-| `DOWNLOAD_BACKEND_URL` | `https://get.jenkins.io` | `${ARTIFACTORY_URL}${ARTIFACTORY_REPOSITORY}` |
+| `REPO_TYPE` | `artifactory` | `artifactory` (or `artifact-keeper`) |
+| `REPO_URL` | `https://repo.jenkins-ci.org/` | **required** |
+| `REPO_API_URL` | `${REPO_URL}api/` (Artifactory) | same |
+| `REPO_KEY` | `releases` | **required** |
+| `REPO_ADAPTER` | `off` | `on` (always on for Artifact Keeper) |
+| `CORE_AGE_DAYS` | `400` | `0` (every stored core a plugin requires gets a tier) |
+| `DOWNLOAD_BACKEND` | `mirror` | `artifactory` (any Maven-layout repository) |
+| `DOWNLOAD_BACKEND_URL` | `https://get.jenkins.io` | `${REPO_URL}${REPO_KEY}`; Artifact Keeper: `${REPO_URL}maven/${REPO_KEY}` |
 | `DOWNLOAD_ACCESS` | `redirect` | `redirect` |
 | `RESOURCES_SOURCE` | `github` | `bundled` (set `url` for procured copies) |
 | `POPULARITY_JSON_URL` | upstream's URL | empty (skip) |
@@ -311,13 +322,13 @@ private online Artifactory works by overriding the `ARTIFACTORY_*` settings and 
 | Links to plugins.jenkins.io and the wiki | present in the JSON, dead in the air gap (cosmetic) |
 
 **Fast-fail for blocked hosts.** `compose.airgapped.yaml` adds `extra_hosts` entries mapping every
-blocked host to `127.0.0.1` for the `uc` and `scheduler` services. Connections are refused
+blocked host to `127.0.0.1` for the `uc`, `scheduler` and `repo-adapter` services. Connections are refused
 immediately instead of stalling on a firewall that drops packets, and each source's own error
 handling produces a warning. The container's normal resolver still handles every other name,
 including the internal Artifactory. (`-Djdk.net.hosts.file` was rejected: it replaces the JVM's
 resolver entirely, so every unlisted host, including Artifactory, would fail to resolve.)
 
-### 7.4 The one upstream patch
+### 7.4 The upstream patches
 
 `patches/0001-popularity-configurable-and-optional.patch`, against `Popularities.java`:
 
@@ -326,7 +337,11 @@ resolver entirely, so every unlisted host, including Artifactory, would fail to 
 - An empty URL, or any `IOException`/`RuntimeException` while fetching, logs a warning and uses an
   empty map (popularity 0), matching how `HealthScores` behaves.
 
-This is submitted upstream as a PR. When a release contains it, the patch and the `git apply` step
+`patches/0002-core-age-configurable.patch`, against `json/TieredUpdateSitesGenerator.java`:
+`CORE_AGE_DAYS` becomes `Environment.getInteger("CORE_AGE_DAYS", 400)`, and `0` means no age limit
+(repo-adapter spec §12).
+
+Both are submitted upstream as PRs. When a release contains them, the patches and the `git apply` step
 are dropped and the jar can come from the released `-bin.zip` (pinned by SHA-256) instead of a
 source build. The pinned clone stays either way: the `-bin` assembly contains only jars, while
 `site/generate-htaccess.sh` and `resources/` exist only in the git tree.
@@ -442,7 +457,7 @@ Compose file-based secrets, mounted under `/run/secrets/`:
 |---|---|
 | `update-center.key`, `update-center.cert` | `uc` generate |
 | `root-ca.crt` | `uc` generate (not secret, but distributed alongside) |
-| `artifactory_username`, `artifactory_password` | `uc` generate and doctor |
+| `repo_username`, `repo_password` | `repo-adapter`; also `uc` generate and doctor when `REPO_ADAPTER` is off |
 | `github_username`, `github_token` | `uc` generate (optional) |
 | `download_proxy_auth` | `web` (mounted always; read only when `DOWNLOAD_ACCESS=proxy`) |
 
@@ -478,13 +493,15 @@ What the source Artifactory repository must contain:
 3. **Core:** `org/jenkins-ci/main/jenkins-war/<v>/jenkins-war-<v>.war` and `.pom` for each core
    version to offer. Without them the site offers no core and has no tiers.
 4. A **service account** that can run AQL against the repository (spike S1).
-   The generator sends the AQL query with credentials up front, but it answers file-download
-   challenges only when the port in `ARTIFACTORY_URL` equals the connection's port
-   (`ArtifactoryRepositoryImpl.java`, `AuthenticatorImpl`). `URI.getPort()` is -1 for a URL
-   without an explicit port, so `https://artifactory.corp/…` would never send credentials for
-   manifests and POMs. `uc` therefore always passes `ARTIFACTORY_URL` to the jar with an explicit
-   port (`:443` / `:80` added when missing). Redirects to `DOWNLOAD_BACKEND_URL` still use the URL
-   as configured.
+   The generator sends the AQL query with credentials up front but cannot authenticate file reads:
+   `AuthenticatorImpl` throws on the null requesting site Java's `HttpClient` passes (§2; found by
+   the repo-adapter's integration test, 2026-09-23). With the repo-adapter on, the air-gapped
+   default, this does not matter. With it off, the repository must allow anonymous reads of POMs
+   and archive entries. `uc` still passes `REPO_URL` to the jar with an explicit port (`:443` / `:80`
+   added when missing), which that authenticator's port check would need. Redirects to
+   `DOWNLOAD_BACKEND_URL` still use the URL as configured.
+   With the repo-adapter, items 2 and 3 relax: POMs are optional wherever the archive embeds one
+   (repo-adapter spec §4.2).
 5. Parent POMs are optional. Without them, SCM links for some plugins may be missing (a warning
    from the generator).
 
@@ -512,7 +529,9 @@ It exits non-zero when anything will be dropped. `uc generate` includes a summar
 | `GENERATE_SCHEDULE` | `0 */6 * * *` | cron, used by the scheduler |
 | `RESOURCES_SOURCE`, `RESOURCES_REF`, `RESOURCES_URL`, `RESOURCES_SHA256` | §6, §7.1 | |
 | `POPULARITY_JSON_URL`, `TOOL_INSTALLERS_URL` | §7.1 | |
-| `ARTIFACTORY_URL`, `ARTIFACTORY_API_URL`, `ARTIFACTORY_REPOSITORY` | §7.1 | passed to the jar |
+| `REPO_TYPE`, `REPO_URL`, `REPO_API_URL`, `REPO_KEY` | §7.1 | the repository; the jar gets the adapter's URL when it is on |
+| `REPO_ADAPTER`, `REPO_ADAPTER_URL`, `REPO_ADAPTER_DIR`, `REPO_CA_FILE`, `REPO_MAX_ARCHIVE_MB` | repo-adapter spec §6 | |
+| `CORE_AGE_DAYS` | §7.1 | passed to the jar (patch 0002) |
 | `DOWNLOAD_BACKEND`, `DOWNLOAD_BACKEND_URL`, `DOWNLOAD_ACCESS` | §7.1 | |
 | `DOWNLOAD_PROXY_CA_FILE`, `DOWNLOAD_PROXY_AUTH_FILE` | system CA bundle, `/run/secrets/download_proxy_auth` | `web`, only with `DOWNLOAD_ACCESS=proxy` |
 | `RETAIN_RELEASES` | `5` | |
@@ -530,15 +549,16 @@ Replaces the current `generator/`, `httpd/`, `docker-compose.yml`, `README.md` a
 
 ```
 Makefile                 build · test · it-online · it-airgapped · it-full · upstream-diff
-compose.yaml             web + scheduler; uc under profile "tools" for one-shot commands
-compose.airgapped.yaml   override: extra_hosts fast-fail entries for uc and scheduler
+compose.yaml             web + scheduler + repo-adapter; uc under profile "tools" for one-shot commands
+compose.airgapped.yaml   override: extra_hosts fast-fail entries; repository credentials for the adapter only
 .env.online.example
 .env.airgapped.example
 uc/
   Dockerfile             multi-stage: patched jar build → runtime
-  patches/0001-popularity-configurable-and-optional.patch
+  patches/0001-popularity-configurable-and-optional.patch, 0002-core-age-configurable.patch
   uc/                    Python package (cli, preflight, resources, htaccess, args, layout,
-                         downloadmap, validate, publish, status, doctor, pki, schedule)
+                         downloadmap, validate, publish, status, doctor, pki, pom, schedule)
+    repo_adapter/        archive, cache, backends, listing, server
   java/VersionTool.java
   templates/             index.html, htaccess-static
 web/
@@ -550,7 +570,7 @@ config/
 tests/
   unit/                  pytest
   routing/               fixture tree + generated .htaccess against the web image
-  integration/           compose files, fake Artifactory, seed script, Jenkins controllers
+  integration/           compose files, fake Artifactory and Artifact Keeper, seed script, Jenkins controllers
 docs/
   01–05 (ChatGPT, unchanged) · operations.md · superpowers/specs/
 secrets/README.md        everything else in secrets/ is gitignored
@@ -601,6 +621,8 @@ All tests run in containers through `make`, so no local Python or Java is needed
     routed to has `requiredCore` ≤ that controller's version. `jenkins-plugin-cli` installs the
     same plugin.
   - `uc rollback` restores the previous release.
+  - It runs once per repository type, through the repo-adapter, against the same seeded repository
+    served by a fake Artifactory and a fake Artifact Keeper (repo-adapter spec §9).
 - **Full catalog (`make it-full`, run by hand):** a complete online generation that records
   duration, heap use, cache size and site size.
 
@@ -630,6 +652,7 @@ operator checkpoint once those commands exist.
 | S5 | ~~Apache symlink swap~~ **Resolved during planning (2026-09-22):** a `live` swap and the `RewriteMap` behind it are picked up with no restart. Kept as a routing test. | — |
 | S6 | Full-catalog first-run duration, heap and cache size. | Tune `JAVA_TOOL_OPTIONS` defaults; document sizing. |
 | S7 | Does GitHub GraphQL accept username plus token over basic auth (upstream's method)? | Document the token type needed. |
+| S8 | Does the repo-adapter publish from the operator's real Artifact Keeper (repo-adapter spec §9)? | Fix the Artifact Keeper backend against what the real server returns. |
 
 Also verified during planning: the patched 3.18.4 build passes all 45 upstream tests.
 

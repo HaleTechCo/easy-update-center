@@ -6,11 +6,13 @@ The same update center Jenkins uses (`updates.jenkins.io`), in two containers:
   with your own PKI, validates each release and publishes it atomically. It keeps the last five
   releases for rollback.
 - **web**: Apache serving the result, including the `?version=` routing to `dynamic-*` tiers, every
-  upstream JSON file, and download redirects to get.jenkins.io or your Artifactory.
+  upstream JSON file, and download redirects to get.jenkins.io or your repository.
+- **repo-adapter**: reads Artifactory or Artifact Keeper for the generator, and fills in the POMs,
+  descriptions and release dates procurement tends to leave out, from inside each `.hpi`.
 
 Two modes:
 - `online` reads `repo.jenkins-ci.org`.
-- `airgapped` reads your internal Artifactory and skips whatever it cannot reach.
+- `airgapped` reads your internal Artifactory or Artifact Keeper and skips whatever it cannot reach.
 
 ```bash
 make build
