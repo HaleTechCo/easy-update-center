@@ -117,6 +117,34 @@ def test_an_unreadable_archive_is_skipped_and_the_rest_proceed(tmp_path):
                                               "caffeine-api-3.2.4-208.v7e2da_a_7db_82b_.pom"}
 
 
+def test_an_unexpected_failure_skips_only_that_archive(tmp_path):
+    class Exploding(FakeBackend):
+        def facts(self, entry, path_coordinates, *, plugin):
+            if entry.path == f"{AD}.hpi":
+                raise RuntimeError("File is encrypted, password required for extraction")
+            return super().facts(entry, path_coordinates, plugin=plugin)
+
+    backend = Exploding({f"{AD}.hpi": make_hpi(*AD_GAV), f"{CAFFEINE}.hpi": make_hpi(*CAFFEINE_GAV)})
+    index = build_index(backend, Cache(tmp_path / "cache"), key="k", now=NOW)
+    assert index.report.skipped == [
+        {"path": f"{AD}.hpi", "reason": "RuntimeError: File is encrypted, password required for extraction"}]
+    assert {r["name"] for r in index.rows} == {"caffeine-api-3.2.4-208.v7e2da_a_7db_82b_.hpi",
+                                              "caffeine-api-3.2.4-208.v7e2da_a_7db_82b_.pom"}
+
+
+def test_an_unreadable_repository_pom_is_replaced_not_fatal(tmp_path):
+    class Flaky(FakeBackend):
+        def get(self, path):
+            if path.endswith(".pom"):
+                raise RuntimeError("connection reset")
+            return super().get(path)
+
+    backend = Flaky({f"{AD}.hpi": make_hpi(*AD_GAV), f"{AD}.pom": pom_xml(*AD_GAV)})
+    index = build_index(backend, Cache(tmp_path / "cache"), key="k", now=NOW)
+    assert index.report.replaced_poms == [{"path": f"{AD}.pom", "reason": "unreadable: RuntimeError: connection reset"}]
+    assert index.poms[f"{AD}.pom"] == pom_xml(*AD_GAV)  # the embedded copy stands in
+
+
 def test_not_an_archive_is_skipped(tmp_path):
     _, index = index_of({f"{AD}.hpi": NGINX_404}, tmp_path)
     assert index.report.skipped[0]["reason"] == "not a zip archive (no end of central directory record)"

@@ -3,6 +3,8 @@ import datetime as dt
 import hashlib
 import io
 import json
+import socket
+import threading
 import zipfile
 
 import pytest
@@ -17,6 +19,7 @@ from uc.repo_adapter.backends import (
     Http,
     RepoEntry,
     artifactory_time,
+    forwards_credentials,
 )
 
 UTC = dt.timezone.utc
@@ -103,6 +106,45 @@ def test_artifactory_without_range_support_gives_no_date():
     prefix = f"/artifactory/jenkins/{HPI_PATH}"
     with StubServer({("GET", prefix): serve_bytes(data, ranges=False)}) as stub:
         assert artifactory(stub).archive_released(entry(data)) is None
+
+
+def test_protocol_errors_are_backend_errors():
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen(1)
+
+    def reply():
+        connection, _ = listener.accept()
+        connection.recv(65536)
+        connection.sendall(b"garbage\r\n\r\n")  # http.client.BadStatusLine, which is not an OSError
+        connection.close()
+
+    threading.Thread(target=reply, daemon=True).start()
+    try:
+        with pytest.raises(BackendError, match="failed"):
+            Http(None).request(f"http://127.0.0.1:{listener.getsockname()[1]}/x", headers={}, limit=1000)
+    finally:
+        listener.close()
+
+
+def test_a_private_ca_is_added_to_the_system_bundle(pki_material):
+    """An Artifactory behind a private CA may still redirect to object storage with a public certificate."""
+    system = len(Http(None).context.get_ca_certs())
+    assert system > 0
+    assert len(Http(pki_material / "root-ca.crt").context.get_ca_certs()) == system + 1
+
+
+@pytest.mark.parametrize(
+    "old,new,expected",
+    [
+        ("https://art.corp/a", "https://art.corp/b", True),
+        ("http://art.corp/a", "https://art.corp/b", True),  # an upgrade
+        ("https://art.corp/a", "https://s3.example.com/b", False),  # another host
+        ("https://art.corp/a", "http://art.corp/b", False),  # a downgrade would send them in the clear
+    ],
+)
+def test_which_redirects_keep_the_credentials(old, new, expected):
+    assert forwards_credentials(old, new) is expected
 
 
 def test_redirects_to_another_host_drop_the_credentials():

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
+import http.client
 import io
 import json
 import re
@@ -79,21 +80,32 @@ class Response:
     body: bytes
 
 
+def forwards_credentials(old_url: str, new_url: str) -> bool:
+    """Whether a redirect from old_url to new_url may carry the repository credentials: only to the same
+    host, and never from https to http, where they would cross the network in the clear."""
+    old, new = urlsplit(old_url), urlsplit(new_url)
+    return new.hostname == old.hostname and not (old.scheme == "https" and new.scheme != "https")
+
+
 class _NoCredentialsAcrossHosts(urllib.request.HTTPRedirectHandler):
     """Artifactory redirects downloads to object storage; repository credentials must not follow."""
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: D102 - urllib's signature
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
-        if new is not None and urlsplit(newurl).hostname != urlsplit(req.full_url).hostname:
+        if new is not None and not forwards_credentials(req.full_url, newurl):
             new.remove_header("Authorization")
         return new
 
 
 class Http:
     def __init__(self, ca_file: Path | None) -> None:
-        context = ssl.create_default_context(cafile=str(ca_file) if ca_file else None)
+        # REPO_CA_FILE adds to the system bundle: a repository behind a private CA may still redirect
+        # downloads to object storage with a public certificate.
+        self.context = ssl.create_default_context()
+        if ca_file:
+            self.context.load_verify_locations(cafile=str(ca_file))
         self.opener = urllib.request.build_opener(
-            urllib.request.HTTPSHandler(context=context), _NoCredentialsAcrossHosts()
+            urllib.request.HTTPSHandler(context=self.context), _NoCredentialsAcrossHosts()
         )
 
     def request(self, url: str, *, headers: dict[str, str], limit: int, data: bytes | None = None,
@@ -106,9 +118,13 @@ class Http:
                 body = response.read(limit + 1)
                 status, got = response.status, dict(response.headers.items())
         except urllib.error.HTTPError as exc:
-            body, status, got = exc.read(4096), exc.code, dict(exc.headers.items())
-        except (OSError, ValueError) as exc:
-            raise BackendError(f"{method or 'GET'} {url} failed: {exc}") from exc
+            status, got = exc.code, dict(exc.headers.items())
+            try:
+                body = exc.read(4096)
+            except (OSError, http.client.HTTPException):
+                body = b""
+        except (OSError, ValueError, http.client.HTTPException) as exc:
+            raise BackendError(f"{method or 'GET'} {url} failed: {exc!r}") from exc
         if len(body) > limit and not truncate:
             raise BackendError(f"{url} is larger than {limit} bytes")
         return Response(status, {k.lower(): v for k, v in got.items()}, body[:limit] if truncate else body)
@@ -125,8 +141,8 @@ class Http:
                     out.write(chunk)
         except urllib.error.HTTPError as exc:
             raise BackendError(f"GET {url} failed with HTTP {exc.code}") from exc
-        except (OSError, ValueError) as exc:
-            raise BackendError(f"GET {url} failed: {exc}") from exc
+        except (OSError, ValueError, http.client.HTTPException) as exc:
+            raise BackendError(f"GET {url} failed: {exc!r}") from exc
 
 
 class RangeReader(io.RawIOBase):

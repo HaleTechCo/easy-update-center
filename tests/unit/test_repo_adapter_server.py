@@ -131,6 +131,26 @@ def test_a_get_before_any_listing_builds_one(running):
     assert backend.calls[0] == ("list", "")
 
 
+def test_a_listing_that_fails_unexpectedly_answers_502(running):
+    backend, url = running({})
+
+    def explode():
+        raise RuntimeError("boom")
+
+    backend.list = explode
+    assert aql(url)[0] == 502
+
+
+def test_descriptions_are_only_fetched_for_listed_plugins(running):
+    """Forwarding carries the service account, so it must not reach paths the listing does not hold."""
+    backend, url = running({f"{BASE}.hpi": make_hpi(*GAV)}, type="artifactory")
+    aql(url)
+    assert fetch(f"{url}{KEY}/../other-repo/org/x/a/1/a-1.jar!/index.jelly")[0] == 404
+    assert fetch(f"{url}{KEY}/org/x/unlisted/1/unlisted-1.jar!/index.jelly")[0] == 404
+    assert [call for call in backend.calls if call[0] == "jar"] == []
+    assert fetch(f"{url}{KEY}/{BASE}.jar!/index.jelly")[0] == 200  # a listed plugin still works
+
+
 def test_an_idle_adapter_only_answers_health(running):
     _, url = running({}, adapter_on=False)
     assert fetch(url.replace("/artifactory/", "/healthz"), token=None)[0] == 200

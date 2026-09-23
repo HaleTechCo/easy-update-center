@@ -37,6 +37,13 @@ def test_unusable_poms_say_why(data, reason):
     assert unusable_reason(data, GIT) == reason
 
 
+def test_a_latin1_pom_is_usable():
+    data = ('<?xml version="1.0" encoding="ISO-8859-1"?><project><groupId>org.jenkins-ci.plugins</groupId>'
+            "<artifactId>git</artifactId><version>5.2.0</version><name>Plugin by J\u00e9r\u00f4me</name></project>"
+            ).encode("latin-1")
+    assert unusable_reason(data, GIT) is None
+
+
 def test_safe_root_refuses_what_the_byte_check_cannot_see():
     assert safe_root(b"<project/>") is not None
     utf16 = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE p [<!ENTITY x "y">]><project/>'.encode("utf-16")

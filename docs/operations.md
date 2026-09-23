@@ -201,7 +201,8 @@ scheduled runs, or the terminal for `docker compose run --rm uc generate`.
 - An account that can read the repository: for Artifactory, one that can run AQL (a non-admin
   account works); for Artifact Keeper, a user name and API token.
 
-A repository behind a private CA needs its bundle in the `repo-adapter` container:
+A repository behind a private CA needs its bundle in the `repo-adapter` container. It is added to the
+system bundle, not a replacement for it:
 
 ```yaml
 # compose.repo-ca.yaml
