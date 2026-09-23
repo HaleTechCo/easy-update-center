@@ -22,16 +22,17 @@ def jar_environment(settings: Settings, creds: Credentials, base_env: Mapping[st
     env = dict(base_env)
     env.update({
         "DOWNLOADS_ROOT_URL": settings.downloads_root_url,
-        "ARTIFACTORY_URL": settings.artifactory_url_with_port,
-        "ARTIFACTORY_API_URL": settings.artifactory_api_url,
-        "ARTIFACTORY_REPOSITORY": settings.artifactory_repository,
-        "ARTIFACTORY_USERNAME": creds.artifactory_username,
-        "ARTIFACTORY_PASSWORD": creds.artifactory_password,
+        "ARTIFACTORY_URL": settings.source_url,
+        "ARTIFACTORY_API_URL": settings.source_api_url,
+        "ARTIFACTORY_REPOSITORY": settings.repo_key,
+        "ARTIFACTORY_USERNAME": creds.repo_username,
+        "ARTIFACTORY_PASSWORD": creds.repo_password,
         "ARTIFACTORY_CACHEDIR": str(settings.cache_dir),
         "GITHUB_USERNAME": creds.github_username,
         "GITHUB_PASSWORD": creds.github_password,
         "POPULARITY_JSON_URL": settings.popularity_json_url,
         "CERTIFICATE_MINIMUM_VALID_DAYS": str(settings.certificate_minimum_valid_days),
+        "CORE_AGE_DAYS": str(settings.core_age_days),
     })
     return env
 

@@ -11,7 +11,7 @@ from uc.status import read_status, write_status
 def use_env(monkeypatch, tmp_path, secrets_dir):
     values = {
         "MODE": "airgapped", "PUBLIC_URL": "https://uc.example.com",
-        "ARTIFACTORY_URL": "http://artifactory:8081/artifactory/", "ARTIFACTORY_REPOSITORY": "jenkins",
+        "REPO_URL": "http://artifactory:8081/artifactory/", "REPO_KEY": "jenkins", "REPO_ADAPTER": "off",
         "SECRETS_DIR": str(secrets_dir), "UC_DATA_DIR": str(tmp_path / "data"),
         "UC_OVERLAY_DIR": str(tmp_path / "overlay"),
     }

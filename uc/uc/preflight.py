@@ -11,6 +11,7 @@ from .model import Credentials
 from .pki import CertInfo, cert_info, key_matches_cert, verify_chain
 
 GITHUB_PLACEHOLDER = "uc"
+ADAPTER_USERNAME = "uc"
 
 
 class PreflightError(UcError):
@@ -69,14 +70,33 @@ def check_signing(settings: Settings, now: dt.datetime) -> CertInfo:
     return info
 
 
-def load_credentials(settings: Settings) -> Credentials:
-    user = read_secret(settings.artifactory_username_file)
-    password = read_secret(settings.artifactory_password_file)
+def load_repository_credentials(settings: Settings) -> tuple[str, str]:
+    """The repository account; with the adapter on, only the adapter needs it."""
+    user = read_secret(settings.repo_username_file)
+    password = read_secret(settings.repo_password_file)
     if not user or not password:
         raise PreflightError(
-            "Artifactory credentials missing: provide "
-            f"{settings.artifactory_username_file} and {settings.artifactory_password_file}"
+            "Repository credentials missing: provide "
+            f"{settings.repo_username_file} and {settings.repo_password_file}"
         )
+    return user, password
+
+
+def load_adapter_token(settings: Settings) -> str:
+    token = read_secret(settings.repo_adapter_token_file)
+    if not token:
+        raise PreflightError(
+            f"repo-adapter token missing: {settings.repo_adapter_token_file}; "
+            "the repo-adapter service creates it when it starts"
+        )
+    return token
+
+
+def load_credentials(settings: Settings) -> Credentials:
+    if settings.repo_adapter:
+        user, password = ADAPTER_USERNAME, load_adapter_token(settings)
+    else:
+        user, password = load_repository_credentials(settings)
     gh_user = read_secret(settings.github_username_file)
     gh_token = read_secret(settings.github_token_file)
     if gh_user and gh_token:

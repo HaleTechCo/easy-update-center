@@ -74,8 +74,8 @@ class ArtifactSource:
     @classmethod
     def from_settings(cls, settings: Settings, creds: Credentials, *, allow_network: bool) -> "ArtifactSource":
         # Same URL the jar uses, so cache keys (sha256 of the URL path) match.
-        return cls(settings.artifactory_url_with_port, settings.artifactory_repository,
-                   creds.artifactory_username, creds.artifactory_password, settings.cache_dir, allow_network)
+        return cls(settings.source_url, settings.repo_key,
+                   creds.repo_username, creds.repo_password, settings.cache_dir, allow_network)
 
     def pom(self, gav: Gav) -> bytes | None:
         return self._get(self.base + gav.with_extension("pom").maven_path)
@@ -198,8 +198,7 @@ def run_doctor(
     settings: Settings, creds: Credentials, *, fetch: bool, versions: VersionTool,
     query: Callable[..., list[aql.RepoFile]] = aql.query_repository,
 ) -> DoctorReport:
-    files = query(settings.artifactory_api_url, settings.artifactory_repository,
-                  creds.artifactory_username, creds.artifactory_password)
+    files = query(settings.source_api_url, settings.repo_key, creds.repo_username, creds.repo_password)
     report = analyze(aql.classify(files), versions,
                      ArtifactSource.from_settings(settings, creds, allow_network=fetch))
     tiers_file = settings.data_dir / "live" / "tiers.json"
@@ -213,7 +212,8 @@ def run_doctor(
 
 def format_report(report: DoctorReport, settings: Settings) -> str:
     lines = [
-        f"Source: {settings.artifactory_url}{settings.artifactory_repository}",
+        f"Source: {settings.repo_type} repository {settings.repo_key} at {settings.repo_url}"
+        + (" (through repo-adapter)" if settings.repo_adapter else ""),
         f"Plugins with a POM: {report.plugins}",
         "Jenkins cores with a POM: "
         + (", ".join(report.cores) or "none (the site will offer no core and no tiers)"),

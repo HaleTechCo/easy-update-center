@@ -18,8 +18,10 @@ class Tiers:
 
 @dataclass(frozen=True)
 class Credentials:
-    artifactory_username: str
-    artifactory_password: str
+    """What uc and the jar present to Settings.source_url: the repository's account, or the adapter token."""
+
+    repo_username: str
+    repo_password: str
     github_username: str
     github_password: str
     github_placeholder: bool

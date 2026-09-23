@@ -1,4 +1,6 @@
-"""Settings for tests: air-gapped against a fake Artifactory, all state under tmp_path."""
+"""Settings for tests: air-gapped against a fake Artifactory, all state under tmp_path.
+
+The repo-adapter is off unless a test turns it on, so tests read the repository directly."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,8 +12,9 @@ def make_settings(tmp_path: Path, secrets: Path, **env: str) -> Settings:
     base = {
         "MODE": "airgapped",
         "PUBLIC_URL": "https://uc.example.com",
-        "ARTIFACTORY_URL": "http://artifactory:8081/artifactory/",
-        "ARTIFACTORY_REPOSITORY": "jenkins",
+        "REPO_URL": "http://artifactory:8081/artifactory/",
+        "REPO_KEY": "jenkins",
+        "REPO_ADAPTER": "off",
         "SECRETS_DIR": str(secrets),
         "UC_DATA_DIR": str(tmp_path / "data"),
         "UC_OVERLAY_DIR": str(tmp_path / "overlay"),
