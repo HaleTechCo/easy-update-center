@@ -1,0 +1,155 @@
+# Tool configuration only. Nothing here is built or installed from this file - the uc package ships
+# inside the uc image (uc/Dockerfile) - so there is deliberately no [build-system] or [project]
+# table. It holds the settings for the Python tools that can read it; .yamllint and .shellcheckrc
+# stay separate because yamllint and shellcheck cannot.
+#
+# Keep ruff's settings here, not in a ruff.toml: ruff prefers a ruff.toml when both exist, so
+# adding one would silently make every [tool.ruff] table below dead.
+
+[tool.ruff]
+# The uc image runs the distribution's python3, which follows the unpinned eclipse-temurin:21-jre
+# base (currently Ubuntu 26.04, Python 3.14). 3.13 stays below it.
+target-version = "py313"
+line-length = 320
+
+# First-party resolution for isort. `uc` is imported from uc/ (the image puts /opt/uc/python on
+# PYTHONPATH), and the test helpers are imported by bare module name after each suite's conftest or
+# script puts its own directory on sys.path. Without these, those imports sort as third-party.
+src = [".", "uc", "tests/support", "tests/integration", "tests/routing"]
+
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pycache__",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    # Ruff formats fenced Python blocks inside Markdown. Snippets in docs are hand-aligned
+    # for readability, so reformatting them is pure churn on documentation. The pre-commit
+    # hook already limits itself to `types_or: [python, pyi]`; this keeps a bare
+    # `ruff format .` idempotent too.
+    "*.md",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+fixable = ["ALL"]
+task-tags = ["TODO"]
+
+ignore = [
+    ### Ruff recommended if using `ruff format`
+    "COM812", # missing-trailing-comma - ruff itself warns that this conflicts with the
+              # formatter ("may cause unexpected behavior") and prints that warning on every
+              # single run while the rule is selected. The formatter already adds the trailing
+              # commas this rule asks for, so the rule buys nothing and costs a permanent
+              # warning. Listing COM819 alone (the usual pairing) is what produces that noise.
+    "COM819", # prohibited-trailing-comma
+    "D206",   # docstring-tab-indentation
+    "D300",   # triple-single-quotes
+    "E111",   # indentation-with-invalid-multiple
+    "E114",   # indentation-with-invalid-multiple-comment
+    "E117",   # over-indented
+    "E501",   # line-too-long
+    "ISC001", # single-line-implicit-string-concatenation
+    "ISC002", # multi-line-implicit-string-concatenation
+    "Q000",   # bad-quotes-inline-string
+    "Q001",   # bad-quotes-multiline-string
+    "Q002",   # bad-quotes-docstring
+    "Q003",   # avoidable-escaped-quote
+    "Q004",   # unnecessary-escaped-quote
+    "W191",   # tab-indentation
+    ### (Optional) Ruff recommended if using `ruff format`
+    "D203", # incorrect-blank-line-before-class
+    "D211", # blank-line-before-class
+    "D212", # multi-line-summary-first-line
+    "D213", # multi-line-summary-second-line
+
+    # Actually ignore these
+    "C901",    # complex-structure
+    "CPY001",  # missing-copyright-notice - enforced by `select = ["ALL"]` as of ruff 0.16.
+               # No license is set on this repo yet, so there is no notice text to stamp.
+    "ERA001",  # commented-out-code
+    "PLR0911", # too-many-return-statements
+    "PLR0912", # too-many-branches
+    "PLR0913", # too-many-arguments
+    "PLR0915", # too-many-statements
+    "S501",    # request-with-no-cert-validation
+    "S608",    # hardcoded-sql-expression
+    "SIM108",  # if-else-block-instead-of-if-exp
+    "TD002",   # missing-todo-author
+    "TD003",   # missing-todo-link
+
+    # Project-specific: `uc` is an operator CLI and the tests' fakes and fixture builders are
+    # scripts run by hand or by compose. print() IS the interface - status tables and progress go
+    # to stdout on purpose.
+    "T20", # flake8-print
+
+    ### Can remove these later and work through them
+    "ANN",    # flake8-annotations
+    "FIX002", # line-contains-todo
+]
+
+[tool.ruff.lint.per-file-ignores]
+# These modules shell out to the tools the uc image installs - java (update-center2 and the
+# VersionTool), openssl, and upstream's generate-htaccess.sh - so the audit-only subprocess rules
+# are noise here: S603 (subprocess-without-shell-equals-true) fires on every subprocess.run([...]) -
+# all calls use list args and never shell=True - and S607 (start-process-with-partial-path) fires on
+# resolving those tools from PATH, which is the intended behavior inside the image.
+"uc/uc/htaccess.py" = ["S603", "S607"]
+"uc/uc/jar.py" = ["S603", "S607"]
+"uc/uc/pki.py" = ["S603", "S607"]
+"uc/uc/versions.py" = ["S603", "S607"]
+# S310 (suspicious-url-open-usage) audits urlopen for file:// and custom schemes. Every URL these
+# modules open comes from the operator's own configuration (REPO_URL, the upstream URLs, the
+# repo-adapter's backend), never from a request or a downloaded document, so there is no untrusted
+# party that could slip a scheme in.
+"uc/uc/aql.py" = ["S310"]
+"uc/uc/doctor.py" = ["S310"]
+"uc/uc/http.py" = ["S310"]
+"uc/uc/repo_adapter/backends.py" = ["S310"]
+# Same reasoning for the pre-commit hook shims under tools/: they exist to launch other tools
+# (shfmt, golangci-lint, docker, pwsh) resolved from PATH. tools/ is not a package (INP001).
+"tools/*.py" = ["INP001", "S603", "S607"]
+# Tests are not a package (INP001), use bare asserts (S101), and compare against
+# literal expected values (PLR2004) - that is what makes them readable as specs. Individual
+# test functions also skip D103 (missing docstring): the test name already states the expectation
+# ("test_edge_defaults_to_hard"), so a docstring would just restate it. The module still
+# carries its own docstring (D100 applies as normal).
+"tests/**/*.py" = ["INP001", "S101", "PLR2004", "D103"]
+
+### Ruff recommended if using `ruff format`
+[tool.ruff.lint.isort]
+known-first-party = ["uc"]
+force-single-line = false
+force-wrap-aliases = false
+combine-as-imports = false
+lines-after-imports = -1
+lines-between-types = 0
+split-on-trailing-comma = true
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+docstring-code-format = true
+docstring-code-line-length = 120

@@ -24,4 +24,5 @@ docker compose up -d
 
 - Operations: [docs/operations.md](docs/operations.md)
 - Upgrading upstream: [docs/upgrading.md](docs/upgrading.md)
+- Tests: `make test` (unit, web and routing, in containers); lint: pre-commit, see [tools/README.md](tools/README.md)
 - Design: [docs/superpowers/specs/2026-09-22-jenkins-update-center-design.md](docs/superpowers/specs/2026-09-22-jenkins-update-center-design.md)

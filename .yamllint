@@ -1,0 +1,32 @@
+---
+# Repo-wide YAML style lint (yamllint --strict, via the pre-commit `yamllint` hook).
+# The hook matches `types: [yaml]`, so this covers every YAML in the tree - .pre-commit-config.yaml,
+# this file, the compose files at the root and the test stacks under tests/ - and any YAML added
+# later is gated on arrival with no config change.
+extends: default
+
+ignore: |
+  .venv/
+  venv*/
+  .idea/
+  .ruff_cache/
+  .pytest_cache/
+
+rules:
+  # Standardize on 160; yamllint's default 80 is too tight for the hook `entry:` lines.
+  line-length:
+    max: 160
+    level: error
+  # Flow mappings/sequences are written with one inner space in places - allow it.
+  braces:
+    max-spaces-inside: 1
+  brackets:
+    max-spaces-inside: 1
+  # Keep booleans as true/false (mapping keys like "on:" exempt).
+  truthy:
+    allowed-values: ["true", "false"]
+    check-keys: false
+  # Inline comments use a single leading space ("- id: ruff  # ...").
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable

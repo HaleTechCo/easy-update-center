@@ -1,0 +1,11 @@
+# ShellCheck configuration - applies to every shellcheck run in this tree (it walks up to find
+# this file). See https://github.com/koalaman/shellcheck/wiki/Directive.
+#
+# NOTE: `--color` has no rc-file equivalent (it's CLI-only), so color is set on the invocations
+# (e.g. `--color=always` in the pre-commit hook); only the linting rules live here.
+#
+# Covers the web image's entrypoint and healthcheck, the uc launcher (uc/bin/uc) and the web test
+# script - and, because the hook matches `types: [shell]`, any shell script added later.
+
+enable=all       # opt into every optional check (SC2250 brace refs, SC2312 masked returns, ...)
+severity=style   # report down to the lowest (style) level

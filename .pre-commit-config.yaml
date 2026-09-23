@@ -1,0 +1,381 @@
+---
+# Pre-commit hooks for jenkins-update-center. See https://pre-commit.com/.
+#
+# This is deliberately the FULL superset - one strict standard for every file type this tree could
+# plausibly grow, not the subset it needs today: yamllint --strict, shellcheck enable=all /
+# severity=style (see .shellcheckrc), ruff select=ALL (see pyproject.toml), LF line endings enforced.
+#
+# Most hooks gate real files here: the uc package and its tests (ruff), the compose files and test
+# stacks (yamllint, docker compose config), the two Dockerfiles (hadolint) and the web image's shell
+# scripts (shellcheck, shfmt). The Go and PowerShell hooks are INERT - nothing matches them yet - and
+# each is marked "(no-op until ...)" below.
+#
+# DO NOT PRUNE THE INERT HOOKS. They are matched by `types:`, not by a path glob, so each starts
+# gating the instant a matching file appears - with no config change, and without anyone having
+# to argue about what the standard should be at the exact moment they are trying to land a file.
+# A hook added later, under that pressure, is a hook that gets added weaker.
+#
+# There is no test hook. The suites run in containers against images built from this tree, which is
+# too slow for every commit; `make test` is the gate for behavior (see the Makefile).
+#
+# All hooks run via tools installed in the project venv (language: system), so this config
+# does NOT clone any github repos at install or run time.
+#   python -m venv .venv
+#   .venv/Scripts/pip install -r requirements-dev.txt   # Linux: bin/pip
+#   pre-commit install                # run on every git commit
+#   pre-commit run --all-files        # run now
+#
+# IMPORTANT: the venv must be active when you `git commit`, otherwise the hook entries
+# (ruff, check-ast, ...) will not be on PATH and pre-commit will fail with "command not found".
+#
+# NOT pip deps - install separately:
+#   go install mvdan.cc/sh/v3/cmd/shfmt@latest                                    # shfmt
+#   go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest      # golangci-lint
+#   Install-Module -Name PSScriptAnalyzer -Scope CurrentUser                      # psscriptanalyzer
+# The hadolint + docker-compose-config hooks need Docker running; if Docker is down,
+# commit with `git commit --no-verify`.
+#
+# No hook shells out through `bash -c`. On Windows the `bash` on PATH can be WSL bash rather
+# than Git Bash: it has its own PATH (the Windows toolchain is invisible to it) and its own
+# /mnt/c view of the tree (staged paths don't resolve). Hooks that need a working directory, an
+# optional-tool check or a stdin redirect use the small Python shims in tools/ instead, which run
+# on the venv interpreter pre-commit already needs.
+#
+# Skip a single hook for one commit:
+#   SKIP=ruff git commit ...
+#
+# Bypass every hook for one commit (use sparingly):
+#   git commit --no-verify
+
+exclude: |
+    (?x)^(
+      \.git/|
+      \.?venv[^/]*/|
+      \.idea/|
+      \.ruff_cache/|
+      \.pytest_cache/|
+      __pycache__/
+    )
+
+repos:
+    - repo: local
+      hooks:
+          # ── hygiene (pre-commit-hooks package) ──────────────────────────────────
+          # The four fixers that rewrite bytes (trailing-whitespace, end-of-file-fixer,
+          # mixed-line-ending, unicode-gremlins) skip uc/patches/. Those are git patches applied to
+          # update-center2's source at image build time: a blank context line in a patch is a
+          # single space, and every context line has to match upstream byte for byte, so
+          # "cleaning" one makes `git apply` refuse it.
+          - id: trailing-whitespace
+            name: trim trailing whitespace
+            entry: trailing-whitespace-fixer
+            language: system
+            types: [text]
+            exclude: '^uc/patches/'
+
+          - id: end-of-file-fixer
+            name: fix end of files
+            entry: end-of-file-fixer
+            language: system
+            types: [text]
+            exclude: '^uc/patches/'
+
+          # Repo is edited on Windows but everything here runs in Linux containers - force LF so a
+          # stray CRLF can't break a script. .gitattributes is the durable fix; this hook is
+          # the second line of defense.
+          - id: mixed-line-ending
+            name: normalize line endings to LF
+            entry: mixed-line-ending
+            language: system
+            args: ['--fix=lf']
+            types: [text]
+            exclude: '^uc/patches/'
+
+          # --unsafe: parse for syntax only, without constructing tags. compose.airgapped.yaml
+          # uses Compose's `!override` merge tag, which a plain YAML loader rejects outright.
+          # yamllint and the docker-compose-config hooks below still check the files properly.
+          - id: check-yaml
+            name: check yaml
+            entry: check-yaml
+            language: system
+            args: ['--unsafe']
+            types: [yaml]
+
+          - id: check-toml # validates pyproject.toml
+            name: check toml
+            entry: check-toml
+            language: system
+            types: [toml]
+
+          - id: check-json
+            name: check json
+            entry: check-json
+            language: system
+            types: [json]
+
+          - id: check-xml
+            name: check xml
+            entry: check-xml
+            language: system
+            types: [xml]
+
+          - id: check-merge-conflict
+            name: check for merge conflicts
+            entry: check-merge-conflict
+            language: system
+            types: [text]
+
+          # Single 500 KB cap. If this repo ever tracks large fixtures (a plugin .hpi, a cached
+          # update-center.json), add a SECOND scoped hook with a bigger --maxkb rather than
+          # raising this one, so the tight cap keeps applying everywhere else.
+          - id: check-added-large-files
+            name: check for added large files
+            entry: check-added-large-files
+            language: system
+            args: ['--maxkb=500']
+
+          - id: check-ast # parse every staged .py to ensure it's syntactically valid
+            name: check python ast
+            entry: check-ast
+            language: system
+            types: [python]
+
+          - id: check-executables-have-shebangs
+            name: check executables have shebangs
+            entry: check-executables-have-shebangs
+            language: system
+            types: [executable]
+
+          - id: check-shebang-scripts-are-executable
+            name: check shebang scripts are executable
+            entry: check-shebang-scripts-are-executable
+            language: system
+            types: [text]
+
+          - id: check-case-conflict # files differing only in case (Windows/Mac footgun)
+            name: check for case-conflicting filenames
+            entry: check-case-conflict
+            language: system
+
+          - id: check-symlinks # broken symlinks (point at a nonexistent target)
+            name: check for broken symlinks
+            entry: check-symlinks
+            language: system
+            types: [symlink]
+
+          - id: destroyed-symlinks # symlinks replaced with their target's file content
+            name: check for destroyed symlinks
+            entry: destroyed-symlinks
+            language: system
+
+          - id: forbid-new-submodules # block accidental git submodule add
+            name: forbid new submodules
+            entry: forbid-new-submodules
+            language: system
+
+          - id: debug-statements # blocks accidental pdb / breakpoint() commits
+            name: debug statements
+            entry: debug-statement-hook
+            language: system
+            types: [python]
+
+          - id: pretty-format-json
+            name: pretty print json
+            entry: pretty-format-json
+            language: system
+            types: [json]
+            args: ['--autofix', '--no-sort-keys', '--no-ensure-ascii', '--indent=4']
+
+          # ── secrets ─────────────────────────────────────────────────────────────
+          # Catches PEM `BEGIN ... PRIVATE KEY` blocks - and ONLY those. It cannot see an
+          # opaque provider token, which is why check-secrets below exists as well.
+          - id: detect-private-key
+            name: detect private keys
+            entry: detect-private-key
+            language: system
+            types: [text]
+
+          # Provider credentials that detect-private-key structurally cannot match: Google
+          # OAuth client secrets (GOCSPX-), API keys, AWS/GitHub/Slack/Stripe tokens, Postgres
+          # URLs carrying a password, an Artifactory API key or reference token, a JWT, and -
+          # the general case - any `scheme://user:pass@host` credentialed URL. Prefix-anchored
+          # rather than entropy-based, so it stays quiet enough to leave on. Mark a deliberate
+          # placeholder or test fixture with an inline "pragma: allowlist secret" comment; see
+          # tools/check_secrets.py.
+          #
+          # Directly relevant here: the repository credentials (REPO_USERNAME/REPO_PASSWORD, the
+          # GitHub token, the download proxy's user:password) belong in secrets/, which is
+          # gitignored - an Artifactory token or a credentialed REPO_URL pasted into a compose
+          # file or an .env example is the realistic failure mode this catches.
+          - id: check-secrets
+            name: check for committed secrets
+            entry: python tools/check_secrets.py
+            language: system
+            types: [text]
+
+          # Documentation is a tree of cross-linked pages, and nothing else here would notice a
+          # link going stale: renaming a heading silently breaks every reference to it, and the
+          # references that rot most quietly are the bare `path/to/page.md#anchor` tokens in .py
+          # and .yaml comments, which nobody re-reads. Checks Markdown links relative to their own
+          # file, and bare tokens in any other file type relative to the repo root.
+          #
+          # WHOLE-TREE, NOT THE STAGED FILES, and that is the whole point of the hook: a commit
+          # renaming a heading touches no other file, so checking only the staged files' OUTGOING
+          # links would never re-check the inbound references aimed at it. `--tracked` makes the
+          # checker enumerate the tracked files itself (`git ls-files`, filtered to .md/.py/.yaml),
+          # and `always_run: true` runs it even for a commit that touches none of those types.
+          - id: check-doc-links
+            name: check documentation links resolve
+            entry: python tools/check_doc_links.py --tracked
+            language: system
+            pass_filenames: false
+            always_run: true
+
+          # ── unicode gremlins (smart quotes / dashes / ellipsis / NBSP / zero-width / BOM / bidi) ─
+          # tools/check_gremlins.py normalizes copy-paste "gremlin" characters to ASCII: smart
+          # quotes -> ' ", en/em dashes -> -, ellipsis -> ..., exotic spaces -> a normal space, and
+          # strips zero-width / soft-hyphen / BOM / bidi controls. --fix rewrites in place + fails so
+          # they get re-staged (like the fixers above). Intentional non-ASCII with no faithful ASCII
+          # form (box drawing, section signs, middle dots, arrows) is NOT on the denylist, so it
+          # passes through untouched.
+          - id: unicode-gremlins
+            name: fix unicode gremlins (smart quotes, dashes, NBSP, zero-width, BOM, bidi)
+            entry: python tools/check_gremlins.py --fix
+            language: system
+            types: [text]
+            exclude: '^uc/patches/'
+
+          # ── shell ───────────────────────────────────────────────────────────────
+          # Matched by type rather than by a path glob, so a shell script added anywhere in the
+          # tree is gated immediately - including extensionless ones like uc/bin/uc, which
+          # pre-commit identifies by their shebang.
+          # shfmt: -i 4 (4-space indent), -sr (space after redirect), -ci (indent switch cases),
+          # -bn (binary ops may start a line), -w (write in place). run_optional.py makes it a
+          # no-op when shfmt isn't on PATH (it's a Go binary, NOT a pip dep).
+          - id: shfmt
+            name: shfmt (shell formatter)
+            entry: python tools/run_optional.py shfmt -i 4 -sr -ci -bn -w
+            language: system
+            types: [shell]
+
+          # shellcheck via shellcheck-py: the PyPI package ships a precompiled shellcheck
+          # binary in the venv's Scripts/ dir, so this works without a system-level install.
+          # Severity + enabled checks come from .shellcheckrc (repo root); --color is CLI-only
+          # (no rc equivalent) so it stays here, and we don't pass --norc, so the rc is read.
+          - id: shellcheck
+            name: shellcheck
+            entry: shellcheck --color=always
+            language: system
+            types: [shell]
+
+          # ── yamllint --strict (config in .yamllint; --strict fails on warnings too) ──
+          - id: yamllint
+            name: yamllint
+            entry: yamllint --strict
+            language: system
+            types: [yaml]
+
+          # ── Python ──────────────────────────────────────────────────────────────
+          # Lint + format via locally-installed ruff. Config in pyproject.toml (select = ALL).
+          # --force-exclude is required because pre-commit passes explicit paths, and ruff
+          # ignores its `exclude` setting for explicitly-passed paths unless forced.
+          - id: ruff
+            name: ruff check
+            entry: ruff check --fix --force-exclude
+            language: system
+            types_or: [python, pyi]
+
+          - id: ruff-format
+            name: ruff format
+            entry: ruff format --force-exclude
+            language: system
+            types_or: [python, pyi]
+
+          # ── Go (no-op until a .go file / go.mod exists) ─────────────────────────
+          # These assume a module at the REPO ROOT. If Go ever lands in a subdirectory
+          # instead, switch the whole-module hooks to `go -C <dir> ...` and golangci-lint to
+          # `python tools/run_in_dir.py <dir> golangci-lint run ./...` (that shim already
+          # exists, for exactly this case), and scope each `files:` pattern to that subtree.
+
+          # gofmt -s (simplify). Fixer pattern: -w rewrites in place, and pre-commit fails any
+          # hook that modifies a file, so the change gets re-staged. gofmt is purely syntactic,
+          # so it takes the staged paths directly and needs no module context.
+          - id: gofmt
+            name: gofmt (format + simplify)
+            entry: python tools/run_optional.py gofmt -l -s -w
+            language: system
+            types: [go]
+
+          # golangci-lint (errcheck, staticcheck, gosec, gocritic, revive, ...). The strict
+          # gate for Go and the slowest Go hook; skip one commit with
+          # `SKIP=golangci-lint git commit ...`. Add a .golangci.yml when Go arrives.
+          - id: golangci-lint
+            name: golangci-lint
+            entry: python tools/run_optional.py golangci-lint run ./...
+            language: system
+            pass_filenames: false
+            files: '\.go$|^go\.(mod|sum)$|^\.golangci\.ya?ml$'
+
+          # Compile everything, including packages whose only caller changed. golangci-lint
+          # type-checks too, but a clean `go build` is the unambiguous signal.
+          - id: go-build
+            name: go build ./...
+            entry: python tools/run_optional.py go build ./...
+            language: system
+            pass_filenames: false
+            files: '\.go$|^go\.(mod|sum)$'
+
+          - id: go-test
+            name: go test ./...
+            entry: python tools/run_optional.py go test ./...
+            language: system
+            pass_filenames: false
+            files: '\.go$|^go\.(mod|sum)$'
+
+          # Keep go.mod/go.sum honest. -diff exits non-zero and prints the patch instead of
+          # writing it, so the fix stays a deliberate `go mod tidy`.
+          - id: go-mod-tidy
+            name: go mod tidy (check)
+            entry: python tools/run_optional.py go mod tidy -diff
+            language: system
+            pass_filenames: false
+            files: '^(go\.mod|go\.sum)$|\.go$'
+
+          # ── Docker (needs Docker running) ───────────────────────────────────────
+          # hadolint lints uc/Dockerfile and web/Dockerfile (piped via stdin by run_hadolint.py;
+          # inline `# hadolint ignore=` directives in the Dockerfile apply). Takes the staged paths,
+          # so it covers a Dockerfile anywhere in the tree.
+          - id: hadolint
+            name: hadolint (Dockerfile)
+            entry: python tools/run_hadolint.py
+            language: system
+            files: '(^|/)Dockerfile([^/]*)$'
+
+          # Schema-validate the compose files before they're committed: the base stack on its own,
+          # and with the air-gapped overlay merged on top, which is how `make compose-check` and a
+          # deployment read it. --no-interpolate skips ${VAR} substitution so it validates
+          # structure without an env file or the required (:?) variables. `make compose-check`
+          # still does the full interpolated check plus the network and secret isolation asserts.
+          - id: docker-compose-config
+            name: docker compose config (validate)
+            entry: python tools/run_optional.py docker compose -f compose.yaml config -q --no-interpolate
+            language: system
+            pass_filenames: false
+            files: '^compose\.yaml$'
+
+          - id: docker-compose-config-airgapped
+            name: docker compose config (validate, air-gapped overlay)
+            entry: python tools/run_optional.py docker compose -f compose.yaml -f compose.airgapped.yaml config -q --no-interpolate
+            language: system
+            pass_filenames: false
+            files: '^compose(\.airgapped)?\.yaml$'
+
+          # ── PowerShell (no-op until a .ps1 file exists) ─────────────────────────
+          # Lint .ps1 via PSScriptAnalyzer (errors only). Best-effort: the Python shim skips
+          # (exit 0) when no PowerShell is on PATH, and the .ps1 wrapper skips when the module
+          # isn't installed.
+          - id: psscriptanalyzer
+            name: PSScriptAnalyzer (lint .ps1)
+            entry: python tools/run_psscriptanalyzer.py
+            language: system
+            files: '\.ps1$'
