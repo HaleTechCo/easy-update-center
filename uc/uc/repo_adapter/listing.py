@@ -46,7 +46,13 @@ class Index:
     manifests: dict[str, bytes] = field(default_factory=dict)  # archive path -> MANIFEST.MF
     descriptions: dict[Coordinates, bytes] = field(default_factory=dict)  # plugin -> index.jelly from its .hpi
     jars: dict[str, RepoEntry] = field(default_factory=dict)  # the repository's .jar files (Artifact Keeper)
+    plugins: set[Coordinates] = field(default_factory=set)  # every plugin archive in the rows
     report: Report | None = None
+
+
+def _reason(exc: Exception) -> str:
+    """Our errors carry their own message; anything else also names its type."""
+    return str(exc) if isinstance(exc, (BackendError, ArchiveError)) else f"{type(exc).__name__}: {exc}"
 
 
 def _row(key: str, directory: str, name: str, *, sha256: str, sha1: str, size: int, created: str,
@@ -106,8 +112,8 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
         try:
             facts = _facts(backend, cache, entry, coordinates, plugin)
             sha1 = _sha1(backend, cache, entry)
-        except (BackendError, ArchiveError) as exc:
-            report.skipped.append({"path": entry.path, "reason": str(exc)})
+        except Exception as exc:  # one bad archive must not stop the listing: it is dropped and reported
+            report.skipped.append({"path": entry.path, "reason": _reason(exc)})
             continue
         if plugin and facts.coordinates and facts.coordinates != coordinates:
             correct = Gav(*facts.coordinates, entry.extension).maven_path
@@ -122,6 +128,8 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
             report.dates_from_repository.append({"path": entry.path, "reason": reason})
         index.rows.append(_row(key, entry.directory, entry.name, sha256=entry.sha256, sha1=sha1, size=entry.size,
                                created=created, modified=modified))
+        if plugin:
+            index.plugins.add(coordinates)
         if facts.manifest is not None:
             index.manifests[entry.path] = facts.manifest
         if plugin and facts.description is not None:
@@ -132,8 +140,8 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
             try:
                 verdict = _pom_verdict(backend, cache, real, coordinates)
                 real_sha1 = _sha1(backend, cache, real) if verdict is None else ""
-            except BackendError as exc:
-                verdict = f"unreadable: {exc}"
+            except Exception as exc:
+                verdict = f"unreadable: {_reason(exc)}"
             if verdict is None:
                 index.poms[pom_path] = None
                 index.rows.append(_row(key, real.directory, real.name, sha256=real.sha256, sha1=real_sha1,
@@ -159,8 +167,8 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
         try:
             verdict = _pom_verdict(backend, cache, entry, (gav.group_id, gav.artifact_id, gav.version))
             sha1 = _sha1(backend, cache, entry) if verdict is None else ""
-        except BackendError as exc:
-            verdict, sha1 = f"unreadable: {exc}", ""
+        except Exception as exc:
+            verdict, sha1 = f"unreadable: {_reason(exc)}", ""
         if verdict is None:
             index.poms[path] = None
             index.rows.append(_row(key, entry.directory, entry.name, sha256=entry.sha256, sha1=sha1,

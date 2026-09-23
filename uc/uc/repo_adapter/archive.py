@@ -5,6 +5,7 @@ import datetime as dt
 import io
 import struct
 import zipfile
+import zlib
 from dataclasses import dataclass
 from typing import BinaryIO, Callable
 
@@ -86,8 +87,8 @@ def read_entry(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
     try:
         with archive.open(info) as entry:
             data = entry.read(limit + 1)
-    except (zipfile.BadZipFile, OSError, ValueError, NotImplementedError) as exc:
-        raise ArchiveError(f"unreadable entry {name}: {exc}") from exc
+    except (zipfile.BadZipFile, OSError, ValueError, NotImplementedError, RuntimeError, zlib.error, EOFError) as exc:
+        raise ArchiveError(f"unreadable entry {name}: {exc}") from exc  # RuntimeError: encrypted
     if len(data) > limit:
         raise ArchiveError(f"{name} is larger than {limit} bytes")
     return data

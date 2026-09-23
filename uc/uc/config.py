@@ -103,7 +103,10 @@ class Settings:
 
     @property
     def cache_dir(self) -> Path:
-        return self.data_dir / "cache" / "artifactory"
+        """The generator's download cache. Its keys are URL paths, and /artifactory/<key>/... is the same
+        with the adapter on or off, so each gets its own directory: toggling REPO_ADAPTER never reuses what
+        the other one cached (an HTML "POM" fetched directly, say)."""
+        return self.data_dir / "cache" / ("repo-adapter" if self.repo_adapter else "artifactory")
 
     @property
     def source_url(self) -> str:

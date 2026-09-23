@@ -52,7 +52,7 @@ services:
       - /tmp
     volumes:
       - uc-data:/data
-    networks: [default, repo]
+    networks: [repo, repo-egress]
     secrets:
       - repo_username
       - repo_password
@@ -75,9 +75,11 @@ services:
 
 networks:
   default: {}
-  # uc, scheduler and the adapter only: the internet-facing web container cannot reach the adapter.
+  # uc, scheduler and the adapter only. The adapter reaches the repository through repo-egress and is
+  # on no network web is on, so the internet-facing web container cannot reach it (make compose-check).
   repo:
     internal: true
+  repo-egress: {}
 
 volumes:
   uc-data:

@@ -76,6 +76,24 @@ def test_a_lying_size_header_is_refused():
         read_entry(open_archive(io.BytesIO(bytes(data))), "entry", 1024)
 
 
+def test_corrupt_and_encrypted_entries_are_archive_errors():
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("entry", b"x" * 4096)
+    corrupt = bytearray(buffer.getvalue())
+    local = corrupt.find(b"PK\x03\x04")
+    name_length, extra_length = struct.unpack("<HH", corrupt[local + 26:local + 30])
+    start = local + 30 + name_length + extra_length
+    corrupt[start:start + 8] = b"\xff" * 8  # an invalid deflate stream: zlib.error
+    with pytest.raises(ArchiveError):
+        read_entry(open_archive(io.BytesIO(bytes(corrupt))), "entry", 1 << 20)
+    encrypted = bytearray(zip_of({"entry": b"secret"}))
+    for signature, flag in ((b"PK\x03\x04", 6), (b"PK\x01\x02", 8)):  # bit 0 of the flags: encrypted
+        encrypted[encrypted.find(signature) + flag] |= 1
+    with pytest.raises(ArchiveError):  # zipfile raises RuntimeError without a password
+        read_entry(open_archive(io.BytesIO(bytes(encrypted))), "entry", 1 << 20)
+
+
 def test_archive_date_prefers_the_extended_timestamp():
     stamp = int(dt.datetime(2023, 11, 18, 20, 14, tzinfo=UTC).timestamp())
     with_unix = open_archive(io.BytesIO(make_hpi(*GIT, unix_time=stamp)))

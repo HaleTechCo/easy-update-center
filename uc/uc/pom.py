@@ -1,9 +1,13 @@
 """Reading untrusted POMs safely, and deciding whether one belongs to a path (repo-adapter spec §4.2 rule 3)."""
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 
 Coordinates = tuple[str, str, str]  # groupId, artifactId, version
+# Encodings expat reads natively that are ASCII-compatible, so the byte check below still sees every
+# declaration. Old POMs sometimes declare ISO-8859-1 for a developer's name.
+_SINGLE_BYTE = re.compile(rb"""^\s*<\?xml[^>]*\sencoding=["'](iso-8859-1|latin-?1|us-ascii)["']""", re.IGNORECASE)
 
 
 def declares_entities(data: bytes) -> bool:
@@ -15,15 +19,19 @@ def safe_root(data: bytes) -> ET.Element | None:
 
     Real Maven POMs never declare a DOCTYPE or entities; refusing them avoids entity-expansion
     tricks without a third-party parser (ElementTree never resolves external entities). The byte
-    check only sees declarations in an ASCII-compatible encoding, so NUL bytes and anything that is
-    not valid UTF-8 (UTF-16, for one) are refused before it.
+    check only sees declarations in an ASCII-compatible encoding, so NUL bytes (UTF-16, UTF-32) are
+    refused, and so is anything that is neither UTF-8 nor declared ISO-8859-1 or US-ASCII.
     """
     if b"\x00" in data or declares_entities(data):
         return None
     try:
         data.decode("utf-8")
+    except UnicodeDecodeError:
+        if not _SINGLE_BYTE.match(data):
+            return None
+    try:
         return ET.fromstring(data)
-    except (UnicodeDecodeError, ET.ParseError):
+    except ET.ParseError:
         return None
 
 

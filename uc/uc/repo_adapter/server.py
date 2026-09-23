@@ -19,8 +19,8 @@ from ..aql import AQL_TEMPLATE, RepoFile, to_gav
 from ..config import Settings, read_secret
 from ..preflight import ADAPTER_USERNAME, load_repository_credentials
 from ..timeutil import utcnow
-from .archive import MANIFEST, ArchiveError
-from .backends import ArtifactKeeperBackend, ArtifactoryBackend, Backend, BackendError, Http
+from .archive import MANIFEST
+from .backends import ArtifactKeeperBackend, ArtifactoryBackend, Backend, Http
 from .cache import Cache
 from .listing import Index, build_index, write_report
 
@@ -80,6 +80,9 @@ class Adapter:
         gav = to_gav(RepoFile(directory, name))
         if gav is None or gav.extension != "jar":
             return None
+        coordinates = (gav.group_id, gav.artifact_id, gav.version)
+        if coordinates not in index.plugins:  # never forward a path the listing does not hold, ".." included
+            return None
         jar = index.jars.get(jar_path)
         if self.backend.type == "artifactory":
             found = self.backend.jar_description(jar_path)
@@ -91,7 +94,7 @@ class Adapter:
             found = self.cache.description(jar.sha256)
             if found is not None:
                 return found
-        return index.descriptions.get((gav.group_id, gav.artifact_id, gav.version))
+        return index.descriptions.get(coordinates)
 
 
 def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
@@ -150,9 +153,9 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 else:
                     self.log_message("refused archive entry %s!/%s", archive, entry)
                     data = None
-            except (BackendError, ArchiveError) as exc:
-                self.log_message("GET %s failed: %s", path, exc)
-                return self._send(502, str(exc).encode(), "text/plain")
+            except Exception as exc:  # noqa: BLE001 - any failure is the repository's, reported as a 502
+                self.log_message("GET %s failed: %r", path, exc)
+                return self._send(502, b"repository error\n", "text/plain")
             return self._send(200, data) if data is not None else self._send(404)
 
         do_HEAD = do_GET
@@ -171,9 +174,9 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 return self._send(400, b"unsupported query\n", "text/plain")
             try:
                 rows = adapter.refresh().rows
-            except (BackendError, ArchiveError) as exc:
-                self.log_message("listing failed: %s", exc)
-                return self._send(502, str(exc).encode(), "text/plain")
+            except Exception as exc:  # noqa: BLE001 - any failure is the repository's, reported as a 502
+                self.log_message("listing failed: %r", exc)
+                return self._send(502, b"repository error\n", "text/plain")
             body = {"results": rows, "range": {"start_pos": 0, "end_pos": len(rows), "total": len(rows)}}
             return self._send(200, json.dumps(body).encode(), "application/json")
 

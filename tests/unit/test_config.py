@@ -93,6 +93,12 @@ def test_artifact_keeper_refuses_the_adapter_off():
         load_settings({**KEEPER, "REPO_ADAPTER": "off"})
 
 
+def test_the_generator_cache_is_separate_with_the_adapter():
+    """Cache keys are URL paths, and /artifactory/<key>/... is the same with the adapter on or off."""
+    assert load_settings(AIRGAPPED).cache_dir == Path("/data/cache/repo-adapter")
+    assert load_settings({**AIRGAPPED, "REPO_ADAPTER": "off"}).cache_dir == Path("/data/cache/artifactory")
+
+
 def test_adapter_settings_can_be_overridden():
     s = load_settings({
         **AIRGAPPED, "REPO_ADAPTER_URL": "http://127.0.0.1:9999/artifactory", "REPO_ADAPTER_DIR": "/state",

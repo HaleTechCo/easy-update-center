@@ -50,10 +50,18 @@ secrets-placeholders:
 	@echo "secrets/: created any missing credential files (empty means 'not set')"
 
 # UC_ENV_FILE selects the services' env_file; --env-file only feeds compose's own interpolation.
-compose-check:
+# check_isolation.py asserts the network and secret boundaries the repo-adapter relies on.
+ISOLATION = docker run -i --rm -v "$(CURDIR)/tests:/tests:ro" --entrypoint python3 $(UC_TEST_IMAGE) \
+  /tests/compose/check_isolation.py
+
+compose-check: build-uc
 	UC_ENV_FILE=.env.online.example docker compose --env-file .env.online.example config --quiet
 	UC_ENV_FILE=.env.airgapped.example docker compose --env-file .env.airgapped.example \
 	  -f compose.yaml -f compose.airgapped.yaml config --quiet
+	UC_ENV_FILE=.env.online.example docker compose --env-file .env.online.example --profile tools \
+	  config --format json | $(ISOLATION) online
+	UC_ENV_FILE=.env.airgapped.example docker compose --env-file .env.airgapped.example \
+	  -f compose.yaml -f compose.airgapped.yaml --profile tools config --format json | $(ISOLATION) airgapped
 
 IT_DIR = tests/integration
 IT_AIR = docker compose -f $(IT_DIR)/airgapped.yaml --env-file $(IT_DIR)/.versions.env

@@ -104,8 +104,9 @@ central directory):
 
 - `repo-adapter` is a new Compose service running `uc repo-adapter` from the existing `uc` image
   (Python 3.14, standard library only, `http.server.ThreadingHTTPServer`). It listens on port 8081 of
-  a new `internal: true` network, `repo`, joined only by `uc`, `scheduler` and itself. It also joins
-  the default network to reach the repository. `web` is not attached to `repo`. In air-gapped mode,
+  a new `internal: true` network, `repo`, joined only by `uc`, `scheduler` and itself. It reaches the
+  repository through a network of its own, `repo-egress`, and shares no network with `web`, which
+  `make compose-check` asserts. In air-gapped mode,
   `compose.airgapped.yaml` gives it the same `extra_hosts` fast-fail entries as `uc` and `scheduler`
   (main spec §7.3).
 - It is the only code that knows repository types. The generator and `uc`'s own AQL client
@@ -260,9 +261,10 @@ Archives are treated as untrusted input.
 - **File reads need none**, because upstream cannot answer a challenge (§2). They serve only POMs,
   manifests and descriptions, never archives, and only on the internal `repo` network, which the
   internet-facing web container is not attached to.
-- **Redirects** from the repository to another host (Artifactory's object storage) are followed
-  without the `Authorization` header.
-- **TLS** to the repository is verified against the system CA bundle, or `REPO_CA_FILE` when set.
+- **Redirects** from the repository to another host (Artifactory's object storage), or from https to
+  http, are followed without the `Authorization` header.
+- **TLS** to the repository is verified against the system CA bundle, plus `REPO_CA_FILE` when set, so
+  a redirect to object storage with a public certificate still verifies.
 - **Logging.** Credentials are never logged. URLs are logged without userinfo.
 - **Trust is unchanged.** The adapter never adds content from outside the repository. Every derived
   file comes from inside an archive the operator vetted, and signing still happens afterwards with the
