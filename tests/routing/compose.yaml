@@ -36,9 +36,26 @@ services:
     volumes:
       - ../../tests:/tests:ro
 
+  backend-tls:
+    <<: *uc-test
+    entrypoint: ["python3", "/tests/routing/stub_backend.py", "9443", "/tls/chain.pem", "/tls/leaf.key"]
+    depends_on:
+      fixtures:
+        condition: service_completed_successfully
+    volumes:
+      - ../../tests:/tests:ro
+      - {type: volume, source: fixtures, target: /tls, read_only: true, volume: {subpath: tls}}
+
   web-full:
     <<: *web
     environment: {MODE: online, PUBLIC_URL: "http://web-full:8080"}
+    volumes:
+      - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: full}}
+
+  # PUBLIC_URL is not the container's own address: a TLS proxy or a remapped port in front of it.
+  web-public:
+    <<: *web
+    environment: {MODE: online, PUBLIC_URL: "https://updates.example.com"}
     volumes:
       - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: full}}
 
@@ -75,6 +92,20 @@ services:
     volumes:
       - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: artifactory}}
 
+  web-proxy-tls:
+    <<: *web
+    environment:
+      MODE: airgapped
+      PUBLIC_URL: "http://web-proxy-tls:8080"
+      DOWNLOAD_ACCESS: proxy
+      DOWNLOAD_BACKEND_URL: "https://backend-tls:9443/repo"
+      DOWNLOAD_PROXY_CA_FILE: /tls/root.crt
+    secrets:
+      - download_proxy_auth
+    volumes:
+      - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: artifactory}}
+      - {type: volume, source: fixtures, target: /tls, read_only: true, volume: {subpath: tls}}
+
   web-weekly:
     <<: *web
     environment: {MODE: online, PUBLIC_URL: "http://web-weekly:8080"}
@@ -98,7 +129,10 @@ services:
     entrypoint: ["python3", "-m", "pytest", "-p", "no:cacheprovider", "-q", "/tests/routing"]
     depends_on:
       backend: {condition: service_started}
+      backend-tls: {condition: service_started}
       web-full: {condition: service_healthy}
+      web-public: {condition: service_healthy}
+      web-proxy-tls: {condition: service_healthy}
       web-artifactory: {condition: service_healthy}
       web-keeper: {condition: service_healthy}
       web-proxy: {condition: service_healthy}
