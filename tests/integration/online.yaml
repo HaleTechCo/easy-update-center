@@ -7,8 +7,8 @@ services:
     user: "0:0"
     network_mode: none
     environment:
-      ARTIFACTORY_USERNAME: ${ARTIFACTORY_USERNAME:?set ARTIFACTORY_USERNAME (a Jenkins community account)}
-      ARTIFACTORY_PASSWORD: ${ARTIFACTORY_PASSWORD:?set ARTIFACTORY_PASSWORD}
+      REPO_USERNAME: ${REPO_USERNAME:?set REPO_USERNAME (a Jenkins community account)}
+      REPO_PASSWORD: ${REPO_PASSWORD:?set REPO_PASSWORD}
       GITHUB_USERNAME: ${GITHUB_USERNAME:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     entrypoint:
@@ -16,8 +16,8 @@ services:
       - -c
       - >-
         uc pki init --out /pki &&
-        printf %s "$$ARTIFACTORY_USERNAME" > /pki/artifactory_username &&
-        printf %s "$$ARTIFACTORY_PASSWORD" > /pki/artifactory_password &&
+        printf %s "$$REPO_USERNAME" > /pki/repo_username &&
+        printf %s "$$REPO_PASSWORD" > /pki/repo_password &&
         printf %s "$$GITHUB_USERNAME" > /pki/github_username &&
         printf %s "$$GITHUB_TOKEN" > /pki/github_token &&
         chmod -R a+rX /pki

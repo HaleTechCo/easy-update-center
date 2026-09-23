@@ -20,7 +20,10 @@ expect_exit() {  # expect_exit CODE MESSAGE [docker run args...]
 
 expect_exit 64 "PUBLIC_URL must be set" -e MODE=online
 expect_exit 64 "MODE must be online or airgapped" -e MODE=bogus -e PUBLIC_URL=http://uc
-expect_exit 64 "set DOWNLOAD_BACKEND_URL, or ARTIFACTORY_URL and ARTIFACTORY_REPOSITORY" -e MODE=airgapped -e PUBLIC_URL=http://uc
+expect_exit 64 "set DOWNLOAD_BACKEND_URL, or REPO_URL and REPO_KEY" -e MODE=airgapped -e PUBLIC_URL=http://uc
+expect_exit 64 "REPO_TYPE must be artifactory or artifact-keeper" -e MODE=online -e PUBLIC_URL=http://uc -e REPO_TYPE=nexus
+expect_exit 64 "REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on" -e MODE=airgapped -e PUBLIC_URL=http://uc \
+  -e REPO_TYPE=artifact-keeper -e REPO_URL=http://ak -e REPO_KEY=jenkins -e REPO_ADAPTER=off
 expect_exit 64 "DOWNLOAD_BACKEND must be mirror or artifactory" -e MODE=online -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=s3
 expect_exit 64 "needs username:password" -e MODE=online -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy
 expect_exit 64 "TLS_CERT_FILE and TLS_KEY_FILE must both be readable" -e MODE=online -e PUBLIC_URL=http://uc -e TLS_CERT_FILE=/nope

@@ -45,7 +45,7 @@ pki-init: build-uc
 
 secrets-placeholders:
 	@mkdir -p secrets
-	@for f in artifactory_username artifactory_password github_username github_token download_proxy_auth; do \
+	@for f in repo_username repo_password github_username github_token download_proxy_auth; do \
 	  [ -e secrets/$$f ] || : > secrets/$$f; done
 	@echo "secrets/: created any missing credential files (empty means 'not set')"
 
@@ -72,14 +72,14 @@ it-clean:
 	docker compose -f $(IT_DIR)/airgapped.yaml --profile seed down -v --remove-orphans
 	# Compose interpolates online.yaml's required (:?) vars even for `down`, which never starts
 	# the pki service that actually needs them, so harmless placeholders are enough here.
-	ARTIFACTORY_USERNAME=unused ARTIFACTORY_PASSWORD=unused \
+	REPO_USERNAME=unused REPO_PASSWORD=unused \
 	  docker compose -f $(IT_DIR)/online.yaml down -v --remove-orphans
 
 IT_ONLINE = docker compose -f $(IT_DIR)/online.yaml
 
 it-online: build
-	@test -n "$$ARTIFACTORY_USERNAME" -a -n "$$ARTIFACTORY_PASSWORD" || \
-	  { echo "export ARTIFACTORY_USERNAME and ARTIFACTORY_PASSWORD (a Jenkins community account)"; exit 2; }
+	@test -n "$$REPO_USERNAME" -a -n "$$REPO_PASSWORD" || \
+	  { echo "export REPO_USERNAME and REPO_PASSWORD (a Jenkins community account)"; exit 2; }
 	@mkdir -p $(IT_DIR)/.results
 	$(IT_ONLINE) run --rm pki
 	$(IT_ONLINE) run --rm driver $(ARGS); rc=$$?; \

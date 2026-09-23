@@ -47,8 +47,19 @@ services:
     environment:
       MODE: airgapped
       PUBLIC_URL: "http://web-artifactory:8080"
-      ARTIFACTORY_URL: "http://artifactory.internal/artifactory/"
-      ARTIFACTORY_REPOSITORY: jenkins
+      REPO_URL: "http://artifactory.internal/artifactory/"
+      REPO_KEY: jenkins
+    volumes:
+      - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: artifactory}}
+
+  web-keeper:
+    <<: *web
+    environment:
+      MODE: airgapped
+      PUBLIC_URL: "http://web-keeper:8080"
+      REPO_TYPE: artifact-keeper
+      REPO_URL: "http://keeper.internal/"
+      REPO_KEY: jenkins
     volumes:
       - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: artifactory}}
 
@@ -89,6 +100,7 @@ services:
       backend: {condition: service_started}
       web-full: {condition: service_healthy}
       web-artifactory: {condition: service_healthy}
+      web-keeper: {condition: service_healthy}
       web-proxy: {condition: service_healthy}
       web-weekly: {condition: service_healthy}
       web-stable: {condition: service_healthy}

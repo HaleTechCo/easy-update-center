@@ -8,9 +8,20 @@ die() { echo "entrypoint: $*" >&2; exit 64; }
 export PUBLIC_URL="${PUBLIC_URL%/}"
 MODE="${MODE:-}"
 case "${MODE}" in
-  online)    default_backend=mirror; default_artifactory=https://repo.jenkins-ci.org/; default_repository=releases ;;
-  airgapped) default_backend=artifactory; default_artifactory=; default_repository= ;;
+  online)    default_backend=mirror; default_repo_url=https://repo.jenkins-ci.org/; default_repo_key=releases ;;
+  airgapped) default_backend=artifactory; default_repo_url=; default_repo_key= ;;
   *) die "MODE must be online or airgapped (got '${MODE}')" ;;
+esac
+REPO_TYPE="${REPO_TYPE:-artifactory}"
+case "${REPO_TYPE}" in
+  artifactory) ;;
+  artifact-keeper)
+    default_repo_url=; default_repo_key=
+    adapter="${REPO_ADAPTER:-on}"
+    case "${adapter,,}" in
+      0|false|no|off) die "REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on" ;;
+    esac ;;
+  *) die "REPO_TYPE must be artifactory or artifact-keeper (got '${REPO_TYPE}')" ;;
 esac
 
 DOWNLOAD_BACKEND="${DOWNLOAD_BACKEND:-${default_backend}}"
@@ -25,11 +36,14 @@ case "${DOWNLOAD_BACKEND}" in
     if [[ -n "${DOWNLOAD_BACKEND_URL:-}" ]]; then
       backend_url="${DOWNLOAD_BACKEND_URL}"
     else
-      artifactory="${ARTIFACTORY_URL:-${default_artifactory}}"
-      repository="${ARTIFACTORY_REPOSITORY:-${default_repository}}"
-      [[ -n "${artifactory}" && -n "${repository}" ]] \
-        || die "set DOWNLOAD_BACKEND_URL, or ARTIFACTORY_URL and ARTIFACTORY_REPOSITORY"
-      backend_url="${artifactory%/}/${repository}"
+      repo_url="${REPO_URL:-${default_repo_url}}"
+      repo_key="${REPO_KEY:-${default_repo_key}}"
+      [[ -n "${repo_url}" && -n "${repo_key}" ]] || die "set DOWNLOAD_BACKEND_URL, or REPO_URL and REPO_KEY"
+      if [[ "${REPO_TYPE}" == artifact-keeper ]]; then
+        backend_url="${repo_url%/}/maven/${repo_key}"
+      else
+        backend_url="${repo_url%/}/${repo_key}"
+      fi
     fi
     defines+=(-D BACKEND_ARTIFACTORY) ;;
   *) die "DOWNLOAD_BACKEND must be mirror or artifactory (got '${DOWNLOAD_BACKEND}')" ;;

@@ -39,8 +39,8 @@ expiring certificate stops publication before Jenkins would reject the signature
 
 ```bash
 make secrets-placeholders
-printf '%s' 'svc-jenkins-uc' > secrets/artifactory_username
-printf '%s' '…password or API token…' > secrets/artifactory_password
+printf '%s' 'svc-jenkins-uc' > secrets/repo_username
+printf '%s' '…password or API token…' > secrets/repo_password
 # online, recommended: GitHub user and a token without scopes
 printf '%s' 'my-bot' > secrets/github_username
 printf '%s' 'ghp_…' > secrets/github_token
@@ -57,8 +57,8 @@ Compose mounts secret files with their host ownership. The uc containers run as 
 container as uid 33:
 
 ```bash
-sudo chown 10001:10001 secrets/update-center.* secrets/root-ca.crt secrets/artifactory_* secrets/github_*
-sudo chmod 0400 secrets/update-center.key secrets/artifactory_password secrets/github_token
+sudo chown 10001:10001 secrets/update-center.* secrets/root-ca.crt secrets/repo_* secrets/github_*
+sudo chmod 0400 secrets/update-center.key secrets/repo_password secrets/github_token
 sudo chown 33:33 secrets/download_proxy_auth && sudo chmod 0400 secrets/download_proxy_auth
 ```
 
@@ -201,7 +201,7 @@ available for a proxy in front.
 
 | Symptom | Cause and fix |
 |---|---|
-| `Artifactory credentials missing: provide /run/secrets/artifactory_username and /run/secrets/artifactory_password` (preflight), or AQL HTTP 403 / `ARTIFACTORY_USERNAME and ARTIFACTORY_PASSWORD need to be set` from the generator | Credentials missing or not allowed to run AQL (spec S1). |
+| `Repository credentials missing: provide /run/secrets/repo_username and /run/secrets/repo_password` (preflight), or AQL HTTP 403 | Credentials missing or not allowed to run AQL (spec S1). |
 | `PUBLIC_URL must be a bare origin` | Remove the path; give the update center its own hostname. |
 | `signing certificate expires in N days` | Rotate the signing certificate (section 3). |
 | `plugin count N < 0.9 × M` | The source shrank. Check `uc doctor`; if intended, `uc generate --force`. |
