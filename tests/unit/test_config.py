@@ -8,19 +8,26 @@ from uc.errors import ConfigError
 AIRGAPPED = {
     "MODE": "airgapped",
     "PUBLIC_URL": "https://uc.example.com",
-    "ARTIFACTORY_URL": "https://artifactory.corp/artifactory",
-    "ARTIFACTORY_REPOSITORY": "jenkins-local",
+    "REPO_URL": "https://artifactory.corp/artifactory",
+    "REPO_KEY": "jenkins-local",
 }
+KEEPER = {**AIRGAPPED, "REPO_TYPE": "artifact-keeper", "REPO_URL": "https://ak.corp", "REPO_KEY": "jenkins-prod-local"}
 
 
 def test_online_defaults():
     s = load_settings({"MODE": "online", "PUBLIC_URL": "https://uc.example.com/"})
     assert s.public_url == "https://uc.example.com"
     assert s.downloads_root_url == "https://uc.example.com/download"
-    assert s.artifactory_url == "https://repo.jenkins-ci.org/"
-    assert s.artifactory_url_with_port == "https://repo.jenkins-ci.org:443/"
-    assert s.artifactory_api_url == "https://repo.jenkins-ci.org:443/api/"
-    assert s.artifactory_repository == "releases"
+    assert s.repo_type == "artifactory"
+    assert s.repo_url == "https://repo.jenkins-ci.org/"
+    assert s.repo_url_with_port == "https://repo.jenkins-ci.org:443/"
+    assert s.repo_api_url == "https://repo.jenkins-ci.org:443/api/"
+    assert s.repo_key == "releases"
+    assert s.repo_adapter is False
+    assert (s.source_url, s.source_api_url) == ("https://repo.jenkins-ci.org:443/", "https://repo.jenkins-ci.org:443/api/")
+    assert s.core_age_days == 400
+    assert s.repo_max_archive_mb == 512
+    assert s.repo_ca_file is None
     assert s.download_backend == "mirror"
     assert s.download_backend_url == "https://get.jenkins.io"
     assert s.download_access == "redirect"
@@ -38,12 +45,21 @@ def test_online_defaults():
     assert s.data_dir == Path("/data")
     assert s.jar == Path("/opt/uc/generator/update-center2.jar")
     assert s.cache_dir == Path("/data/cache/artifactory")
+    assert s.repo_adapter_dir == Path("/data/repo-adapter")
+    assert s.repo_adapter_token_file == Path("/data/repo-adapter/token")
+    assert s.repo_adapter_report_file == Path("/data/repo-adapter/report.json")
+    assert s.repo_username_file == Path("/run/secrets/repo_username")
 
 
 def test_airgapped_defaults():
     s = load_settings(AIRGAPPED)
-    assert s.artifactory_url == "https://artifactory.corp/artifactory/"
-    assert s.artifactory_url_with_port == "https://artifactory.corp:443/artifactory/"
+    assert s.repo_url == "https://artifactory.corp/artifactory/"
+    assert s.repo_url_with_port == "https://artifactory.corp:443/artifactory/"
+    assert s.repo_adapter is True
+    assert s.repo_adapter_url == "http://repo-adapter:8081/artifactory/"
+    assert (s.source_url, s.source_api_url) == (
+        "http://repo-adapter:8081/artifactory/", "http://repo-adapter:8081/artifactory/api/")
+    assert s.core_age_days == 0
     assert s.download_backend == "artifactory"
     assert s.download_backend_url == "https://artifactory.corp/artifactory/jenkins-local"
     assert s.resources_source == "bundled"
@@ -51,9 +67,48 @@ def test_airgapped_defaults():
     assert s.tool_installers_url == ""
 
 
-def test_airgapped_requires_artifactory():
-    with pytest.raises(ConfigError, match="ARTIFACTORY_URL and ARTIFACTORY_REPOSITORY"):
+def test_airgapped_requires_a_repository():
+    with pytest.raises(ConfigError, match="REPO_URL and REPO_KEY must be set"):
         load_settings({"MODE": "airgapped", "PUBLIC_URL": "https://uc.example.com"})
+
+
+def test_artifact_keeper_defaults():
+    s = load_settings(KEEPER)
+    assert s.repo_type == "artifact-keeper"
+    assert s.repo_url == "https://ak.corp/"
+    assert s.repo_adapter is True
+    assert s.download_backend_url == "https://ak.corp/maven/jenkins-prod-local"
+
+
+def test_artifact_keeper_online_needs_its_own_url_and_forces_the_adapter():
+    with pytest.raises(ConfigError, match="REPO_URL and REPO_KEY must be set"):
+        load_settings({"MODE": "online", "PUBLIC_URL": "https://uc", "REPO_TYPE": "artifact-keeper"})
+    s = load_settings({**KEEPER, "MODE": "online"})
+    assert s.repo_adapter is True
+    assert s.core_age_days == 400
+
+
+def test_artifact_keeper_refuses_the_adapter_off():
+    with pytest.raises(ConfigError, match="REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on"):
+        load_settings({**KEEPER, "REPO_ADAPTER": "off"})
+
+
+def test_adapter_settings_can_be_overridden():
+    s = load_settings({
+        **AIRGAPPED, "REPO_ADAPTER_URL": "http://127.0.0.1:9999/artifactory", "REPO_ADAPTER_DIR": "/state",
+        "REPO_CA_FILE": "/ca/corp.pem", "REPO_MAX_ARCHIVE_MB": "64", "CORE_AGE_DAYS": "400",
+    })
+    assert s.source_url == "http://127.0.0.1:9999/artifactory/"
+    assert s.repo_adapter_token_file == Path("/state/token")
+    assert s.repo_ca_file == Path("/ca/corp.pem")
+    assert (s.repo_max_archive_mb, s.core_age_days) == (64, 400)
+
+
+def test_online_private_artifactory_can_turn_the_adapter_on():
+    s = load_settings({"MODE": "online", "PUBLIC_URL": "https://uc", "REPO_URL": "https://art.corp/artifactory/",
+                       "REPO_KEY": "jenkins", "REPO_ADAPTER": "on"})
+    assert s.repo_adapter is True
+    assert s.source_url == "http://repo-adapter:8081/artifactory/"
 
 
 @pytest.mark.parametrize("mode", ["", "offline"])
@@ -86,7 +141,12 @@ def test_resources_url_required_for_url_source():
         ("DOWNLOAD_BACKEND", "s3", "DOWNLOAD_BACKEND must be one of"),
         ("DOWNLOAD_ACCESS", "cache", "DOWNLOAD_ACCESS must be one of"),
         ("ALLOW_LOCAL_PUBLIC_URL", "maybe", "true or false"),
-        ("ARTIFACTORY_REPOSITORY", 'a"b', "unsupported characters"),
+        ("REPO_KEY", 'a"b', "unsupported characters"),
+        ("REPO_TYPE", "nexus", "REPO_TYPE must be one of artifactory, artifact-keeper"),
+        ("REPO_ADAPTER", "sometimes", "true or false"),
+        ("CORE_AGE_DAYS", "-1", "must be >= 0"),
+        ("CORE_AGE_DAYS", "ten", "must be an integer"),
+        ("REPO_MAX_ARCHIVE_MB", "0", "must be >= 1"),
     ],
 )
 def test_invalid_values_are_rejected(name, value, message):
@@ -107,7 +167,7 @@ def test_backend_url_override_and_extra_args():
 def test_secret_paths_follow_secrets_dir_and_overrides():
     s = load_settings({**AIRGAPPED, "SECRETS_DIR": "/pki", "GITHUB_TOKEN_FILE": "/other/token"})
     assert s.signing_cert_file == Path("/pki/update-center.cert")
-    assert s.artifactory_password_file == Path("/pki/artifactory_password")
+    assert s.repo_password_file == Path("/pki/repo_password")
     assert s.github_token_file == Path("/other/token")
 
 
@@ -124,9 +184,9 @@ def test_with_explicit_port(url, expected):
     assert with_explicit_port(url) == expected
 
 
-def test_credentials_in_artifactory_url_are_rejected():
+def test_credentials_in_repo_url_are_rejected():
     with pytest.raises(ConfigError, match="credentials"):
-        load_settings({**AIRGAPPED, "ARTIFACTORY_URL": "https://u:p@artifactory.corp/"})
+        load_settings({**AIRGAPPED, "REPO_URL": "https://u:p@artifactory.corp/"})
 
 
 def test_read_secret(tmp_path):

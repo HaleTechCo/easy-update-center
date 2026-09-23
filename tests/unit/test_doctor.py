@@ -144,7 +144,8 @@ def test_format_report(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     listing = classify(plugin("orphan", "1.0", "hpi") + plugin("git", "5.2.0", "hpi", "pom"))
     text = format_report(analyze(listing, versions(), FakeSource({}, {})), settings)
-    assert "Source: http://artifactory:8081/artifactory/jenkins" in text
+    assert "Source: artifactory repository jenkins at http://artifactory:8081/artifactory/" in text
+    assert "through repo-adapter" not in text
     assert "Jenkins cores with a POM: none" in text
     assert "Dropped by the generator: 1" in text
     assert "org/jenkins-ci/plugins/orphan/1.0/orphan-1.0.hpi" in text

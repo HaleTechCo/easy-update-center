@@ -5,7 +5,13 @@ import pytest
 from ucsupport import make_settings
 
 from uc.pki import init_pki
-from uc.preflight import PreflightError, check_public_url, check_signing, load_credentials
+from uc.preflight import (
+    PreflightError,
+    check_public_url,
+    check_signing,
+    load_credentials,
+    load_repository_credentials,
+)
 
 NOW = dt.datetime.now(dt.timezone.utc)
 
@@ -77,7 +83,7 @@ def test_check_signing_wrong_root(tmp_path, secrets_dir):
 
 def test_load_credentials_with_github_placeholder(tmp_path, secrets_dir):
     creds = load_credentials(make_settings(tmp_path, secrets_dir))
-    assert (creds.artifactory_username, creds.artifactory_password) == ("uc", "secret")
+    assert (creds.repo_username, creds.repo_password) == ("uc", "secret")
     assert (creds.github_username, creds.github_password, creds.github_placeholder) == ("uc", "uc", True)
 
 
@@ -88,7 +94,26 @@ def test_load_credentials_with_github_token(tmp_path, secrets_dir):
     assert (creds.github_username, creds.github_password, creds.github_placeholder) == ("bot", "ghp_x", False)
 
 
-def test_load_credentials_requires_artifactory(tmp_path, secrets_dir):
-    (secrets_dir / "artifactory_password").write_text("")
-    with pytest.raises(PreflightError, match="Artifactory credentials missing"):
+def test_load_credentials_requires_the_repository_account(tmp_path, secrets_dir):
+    (secrets_dir / "repo_password").write_text("")
+    with pytest.raises(PreflightError, match="Repository credentials missing"):
         load_credentials(make_settings(tmp_path, secrets_dir))
+
+
+def test_load_credentials_uses_the_adapter_token_when_the_adapter_is_on(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER="on")
+    (secrets_dir / "repo_password").write_text("")  # the adapter holds these, not uc
+    settings.repo_adapter_dir.mkdir(parents=True)
+    settings.repo_adapter_token_file.write_text("adapter-token\n")
+    creds = load_credentials(settings)
+    assert (creds.repo_username, creds.repo_password) == ("uc", "adapter-token")
+
+
+def test_load_credentials_explains_a_missing_adapter_token(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER="on")
+    with pytest.raises(PreflightError, match="repo-adapter token missing: .*repo-adapter.token"):
+        load_credentials(settings)
+
+
+def test_load_repository_credentials(tmp_path, secrets_dir):
+    assert load_repository_credentials(make_settings(tmp_path, secrets_dir)) == ("uc", "secret")

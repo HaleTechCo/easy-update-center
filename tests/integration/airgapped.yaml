@@ -66,7 +66,7 @@ services:
       - -c
       - >-
         uc pki init --out /pki && cp /pki/root-ca.crt /trust/ &&
-        printf uc > /pki/artifactory_username && printf uc-secret > /pki/artifactory_password &&
+        printf uc > /pki/repo_username && printf uc-secret > /pki/repo_password &&
         printf uc:uc-secret > /pki/download_proxy_auth && chmod -R a+rX /pki /trust
     volumes:
       - pki:/pki
@@ -97,8 +97,8 @@ services:
     environment:
       MODE: airgapped
       PUBLIC_URL: "http://web:8080"
-      ARTIFACTORY_URL: "http://artifactory:8081/artifactory/"
-      ARTIFACTORY_REPOSITORY: jenkins
+      REPO_URL: "http://artifactory:8081/artifactory/"
+      REPO_KEY: jenkins
     volumes:
       - uc-data:/data:ro
 
@@ -140,8 +140,9 @@ services:
     environment:
       MODE: airgapped
       PUBLIC_URL: "http://web:8080"
-      ARTIFACTORY_URL: "http://artifactory:8081/artifactory/"
-      ARTIFACTORY_REPOSITORY: jenkins
+      REPO_URL: "http://artifactory:8081/artifactory/"
+      REPO_KEY: jenkins
+      REPO_ADAPTER: "off"  # until the repo-adapter service exists (plan Task 11)
       SECRETS_DIR: /pki
       UC_DATA_DIR: /data
       LTS_OLD: ${LTS_OLD:-x}

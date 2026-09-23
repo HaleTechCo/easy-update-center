@@ -24,11 +24,22 @@ def test_jar_environment(tmp_path, secrets_dir):
     assert (env["GITHUB_USERNAME"], env["GITHUB_PASSWORD"]) == ("uc", "uc")
     assert env["POPULARITY_JSON_URL"] == ""
     assert env["CERTIFICATE_MINIMUM_VALID_DAYS"] == "30"
+    assert env["CORE_AGE_DAYS"] == "0"
 
 
 def test_jar_environment_uses_explicit_port(tmp_path, secrets_dir):
-    settings = make_settings(tmp_path, secrets_dir, ARTIFACTORY_URL="https://art.corp/artifactory")
+    settings = make_settings(tmp_path, secrets_dir, REPO_URL="https://art.corp/artifactory")
     assert jar_environment(settings, CREDS, {})["ARTIFACTORY_URL"] == "https://art.corp:443/artifactory/"
+
+
+def test_jar_environment_points_at_the_adapter_when_it_is_on(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER="on", CORE_AGE_DAYS="400")
+    env = jar_environment(settings, Credentials("uc", "token", "uc", "uc", True), {})
+    assert env["ARTIFACTORY_URL"] == "http://repo-adapter:8081/artifactory/"
+    assert env["ARTIFACTORY_API_URL"] == "http://repo-adapter:8081/artifactory/api/"
+    assert env["ARTIFACTORY_REPOSITORY"] == "jenkins"
+    assert (env["ARTIFACTORY_USERNAME"], env["ARTIFACTORY_PASSWORD"]) == ("uc", "token")
+    assert env["CORE_AGE_DAYS"] == "400"
 
 
 def test_java_command(tmp_path, secrets_dir):

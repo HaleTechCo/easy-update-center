@@ -11,6 +11,7 @@ from urllib.parse import urlsplit, urlunsplit
 from .errors import ConfigError
 
 MODES = ("online", "airgapped")
+REPO_TYPES = ("artifactory", "artifact-keeper")
 BACKENDS = ("mirror", "artifactory")
 ACCESS_MODES = ("redirect", "proxy")
 RESOURCE_SOURCES = ("github", "url", "bundled")
@@ -22,6 +23,8 @@ UPSTREAM_POPULARITY_URL = (
     "plugin-installation-trend/latestNumbers.json"
 )
 UPSTREAM_TOOL_INSTALLERS_URL = "https://updates.jenkins.io/updates/"
+DEFAULT_ADAPTER_URL = "http://repo-adapter:8081/artifactory/"
+UPSTREAM_CORE_AGE_DAYS = 400
 _REPOSITORY_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
@@ -37,10 +40,17 @@ class Settings:
     resources_sha256: str
     popularity_json_url: str
     tool_installers_url: str
-    artifactory_url: str
-    artifactory_url_with_port: str
-    artifactory_api_url: str
-    artifactory_repository: str
+    repo_type: str
+    repo_url: str
+    repo_url_with_port: str
+    repo_api_url: str
+    repo_key: str
+    repo_adapter: bool
+    repo_adapter_url: str
+    repo_adapter_dir: Path
+    repo_ca_file: Path | None
+    repo_max_archive_mb: int
+    core_age_days: int
     download_backend: str
     download_backend_url: str
     download_access: str
@@ -58,8 +68,8 @@ class Settings:
     signing_key_file: Path
     signing_cert_file: Path
     root_ca_file: Path
-    artifactory_username_file: Path
-    artifactory_password_file: Path
+    repo_username_file: Path
+    repo_password_file: Path
     github_username_file: Path
     github_token_file: Path
 
@@ -94,6 +104,23 @@ class Settings:
     @property
     def cache_dir(self) -> Path:
         return self.data_dir / "cache" / "artifactory"
+
+    @property
+    def source_url(self) -> str:
+        """Artifactory-style base URL that uc and the jar read: the adapter, or the repository itself."""
+        return self.repo_adapter_url if self.repo_adapter else self.repo_url_with_port
+
+    @property
+    def source_api_url(self) -> str:
+        return self.repo_adapter_url + "api/" if self.repo_adapter else self.repo_api_url
+
+    @property
+    def repo_adapter_token_file(self) -> Path:
+        return self.repo_adapter_dir / "token"
+
+    @property
+    def repo_adapter_report_file(self) -> Path:
+        return self.repo_adapter_dir / "report.json"
 
 
 def _get(env: Mapping[str, str], name: str, default: str = "") -> str:
@@ -175,19 +202,36 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     if not public_url:
         raise ConfigError("PUBLIC_URL must be set")
 
-    artifactory_url = _get(env, "ARTIFACTORY_URL", PUBLIC_ARTIFACTORY_URL if online else "")
-    repository = _get(env, "ARTIFACTORY_REPOSITORY", "releases" if online else "")
-    if not artifactory_url or not repository:
-        raise ConfigError("ARTIFACTORY_URL and ARTIFACTORY_REPOSITORY must be set in airgapped mode")
-    if not _REPOSITORY_RE.match(repository):
-        raise ConfigError(f"ARTIFACTORY_REPOSITORY contains unsupported characters: {repository!r}")
-    artifactory_url = with_trailing_slash(artifactory_url)
-    artifactory_url_with_port = with_explicit_port(artifactory_url)
-    api_url = with_trailing_slash(_get(env, "ARTIFACTORY_API_URL", artifactory_url_with_port + "api/"))
+    repo_type = _choice(env, "REPO_TYPE", "artifactory", REPO_TYPES)
+    public_repo = online and repo_type == "artifactory"
+    repo_url = _get(env, "REPO_URL", PUBLIC_ARTIFACTORY_URL if public_repo else "")
+    repo_key = _get(env, "REPO_KEY", "releases" if public_repo else "")
+    if not repo_url or not repo_key:
+        raise ConfigError(
+            "REPO_URL and REPO_KEY must be set (they default to repo.jenkins-ci.org "
+            "only in online mode with REPO_TYPE=artifactory)"
+        )
+    if not _REPOSITORY_RE.match(repo_key):
+        raise ConfigError(f"REPO_KEY contains unsupported characters: {repo_key!r}")
+    repo_url = with_trailing_slash(repo_url)
+    repo_url_with_port = with_explicit_port(repo_url)
+    api_url = with_trailing_slash(_get(env, "REPO_API_URL", repo_url_with_port + "api/"))
+
+    adapter_default = not online or repo_type == "artifact-keeper"
+    repo_adapter = _bool(env, "REPO_ADAPTER", adapter_default)
+    if repo_type == "artifact-keeper" and not repo_adapter:
+        raise ConfigError("REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on")
+    repo_ca = _get(env, "REPO_CA_FILE")
 
     backend = _choice(env, "DOWNLOAD_BACKEND", "mirror" if online else "artifactory", BACKENDS)
-    default_backend_url = UPSTREAM_MIRROR_URL if backend == "mirror" else artifactory_url + repository
+    if backend == "mirror":
+        default_backend_url = UPSTREAM_MIRROR_URL
+    elif repo_type == "artifact-keeper":
+        default_backend_url = f"{repo_url.rstrip('/')}/maven/{repo_key}"
+    else:
+        default_backend_url = repo_url + repo_key
     backend_url = _get(env, "DOWNLOAD_BACKEND_URL", default_backend_url).rstrip("/")
+    data_dir = Path(_get(env, "UC_DATA_DIR", "/data"))
 
     resources_source = _choice(
         env, "RESOURCES_SOURCE", "github" if online else "bundled", RESOURCE_SOURCES
@@ -217,10 +261,17 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         tool_installers_url=env.get(
             "TOOL_INSTALLERS_URL", UPSTREAM_TOOL_INSTALLERS_URL if online else ""
         ).strip(),
-        artifactory_url=artifactory_url,
-        artifactory_url_with_port=artifactory_url_with_port,
-        artifactory_api_url=api_url,
-        artifactory_repository=repository,
+        repo_type=repo_type,
+        repo_url=repo_url,
+        repo_url_with_port=repo_url_with_port,
+        repo_api_url=api_url,
+        repo_key=repo_key,
+        repo_adapter=repo_adapter,
+        repo_adapter_url=with_trailing_slash(_get(env, "REPO_ADAPTER_URL", DEFAULT_ADAPTER_URL)),
+        repo_adapter_dir=Path(_get(env, "REPO_ADAPTER_DIR", str(data_dir / "repo-adapter"))),
+        repo_ca_file=Path(repo_ca) if repo_ca else None,
+        repo_max_archive_mb=_int(env, "REPO_MAX_ARCHIVE_MB", 512, minimum=1),
+        core_age_days=_int(env, "CORE_AGE_DAYS", UPSTREAM_CORE_AGE_DAYS if online else 0),
         download_backend=backend,
         download_backend_url=backend_url,
         download_access=_choice(env, "DOWNLOAD_ACCESS", "redirect", ACCESS_MODES),
@@ -232,14 +283,14 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         stale_after_days=_int(env, "STALE_AFTER_DAYS", 30),
         allow_local_public_url=_bool(env, "ALLOW_LOCAL_PUBLIC_URL", False),
         extra_args=tuple(_get(env, "UC_EXTRA_ARGS").split()),
-        data_dir=Path(_get(env, "UC_DATA_DIR", "/data")),
+        data_dir=data_dir,
         overlay_dir=Path(_get(env, "UC_OVERLAY_DIR", "/config/overlay")),
         app_dir=Path(_get(env, "UC_APP_DIR", "/opt/uc")),
         signing_key_file=secret("SIGNING_KEY_FILE", "update-center.key"),
         signing_cert_file=secret("SIGNING_CERT_FILE", "update-center.cert"),
         root_ca_file=secret("ROOT_CA_FILE", "root-ca.crt"),
-        artifactory_username_file=secret("ARTIFACTORY_USERNAME_FILE", "artifactory_username"),
-        artifactory_password_file=secret("ARTIFACTORY_PASSWORD_FILE", "artifactory_password"),
+        repo_username_file=secret("REPO_USERNAME_FILE", "repo_username"),
+        repo_password_file=secret("REPO_PASSWORD_FILE", "repo_password"),
         github_username_file=secret("GITHUB_USERNAME_FILE", "github_username"),
         github_token_file=secret("GITHUB_TOKEN_FILE", "github_token"),
     )

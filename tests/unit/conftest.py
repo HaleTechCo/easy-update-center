@@ -22,6 +22,6 @@ def secrets_dir(tmp_path, pki_material):
     directory.mkdir()
     for name in ("update-center.key", "update-center.cert", "root-ca.crt"):
         shutil.copy(pki_material / name, directory / name)
-    (directory / "artifactory_username").write_text("uc\n")
-    (directory / "artifactory_password").write_text("secret\n")
+    (directory / "repo_username").write_text("uc\n")
+    (directory / "repo_password").write_text("secret\n")
     return directory

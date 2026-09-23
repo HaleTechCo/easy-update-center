@@ -17,8 +17,8 @@ x-uc: &uc
     - update-center.key
     - update-center.cert
     - root-ca.crt
-    - artifactory_username
-    - artifactory_password
+    - repo_username
+    - repo_password
     - github_username
     - github_token
 
@@ -57,10 +57,10 @@ secrets:
     file: ./secrets/update-center.cert
   root-ca.crt:
     file: ./secrets/root-ca.crt
-  artifactory_username:
-    file: ./secrets/artifactory_username
-  artifactory_password:
-    file: ./secrets/artifactory_password
+  repo_username:
+    file: ./secrets/repo_username
+  repo_password:
+    file: ./secrets/repo_password
   github_username:
     file: ./secrets/github_username
   github_token:

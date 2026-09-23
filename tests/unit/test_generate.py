@@ -129,7 +129,7 @@ def test_plugin_count_drop_needs_force(tmp_path, secrets_dir):
 
 
 def test_online_generation_uses_mirror_and_tool_installers(tmp_path, secrets_dir):
-    settings = make_settings(tmp_path, secrets_dir, MODE="online", ARTIFACTORY_URL="", ARTIFACTORY_REPOSITORY="",
+    settings = make_settings(tmp_path, secrets_dir, MODE="online", REPO_URL="", REPO_KEY="", REPO_ADAPTER="",
                              RESOURCES_SOURCE="bundled", TOOL_INSTALLERS_URL="https://updates.example/updates/")
     files = {
         "https://updates.example/updates/": b'<a href="hudson.tasks.Maven.MavenInstaller.json">m</a>',

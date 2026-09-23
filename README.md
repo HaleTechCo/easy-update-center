@@ -16,7 +16,7 @@ Two modes:
 make build
 cp .env.online.example .env      # or .env.airgapped.example; set PUBLIC_URL
 make pki-init secrets-placeholders
-# write secrets/artifactory_username and secrets/artifactory_password
+# write secrets/repo_username and secrets/repo_password
 docker compose up -d
 ```
 

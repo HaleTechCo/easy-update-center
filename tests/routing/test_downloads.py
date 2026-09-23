@@ -5,6 +5,7 @@ import pytest
 from helpers import fetch
 
 ARTIFACTORY = "http://artifactory.internal/artifactory/jenkins"
+KEEPER = "http://keeper.internal/maven/jenkins"
 
 
 def test_mirror_plugin_redirect():
@@ -40,6 +41,14 @@ def test_artifactory_map_hit_and_miss():
     war = fetch("web-artifactory", "/download/war/2.528.1/jenkins.war")
     assert war.location == f"{ARTIFACTORY}/org/jenkins-ci/main/jenkins-war/2.528.1/jenkins-war-2.528.1.war"
     assert fetch("web-artifactory", "/download/war/2.540/jenkins.war").status == 404
+
+
+def test_artifact_keeper_downloads_use_its_maven_path():
+    response = fetch("web-keeper", "/download/plugins/git/5.2.0/git.hpi")
+    assert response.status == 302
+    assert response.location == f"{KEEPER}/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.hpi"
+    war = fetch("web-keeper", "/download/war/2.528.1/jenkins.war")
+    assert war.location == f"{KEEPER}/org/jenkins-ci/main/jenkins-war/2.528.1/jenkins-war-2.528.1.war"
 
 
 def test_proxy_mode_streams_with_credentials():

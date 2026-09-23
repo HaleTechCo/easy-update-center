@@ -108,8 +108,7 @@ def _build_and_publish(
     mapping: dict[str, str] | None = None
     if settings.download_backend == "artifactory":
         listing = aql.classify(tools.aql_query(
-            settings.artifactory_api_url, settings.artifactory_repository,
-            creds.artifactory_username, creds.artifactory_password,
+            settings.source_api_url, settings.repo_key, creds.repo_username, creds.repo_password,
         ))
         current = validate.load_site_json(staging / "current" / "update-center.actual.json")
         mapping, map_warnings = downloadmap.build_download_map(listing, downloadmap.preferred_groups(current))
