@@ -131,6 +131,7 @@ def _build_and_publish(
     if listing is not None:
         versions = tools.versions or VersionTool.from_settings(settings)
         report = doctor.analyze(listing, versions, doctor.ArtifactSource.from_settings(settings, creds, allow_network=False))
+        doctor.attach_adapter_report(report, settings)
         doctor_summary = report.summary()
         if report.dropped:
             warnings.append(
