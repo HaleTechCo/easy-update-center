@@ -298,8 +298,9 @@ no compatibility aliases.
   `ARTIFACTORY_API_URL=http://repo-adapter:8081/artifactory/api/`, `ARTIFACTORY_REPOSITORY=${REPO_KEY}`,
   `ARTIFACTORY_USERNAME=uc`, `ARTIFACTORY_PASSWORD=<token>`. With it off: `REPO_URL` (explicit port
   added), `REPO_API_URL`, `REPO_KEY` and the repository credentials, as today.
-- `make it-online` reads `REPO_USERNAME` and `REPO_PASSWORD` instead of the `ARTIFACTORY_*` pair.
-  Existing local `.env` files need those two keys renamed.
+- `make it-online` reads `JENKINS_COMMUNITY_USERNAME` and `JENKINS_COMMUNITY_PASSWORD` instead of the
+  `ARTIFACTORY_*` pair. They are test-only and always a community account for repo.jenkins-ci.org; a
+  deployment reads `secrets/repo_*`. Existing local `.env` files need those two keys renamed.
 
 ## 7. Reporting
 

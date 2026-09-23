@@ -87,14 +87,14 @@ it-clean:
 	docker compose -f $(IT_DIR)/airgapped.yaml --profile seed down -v --remove-orphans
 	# Compose interpolates online.yaml's required (:?) vars even for `down`, which never starts
 	# the pki service that actually needs them, so harmless placeholders are enough here.
-	REPO_USERNAME=unused REPO_PASSWORD=unused \
+	JENKINS_COMMUNITY_USERNAME=unused JENKINS_COMMUNITY_PASSWORD=unused \
 	  docker compose -f $(IT_DIR)/online.yaml down -v --remove-orphans
 
 IT_ONLINE = docker compose -f $(IT_DIR)/online.yaml
 
 it-online: build
-	@test -n "$$REPO_USERNAME" -a -n "$$REPO_PASSWORD" || \
-	  { echo "export REPO_USERNAME and REPO_PASSWORD (a Jenkins community account)"; exit 2; }
+	@test -n "$$JENKINS_COMMUNITY_USERNAME" -a -n "$$JENKINS_COMMUNITY_PASSWORD" || \
+	  { echo "export JENKINS_COMMUNITY_USERNAME and JENKINS_COMMUNITY_PASSWORD (a Jenkins community account for repo.jenkins-ci.org; test-only, a deployment reads secrets/repo_*)"; exit 2; }
 	@mkdir -p $(IT_DIR)/.results
 	$(IT_ONLINE) run --rm pki
 	$(IT_ONLINE) run --rm driver $(ARGS); rc=$$?; \

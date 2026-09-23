@@ -6,9 +6,11 @@ services:
     image: ${UC_IMAGE:-jenkins-uc/uc:local}
     user: "0:0"
     network_mode: none
+    # Test-only: the stack under test reads repo.jenkins-ci.org, so the community account becomes its
+    # repo_username/repo_password secrets here. A deployment reads secrets/repo_* instead.
     environment:
-      REPO_USERNAME: ${REPO_USERNAME:?set REPO_USERNAME (a Jenkins community account)}
-      REPO_PASSWORD: ${REPO_PASSWORD:?set REPO_PASSWORD}
+      JENKINS_COMMUNITY_USERNAME: ${JENKINS_COMMUNITY_USERNAME:?set JENKINS_COMMUNITY_USERNAME (a Jenkins community account)}
+      JENKINS_COMMUNITY_PASSWORD: ${JENKINS_COMMUNITY_PASSWORD:?set JENKINS_COMMUNITY_PASSWORD}
       GITHUB_USERNAME: ${GITHUB_USERNAME:-}
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     entrypoint:
@@ -16,8 +18,8 @@ services:
       - -c
       - >-
         uc pki init --out /pki &&
-        printf %s "$$REPO_USERNAME" > /pki/repo_username &&
-        printf %s "$$REPO_PASSWORD" > /pki/repo_password &&
+        printf %s "$$JENKINS_COMMUNITY_USERNAME" > /pki/repo_username &&
+        printf %s "$$JENKINS_COMMUNITY_PASSWORD" > /pki/repo_password &&
         printf %s "$$GITHUB_USERNAME" > /pki/github_username &&
         printf %s "$$GITHUB_TOKEN" > /pki/github_token &&
         chmod -R a+rX /pki
