@@ -1,6 +1,7 @@
 """Test-only stand-in for the three Artifactory calls update-center2 makes (spec §13):
 POST /artifactory/api/search/aql, GET /artifactory/<repo>/<path>, GET /artifactory/<repo>/<path>!/<entry>.
-update-center2 answers 401 challenges with credentials, so private reads use WWW-Authenticate: Basic."""
+update-center2 answers 401 challenges with credentials, so private reads use WWW-Authenticate: Basic.
+File reads honour a single Range, as Artifactory does (the repo-adapter reads archive dates that way)."""
 from __future__ import annotations
 
 import argparse
@@ -18,6 +19,7 @@ from pathlib import Path
 PREFIX = "/artifactory/"
 EXTENSIONS = (".hpi", ".jpi", ".war", ".pom")
 _REPO = re.compile(r'"repo":\{"\$eq":"([A-Za-z0-9._-]+)"\}')
+_RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 
 def aql_results(root: Path, repository: str) -> list[dict]:
@@ -56,10 +58,13 @@ def make_handler(root: Path, credentials: str, anonymous_read: bool):
     expected = "Basic " + base64.b64encode(credentials.encode()).decode()
 
     class Handler(BaseHTTPRequestHandler):
-        def _send(self, status: int, body: bytes = b"", content_type: str = "application/octet-stream") -> None:
+        def _send(self, status: int, body: bytes = b"", content_type: str = "application/octet-stream",
+                  headers: dict[str, str] | None = None) -> None:
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
+            for key, value in (headers or {}).items():
+                self.send_header(key, value)
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(body)
@@ -93,6 +98,15 @@ def make_handler(root: Path, credentials: str, anonymous_read: bool):
             data = read_artifact(root, relative)
             if data is None:
                 return self._send(404)
+            match = _RANGE.match(self.headers.get("Range", "")) if "!/" not in relative else None
+            if match and data:
+                first, last = match.groups()
+                if first == "":
+                    start, end = max(0, len(data) - int(last)), len(data) - 1
+                else:
+                    start, end = int(first), min(int(last) if last else len(data) - 1, len(data) - 1)
+                return self._send(206, data[start:end + 1],
+                                  headers={"Content-Range": f"bytes {start}-{end}/{len(data)}", "Accept-Ranges": "bytes"})
             self._send(200, data)
 
         do_HEAD = do_GET
