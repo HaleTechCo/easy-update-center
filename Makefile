@@ -6,11 +6,12 @@ UC_TEST_IMAGE ?= jenkins-uc/uc-test:local
 WEB_IMAGE ?= jenkins-uc/web:local
 export UC_IMAGE UC_TEST_IMAGE WEB_IMAGE
 
-# Unit tests read the Python and templates straight from the working tree
+# Unit tests read the Python, templates and lint tools straight from the working tree
 # (VersionTool.java is compiled into the image, so changing it needs `make build-uc`).
 SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" \
-             -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro"
+             -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro" \
+             -v "$(CURDIR)/tools:/tools:ro"
 
 .PHONY: build build-uc build-web test test-unit test-web test-routing pki-init secrets-placeholders compose-check it-airgapped it-clean it-online it-full upstream-diff
 

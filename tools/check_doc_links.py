@@ -2,8 +2,8 @@
 
 The documentation is a tree of cross-linked pages, and nothing else in the gate would notice a
 link going stale: a renamed heading breaks every reference to it silently, and the references
-that rot most quietly are the ones in `.py` and `.yaml` comments, which nobody re-reads. This
-hook is why `docs/` can be reorganised without that happening.
+that rot most quietly are the ones in comments - code, compose files, Makefiles, Dockerfiles -
+which nobody re-reads. This hook is why `docs/` can be reorganised without that happening.
 
 Two kinds of reference are checked, because the tree contains both:
 
@@ -19,10 +19,10 @@ heading/anchor scanner and the link scanner so the two cannot drift apart. The a
 genuinely broken reference that appears only inside a fence goes unreported, because it was
 never live to begin with.
 
-`heading_slug` reproduces GitHub's algorithm rather than a convenient approximation. GitHub gives
-each whitespace character its own hyphen instead of collapsing runs, so a heading like
-`uc.env / web.env` slugs to `ucenv--webenv` with TWO hyphens. A checker that collapses whitespace
-reports that real link as broken.
+`heading_slug` reproduces GitLab's algorithm, because GitLab is where these pages are read. GitLab
+turns each space into a hyphen and then squeezes every run of hyphens to one, so a heading like
+`uc.env / web.env` slugs to `ucenv-webenv`. GitHub keeps both hyphens (`ucenv--webenv`), so a
+checker that followed GitHub would pass links that are broken on GitLab.
 """
 
 from __future__ import annotations
@@ -64,19 +64,20 @@ MARKDOWN_SUFFIX = '.md'
 
 
 def heading_slug(text: str) -> str:
-    """Reproduce GitHub's heading-to-anchor algorithm.
+    """Reproduce GitLab's heading-to-anchor algorithm.
 
     Inline code, links and raw HTML are reduced to their text, the result is lowercased, every
-    character that is not a word character, whitespace or hyphen is dropped, and then each
-    remaining whitespace character becomes one hyphen. That last step is the one worth stating:
-    GitHub does NOT collapse runs of whitespace, so two spaces produce two hyphens.
+    character that is not a word character, whitespace or hyphen is dropped, each remaining
+    whitespace character becomes a hyphen, and then every run of hyphens becomes one. The last
+    step is GitLab's, not GitHub's: `uc.env / web.env` is `ucenv-webenv` on GitLab, where this
+    repository is hosted, and `ucenv--webenv` on GitHub.
     """
     text = re.sub(r'`([^`]*)`', r'\1', text)
     text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)
     text = re.sub(r'<[^>]+>', '', text)
     text = unicodedata.normalize('NFKD', text).lower()
     text = re.sub(r'[^\w\s-]', '', text)
-    return re.sub(r'\s', '-', text.strip())
+    return re.sub(r'-{2,}', '-', re.sub(r'\s', '-', text.strip()))
 
 
 def _unfenced_lines(text: str) -> list[str]:
@@ -106,7 +107,7 @@ def anchors_in(path: Path) -> set[str]:
     """Every anchor `path` offers: one per ATX heading, plus every explicit `<a id=>` tag.
 
     Headings inside a fenced code block are not headings - this tree's documents are full of
-    shell transcripts whose lines start with `#` - and a heading slug that repeats gets GitHub's
+    shell transcripts whose lines start with `#` - and a heading slug that repeats gets the host's
     `-1`, `-2` suffix so that two sections with the same name remain separately addressable.
     """
     found: set[str] = set()
@@ -184,19 +185,28 @@ def broken_links(path: Path, root: Path) -> list[str]:
     return problems
 
 
-TRACKED_SUFFIXES = ('.md', '.py', '.yaml')
-"""The file types `--tracked` scans - the three that can carry a reference in this tree.
+TRACKED_SUFFIXES = ('.md', '.py', '.yaml', '.conf', '.sh')
+TRACKED_NAMES = ('Makefile', 'Dockerfile')
+TRACKED_ENV_EXAMPLE = re.compile(r'(?:^|/)\.env\.[^/]+\.example$')
+"""The files `--tracked` scans: every type that carries a reference in this tree.
 
-Not a performance filter. `git ls-files` also names Dockerfiles, patches and `.gitattributes`,
-and a suffix list is the honest way to say which files can hold a link at all.
+Markdown pages, and comments in Python, compose and pre-commit YAML, Apache `.conf`, shell
+scripts, the Makefile, the Dockerfiles and the `.env.*.example` files. Not a performance filter:
+`git ls-files` also names patches, `.gitattributes` and extensionless scripts, and this list is the
+honest statement of which files can hold a link at all.
 """
+
+
+def _scannable(name: str) -> bool:
+    """Say whether the tracked file `name` is one of the types that can hold a reference."""
+    return name.endswith(TRACKED_SUFFIXES) or name.rsplit('/', 1)[-1] in TRACKED_NAMES or TRACKED_ENV_EXAMPLE.search(name) is not None
+
 
 TRACKED_EXCLUDE_PREFIXES: tuple[str, ...] = ()
 """Tracked paths `--tracked` skips.
 
-Empty: every tracked document is expected to resolve, including the specs and plans under
-docs/superpowers/. Add a prefix here only for a directory of historical records that
-deliberately names pages which no longer exist, and say why next to it.
+Empty: every tracked document is expected to resolve. Add a prefix here only for a directory of
+historical records that deliberately names pages which no longer exist, and say why next to it.
 """
 
 USAGE = 'usage: check_doc_links.py --tracked | PATH [PATH ...] - checks the documentation references in each path given; it takes no default set'
@@ -215,7 +225,7 @@ def tracked_paths(root: Path) -> list[Path]:
     # path would break every other checkout. It cannot be the thing that is missing here.
     listing = subprocess.run(['git', 'ls-files', '-z'], capture_output=True, check=True, cwd=root, encoding='utf-8', errors='replace').stdout
     names = [name for name in listing.split('\0') if name]
-    return [root / name for name in names if name.endswith(TRACKED_SUFFIXES) and not name.startswith(TRACKED_EXCLUDE_PREFIXES) and (root / name).is_file()]
+    return [root / name for name in names if _scannable(name) and not name.startswith(TRACKED_EXCLUDE_PREFIXES) and (root / name).is_file()]
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -224,7 +234,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     `--tracked`, given alone, stands in for the whole tree: every tracked file of a type that can
     hold a reference. It is what the pre-commit hook passes, because **checking only the OUTGOING
     links of the files in a commit misses every INBOUND one** - a commit that renames a heading in
-    `operations.md` touches no other file, so nothing would re-check the references aimed at it
+    one page touches no other file, so nothing would re-check the references aimed at it
     from elsewhere, which is exactly the rot this checker exists to catch.
 
     **NO PATHS IS A USAGE ERROR, NOT AN EMPTY CLEAN RUN.** The loop below iterates what it is

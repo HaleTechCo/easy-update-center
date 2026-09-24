@@ -40,7 +40,7 @@ interpreter pre-commit already needs.
 
 | File | Role |
 | --- | --- |
-| `check_doc_links.py` | Checks that every relative Markdown link, and every bare `path/to/page.md#anchor` token in a `.py` or `.yaml` comment, resolves - file and heading anchor both. Scans the whole tracked tree on every run, so renaming a heading is caught by the links pointing AT it, not only the ones in the files you changed. |
+| `check_doc_links.py` | Checks that every relative Markdown link, and every bare `path/to/page.md#anchor` token in a comment of any other tracked file that can hold one (Python, YAML, shell, `.conf`, Makefile, Dockerfiles, `.env` examples), resolves - file and heading anchor both. Scans the whole tracked tree on every run, so renaming a heading is caught by the links pointing AT it, not only the ones in the files you changed. Anchors follow GitLab's heading algorithm. |
 | `check_gremlins.py` | Finds, and with `--fix` rewrites, Unicode "gremlins" in text files - smart quotes, em/en dashes, ellipses, NBSP, zero-width characters, BOMs, bidi controls. Run as a **fixer**, so it reports `Failed` on the run that changes a file. Box drawing, `§`, arrows and middle dots are left alone. |
 | `check_secrets.py` | Refuses a commit containing something that looks like a real provider credential - a Google/AWS/GitHub/Slack/Stripe/Postgres shape, an Artifactory API key or reference token, a JWT, or a general `scheme://user:pass@host` credentialed URL. A finding line shows a provider shape as its first twelve characters - enough to say which shape matched - and a credentialed URL as `scheme://user:***@`, the whole password masked. |
 | `run_optional.py` | Runs a tool if it is on PATH, otherwise exits 0. **Read the caveat below.** |
