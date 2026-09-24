@@ -215,15 +215,16 @@ repos:
 
           # Documentation is a tree of cross-linked pages, and nothing else here would notice a
           # link going stale: renaming a heading silently breaks every reference to it, and the
-          # references that rot most quietly are the bare `path/to/page.md#anchor` tokens in .py
-          # and .yaml comments, which nobody re-reads. Checks Markdown links relative to their own
-          # file, and bare tokens in any other file type relative to the repo root.
+          # references that rot most quietly are the bare `path/to/page.md#anchor` tokens in comments
+          # (Python, YAML, shell, Apache .conf, Makefile, Dockerfiles, .env examples), which nobody
+          # re-reads. Checks Markdown links relative to their own file, and bare tokens in any other
+          # file type relative to the repo root. Anchors follow GitLab's heading algorithm.
           #
           # WHOLE-TREE, NOT THE STAGED FILES, and that is the whole point of the hook: a commit
           # renaming a heading touches no other file, so checking only the staged files' OUTGOING
           # links would never re-check the inbound references aimed at it. `--tracked` makes the
-          # checker enumerate the tracked files itself (`git ls-files`, filtered to .md/.py/.yaml),
-          # and `always_run: true` runs it even for a commit that touches none of those types.
+          # checker enumerate the tracked files itself (`git ls-files`, filtered to the file types
+          # that can hold a reference), and `always_run: true` runs it even for a commit that touches none of those types.
           - id: check-doc-links
             name: check documentation links resolve
             entry: python tools/check_doc_links.py --tracked
