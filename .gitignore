@@ -15,6 +15,9 @@ tests/integration/.results/
 # Agent scratch
 .superpowers/
 
+# Local working notes
+todo.txt
+
 # Python: the parts of github/gitignore's Python.gitignore that apply here. uc is
 # stdlib-only and its tests run in containers; editors and ad-hoc runs on the host
 # still write these.
