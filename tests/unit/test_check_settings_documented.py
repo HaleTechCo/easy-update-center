@@ -1,0 +1,133 @@
+"""The settings hook: what counts as read, what counts as documented, and both failure directions."""
+
+import importlib.util
+from pathlib import Path
+
+TOOLS = Path(__file__).resolve().parents[2] / 'tools'
+_spec = importlib.util.spec_from_file_location('check_settings_documented', TOOLS / 'check_settings_documented.py')
+hook = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(hook)
+
+CONFIG_PY = """
+mode = _choice(env, 'MODE', '', MODES)
+days = _int(env, 'RETAIN_RELEASES', 5, minimum=1)
+ratio = _ratio(env, 'MIN_PLUGIN_RATIO', 0.9)
+flag = _bool(env, 'ALLOW_LOCAL_PUBLIC_URL', default=False)
+url = env.get('POPULARITY_JSON_URL', UPSTREAM if online else '').strip()
+key = secret('SIGNING_KEY_FILE', 'update-center.key')
+value = _get(env, name, default)
+"""
+
+ENTRYPOINT_SH = """
+[[ -n "${PUBLIC_URL:-}" ]] || die "PUBLIC_URL must be set"
+export PUBLIC_URL="${PUBLIC_URL%/}"
+adapter="${REPO_ADAPTER-on}"
+auth_file="${DOWNLOAD_PROXY_AUTH_FILE:-/run/secrets/download_proxy_auth}"
+DOWNLOAD_PROXY_AUTH_HEADER="Basic x"
+export DOWNLOAD_PROXY_AUTH_HEADER
+echo "${DOWNLOAD_PROXY_AUTH_HEADER}" "${local_name:-x}"
+"""
+
+COMPOSE_YAML = """
+image: ${UC_IMAGE:-jenkins-uc/uc:local}
+env_file: ${UC_ENV_FILE:-.env}
+ports:
+  - "${HTTPS_PORT:-8443}:8443"
+  - "${HTTP_PORT}:8080"
+"""
+
+PAGE = """# Configuration reference
+
+| Setting | Default |
+|---|---|
+| `MODE` | - |
+| `REPO_URL`, `REPO_KEY` | see `DOWNLOAD_BACKEND` |
+
+```text
+| `IN_A_FENCE` | ignored |
+```
+
+## Read by bundled software
+
+| Setting | Read by |
+|---|---|
+| `JAVA_TOOL_OPTIONS` | the JVM |
+"""
+
+
+def test_config_readers_env_get_and_secret_paths_are_read():
+    assert hook.names_read(CONFIG_PY, hook.PYTHON_READ) == {'MODE', 'RETAIN_RELEASES', 'MIN_PLUGIN_RATIO', 'ALLOW_LOCAL_PUBLIC_URL', 'POPULARITY_JSON_URL', 'SIGNING_KEY_FILE'}
+
+
+def test_shell_reads_are_the_defaulted_expansions_only():
+    assert hook.names_read(ENTRYPOINT_SH, hook.SHELL_READ) == {'PUBLIC_URL', 'REPO_ADAPTER', 'DOWNLOAD_PROXY_AUTH_FILE'}
+
+
+def test_every_compose_interpolation_is_read():
+    assert hook.names_read(COMPOSE_YAML, hook.COMPOSE_READ) == {'UC_IMAGE', 'UC_ENV_FILE', 'HTTPS_PORT', 'HTTP_PORT'}
+
+
+def test_documented_names_come_from_first_cells_outside_fences():
+    names, bundled = hook.documented(PAGE)
+    assert names == {'MODE', 'REPO_URL', 'REPO_KEY', 'JAVA_TOOL_OPTIONS'}
+    assert bundled == {'JAVA_TOOL_OPTIONS'}
+
+
+def test_undocumented_setting_is_reported_with_its_reader():
+    lines = hook.problems({'MODE': 'uc/uc/config.py', 'TLS_KEY_FILE': 'web/entrypoint.sh'}, {'MODE'}, set())
+    assert lines == ['TLS_KEY_FILE is read by web/entrypoint.sh but not documented in docs/reference/configuration.md']
+
+
+def test_documented_setting_that_nothing_reads_is_reported():
+    lines = hook.problems({'MODE': 'uc/uc/config.py'}, {'MODE', 'OLD_SETTING'}, set())
+    assert lines == ['OLD_SETTING is documented in docs/reference/configuration.md but nothing reads it']
+
+
+def test_bundled_software_settings_need_no_reader():
+    assert hook.problems({'MODE': 'uc/uc/config.py'}, {'MODE', 'JAVA_TOOL_OPTIONS'}, {'JAVA_TOOL_OPTIONS'}) == []
+
+
+def _tree(root, page):
+    (root / 'uc' / 'uc').mkdir(parents=True)
+    (root / 'web').mkdir()
+    (root / 'docs' / 'reference').mkdir(parents=True)
+    (root / 'uc' / 'uc' / 'config.py').write_text("mode = _choice(env, 'MODE', '', MODES)\n", encoding='utf-8')
+    (root / 'web' / 'entrypoint.sh').write_text('key="${TLS_KEY_FILE:-}"\n', encoding='utf-8')
+    (root / 'compose.yaml').write_text('image: ${UC_IMAGE:-x}\n', encoding='utf-8')
+    (root / 'compose.airgapped.yaml').write_text('services: {}\n', encoding='utf-8')
+    (root / 'docs' / 'reference' / 'configuration.md').write_text(page, encoding='utf-8')
+
+
+def test_code_settings_names_the_first_reader(tmp_path):
+    _tree(tmp_path, '')
+    assert hook.code_settings(tmp_path) == {'MODE': 'uc/uc/config.py', 'TLS_KEY_FILE': 'web/entrypoint.sh', 'UC_IMAGE': 'compose.yaml'}
+
+
+def test_main_passes_when_both_sides_agree(tmp_path, monkeypatch):
+    _tree(tmp_path, '| Setting |\n|---|\n| `MODE` |\n| `TLS_KEY_FILE` |\n| `UC_IMAGE` |\n')
+    monkeypatch.chdir(tmp_path)
+    assert hook.main([]) == 0
+
+
+def test_main_fails_and_names_the_gap(tmp_path, monkeypatch, capsys):
+    _tree(tmp_path, '| Setting |\n|---|\n| `MODE` |\n| `UC_IMAGE` |\n')
+    monkeypatch.chdir(tmp_path)
+    assert hook.main([]) == 1
+    assert 'TLS_KEY_FILE is read by web/entrypoint.sh' in capsys.readouterr().out
+
+
+def test_main_refuses_when_the_page_is_missing(tmp_path, monkeypatch):
+    _tree(tmp_path, '')
+    (tmp_path / 'docs' / 'reference' / 'configuration.md').unlink()
+    monkeypatch.chdir(tmp_path)
+    assert hook.main([]) == 2
+
+
+def test_main_refuses_when_nothing_is_documented(tmp_path, monkeypatch):
+    _tree(tmp_path, '# Configuration reference\n')
+    monkeypatch.chdir(tmp_path)
+    assert hook.main([]) == 2
+
+
+def test_main_refuses_arguments():
+    assert hook.main(['docs/reference/configuration.md']) == 2

@@ -224,10 +224,23 @@ repos:
           # renaming a heading touches no other file, so checking only the staged files' OUTGOING
           # links would never re-check the inbound references aimed at it. `--tracked` makes the
           # checker enumerate the tracked files itself (`git ls-files`, filtered to the file types
-          # that can hold a reference), and `always_run: true` runs it even for a commit that touches none of those types.
+          # that can hold a reference), and `always_run: true` runs it even for a commit that
+          # touches none of those types.
           - id: check-doc-links
             name: check documentation links resolve
             entry: python tools/check_doc_links.py --tracked
+            language: system
+            pass_filenames: false
+            always_run: true
+
+          # Every setting the code reads must be documented in docs/reference/configuration.md,
+          # and every setting documented there must still be read: tools/check_settings_documented.py
+          # compares uc/uc/config.py, web/entrypoint.sh and the compose files with the page's tables.
+          # Whole-tree and always run, like check-doc-links, for the same reason: a commit adding a
+          # setting to config.py touches no page, so only a hook that always runs notices.
+          - id: check-settings-documented
+            name: check settings are documented
+            entry: python tools/check_settings_documented.py
             language: system
             pass_filenames: false
             always_run: true
