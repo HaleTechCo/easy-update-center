@@ -1,0 +1,50 @@
+# Documentation
+
+Which page to read for which job. New here? Start with the [README](../README.md), then a getting-started page.
+
+## Getting started
+
+- [Requirements](getting-started/requirements.md) - host, software, accounts, network, sizing
+- [Deploy online](getting-started/online.md) - plugins from repo.jenkins-ci.org
+- [Deploy air-gapped](getting-started/airgapped.md) - plugins from your Artifactory or Artifact Keeper
+
+## How-to guides
+
+- [Configure Jenkins controllers](how-to/configure-jenkins.md)
+- [Stock an air-gapped repository](how-to/stock-airgapped-repository.md)
+- [Keep upstream data fresh](how-to/keep-upstream-data-fresh.md)
+- [Enable TLS](how-to/enable-tls.md)
+- [Proxy plugin downloads](how-to/proxy-downloads.md)
+- [Rotate the signing certificate](how-to/rotate-signing-certificate.md)
+- [Block plugins and add warnings](how-to/block-plugins-and-add-warnings.md)
+- [Generate and roll back](how-to/generate-and-roll-back.md)
+- [Monitor](how-to/monitor.md)
+- [Upgrade](how-to/upgrade.md)
+
+## Reference
+
+- [Configuration](reference/configuration.md) - every setting
+- [uc commands](reference/cli.md)
+- [Secrets](reference/secrets.md)
+- [status.json](reference/status-json.md)
+- [Site layout](reference/site-layout.md) - every URL served
+- [Network](reference/network.md) - ports and outbound hosts
+- [Dependencies](reference/dependencies.md) - what it is built from, with licenses
+
+## Architecture
+
+- [Overview](architecture/overview.md)
+- [Generation pipeline](architecture/generation-pipeline.md)
+- [Request routing](architecture/request-routing.md)
+- [Modes](architecture/modes.md)
+- [repo-adapter](architecture/repo-adapter.md)
+- [Signing and trust](architecture/signing.md)
+
+## Development
+
+- [Contributing](../CONTRIBUTING.md) - setup, tests, lint, merge requests
+- [Upgrading update-center2](development/upgrading-upstream.md)
+
+## Troubleshooting
+
+- [Troubleshooting](troubleshooting.md)
