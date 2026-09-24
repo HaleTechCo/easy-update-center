@@ -21,4 +21,10 @@ tests/integration/.results/
 __pycache__/
 *.py[cod]
 .pytest_cache/
-.venv/
+
+# Lint tooling (pre-commit; see tools/README.md). The hooks run from a host venv, under
+# any of the names .pre-commit-config.yaml excludes (.venv, .venv313, venv, ...), and ruff
+# caches at the root. Every other hook rewrites files in place or writes outside the tree.
+.venv*/
+venv*/
+.ruff_cache/
