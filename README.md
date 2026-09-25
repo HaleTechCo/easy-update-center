@@ -1,27 +1,137 @@
 # Jenkins update center, self-hosted
 
-The same update center Jenkins uses (`updates.jenkins.io`), in two containers:
+The same update center Jenkins uses (`updates.jenkins.io`), in containers on your own host. Jenkins
+controllers and `jenkins-plugin-cli` point at it with no plugin or code change. It runs online,
+reading the public plugin repository, or fully air-gapped, reading your own.
 
-- **uc**: runs the upstream `update-center2` generator (3.18.4, two small patches), signs everything
-  with your own PKI, validates each release and publishes it atomically. It keeps the last five
-  releases for rollback.
-- **web**: Apache serving the result, including the `?version=` routing to `dynamic-*` tiers, every
-  upstream JSON file, and download redirects to get.jenkins.io or your repository.
-- **repo-adapter**: reads Artifactory or Artifact Keeper for the generator, and fills in the POMs,
-  descriptions and release dates procurement tends to leave out, from inside each `.hpi`.
+## What you get
 
-Two modes:
-- `online` reads `repo.jenkins-ci.org`.
-- `airgapped` reads your internal Artifactory or Artifact Keeper and skips whatever it cannot reach.
+- **Version routing:** `/update-center.json?version=2.528.1` redirects each controller to the tiered
+  site that only offers plugins its core can run, exactly as updates.jenkins.io does.
+- **Every upstream file:** `update-center.json`, `plugin-versions.json`, `release-history.json`,
+  the experimental and stable sites, download index pages, and tool installers.
+- **Your own signing keys:** metadata is signed with your PKI; controllers trust your root CA.
+- **Safe publishing:** each release is validated before it goes live, the switch is atomic, the last
+  five releases are kept, and `uc rollback` goes back in one command.
+- **Online or air-gapped:** plugins from repo.jenkins-ci.org, or from your Artifactory or Artifact
+  Keeper, with missing POMs, descriptions and release dates filled in from the plugins themselves.
+- **Your own policy:** hide plugins or releases, and publish your own security warnings.
+- **Monitoring:** `status.json` reports the last run, the certificate's expiry and the age of the
+  security data.
+
+## How it works
+
+A scheduler regenerates the site with Jenkins' own generator, update-center2, and an Apache
+container serves it. Plugin binaries are not copied: downloads go to get.jenkins.io or to your
+repository. More in the [architecture overview](docs/architecture/overview.md).
+
+```mermaid
+flowchart LR
+    jenkins["Jenkins controllers and jenkins-plugin-cli"]
+    subgraph stack["docker compose"]
+        web["web: Apache, read-only"]
+        scheduler["scheduler: uc schedule"]
+        uc["uc: one-shot commands"]
+        adapter["repo-adapter"]
+        data[("uc-data volume")]
+    end
+    source["Source repository: repo.jenkins-ci.org, Artifactory or Artifact Keeper"]
+    binaries["Binaries: get.jenkins.io or your repository"]
+
+    jenkins -->|"metadata and version routing"| web
+    jenkins -->|"downloads, after a redirect"| binaries
+    web -.->|"downloads, proxy mode"| binaries
+    web -->|"serves the live release"| data
+    scheduler -->|"new release, atomic swap"| data
+    uc -->|"new release, rollback"| data
+    scheduler -->|"listing, POMs, manifests"| adapter
+    uc -->|"listing, POMs, manifests"| adapter
+    adapter --> source
+    scheduler -.->|"online default: no adapter"| source
+```
+
+## Quick start
+
+You need a Linux host with Docker (Compose v2), GNU make and git, a hostname for the update center,
+and a Jenkins community account (online) or an account on your repository (air-gapped). Details:
+[Requirements](docs/getting-started/requirements.md).
+
+### Online
 
 ```bash
+git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
+cd jenkins-update-center
 make build
-cp .env.online.example .env      # or .env.airgapped.example; set PUBLIC_URL
+cp .env.online.example .env          # set PUBLIC_URL to your update center's origin
 make pki-init secrets-placeholders
-# write secrets/repo_username and secrets/repo_password
+printf '%s' 'community-user' > secrets/repo_username        # free: https://accounts.jenkins.io
+printf '%s' 'community-password' > secrets/repo_password
 docker compose up -d
 ```
 
-- Operations: [docs/operations.md](docs/operations.md)
-- Upgrading upstream: [docs/upgrading.md](docs/upgrading.md)
-- Tests: `make test` (unit, web and routing, in containers); lint: pre-commit, see [tools/README.md](tools/README.md)
+On Linux, first give the secret files to the container user:
+[File ownership on Linux](docs/reference/secrets.md#file-ownership-on-linux).
+
+The first run reads the whole plugin catalog and **takes hours**; follow it with
+`docker compose logs -f scheduler`. When `docker compose run --rm uc status` shows a `live_release`,
+point Jenkins at it: [Configure Jenkins controllers](docs/how-to/configure-jenkins.md).
+
+Full walkthrough: [Deploy online](docs/getting-started/online.md).
+
+### Air-gapped
+
+```bash
+git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
+cd jenkins-update-center
+make build                            # needs internet once; or build elsewhere and docker load
+cp .env.airgapped.example .env        # set PUBLIC_URL, REPO_URL, REPO_KEY
+make pki-init secrets-placeholders
+printf '%s' 'svc-jenkins-uc' > secrets/repo_username
+printf '%s' 'password-or-api-token' > secrets/repo_password
+export COMPOSE_FILE=compose.yaml:compose.airgapped.yaml
+docker compose run --rm uc doctor --fetch       # what the generator will see in your repository
+docker compose up -d
+```
+
+Your repository holds the plugins and cores to offer, in Maven layout:
+[Stock an air-gapped repository](docs/how-to/stock-airgapped-repository.md). No internet on the
+Docker host? [Build elsewhere and load the images](docs/getting-started/airgapped.md#2-build-the-images).
+On Linux, set [file ownership](docs/reference/secrets.md#file-ownership-on-linux) before starting.
+When a release is live, [configure Jenkins controllers](docs/how-to/configure-jenkins.md).
+
+Full walkthrough: [Deploy air-gapped](docs/getting-started/airgapped.md).
+
+## After the quick start
+
+1. **Move `secrets/root/` offline.** It holds the root CA's key; anyone with it can sign metadata
+   your controllers accept. [Where the root key lives](docs/how-to/rotate-signing-certificate.md#where-the-root-key-lives).
+2. **Trust `secrets/root-ca.crt` on every controller**, in `$JENKINS_HOME/update-center-rootCAs/`.
+   [Trust the root CA](docs/how-to/configure-jenkins.md#trust-the-root-ca).
+3. **Put TLS in front.** [Enable TLS](docs/how-to/enable-tls.md).
+
+Then set up [monitoring](docs/how-to/monitor.md) and a reminder to
+[rotate the signing certificate](docs/how-to/rotate-signing-certificate.md) yearly.
+
+## Documentation
+
+The [documentation index](docs/README.md) has everything:
+
+- **Getting started:** requirements, and a production deployment per mode.
+- **How-to guides:** configuring controllers, stocking a repository, TLS, proxied downloads, key
+  rotation, blocking plugins, rollback, monitoring, upgrades.
+- **Reference:** every setting, `uc` command, secret, `status.json` field, URL, network host and
+  dependency.
+- **Architecture:** how the pieces fit, with diagrams.
+
+Something wrong? See [Troubleshooting](docs/troubleshooting.md).
+
+## Contributing
+
+Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Please report security issues
+privately, as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+MIT, see [LICENSE](LICENSE). The update-center2 generator this project builds and patches is
+published by the Jenkins project without a repository-wide license file; see
+[Dependencies](docs/reference/dependencies.md#note-on-update-center2s-license).
