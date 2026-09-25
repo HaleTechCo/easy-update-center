@@ -134,6 +134,8 @@ privately, as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The update-center2 generator this project builds and patches is
-published by the Jenkins project without a repository-wide license file; see
-[Dependencies](docs/reference/dependencies.md#note-on-update-center2s-license).
+MIT, see [LICENSE](LICENSE). The update-center2 generator this project builds and patches is MIT
+under the Jenkins project's governance, though its repository has no license file of its own; see
+[Note on update-center2's license](docs/reference/dependencies.md#note-on-update-center2s-license).
+The uc image carries the notices for all the third-party software it ships in `/opt/uc/licenses/`
+([Third-party notices](docs/reference/dependencies.md#third-party-notices)).

@@ -18,6 +18,9 @@ once releases are published.
 
 ### Added
 
+- Third-party notices in the uc image, `/opt/uc/licenses/`: update-center2's MIT license with the
+  Jenkins project's governance statement, every bundled Java library with its license (generated
+  by the build, which fails on a library with no known license), and the license texts.
 - A self-hosted Jenkins update center in containers: `uc` (generation and tools), `web` (Apache),
   `scheduler` and `repo-adapter`, run with Docker Compose.
 - Online mode (plugins from repo.jenkins-ci.org, downloads from get.jenkins.io) and air-gapped mode
