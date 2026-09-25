@@ -1,3 +1,99 @@
 # Contributing
 
 How to set up, test and submit changes to this project.
+
+## Prerequisites
+
+- Docker with Compose v2, and GNU make. Every test suite runs in containers built from this tree.
+- Python 3 on the host, only for the lint tools behind the pre-commit hooks.
+- git.
+
+On Windows, use Git Bash or WSL; the Makefile sets `MSYS_NO_PATHCONV=1` for its own Docker commands.
+
+## Set up
+
+```bash
+git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
+cd jenkins-update-center
+make build                                         # both images, and the uc test image
+
+python -m venv .venv
+.venv/Scripts/pip install -r requirements-dev.txt  # Linux/macOS: .venv/bin/pip
+.venv/Scripts/pre-commit install                   # run the hooks on every commit
+```
+
+The hooks run tools from the venv (`language: system`), so **activate the venv in every shell you
+commit from**: `source .venv/Scripts/activate` (Linux/macOS: `source .venv/bin/activate`). Optional
+tools and the details of each hook: [tools/README.md](tools/README.md).
+
+## Repository layout
+
+```text
+uc/                   the uc image: Dockerfile, update-center2 patches, VersionTool, templates
+uc/uc/                the uc Python package (standard library only): CLI, generation, doctor,
+                      PKI, status; repo_adapter/ is the repo-adapter service
+web/                  the web image: Apache configuration, entrypoint, health check
+compose.yaml          the stack; compose.airgapped.yaml is the air-gapped override
+config/overlay/       operator overlay merged into upstream's resources/
+secrets/              keys and credentials (gitignored except its README)
+tests/unit/           pytest, run in the uc test image
+tests/routing/        the web image's routing against generated fixture sites
+tests/web/            the web entrypoint's configuration checks
+tests/compose/        network and secret isolation of the Compose files
+tests/integration/    end to end: fake Artifactory and Artifact Keeper, real Jenkins controllers
+tests/support/        helpers shared by the suites
+tools/                pre-commit hook scripts
+docs/                 the documentation
+```
+
+How the pieces fit: [Architecture overview](docs/architecture/overview.md).
+
+## Tests
+
+| Command | What it runs | Needs |
+|---|---|---|
+| `make test` | Unit, web entrypoint and routing tests. The gate for every change. | Docker |
+| `make test-unit ARGS='-k name'` | A subset of the unit tests. | Docker |
+| `make compose-check` | Both Compose configurations, and the network and secret isolation the repo-adapter relies on. | Docker |
+| `make it-airgapped` | End to end against a fake Artifactory and a fake Artifact Keeper, with real Jenkins controllers installing plugins. | Docker |
+| `make it-online` | End to end against repo.jenkins-ci.org, capped at 25 plugins. | `JENKINS_COMMUNITY_USERNAME` and `JENKINS_COMMUNITY_PASSWORD` exported (a free account); optional `GITHUB_USERNAME`, `GITHUB_TOKEN` |
+| `make it-full` | The online run with the whole catalog. Takes hours. | as above |
+| `make it-clean` | Removes the integration suites' containers and volumes. | Docker |
+
+Unit tests read `uc/uc/`, `uc/templates/` and `tools/` straight from the working tree, so they need
+no rebuild. Changing `uc/java/VersionTool.java` or a Dockerfile needs `make build` first.
+
+## Lint
+
+```bash
+pre-commit run --all-files
+```
+
+Fixer hooks (formatting, whitespace, typographic characters) rewrite files and report `Failed` on the
+run that changes something; run again, and a second clean run is the real signal. Two hooks guard the
+documentation:
+
+- `check-doc-links`: every relative link and every `docs/<page>.md#anchor` reference in a comment
+  resolves, with GitLab's heading anchors;
+- `check-settings-documented`: every setting the code reads is in
+  [docs/reference/configuration.md](docs/reference/configuration.md), and nothing documented there is
+  unread.
+
+## Commits and merge requests
+
+- One logical change per commit. Subjects in the imperative mood, with an optional area prefix:
+  `repo-adapter: ...`, `web: ...`, `docs: ...`.
+- Tests with every behavior change: a failing test first, then the fix.
+- Before opening a merge request: `make test` passes (and `make it-airgapped` if generation, the
+  repo-adapter or the web tier changed), `pre-commit run --all-files` passes, the docs describe the
+  change (a new setting fails the settings hook until it is documented), and `CHANGELOG.md` has an
+  entry under "Unreleased".
+- Security issues go through [SECURITY.md](SECURITY.md), never a public issue or merge request.
+
+By contributing you agree that your contribution is licensed under the project's
+[MIT license](LICENSE), and to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Maintainer tasks
+
+- Moving to a new update-center2 release: [Upgrading update-center2](docs/development/upgrading-upstream.md).
+- Keep [Dependencies](docs/reference/dependencies.md) in step with the Dockerfiles.

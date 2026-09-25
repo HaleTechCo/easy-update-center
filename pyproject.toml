@@ -88,7 +88,7 @@ ignore = [
     # Actually ignore these
     "C901",    # complex-structure
     "CPY001",  # missing-copyright-notice - enforced by `select = ["ALL"]` as of ruff 0.16.
-               # No license is set on this repo yet, so there is no notice text to stamp.
+               # The project is MIT-licensed through LICENSE; MIT needs no notice in every file.
     "ERA001",  # commented-out-code
     "PLR0911", # too-many-return-statements
     "PLR0912", # too-many-branches
