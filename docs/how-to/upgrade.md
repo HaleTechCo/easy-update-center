@@ -33,8 +33,8 @@ docker compose up -d
 docker compose run --rm uc generate
 ```
 
-On Linux, if `git pull` cannot update a file under `secrets/` (such as its README) because
-`secrets/` belongs to the containers' user, run it with `sudo` or fix that file's ownership first.
+On Linux, if `git pull` cannot update a file under `secrets/` (such as its README), an older
+`make pki-init` gave `secrets/` to uid 10001: run `make secrets-permissions` first.
 
 ## Go back to the previous revision
 

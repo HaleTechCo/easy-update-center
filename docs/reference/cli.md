@@ -132,7 +132,8 @@ generator on the internal `repo` network, and stays idle when `REPO_ADAPTER` is 
 ## uc pki
 
 Manages the signing PKI. It does not read the configuration, so it runs with `docker run` against
-the image. `make pki-init` wraps `init`.
+the image. `make pki-init` wraps `init`, and `make pki-rotate ROOT=<dir>` wraps `rotate`; both then
+set the permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)).
 
 ```bash
 uc pki init --out <dir> [--root-days 3650] [--signing-days 365] [--org <name>]

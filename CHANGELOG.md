@@ -6,6 +6,16 @@ once releases are published.
 
 ## Unreleased
 
+### Changed
+
+- `secrets/` stays owned by you on Linux. `make pki-init`, `make secrets-placeholders` and the new
+  `make pki-rotate` and `make secrets-permissions` let each container read its own files through its
+  group (uc 10001, web 33) instead of handing the whole directory to uid 10001, so no step needs
+  `sudo` and credentials can be written before or after the keys. `make secrets-permissions` also
+  repairs a `secrets/` set up the old way.
+- `make pki-init` builds the uc image only when it is missing, so it works on an offline host that
+  loaded pre-built images.
+
 ### Added
 
 - A self-hosted Jenkins update center in containers: `uc` (generation and tools), `web` (Apache),

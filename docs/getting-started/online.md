@@ -40,8 +40,8 @@ Every setting: [Configuration reference](../reference/configuration.md).
 
 ## 3. Add credentials
 
-Write the credentials before creating the keys: on Linux, `make pki-init` gives the whole
-`secrets/` directory to the container user, after which only `sudo` can write there.
+`make secrets-placeholders` creates the credential files with the permissions the containers need;
+writing into them keeps those permissions.
 
 ```bash
 make secrets-placeholders
@@ -60,19 +60,17 @@ What each file holds: [Secrets reference](../reference/secrets.md).
 make pki-init
 ```
 
-This creates the root CA and the signing certificate in `secrets/`. On Linux it also gives every file
-in `secrets/` to uid 10001, the containers' user. Finish the permissions, and **move the root CA's
-key to offline storage** right away: it is needed only once a year, to issue the next signing
+This creates the root CA and the signing certificate in `secrets/`, and sets the permissions of
+everything there: `secrets/` stays yours, and each container reads its own files through its group
+([File ownership on Linux](../reference/secrets.md#file-ownership-on-linux)). Then **move the root
+CA's key to offline storage** right away: it is needed only once a year, to issue the next signing
 certificate.
 
 ```bash
-sudo chmod 0400 secrets/update-center.key secrets/repo_password secrets/github_token
-sudo mv secrets/root /media/offline-usb/jenkins-uc-root      # any offline location
+mv secrets/root /media/offline-usb/jenkins-uc-root      # any offline location
 ```
 
-Docker Desktop (macOS, Windows) needs none of the `sudo` lines except moving the key. See
-[File ownership on Linux](../reference/secrets.md#file-ownership-on-linux) and
-[Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).
+See [Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).
 
 ## 5. Start
 
