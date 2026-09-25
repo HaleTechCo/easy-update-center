@@ -114,9 +114,11 @@ docker compose -f compose.yaml -f compose.airgapped.yaml up -d
 docker compose -f compose.yaml -f compose.airgapped.yaml logs -f scheduler repo-adapter
 ```
 
-The run ends with `published release <id>`. Its length depends on the repository: the adapter reads
-each archive's manifest once and caches it. Until the first release, the web container logs "waiting
-for the first published release".
+Its length depends on the repository: the adapter reads each archive's manifest once and caches it.
+The first run ends quietly (the scheduler logs `read crontab` after it); it is done when
+`docker compose run --rm uc status` shows a `live_release`. Later scheduled runs end with
+`published release <id>`. Until the first release, the web container logs "waiting for the first
+published release". A failed run logs a Python traceback saying why.
 
 ## 8. Verify
 
