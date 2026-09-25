@@ -35,17 +35,10 @@ Edit `.env` and set `PUBLIC_URL` to your update center's origin, for example
 
 Every setting: [Configuration reference](../reference/configuration.md).
 
-## 3. Create the signing keys
+## 3. Add credentials
 
-```bash
-make pki-init
-```
-
-This creates the root CA and the signing certificate in `secrets/`. Then **move `secrets/root/` to
-offline storage**: it holds the root CA's private key, needed only once a year to issue the next
-signing certificate. See [Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).
-
-## 4. Add credentials
+Write the credentials before creating the keys: on Linux, `make pki-init` gives the whole
+`secrets/` directory to the container user, after which only `sudo` can write there.
 
 ```bash
 make secrets-placeholders
@@ -56,14 +49,27 @@ printf '%s' 'your-github-user' > secrets/github_username
 printf '%s' 'ghp_...' > secrets/github_token
 ```
 
-On Linux, give the files to the container user (Docker Desktop needs nothing):
+What each file holds: [Secrets reference](../reference/secrets.md).
+
+## 4. Create the signing keys
 
 ```bash
-sudo chown 10001:10001 secrets/repo_* secrets/github_*
-sudo chmod 0400 secrets/repo_password secrets/github_token
+make pki-init
 ```
 
-What each file holds: [Secrets reference](../reference/secrets.md).
+This creates the root CA and the signing certificate in `secrets/`. On Linux it also gives every file
+in `secrets/` to uid 10001, the containers' user. Finish the permissions, and **move the root CA's
+key to offline storage** right away: it is needed only once a year, to issue the next signing
+certificate.
+
+```bash
+sudo chmod 0400 secrets/update-center.key secrets/repo_password secrets/github_token
+sudo mv secrets/root /media/offline-usb/jenkins-uc-root      # any offline location
+```
+
+Docker Desktop (macOS, Windows) needs none of the `sudo` lines except moving the key. See
+[File ownership on Linux](../reference/secrets.md#file-ownership-on-linux) and
+[Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).
 
 ## 5. Start
 

@@ -2,17 +2,27 @@
 
 Symptoms, causes and fixes, grouped by where the symptom shows up.
 
-Start with `docker compose run --rm uc status` and the scheduler's log
-(`docker compose logs --tail 200 scheduler`). `status.json` names only a failure's class; the log has
-the message quoted below. Air-gapped, add `-f compose.yaml -f compose.airgapped.yaml` to each command.
+Start with `docker compose run --rm uc status`. `status.json` names only a failure's class (as
+`<ErrorClass>: see the generator log`); the message quoted below is in the output of the run:
+
+- a scheduled run: `docker compose logs --tail 200 scheduler`;
+- a run you started with `docker compose run --rm uc generate`: that command's own output;
+- air-gapped, repository errors (authentication, certificates, timeouts) also appear in
+  `docker compose logs --tail 200 repo-adapter`.
+
+Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
+([Deploy air-gapped](getting-started/airgapped.md#3-configure)).
 
 ## Generation
 
 | Symptom | Cause and fix |
 |---|---|
-| `Repository credentials missing: provide /run/secrets/repo_username and /run/secrets/repo_password` | The credential files are empty or missing. Write them ([Add credentials](getting-started/online.md#4-add-credentials)). Air-gapped with `REPO_ADAPTER=off`, also add them back to the `secrets` lists in `compose.airgapped.yaml`. |
+| `Repository credentials missing: provide /run/secrets/repo_username and /run/secrets/repo_password` | The credential files are empty or missing. Write them: [online](getting-started/online.md#3-add-credentials), [air-gapped](getting-started/airgapped.md#4-add-credentials). Air-gapped with `REPO_ADAPTER=off`, also add them back to the `secrets` lists in `compose.airgapped.yaml`. |
 | The listing fails with HTTP 403 (online) | Anonymous or wrong credentials: repo.jenkins-ci.org needs a Jenkins community account ([Accounts](getting-started/requirements.md#accounts)). |
-| The listing fails with HTTP 403 (Artifactory) | The account may not run AQL queries on the repository. Grant it, or use another account. |
+| The listing fails with HTTP 403 (Artifactory) | The account cannot read the repository. Give it read permission on the repository (no admin rights are needed), or use another account. |
+| A stack trace from `GitHubSource`: `java.io.IOException: This endpoint requires you to be authenticated` | Not an error: the warning for a missing GitHub token. The run continues without labels from GitHub topics ([GitHub token](reference/secrets.md#github-token)). |
+| `Permission denied` writing to `secrets/` (Linux) | `make pki-init` gave `secrets/` to the containers' user. Write with `sudo` ([File ownership on Linux](reference/secrets.md#file-ownership-on-linux)). |
+| `make pki-init` starts building the image, and fails without internet | It rebuilds the image first. On a host that loaded pre-built images, run `make -o build-uc pki-init`. |
 | `PUBLIC_URL must be a bare origin such as https://uc.example.com` | `PUBLIC_URL` has a path, query or fragment. Give the update center its own hostname ([A hostname for PUBLIC_URL](getting-started/requirements.md#a-hostname-for-public_url)). |
 | `PUBLIC_URL points at localhost, which Jenkins controllers cannot reach` | Use a name controllers can resolve. `ALLOW_LOCAL_PUBLIC_URL=true` exists for tests only. |
 | `uc: another generation holds /data/.lock` (exit code 75) | A generation or rollback is already running, often the scheduler's. Wait for it; `docker compose logs -f scheduler` shows it. |
@@ -76,4 +86,4 @@ the message quoted below. Air-gapped, add `-f compose.yaml -f compose.airgapped.
 | The update site shows no plugins, or an old list | Click **Check now** on the Plugins page. Check `status.json`'s `live_release` and `last_run`. |
 | Plugins are offered that the controller cannot install | Their dependencies are missing from the repository. `uc doctor` lists them under dependency problems. |
 | `jenkins-plugin-cli` downloads from the wrong host | `JENKINS_UC` has a path; set it to the bare origin ([jenkins-plugin-cli](how-to/configure-jenkins.md#jenkins-plugin-cli-and-the-jenkins-docker-image)). |
-| The controller cannot reach the update center at all | Check `curl $PUBLIC_URL/uctest.json` from the controller's host: it must print `{}`. |
+| The controller cannot reach the update center at all | From the controller's host, `curl https://jenkins-updates.example.com/uctest.json` (your `PUBLIC_URL`) must print `{}`. |

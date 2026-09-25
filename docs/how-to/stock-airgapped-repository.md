@@ -81,8 +81,9 @@ see every plugin in `current/`, but no core upgrade. See [Core age](../architect
 
 ## The service account
 
-- **Artifactory:** an account that can run AQL queries on the repository; a non-admin account
-  works. Anonymous access is not needed.
+- **Artifactory:** an account with read permission on the repository, with its password or an
+  access token in `secrets/repo_password`. No admin rights are needed: the generator's listing (an
+  AQL query) returns whatever the account can read. Anonymous access is not needed.
 - **Artifact Keeper:** a user name and an API token (not the password); the token goes in
   `secrets/repo_password`.
 
@@ -95,10 +96,13 @@ bundle: [Repository behind a private CA](../getting-started/airgapped.md#reposit
 Before the first generation, and after each procurement:
 
 ```bash
-docker compose -f compose.yaml -f compose.airgapped.yaml run --rm uc doctor --fetch
+docker compose run --rm uc doctor --fetch
 ```
 
-It exits 1 when anything will be dropped. Read it top down:
+(With `COMPOSE_FILE` set in `.env`, as in [Deploy air-gapped](../getting-started/airgapped.md#3-configure);
+otherwise add `-f compose.yaml -f compose.airgapped.yaml`.) `--fetch` reads each archive's manifest
+and POM so dependencies can be checked before the first generation; the results are cached. It exits
+1 when anything will be dropped. Read it top down:
 
 | Section | What to do |
 |---|---|

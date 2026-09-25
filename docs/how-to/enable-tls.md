@@ -14,10 +14,16 @@ proxy or ingress you already run:
    `https://jenkins-updates.example.com`.
 2. Forward every path and query string unchanged to the web container's port 8080. The query
    string matters: version routing depends on `?version=`.
-3. Publish a release with the new URL: `docker compose run --rm uc generate`.
+3. If a release was already published under a different `PUBLIC_URL`, publish one with the new URL:
+   `docker compose run --rm uc generate`. On a fresh installation the first run already uses it.
 
 Redirects always name `PUBLIC_URL`, whatever `Host` header the proxy sends, so no rewriting is
 needed in the proxy.
+
+Keep port 8080 away from everyone but the proxy, especially in proxy download mode, where it would
+serve repository files over plain HTTP. `HTTP_PORT` accepts a bind address: with the proxy on the
+same host, `HTTP_PORT=127.0.0.1:8080` in `.env` publishes it on the loopback interface only.
+Otherwise restrict it with the host's firewall.
 
 ## In the web container
 
@@ -41,6 +47,8 @@ Put the PEM certificate (with its chain) and key in `./tls/`, readable by uid 33
 docker compose -f compose.yaml -f compose.tls.yaml up -d
 ```
 
-Air-gapped, add `-f compose.airgapped.yaml` too, or list all three in `COMPOSE_FILE`. Port 8443
+Air-gapped, add it to `COMPOSE_FILE` in `.env` instead
+(`COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.tls.yaml`) and run `docker compose up -d`.
+Port 8443
 (`HTTPS_PORT` on the host) then serves TLS with Mozilla's "intermediate" settings; 8080 stays
 available for a proxy in front. Set `PUBLIC_URL` to the `https://` origin and publish a new release.

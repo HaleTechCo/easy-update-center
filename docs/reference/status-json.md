@@ -24,7 +24,7 @@ and `warnings`, so the other fields keep describing the live release. `uc rollba
 | `last_run` | object | The most recent `uc generate`, successful or not. |
 | `last_run.id` | string | Its release id. |
 | `last_run.result` | string | `success` or `failed`. |
-| `last_run.error` | string or null | On failure, the error's class only, as `<ErrorClass>: see the generator log`. The message is in the container log. |
+| `last_run.error` | string or null | On failure, the error's class only, as `<ErrorClass>: see the generator log`. The message is in the run's output: the scheduler's log for scheduled runs, the terminal for a manual `uc generate`; air-gapped repository errors also appear in the repo-adapter's log. See [Troubleshooting](../troubleshooting.md). |
 | `last_run.finished_at` | string | When it finished (ISO 8601, UTC). |
 | `generated_at` | string | When the live release's generation started (ISO 8601, UTC). |
 | `update_center2` | string | The generator version, for example `3.18.4+patches`. |
@@ -42,7 +42,7 @@ and `warnings`, so the other fields keep describing the live release. `uc rollba
 | `signing_cert.days_left` | integer | Days until expiry at the end of the run. Generation stops within `CERTIFICATE_MINIMUM_VALID_DAYS`. |
 | `tiers` | object | The tiered sites: `weekly` and `stable`, lists of core versions. Both empty when the repository holds no core. |
 | `plugin_count` | integer | Plugins offered by the live release's `current/` site. |
-| `warnings` | list of strings | What the last run could not do but published anyway, for example "GitHub unavailable" or dropped artifacts. Review them. |
+| `warnings` | list of strings | What the last run could not do but published anyway, for example "GitHub credentials not set: plugin labels from GitHub topics are omitted" or dropped artifacts. Review them. |
 | `doctor` | object or null | With `DOWNLOAD_BACKEND=artifactory` (the air-gapped default), counts from the same checks as `uc doctor`; `null` otherwise. |
 | `doctor.plugins` | integer | Plugins with a POM in the repository listing. |
 | `doctor.cores` | list of strings | Core versions with a POM. |
@@ -89,8 +89,8 @@ An air-gapped deployment after a successful run:
   "plugin_count": 211,
   "public_url": "https://jenkins-updates.corp.example",
   "resources": {
-    "age_days": 12,
-    "data_date": "2026-09-12T09:14:05Z",
+    "age_days": 22,
+    "data_date": "2026-09-02T08:35:03Z",
     "fetched_at": "2026-09-24T06:00:03Z",
     "overlay": ["artifact-ignores.properties"],
     "ref": "b2c8ad2b2feb425b471e6dcc9174c50dc3b3c1dd",

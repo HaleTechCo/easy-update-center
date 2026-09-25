@@ -19,6 +19,22 @@ The file name does not matter; every certificate in the directory is trusted. Fo
 container, mount the file into that directory, or bake it into your controller image. Only
 `root-ca.crt` goes to controllers, never a key.
 
+`root-ca.crt` only vouches for the metadata's signatures. It has nothing to do with HTTPS: if
+`PUBLIC_URL` is `https://` with a certificate from a private CA, the controller's Java runtime must
+trust that CA as well, as it must for any internal HTTPS service. The same goes for the repository
+when controllers download from it directly (`DOWNLOAD_ACCESS=redirect`), and for
+`jenkins-plugin-cli`, which runs on the same Java runtime. For a controller built from the official
+image, for example:
+
+```dockerfile
+FROM jenkins/jenkins:lts
+USER root
+COPY corp-ca.crt /usr/local/share/ca-certificates/corp-ca.crt
+RUN keytool -importcert -noprompt -cacerts -storepass changeit \
+      -alias corp-ca -file /usr/local/share/ca-certificates/corp-ca.crt
+USER jenkins
+```
+
 ## Point the update site at the update center
 
 Set the default update site's URL to `$PUBLIC_URL/update-center.json`. The site's id must match

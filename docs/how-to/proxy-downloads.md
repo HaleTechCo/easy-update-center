@@ -24,19 +24,22 @@ repository.
    printf '%s' 'svc-read:password-or-token' > secrets/download_proxy_auth
    ```
 
-   On Linux the web container reads it as uid 33:
+   On Linux, once `make pki-init` has run, `secrets/` belongs to the containers' user: write the
+   file with `sudo`, then give it to uid 33, the web container's user:
 
    ```bash
+   printf '%s' 'svc-read:password-or-token' | sudo tee secrets/download_proxy_auth >/dev/null
    sudo chown 33:33 secrets/download_proxy_auth && sudo chmod 0400 secrets/download_proxy_auth
    ```
 
 2. Set `DOWNLOAD_ACCESS=proxy` in `.env`.
-3. Recreate the web container: `docker compose up -d` (air-gapped, with both compose files).
+3. Recreate the web container: `docker compose up -d` (air-gapped, with `COMPOSE_FILE` in `.env`).
 
 The web container refuses to start in proxy mode if the file does not hold `username:password`. To
-check, download a plugin you know the repository holds through it:
+check, download a plugin you know the repository holds through it, using your own `PUBLIC_URL`:
 
 ```bash
+PUBLIC_URL=https://jenkins-updates.corp.example
 curl -sSo /dev/null -w '%{http_code}\n' -L "$PUBLIC_URL/download/plugins/git/latest/git.hpi"
 ```
 
@@ -59,8 +62,16 @@ services:
       DOWNLOAD_PROXY_CA_FILE: /etc/ssl/uc-proxy-ca.crt
 ```
 
+Copy the CA's PEM file to `secrets/proxy-ca.crt` (with `sudo cp` on Linux once `make pki-init` has run;
+leave it world-readable, mode 0644, since the web container reads it as uid 33), add the override to
+`COMPOSE_FILE` in `.env`, and recreate the web container:
+
 ```bash
-docker compose -f compose.yaml -f compose.airgapped.yaml -f compose.proxy-ca.yaml up -d
+COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.proxy-ca.yaml    # in .env (Windows: ; between files)
+```
+
+```bash
+docker compose up -d
 ```
 
 The file must hold every CA needed to verify the backend (intermediate CAs are accepted). It

@@ -13,7 +13,7 @@ git fetch
 git log --oneline HEAD..origin/master     # what changes
 git pull
 make build
-docker compose up -d                      # air-gapped: add -f compose.yaml -f compose.airgapped.yaml
+docker compose up -d                      # air-gapped: COMPOSE_FILE in .env selects the override
 docker compose run --rm uc generate       # publish with the new generator now, instead of at the next schedule
 docker compose run --rm uc status
 ```
