@@ -4,20 +4,114 @@ A production deployment that reads plugins from repo.jenkins-ci.org and sends co
 
 ## Before you start
 
+- Check the [requirements](requirements.md): a Linux Docker host, a hostname for `PUBLIC_URL`, a
+  Jenkins community account, and internet access.
+- The first run reads the whole plugin catalog and **takes hours**. Controllers can be pointed at
+  the update center only after it finishes.
+
 ## 1. Build the images
+
+```bash
+git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
+cd jenkins-update-center
+make build
+```
+
+This builds `jenkins-uc/uc:local` (update-center2 from source, with its tests) and
+`jenkins-uc/web:local`. The first build takes several minutes.
 
 ## 2. Configure
 
+```bash
+cp .env.online.example .env
+```
+
+Edit `.env` and set `PUBLIC_URL` to your update center's origin, for example
+`https://jenkins-updates.example.com`. Other settings worth knowing now:
+
+- `GENERATE_SCHEDULE`: when to regenerate (default every six hours);
+- `JAVA_TOOL_OPTIONS`: `-Xmx6g` for the full catalog, and an outbound proxy if the host needs one;
+- `HTTP_PORT`: the host port for the web container (default 8080).
+
+Every setting: [Configuration reference](../reference/configuration.md).
+
 ## 3. Create the signing keys
+
+```bash
+make pki-init
+```
+
+This creates the root CA and the signing certificate in `secrets/`. Then **move `secrets/root/` to
+offline storage**: it holds the root CA's private key, needed only once a year to issue the next
+signing certificate. See [Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).
 
 ## 4. Add credentials
 
+```bash
+make secrets-placeholders
+printf '%s' 'your-community-user' > secrets/repo_username
+printf '%s' 'your-community-password' > secrets/repo_password
+# recommended: a GitHub user and a classic token with no scopes, for plugin labels
+printf '%s' 'your-github-user' > secrets/github_username
+printf '%s' 'ghp_...' > secrets/github_token
+```
+
+On Linux, give the files to the container user (Docker Desktop needs nothing):
+
+```bash
+sudo chown 10001:10001 secrets/repo_* secrets/github_*
+sudo chmod 0400 secrets/repo_password secrets/github_token
+```
+
+What each file holds: [Secrets reference](../reference/secrets.md).
+
 ## 5. Start
+
+```bash
+docker compose up -d
+```
+
+This starts `web`, `scheduler` and `repo-adapter` (idle online). The scheduler starts the first
+generation at once, because no release is live yet.
 
 ## 6. Watch the first run
 
+```bash
+docker compose logs -f scheduler
+```
+
+The generator logs each manifest and POM it downloads. The run ends with `published release <id>`.
+Until then the web container logs "waiting for the first published release" and answers nothing. If
+the run fails, the log says why; see [Troubleshooting](../troubleshooting.md#generation).
+
 ## 7. Verify
+
+```bash
+docker compose run --rm uc status
+```
+
+`last_run.result` is `success` and `live_release` names the release. Then, from where your
+controllers run:
+
+```bash
+curl -sI "https://jenkins-updates.example.com/update-center.json?version=2.528.1" | grep -i '^location'
+curl -s  "https://jenkins-updates.example.com/uctest.json"
+```
+
+The first redirects to a `dynamic-stable-...` tier; the second prints `{}`.
 
 ## 8. Connect Jenkins
 
+On every controller, copy `secrets/root-ca.crt` into `$JENKINS_HOME/update-center-rootCAs/` and set
+the update site to `$PUBLIC_URL/update-center.json`:
+[Configure Jenkins controllers](../how-to/configure-jenkins.md).
+
 ## Production checklist
+
+- [ ] TLS: `PUBLIC_URL` is `https://`, through your proxy or the web container ([Enable TLS](../how-to/enable-tls.md)).
+- [ ] The root CA key (`secrets/root/`) is offline, with a backup.
+- [ ] `secrets/` is backed up: losing the signing key means issuing a new one; losing the root key
+      means re-trusting every controller.
+- [ ] Monitoring alerts on failed runs, certificate expiry and stale data ([Monitor](../how-to/monitor.md)).
+- [ ] A reminder 45 days before `signing_cert.not_after` ([Rotate the signing certificate](../how-to/rotate-signing-certificate.md)).
+- [ ] `GENERATE_SCHEDULE` suits how quickly you want new plugin releases.
