@@ -1,4 +1,4 @@
-"""Releases on the data volume and the atomic live swap (spec §4, §6 step 10)."""
+"""Releases on the data volume and the atomic live swap (docs/architecture/generation-pipeline.md#step-10-publish)."""
 
 from __future__ import annotations
 
@@ -134,7 +134,7 @@ def prune(data_dir: Path, retain: int) -> list[str]:
 
 
 def reclaim_orphans(data_dir: Path, current_id: str) -> list[str]:
-    """Remove staging and work trees left by a run that was killed (spec §6 step 10).
+    """Remove staging and work trees left by a run that was killed (docs/architecture/generation-pipeline.md#failed-runs).
 
     Called under the RunLock, so anything here belongs to a run that is no longer alive.
     `.failed-*` is deliberately kept: mark_failed preserves the last failure for debugging.

@@ -1,4 +1,4 @@
-"""Online end to end (spec §13): generate from repo.jenkins-ci.org, serve, redirect to get.jenkins.io."""
+"""Online end to end (CONTRIBUTING.md#tests): generate from repo.jenkins-ci.org, serve, redirect to get.jenkins.io."""
 
 from __future__ import annotations
 
@@ -95,6 +95,6 @@ def test_version_routing_uses_generated_tiers(release):
 
 def test_github_labels_when_a_token_is_given(release):
     if release['warnings'] and any('GitHub' in w for w in release['warnings']):
-        pytest.skip('no GitHub token provided (spec S7 needs one)')
+        pytest.skip('no GitHub token provided (the label test needs one)')
     doc = json.loads(get(WEB + '/current/update-center.actual.json'))
     assert any(p.get('labels') for p in doc['plugins'].values())

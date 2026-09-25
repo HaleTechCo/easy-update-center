@@ -1,4 +1,4 @@
-# Web tier (spec §8): Apache serving /data/live with upstream's .htaccess routing.
+# Web tier (docs/architecture/request-routing.md): Apache serving /data/live with upstream's .htaccess routing.
 FROM httpd:2.4
 # Distribution packages are not version-pinned (DL3008): httpd:2.4 tracks Debian's current release,
 # and the archive drops superseded versions, so a pin breaks the build the day the base moves.

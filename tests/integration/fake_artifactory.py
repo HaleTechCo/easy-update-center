@@ -1,4 +1,4 @@
-"""Test-only stand-in for the three Artifactory calls update-center2 makes (spec §13).
+"""Test-only stand-in for the three Artifactory calls update-center2 makes (CONTRIBUTING.md#tests).
 
 POST /artifactory/api/search/aql, GET /artifactory/<repo>/<path>, GET /artifactory/<repo>/<path>!/<entry>.
 update-center2 answers 401 challenges with credentials, so private reads use WWW-Authenticate: Basic.

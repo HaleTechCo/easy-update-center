@@ -1,4 +1,4 @@
-"""Reading untrusted POMs safely, and deciding whether one belongs to a path (repo-adapter spec §4.2 rule 3)."""
+"""Reading untrusted POMs safely, and deciding whether one belongs to a path (docs/architecture/repo-adapter.md#filling-gaps)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Plugin and core archives shaped like Maven, Gradle and pre-2015 builds (repo-adapter spec §2)."""
+"""Plugin and core archives shaped like Maven, Gradle and pre-2015 builds (docs/architecture/repo-adapter.md#filling-gaps)."""
 
 from __future__ import annotations
 

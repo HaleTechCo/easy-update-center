@@ -1,4 +1,4 @@
-"""A live symlink swap, and the RewriteMap behind it, take effect without restarting Apache (spec S5)."""
+"""A live symlink swap, and the RewriteMap behind it, take effect without restarting Apache (docs/architecture/request-routing.md#live-swap)."""
 
 from pathlib import Path
 

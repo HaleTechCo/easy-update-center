@@ -1,4 +1,4 @@
-"""Air-gapped end to end (spec §13, repo-adapter spec §9).
+"""Air-gapped end to end (CONTRIBUTING.md#tests).
 
 Doctor, generate through the repo-adapter, serve, and real Jenkins controllers installing plugins.
 `make it-airgapped` runs it once per repository type.

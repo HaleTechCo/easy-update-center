@@ -1,5 +1,5 @@
 ---
-# Web-tier routing tests (spec §13). Run with `make test-routing`.
+# Web-tier routing tests (CONTRIBUTING.md#tests). Run with `make test-routing`.
 name: uc-routing
 
 x-web: &web

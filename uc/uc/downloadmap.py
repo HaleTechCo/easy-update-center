@@ -1,4 +1,4 @@
-"""The .htdownload-map RewriteMap: /download/... keys to Maven paths in Artifactory (spec §6 step 8, §8.2)."""
+"""The .htdownload-map RewriteMap: /download/... keys to Maven paths in Artifactory (docs/architecture/generation-pipeline.md#step-8-layout-and-download-map)."""
 
 from __future__ import annotations
 

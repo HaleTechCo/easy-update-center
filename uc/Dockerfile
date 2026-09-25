@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
-# uc image: pinned + patched update-center2 (spec §4, §7.4) and the uc CLI.
+# uc image: pinned + patched update-center2 and the uc CLI.
+# See docs/architecture/overview.md and docs/development/upgrading-upstream.md#the-patches.
 ARG UC2_VERSION=3.18.4
 ARG UC2_COMMIT=b2c8ad2b2feb425b471e6dcc9174c50dc3b3c1dd
 ARG SUPERCRONIC_VERSION=v0.2.49

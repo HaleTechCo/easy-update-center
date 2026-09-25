@@ -1,4 +1,4 @@
-"""Upstream resources/ (security warnings, suspensions, labels) plus the operator overlay (spec §6 step 2)."""
+"""Upstream resources/ (security warnings, suspensions, labels) plus the operator overlay (docs/architecture/generation-pipeline.md#step-2-resources)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""The root .htaccess: upstream generate-htaccess.sh output minus its download redirects (spec §6 step 5)."""
+"""The root .htaccess: upstream generate-htaccess.sh output minus its download redirects (docs/architecture/generation-pipeline.md#step-5-htaccess)."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ class HtaccessError(UcError):
 
 
 def _changed(detail: str) -> HtaccessError:
-    return HtaccessError(f'{detail}; upstream generate-htaccess.sh changed, review it before upgrading (docs/upgrading.md)')
+    return HtaccessError(f'{detail}; upstream generate-htaccess.sh changed, review it before upgrading (docs/development/upgrading-upstream.md)')
 
 
 def strip_download_rules(text: str) -> str:

@@ -1,4 +1,4 @@
-"""Content-addressed cache of small derived files, keyed by sha256 (repo-adapter spec §5.1)."""
+"""Content-addressed cache of small derived files, keyed by sha256 (docs/architecture/repo-adapter.md#cache)."""
 
 from __future__ import annotations
 

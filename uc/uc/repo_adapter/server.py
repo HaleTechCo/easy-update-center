@@ -1,4 +1,4 @@
-"""uc repo-adapter: upstream's three Artifactory requests, answered from either repository type (repo-adapter spec §3, §4.1, §5.3)."""
+"""uc repo-adapter: upstream's three Artifactory requests, answered from either repository type (docs/architecture/repo-adapter.md#requests-it-answers)."""
 
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ class Adapter:
             return index
 
     def current(self) -> Index:
-        """Return the latest listing; after a restart, the first GET builds one (spec §4.1)."""
+        """Return the latest listing; after a restart, the first GET builds one."""
         return self.index or self.refresh()
 
     def pom(self, path: str) -> bytes | None:
@@ -132,7 +132,7 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
 
             Only the listing is authenticated. Upstream cannot answer an authentication challenge for
             file reads: its Authenticator dereferences the requesting site, which Java's HttpClient
-            always passes as null. GETs serve metadata only, on the internal repo network (spec §5.3).
+            always passes as null. GETs serve metadata only, on the internal repo network (docs/architecture/repo-adapter.md#security).
             """
             if adapter is None:
                 self._send(503, b'REPO_ADAPTER is off\n', 'text/plain')

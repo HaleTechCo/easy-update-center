@@ -1,4 +1,4 @@
-"""The scheduler service: a first release straight away, then supercronic on GENERATE_SCHEDULE (spec §5)."""
+"""The scheduler service: a first release straight away, then supercronic on GENERATE_SCHEDULE (docs/reference/cli.md#uc-schedule)."""
 
 from __future__ import annotations
 

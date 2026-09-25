@@ -1,4 +1,4 @@
-"""Running the update-center2 jar (spec §6 steps 3, 4, 7)."""
+"""Running the update-center2 jar (docs/architecture/generation-pipeline.md#step-7-run-the-generator)."""
 
 from __future__ import annotations
 
