@@ -70,8 +70,8 @@ make pki-init                        # signing keys; move secrets/root/ offline 
 docker compose up -d
 ```
 
-Write the credentials before `make pki-init`: on Linux it gives `secrets/` to the containers' user,
-and later changes need `sudo` ([File ownership on Linux](docs/reference/secrets.md#file-ownership-on-linux)).
+`secrets/` stays yours, with no `sudo`: the `make` targets let each container read its own files
+through its group ([File ownership on Linux](docs/reference/secrets.md#file-ownership-on-linux)).
 
 The first run reads the whole plugin catalog and **takes hours**; follow it with
 `docker compose logs -f scheduler`. When `docker compose run --rm uc status` shows a `live_release`,
@@ -97,9 +97,8 @@ docker compose up -d
 Your repository holds the plugins and cores to offer, in Maven layout:
 [Stock an air-gapped repository](docs/how-to/stock-airgapped-repository.md). No internet on the
 Docker host? Build on a connected machine and carry the images and a `git bundle` of this repository
-across, then use `make -o build-uc pki-init`:
-[Build the images](docs/getting-started/airgapped.md#2-build-the-images). As online, write the
-credentials before `make pki-init`. When a release is live,
+across; the `make` targets above then run without internet:
+[Build the images](docs/getting-started/airgapped.md#2-build-the-images). When a release is live,
 [configure Jenkins controllers](docs/how-to/configure-jenkins.md).
 
 Full walkthrough: [Deploy air-gapped](docs/getting-started/airgapped.md).

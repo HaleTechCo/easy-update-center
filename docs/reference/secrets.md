@@ -47,28 +47,30 @@ The web container never receives the signing key.
 ## File ownership on Linux
 
 Compose mounts secret files with their host ownership and permissions. The uc image's containers
-(`scheduler`, `uc`, `repo-adapter`) run as uid 10001, the web container as uid 33.
+(`scheduler`, `uc`, `repo-adapter`) run as uid 10001 with group 10001, the web container as uid 33
+with group 33. `secrets/` stays yours, and each container reads its own files through its group:
 
-`make pki-init` gives the whole `secrets/` directory, and every file already in it, to uid 10001.
-That is the right owner for the containers, but afterwards your own user can no longer write there.
-So write the credential files first, then run `make pki-init`, then tighten the permissions:
+| Files | Owner | Group | Mode |
+|---|---|---|---|
+| `update-center.key`, `repo_username`, `repo_password`, `github_username`, `github_token` | you | 10001 | 0640 |
+| `update-center.cert`, `root-ca.crt` | you | 10001 | 0644 |
+| `download_proxy_auth` | you | 33 | 0640 |
+| `repo-ca.crt`, `proxy-ca.crt`, `README.md` | you | yours | unchanged (0644) |
+| `root/`, `root/root-ca.key` | you | yours | 0700, 0600 |
+
+`make pki-init`, `make pki-rotate` and `make secrets-placeholders` set this up (through
+`scripts/secrets-permissions.sh`, run as root in the uc image), so no step needs `sudo`, and you can
+write credentials before or after creating the keys. Writing into an existing file, as
+`printf '%s' '...' > secrets/repo_password` does, keeps its permissions. After **replacing** a file
+(copying a new one over it, or saving it from an editor that writes a new file), run:
 
 ```bash
-make secrets-placeholders
-printf '%s' '...' > secrets/repo_username      # and the other credential files you need
-make pki-init
-sudo chmod 0400 secrets/update-center.key secrets/repo_password secrets/github_token
-sudo chown 33:33 secrets/download_proxy_auth && sudo chmod 0400 secrets/download_proxy_auth   # proxy mode only
+make secrets-permissions
 ```
 
-To change a file later, use `sudo` (for example `printf '%s' '...' | sudo tee secrets/repo_password >/dev/null`),
-or give a file back to uid 10001 after editing it:
-
-```bash
-sudo chown 10001:10001 secrets/update-center.* secrets/root-ca.crt secrets/repo_* secrets/github_*
-```
-
-Docker Desktop (macOS, Windows) needs none of this.
+It is idempotent, and it also hands back a `secrets/` that an older version of `make pki-init` gave
+wholesale to uid 10001. Docker Desktop (macOS, Windows) ignores ownership, so none of this matters
+there.
 
 ## GitHub token
 

@@ -22,15 +22,11 @@ repository.
 
    ```bash
    printf '%s' 'svc-read:password-or-token' > secrets/download_proxy_auth
+   make secrets-permissions
    ```
 
-   On Linux, once `make pki-init` has run, `secrets/` belongs to the containers' user: write the
-   file with `sudo`, then give it to uid 33, the web container's user:
-
-   ```bash
-   printf '%s' 'svc-read:password-or-token' | sudo tee secrets/download_proxy_auth >/dev/null
-   sudo chown 33:33 secrets/download_proxy_auth && sudo chmod 0400 secrets/download_proxy_auth
-   ```
+   `make secrets-permissions` lets the web container (group 33) read the file, and nobody else
+   ([File ownership on Linux](../reference/secrets.md#file-ownership-on-linux)).
 
 2. Set `DOWNLOAD_ACCESS=proxy` in `.env`.
 3. Recreate the web container: `docker compose up -d` (air-gapped, with `COMPOSE_FILE` in `.env`).
@@ -62,9 +58,9 @@ services:
       DOWNLOAD_PROXY_CA_FILE: /etc/ssl/uc-proxy-ca.crt
 ```
 
-Copy the CA's PEM file to `secrets/proxy-ca.crt` (with `sudo cp` on Linux once `make pki-init` has run;
-leave it world-readable, mode 0644, since the web container reads it as uid 33), add the override to
-`COMPOSE_FILE` in `.env`, and recreate the web container:
+Copy the CA's PEM file to `secrets/proxy-ca.crt` and run `make secrets-permissions` (it keeps the
+file readable, mode 0644, for the web container), add the override to `COMPOSE_FILE` in `.env`, and
+recreate the web container:
 
 ```bash
 COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.proxy-ca.yaml    # in .env (Windows: ; between files)

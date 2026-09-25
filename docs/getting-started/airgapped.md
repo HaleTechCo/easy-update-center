@@ -46,8 +46,8 @@ cd jenkins-update-center
 
 The image archive is about 200 MB. `docker load` prints `Loaded image: jenkins-uc/uc:local` and
 `Loaded image: jenkins-uc/web:local`. These two images are all the update center runs; nothing else
-is pulled. On that host, skip `make build`, and create the signing keys with
-`make -o build-uc pki-init` (step 5): plain `make pki-init` tries to rebuild the image first.
+is pulled. On that host, skip `make build`; the other `make` targets below use the loaded images and
+need no internet.
 
 ## 3. Configure
 
@@ -82,8 +82,8 @@ Every setting: [Configuration reference](../reference/configuration.md).
 
 ## 4. Add credentials
 
-Write the credentials before creating the keys: on Linux, `make pki-init` gives the whole
-`secrets/` directory to the container user, after which only `sudo` can write there.
+`make secrets-placeholders` creates the credential files with the permissions the containers need;
+writing into them keeps those permissions.
 
 ```bash
 make secrets-placeholders
@@ -100,22 +100,20 @@ printf '%s' 'svc-read:password-or-token' > secrets/download_proxy_auth
 ## 5. Create the signing keys
 
 ```bash
-make pki-init                  # or, on a host that loaded pre-built images: make -o build-uc pki-init
+make pki-init
 ```
 
-This creates the root CA and the signing certificate in `secrets/`. On Linux it also gives every file
-in `secrets/` to uid 10001, the containers' user. Finish the permissions, and move the root CA's key
-to offline storage right away (it is needed only once a year):
+This creates the root CA and the signing certificate in `secrets/`, and sets the permissions of
+everything there: `secrets/` stays yours, the uc containers read their files through group 10001, and
+the web container reads `download_proxy_auth` through group 33
+([File ownership on Linux](../reference/secrets.md#file-ownership-on-linux)). Then move the root CA's
+key to offline storage right away (it is needed only once a year):
 
 ```bash
-sudo chmod 0400 secrets/update-center.key secrets/repo_password
-sudo chown 33:33 secrets/download_proxy_auth && sudo chmod 0400 secrets/download_proxy_auth   # proxy mode only
-sudo mv secrets/root /media/offline-usb/jenkins-uc-root      # any offline location
+mv secrets/root /media/offline-usb/jenkins-uc-root      # any offline location
 ```
 
-Docker Desktop (macOS, Windows) needs none of the `sudo` lines except moving the key. See
-[File ownership on Linux](../reference/secrets.md#file-ownership-on-linux) and
-[Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).
+See [Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).
 
 ## 6. Start
 

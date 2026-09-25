@@ -13,7 +13,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro" \
              -v "$(CURDIR)/tools:/tools:ro"
 
-.PHONY: build build-uc build-web test test-unit test-web test-routing pki-init secrets-placeholders compose-check it-airgapped it-clean it-online it-full upstream-diff
+.PHONY: build build-uc build-web uc-image test test-unit test-web test-routing test-secrets pki-init pki-rotate secrets-placeholders secrets-permissions compose-check it-airgapped it-clean it-online it-full upstream-diff
 
 build: build-uc build-web
 
@@ -24,7 +24,12 @@ build-uc:
 build-web:
 	docker build -t $(WEB_IMAGE) web
 
-test: test-unit test-web test-routing
+# The uc image, built only when it is missing: the targets that merely run it must also work on a
+# host that loaded pre-built images and has no internet access.
+uc-image:
+	@docker image inspect $(UC_IMAGE) >/dev/null 2>&1 || docker build --target runtime -t $(UC_IMAGE) uc
+
+test: test-unit test-web test-routing test-secrets
 
 test-unit: build-uc
 	docker run --rm $(SRC_MOUNTS) $(UC_TEST_IMAGE) -q /tests/unit $(ARGS)
@@ -38,17 +43,42 @@ test-routing: build-uc build-web
 	$(ROUTING) run --rm tester $(ARGS); rc=$$?; \
 	  $(ROUTING) down -v --remove-orphans >/dev/null 2>&1; exit $$rc
 
-# Creates the PKI in ./secrets as uid 10001 (the uc user). Refuses to overwrite existing files.
-pki-init: build-uc
-	@mkdir -p secrets
-	docker run --rm --user 0:0 --entrypoint sh -v "$(CURDIR)/secrets:/pki" $(UC_IMAGE) \
-	  -c 'uc pki init --out /pki && chown -R 10001:10001 /pki'
+# Ownership is real only on a Linux filesystem, so the checks run inside the uc image as root.
+test-secrets: uc-image
+	docker run --rm --user 0:0 --entrypoint bash -v "$(CURDIR)/scripts:/scripts:ro" \
+	  -v "$(CURDIR)/tests/secrets:/tests:ro" $(UC_IMAGE) /tests/permissions-checks.sh
 
-secrets-placeholders:
+# secrets/ stays yours; the containers read their files through their group (uc 10001, web 33).
+# scripts/secrets-permissions.sh sets that up, as root in the uc image, after every target that
+# writes to secrets/. Run `make secrets-permissions` yourself after replacing a file in secrets/.
+HOST_UID ?= $(shell id -u)
+HOST_GID ?= $(shell id -g)
+IN_SECRETS = docker run --rm --user 0:0 --entrypoint sh -v "$(CURDIR)/secrets:/pki" \
+  -v "$(CURDIR)/scripts/secrets-permissions.sh:/usr/local/bin/secrets-permissions.sh:ro"
+FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh /pki $(HOST_UID) $(HOST_GID)
+SECRET_FILES = repo_username repo_password github_username github_token download_proxy_auth
+
+# Creates the root CA and signing certificate in ./secrets. Refuses to overwrite existing files.
+pki-init: uc-image
 	@mkdir -p secrets
-	@for f in repo_username repo_password github_username github_token download_proxy_auth; do \
-	  [ -e secrets/$$f ] || : > secrets/$$f; done
+	$(IN_SECRETS) $(UC_IMAGE) -c 'uc pki init --out /pki && $(FIX_SECRETS)'
+
+# Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
+# signing certificate and keeps the previous pair as *.old.
+pki-rotate: uc-image
+	@test -n "$(ROOT)" || { echo "usage: make pki-rotate ROOT=<directory holding root-ca.key>"; exit 2; }
+	$(IN_SECRETS) -v "$(abspath $(ROOT)):/pki/root:ro" $(UC_IMAGE) -c 'uc pki rotate --dir /pki && $(FIX_SECRETS)'
+	@rmdir secrets/root 2>/dev/null || true
+
+secrets-placeholders: uc-image
+	@mkdir -p secrets
+	@$(IN_SECRETS) $(UC_IMAGE) -c 'for f in $(SECRET_FILES); do [ -e /pki/$$f ] || : > /pki/$$f; done; $(FIX_SECRETS)'
 	@echo "secrets/: created any missing credential files (empty means 'not set')"
+
+secrets-permissions: uc-image
+	@mkdir -p secrets
+	@$(IN_SECRETS) $(UC_IMAGE) -c '$(FIX_SECRETS)'
+	@echo "secrets/: yours; the containers read their files through their group"
 
 # UC_ENV_FILE selects the services' env_file; --env-file only feeds compose's own interpolation.
 # check_isolation.py asserts the network and secret boundaries the repo-adapter relies on.
