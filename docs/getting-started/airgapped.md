@@ -6,18 +6,10 @@ A production deployment that reads plugins from your own Artifactory or Artifact
 
 - Check the [requirements](requirements.md): a Linux Docker host, a hostname for `PUBLIC_URL`, and
   an account that can read your repository.
-- Your repository holds the plugins and Jenkins cores to offer (next step). Controllers download
-  from it too, directly or through the update center.
-- Building the images needs internet access, once; running them does not.
-
-To save typing `-f compose.yaml -f compose.airgapped.yaml` on every command, set this in the shell
-you work in (on Windows, separate the files with `;` instead of `:`):
-
-```bash
-export COMPOSE_FILE=compose.yaml:compose.airgapped.yaml
-```
-
-The commands below include the `-f` flags anyway.
+- Your repository holds the plugins and Jenkins cores to offer (step 1). Controllers download from
+  it too, directly or through the update center.
+- Building the images needs internet access, once, on any machine with the same CPU architecture as
+  the Docker host. Running them needs none.
 
 ## 1. Stock the repository
 
@@ -27,7 +19,7 @@ Plugins go in Maven layout under the group their manifest names, cores as
 
 ## 2. Build the images
 
-On a host with internet access:
+If the Docker host has internet access, build there:
 
 ```bash
 git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
@@ -35,20 +27,27 @@ cd jenkins-update-center
 make build
 ```
 
-If the Docker host that will run the update center has no internet access, build on a machine that
-does and move the images, with a clone of this repository, across:
+If it has none, build on a machine that does, with the **same CPU architecture** as the Docker host
+(x86-64 or arm64), and carry two files across: the images and the repository itself.
 
 ```bash
 # on the machine with internet access
+git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
+cd jenkins-update-center
 make build
-docker save jenkins-uc/uc:local jenkins-uc/web:local | gzip > jenkins-uc-images.tar.gz
+docker save jenkins-uc/uc:local jenkins-uc/web:local | gzip > ../jenkins-uc-images.tar.gz
+git bundle create ../jenkins-uc.bundle master
 
-# on the air-gapped Docker host, in its clone of this repository
+# on the air-gapped Docker host, with both files in the current directory
+git clone jenkins-uc.bundle jenkins-update-center
 gunzip -c jenkins-uc-images.tar.gz | docker load
+cd jenkins-update-center
 ```
 
-The archive is about 200 MB. `docker load` prints `Loaded image: jenkins-uc/uc:local` and
-`Loaded image: jenkins-uc/web:local`. Skip `make build` on that host.
+The image archive is about 200 MB. `docker load` prints `Loaded image: jenkins-uc/uc:local` and
+`Loaded image: jenkins-uc/web:local`. These two images are all the update center runs; nothing else
+is pulled. On that host, skip `make build`, and create the signing keys with
+`make -o build-uc pki-init` (step 5): plain `make pki-init` tries to rebuild the image first.
 
 ## 3. Configure
 
@@ -56,78 +55,116 @@ The archive is about 200 MB. `docker load` prints `Loaded image: jenkins-uc/uc:l
 cp .env.airgapped.example .env
 ```
 
-Edit `.env`:
+Edit `.env`. It already sets `MODE=airgapped`; keep that. Then:
 
-- `PUBLIC_URL`: your update center's origin, for example `https://jenkins-updates.corp.example`.
-- `REPO_URL` and `REPO_KEY`: for Artifactory, the `/artifactory/` base URL and the repository key.
+- `PUBLIC_URL`: the origin controllers will use, decided now, because it is written into the signed
+  metadata. Include the port if it is not the scheme's default, for example
+  `http://uc.corp.example:8080`, or `https://jenkins-updates.corp.example` behind your TLS proxy
+  ([Enable TLS](../how-to/enable-tls.md)).
+- `REPO_URL` and `REPO_KEY`: for Artifactory, the `/artifactory/` base URL (a trailing slash is
+  optional) and the repository key.
 - For Artifact Keeper instead: `REPO_TYPE=artifact-keeper`, `REPO_URL` the server's base URL, and
   `REPO_KEY` the repository key (not its display name).
-- If controllers cannot read the repository without credentials: `DOWNLOAD_ACCESS=proxy`
+- `DOWNLOAD_ACCESS=proxy` if controllers cannot read the repository without credentials
   ([Proxy plugin downloads](../how-to/proxy-downloads.md)).
+- Uncomment `COMPOSE_FILE=compose.yaml:compose.airgapped.yaml` (on Windows, separate the files with
+  `;`). Compose reads it from `.env`, so every `docker compose` command below, and in the other
+  pages, uses the air-gapped override without `-f` flags, as long as you run it from the repository
+  directory.
+- Recommended: fresh security warnings through `RESOURCES_SOURCE=url`. The data built into the image
+  is only as recent as its update-center2 commit, and `status.json` marks it stale 30 days after
+  that. See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
+
+If the repository (or the download backend, in proxy mode) uses a certificate from a private CA, set
+that up now, before step 6: [Repository behind a private CA](#repository-behind-a-private-ca).
 
 Every setting: [Configuration reference](../reference/configuration.md).
 
-## 4. Create the signing keys
+## 4. Add credentials
 
-```bash
-make pki-init
-```
-
-Then **move `secrets/root/` to offline storage**: see
-[Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).
-
-## 5. Add credentials
+Write the credentials before creating the keys: on Linux, `make pki-init` gives the whole
+`secrets/` directory to the container user, after which only `sudo` can write there.
 
 ```bash
 make secrets-placeholders
 printf '%s' 'svc-jenkins-uc' > secrets/repo_username
-printf '%s' 'password-or-api-token' > secrets/repo_password    # Artifact Keeper: an API token
+printf '%s' 'password-or-token' > secrets/repo_password
+# only with DOWNLOAD_ACCESS=proxy: a read-only account for downloads
+printf '%s' 'svc-read:password-or-token' > secrets/download_proxy_auth
 ```
 
-Only the repo-adapter container receives these. On Linux, give them to the container user:
+`repo_password` is the account's password or an access token (Artifactory), or an API token
+(Artifact Keeper). Only the repo-adapter container receives these two files. What each file holds:
+[Secrets reference](../reference/secrets.md).
+
+## 5. Create the signing keys
 
 ```bash
-sudo chown 10001:10001 secrets/repo_*
-sudo chmod 0400 secrets/repo_password
+make pki-init                  # or, on a host that loaded pre-built images: make -o build-uc pki-init
 ```
 
-With `DOWNLOAD_ACCESS=proxy`, also write `secrets/download_proxy_auth`; see
-[Secrets reference](../reference/secrets.md).
+This creates the root CA and the signing certificate in `secrets/`. On Linux it also gives every file
+in `secrets/` to uid 10001, the containers' user. Finish the permissions, and move the root CA's key
+to offline storage right away (it is needed only once a year):
+
+```bash
+sudo chmod 0400 secrets/update-center.key secrets/repo_password
+sudo chown 33:33 secrets/download_proxy_auth && sudo chmod 0400 secrets/download_proxy_auth   # proxy mode only
+sudo mv secrets/root /media/offline-usb/jenkins-uc-root      # any offline location
+```
+
+Docker Desktop (macOS, Windows) needs none of the `sudo` lines except moving the key. See
+[File ownership on Linux](../reference/secrets.md#file-ownership-on-linux) and
+[Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).
 
 ## 6. Start
 
 First check what the generator will see:
 
 ```bash
-docker compose -f compose.yaml -f compose.airgapped.yaml run --rm uc doctor --fetch
+docker compose run --rm uc doctor --fetch
 ```
 
-Fix what it reports as dropped, or accept it, then start:
+`--fetch` downloads the manifest and POM of every archive the generator will read, so dependency
+problems show up before the first generation; on a large repository it takes a while, and the
+results are cached for the generator. Fix what it reports as dropped, or accept it, then start:
 
 ```bash
-docker compose -f compose.yaml -f compose.airgapped.yaml up -d
+docker compose up -d
 ```
 
 ## 7. Watch the first run
 
 ```bash
-docker compose -f compose.yaml -f compose.airgapped.yaml logs -f scheduler repo-adapter
+docker compose logs -f scheduler repo-adapter
 ```
 
-The run ends with `published release <id>`. Its length depends on the repository: the adapter reads
-each archive's manifest once and caches it. Until the first release, the web container logs "waiting
-for the first published release".
+Its length depends on the repository: the adapter reads each archive's manifest once and caches it.
+The first run ends quietly (the scheduler logs `read crontab` after it); it is done when
+`docker compose run --rm uc status` shows a `live_release`. Later scheduled runs end with
+`published release <id>`. Until the first release, the web container logs "waiting for the first
+published release". A failed run logs a Python traceback saying why; repository errors (401,
+certificates) also appear in the repo-adapter's log.
 
 ## 8. Verify
 
 ```bash
-docker compose -f compose.yaml -f compose.airgapped.yaml run --rm uc status
-curl -sI "https://jenkins-updates.corp.example/update-center.json?version=2.528.1" | grep -i '^location'
+docker compose run --rm uc status
 ```
 
-`last_run.result` is `success`; `warnings` lists what was dropped (GitHub labels, popularity and
-tool installers are expected). The `curl` shows a redirect to a tier for a core your repository
-holds, or to `current/` when it holds none.
+`last_run.result` is `success`; `warnings` lists what the air gap dropped (GitHub labels, popularity
+and tool installers are expected). Then, from a controller's host, with your own URL and a core
+version you stocked:
+
+```bash
+PUBLIC_URL=http://uc.corp.example:8080
+curl -sI "$PUBLIC_URL/update-center.json?version=2.528.1" | grep -i '^location'
+curl -sSo /dev/null -w '%{http_code}\n' -L "$PUBLIC_URL/download/plugins/git/latest/git.hpi"
+```
+
+The first prints `Location: http://uc.corp.example:8080/dynamic-stable-2.528.1/update-center.json`
+(the newest tier at or below that version; `current/` when the repository holds no core). The
+second downloads a plugin you stocked (here `git`) and prints `200`.
 
 ## 9. Connect Jenkins
 
@@ -137,8 +174,8 @@ the update site to `$PUBLIC_URL/update-center.json`:
 
 ## Repository behind a private CA
 
-If the repository's certificate comes from a private CA, give the repo-adapter that CA's bundle. It
-is added to the system bundle, not a replacement for it:
+If the repository's certificate comes from a private CA, give the repo-adapter that CA's bundle, in
+an override file next to `compose.yaml`:
 
 ```yaml
 # compose.repo-ca.yaml
@@ -150,14 +187,26 @@ services:
       REPO_CA_FILE: /etc/ssl/uc-repo-ca.crt
 ```
 
-Then use three files: `-f compose.yaml -f compose.airgapped.yaml -f compose.repo-ca.yaml`, or
-`COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.repo-ca.yaml`. The download proxy has its
-own CA setting: [Backend with a private CA](../how-to/proxy-downloads.md#backend-with-a-private-ca).
+Copy the CA's PEM file to `secrets/repo-ca.crt` and add the override to `COMPOSE_FILE` in `.env`:
+
+```bash
+COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.repo-ca.yaml
+```
+
+This bundle is **added to** the system bundle. The download proxy's CA setting works the other way
+round: `DOWNLOAD_PROXY_CA_FILE` **replaces** the system bundle for downloads
+([Backend with a private CA](../how-to/proxy-downloads.md#backend-with-a-private-ca)). With both, and
+TLS in the web container, `COMPOSE_FILE` lists every override:
+
+```bash
+COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.repo-ca.yaml:compose.proxy-ca.yaml:compose.tls.yaml
+```
 
 ## Production checklist
 
-- [ ] TLS: `PUBLIC_URL` is `https://` ([Enable TLS](../how-to/enable-tls.md)).
-- [ ] The root CA key (`secrets/root/`) is offline, with a backup.
+- [ ] TLS: `PUBLIC_URL` is `https://` ([Enable TLS](../how-to/enable-tls.md)); controllers trust its
+      certificate.
+- [ ] The root CA key is offline, with a backup.
 - [ ] `secrets/` is backed up.
 - [ ] Monitoring alerts on failed runs, certificate expiry and stale data ([Monitor](../how-to/monitor.md)).
 - [ ] A reminder 45 days before `signing_cert.not_after` ([Rotate the signing certificate](../how-to/rotate-signing-certificate.md)).

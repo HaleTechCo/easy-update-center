@@ -63,14 +63,15 @@ git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
 cd jenkins-update-center
 make build
 cp .env.online.example .env          # set PUBLIC_URL to your update center's origin
-make pki-init secrets-placeholders
+make secrets-placeholders
 printf '%s' 'community-user' > secrets/repo_username        # free: https://accounts.jenkins.io
 printf '%s' 'community-password' > secrets/repo_password
+make pki-init                        # signing keys; move secrets/root/ offline afterwards
 docker compose up -d
 ```
 
-On Linux, first give the secret files to the container user:
-[File ownership on Linux](docs/reference/secrets.md#file-ownership-on-linux).
+Write the credentials before `make pki-init`: on Linux it gives `secrets/` to the containers' user,
+and later changes need `sudo` ([File ownership on Linux](docs/reference/secrets.md#file-ownership-on-linux)).
 
 The first run reads the whole plugin catalog and **takes hours**; follow it with
 `docker compose logs -f scheduler`. When `docker compose run --rm uc status` shows a `live_release`,
@@ -83,21 +84,23 @@ Full walkthrough: [Deploy online](docs/getting-started/online.md).
 ```bash
 git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
 cd jenkins-update-center
-make build                            # needs internet once; or build elsewhere and docker load
-cp .env.airgapped.example .env        # set PUBLIC_URL, REPO_URL, REPO_KEY
-make pki-init secrets-placeholders
+make build                            # needs internet once; see below for hosts without it
+cp .env.airgapped.example .env        # set PUBLIC_URL, REPO_URL, REPO_KEY; uncomment COMPOSE_FILE
+make secrets-placeholders
 printf '%s' 'svc-jenkins-uc' > secrets/repo_username
-printf '%s' 'password-or-api-token' > secrets/repo_password
-export COMPOSE_FILE=compose.yaml:compose.airgapped.yaml
+printf '%s' 'password-or-token' > secrets/repo_password
+make pki-init                         # signing keys; move secrets/root/ offline afterwards
 docker compose run --rm uc doctor --fetch       # what the generator will see in your repository
 docker compose up -d
 ```
 
 Your repository holds the plugins and cores to offer, in Maven layout:
 [Stock an air-gapped repository](docs/how-to/stock-airgapped-repository.md). No internet on the
-Docker host? [Build elsewhere and load the images](docs/getting-started/airgapped.md#2-build-the-images).
-On Linux, set [file ownership](docs/reference/secrets.md#file-ownership-on-linux) before starting.
-When a release is live, [configure Jenkins controllers](docs/how-to/configure-jenkins.md).
+Docker host? Build on a connected machine and carry the images and a `git bundle` of this repository
+across, then use `make -o build-uc pki-init`:
+[Build the images](docs/getting-started/airgapped.md#2-build-the-images). As online, write the
+credentials before `make pki-init`. When a release is live,
+[configure Jenkins controllers](docs/how-to/configure-jenkins.md).
 
 Full walkthrough: [Deploy air-gapped](docs/getting-started/airgapped.md).
 

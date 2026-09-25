@@ -2,8 +2,9 @@
 
 Everyday commands: publish a release now, accept a deliberate shrink, go back to an earlier release, read the logs.
 
-Air-gapped, run these with `-f compose.yaml -f compose.airgapped.yaml`, or set
-`COMPOSE_FILE=compose.yaml:compose.airgapped.yaml` once.
+Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`, as in
+[Deploy air-gapped](../getting-started/airgapped.md#3-configure); otherwise add
+`-f compose.yaml -f compose.airgapped.yaml` to each.
 
 ## Generate now
 

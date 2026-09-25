@@ -18,12 +18,15 @@ You need the root key from offline storage, here mounted from `/offline/root` (t
 `root-ca.key`):
 
 ```bash
-docker run --rm --user 0:0 --entrypoint sh -v "$PWD/secrets:/pki" -v /offline/root:/pki/root \
-  jenkins-uc/uc:local -c 'uc pki rotate --dir /pki && chown -R 10001:10001 /pki'
+docker run --rm --user 0:0 --entrypoint sh -v "$PWD/secrets:/pki" -v /offline/root:/pki/root:ro \
+  jenkins-uc/uc:local -c 'uc pki rotate --dir /pki && chown 10001:10001 /pki/update-center.key /pki/update-center.cert'
 ```
 
 This writes a new `secrets/update-center.key` and `secrets/update-center.cert` and keeps the
-previous pair as `*.old`. From Git Bash on Windows, run it with `MSYS_NO_PATHCONV=1` set.
+previous pair as `*.old`. The root key is mounted read-only and only read; its ownership on the
+offline media is left alone. Docker leaves an empty `secrets/root/` directory behind as the mount
+point: remove it (`sudo rmdir secrets/root` on Linux). From Git Bash on Windows, run the command with
+`MSYS_NO_PATHCONV=1` set.
 
 Then make the running services use the new files. Compose mounts each secret file as it was when
 the container started, so recreate the scheduler:
@@ -34,8 +37,9 @@ docker compose run --rm uc generate
 docker compose run --rm uc status        # signing_cert.not_after is a year out
 ```
 
-(Air-gapped, add `-f compose.yaml -f compose.airgapped.yaml`, or set `COMPOSE_FILE`.) Return the root
-key to offline storage. Once the new release is live, delete `secrets/*.old`.
+(Air-gapped, with `COMPOSE_FILE` set in `.env`, as in [Deploy air-gapped](../getting-started/airgapped.md#3-configure).) Return the root
+key to offline storage. Once the new release is live, delete `secrets/*.old` (with `sudo` on Linux,
+where `secrets/` belongs to the containers' user).
 
 ## Replace the root CA
 
@@ -52,7 +56,7 @@ overlap, because controllers reject metadata signed under a root they do not tru
 
 2. Add `newpki/root-ca.crt` to `update-center-rootCAs/` on every controller, **keeping the old
    root** there. Jenkins trusts every certificate in that directory.
-3. Once every controller has it, switch signing: move `newpki/update-center.key`,
+3. Once every controller has it, switch signing: move (with `sudo` on Linux) `newpki/update-center.key`,
    `newpki/update-center.cert` and `newpki/root-ca.crt` into `secrets/`, replacing the old files,
    then recreate the scheduler and generate as above.
 4. Move `newpki/root/root-ca.key` offline.

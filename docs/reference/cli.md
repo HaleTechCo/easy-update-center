@@ -11,12 +11,14 @@ has the same volume, secrets and settings as the scheduler:
 docker compose run --rm uc <command> [options]
 ```
 
-Air-gapped, include the override file in every command, or set `COMPOSE_FILE` once:
+Air-gapped, set `COMPOSE_FILE` in `.env` so plain `docker compose` uses the air-gapped override
+(Compose reads it from there; on Windows, separate the files with `;`):
 
 ```bash
-docker compose -f compose.yaml -f compose.airgapped.yaml run --rm uc <command>
-export COMPOSE_FILE=compose.yaml:compose.airgapped.yaml   # then plain `docker compose ...` works
+COMPOSE_FILE=compose.yaml:compose.airgapped.yaml
 ```
+
+Without it, add `-f compose.yaml -f compose.airgapped.yaml` to every command.
 
 - The `uc` service sits in the `tools` profile, so `docker compose up` does not start it; `run`
   does. Running it starts the `repo-adapter` first.
@@ -107,9 +109,11 @@ Prints `status.json`, the same document served at `$PUBLIC_URL/status.json`. Fie
 uc schedule
 ```
 
-The `scheduler` service's command; you do not run it by hand. When no release is live it runs
-`uc generate` at once (a failure is logged and scheduling continues), then hands over to
-supercronic, which runs `uc generate` on `GENERATE_SCHEDULE` (default every six hours).
+The `scheduler` service's command; you do not run it by hand. When no release is live it generates
+one at once, in its own process: that first run prints no `published release` line, and a failure
+is logged as a traceback while scheduling continues. It then hands over to supercronic, which runs
+`uc generate` on `GENERATE_SCHEDULE` (default every six hours); those runs print
+`published release <id>`.
 
 ## uc repo-adapter
 

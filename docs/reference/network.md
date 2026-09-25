@@ -36,8 +36,10 @@ asserts this layout.
 | `reports.jenkins.io` | `scheduler`, `uc` | Issue trackers, maintainers and health scores. Optional: the run warns and continues without them. |
 
 `uc doctor --fetch` reads from `repo.jenkins-ci.org` too. The air-gapped override also blocks
-`github.com` as a precaution. An outbound HTTP proxy is set through `JAVA_TOOL_OPTIONS` for the
-generator (`-Dhttps.proxyHost`, `-Dhttps.proxyPort`).
+`github.com` as a precaution. Behind an outbound HTTP proxy, set it for
+both halves: `JAVA_TOOL_OPTIONS` (`-Dhttps.proxyHost`, `-Dhttps.proxyPort`) for the generator, and
+`HTTPS_PROXY` with `NO_PROXY=repo-adapter` for the `uc` code, which fetches the upstream resources and
+tool installers itself.
 
 ## Outbound: air-gapped
 

@@ -30,22 +30,18 @@ Edit `.env` and set `PUBLIC_URL` to your update center's origin, for example
 `https://jenkins-updates.example.com`. Other settings worth knowing now:
 
 - `GENERATE_SCHEDULE`: when to regenerate (default every six hours);
-- `JAVA_TOOL_OPTIONS`: `-Xmx6g` for the full catalog, and an outbound proxy if the host needs one;
+- `JAVA_TOOL_OPTIONS`: `-Xmx6g` for the full catalog;
+- behind an outbound proxy, set it twice, once for the generator and once for the `uc` code:
+  `-Dhttps.proxyHost=proxy.example.com -Dhttps.proxyPort=3128` in `JAVA_TOOL_OPTIONS`, and
+  `HTTPS_PROXY=http://proxy.example.com:3128` with `NO_PROXY=repo-adapter`;
 - `HTTP_PORT`: the host port for the web container (default 8080).
 
 Every setting: [Configuration reference](../reference/configuration.md).
 
-## 3. Create the signing keys
+## 3. Add credentials
 
-```bash
-make pki-init
-```
-
-This creates the root CA and the signing certificate in `secrets/`. Then **move `secrets/root/` to
-offline storage**: it holds the root CA's private key, needed only once a year to issue the next
-signing certificate. See [Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).
-
-## 4. Add credentials
+Write the credentials before creating the keys: on Linux, `make pki-init` gives the whole
+`secrets/` directory to the container user, after which only `sudo` can write there.
 
 ```bash
 make secrets-placeholders
@@ -56,14 +52,27 @@ printf '%s' 'your-github-user' > secrets/github_username
 printf '%s' 'ghp_...' > secrets/github_token
 ```
 
-On Linux, give the files to the container user (Docker Desktop needs nothing):
+What each file holds: [Secrets reference](../reference/secrets.md).
+
+## 4. Create the signing keys
 
 ```bash
-sudo chown 10001:10001 secrets/repo_* secrets/github_*
-sudo chmod 0400 secrets/repo_password secrets/github_token
+make pki-init
 ```
 
-What each file holds: [Secrets reference](../reference/secrets.md).
+This creates the root CA and the signing certificate in `secrets/`. On Linux it also gives every file
+in `secrets/` to uid 10001, the containers' user. Finish the permissions, and **move the root CA's
+key to offline storage** right away: it is needed only once a year, to issue the next signing
+certificate.
+
+```bash
+sudo chmod 0400 secrets/update-center.key secrets/repo_password secrets/github_token
+sudo mv secrets/root /media/offline-usb/jenkins-uc-root      # any offline location
+```
+
+Docker Desktop (macOS, Windows) needs none of the `sudo` lines except moving the key. See
+[File ownership on Linux](../reference/secrets.md#file-ownership-on-linux) and
+[Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).
 
 ## 5. Start
 
@@ -80,9 +89,14 @@ generation at once, because no release is live yet.
 docker compose logs -f scheduler
 ```
 
-The generator logs each manifest and POM it downloads. The run ends with `published release <id>`.
-Until then the web container logs "waiting for the first published release" and answers nothing. If
-the run fails, the log says why; see [Troubleshooting](../troubleshooting.md#generation).
+The generator logs each manifest and POM it downloads. The first run ends quietly: the generator's
+last line is `Finished N executions found in parameters file`, then the scheduler logs
+`read crontab`. It is done when `docker compose run --rm uc status` shows a `live_release`. Later
+scheduled runs end with `published release <id>`. Until the first release, the web container logs
+"waiting for the first published release" and answers nothing. If the run fails, the log shows a
+Python traceback saying why; see [Troubleshooting](../troubleshooting.md#generation). A stack trace
+from `GitHubSource` saying "This endpoint requires you to be authenticated" is only the warning for
+a missing GitHub token.
 
 ## 7. Verify
 

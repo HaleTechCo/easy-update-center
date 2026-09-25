@@ -38,8 +38,10 @@ Nothing else is installed on the host: the generator, Python and Apache all run 
   generator's listing query against repo.jenkins-ci.org is refused anonymously (HTTP 403).
   Recommended: a GitHub classic token with no scopes, for plugin labels; see
   [GitHub token](../reference/secrets.md#github-token).
-- **Air-gapped:** an account that can read your repository. Artifactory: one that can run AQL
-  queries on it (a non-admin account works). Artifact Keeper: a user name and an API token.
+- **Air-gapped:** an account that can read your repository. Artifactory: an account with read
+  permission on the repository; no admin rights are needed, because the generator's listing (an AQL
+  query) returns whatever the account can read. It authenticates with its password or an access
+  token. Artifact Keeper: a user name and an API token.
 - **Air-gapped with `DOWNLOAD_ACCESS=proxy`:** a read-only account for downloads (it can be the same
   one).
 

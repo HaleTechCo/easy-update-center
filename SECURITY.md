@@ -31,7 +31,10 @@ Only the latest commit on `master` is supported until versioned releases exist.
   repo-adapter receives repository credentials.
 - Plugin archives and POMs from the repository are treated as untrusted: reads are size-capped,
   only named entries are read, and XML with DOCTYPE or entity declarations is refused.
-- `status.json` is public and carries no paths, URLs or error messages from the repository.
+- `status.json` is public. It never holds credentials, and a failed run shows only the error's
+  class, never its message. Its `warnings` are short messages that can name plugin coordinates or
+  the URL of an upstream-data source that failed to download; restrict `/status.json` at your proxy
+  if those URLs are sensitive.
 
 Details: [docs/architecture/overview.md](docs/architecture/overview.md#networks-and-trust-boundaries)
 and [docs/architecture/repo-adapter.md](docs/architecture/repo-adapter.md#security).

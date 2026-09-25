@@ -39,6 +39,7 @@ and which you can run by hand; "doctor" means `uc doctor`.
 | `POPULARITY_JSON_URL` | upstream's `latestNumbers.json` on raw.githubusercontent.com | empty (skipped) |
 | `TOOL_INSTALLERS_URL` | `https://updates.jenkins.io/updates/` | empty (skipped) |
 
+A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` always has one between them.
 `REPO_URL` and `REPO_KEY` default to repo.jenkins-ci.org only in online mode with
 `REPO_TYPE=artifactory`; otherwise both are required. `DOWNLOAD_BACKEND_URL` follows
 `DOWNLOAD_BACKEND`, not the mode: `mirror` means get.jenkins.io, `artifactory` means your repository.
@@ -48,7 +49,7 @@ and which you can run by hand; "doctor" means `uc doctor`.
 | Setting | Default | Read by | Notes |
 |---|---|---|---|
 | `REPO_TYPE` | `artifactory` | generate, doctor, repo-adapter, web | `artifactory` or `artifact-keeper`. Artifact Keeper is read only through the repo-adapter. |
-| `REPO_URL` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web | Artifactory: the `/artifactory/` base URL. Artifact Keeper: the server's base URL. Must not contain credentials. |
+| `REPO_URL` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web | Artifactory: the `/artifactory/` base URL. Artifact Keeper: the server's base URL. A trailing slash is optional. Must not contain credentials. |
 | `REPO_API_URL` | `${REPO_URL}api/` | generate, doctor, repo-adapter | Artifactory's API base, for the listing query. Set it only when the API is served elsewhere. |
 | `REPO_KEY` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web | The repository key (for Artifact Keeper, the key, not the display name). Letters, digits, `.`, `_` and `-` only. |
 
@@ -137,7 +138,10 @@ Not for production.
 
 | Setting | Read by | Notes |
 |---|---|---|
-| `JAVA_TOOL_OPTIONS` | the JVM running update-center2 | Heap size (`-Xmx6g`) and an outbound HTTP proxy (`-Dhttps.proxyHost=... -Dhttps.proxyPort=...`). See [Host sizing](../getting-started/requirements.md#host-sizing). |
+| `JAVA_TOOL_OPTIONS` | the JVM running update-center2 | Heap size (`-Xmx6g`) and the generator's outbound HTTP proxy (`-Dhttps.proxyHost=... -Dhttps.proxyPort=...`). See [Host sizing](../getting-started/requirements.md#host-sizing). |
+| `HTTPS_PROXY`, `HTTP_PROXY` | Python in `uc`, `scheduler` and `repo-adapter` | The outbound proxy for everything the generator does not fetch itself: upstream resources, tool installers, listing queries. Behind a proxy, set it **and** the proxy flags in `JAVA_TOOL_OPTIONS`; neither covers the other. |
+| `NO_PROXY` | Python in `uc`, `scheduler` and `repo-adapter` | Hosts to reach directly. With a proxy set, include `repo-adapter` (and your repository's host if it is internal), for example `NO_PROXY=repo-adapter,artifactory.corp.example`. |
+| `COMPOSE_FILE` | `docker compose`, from `.env` | The Compose files every plain `docker compose` command uses (on Windows, `;` between files). Set it whenever you use an override, in either mode, so later commands keep it: `compose.yaml:compose.airgapped.yaml` air-gapped, plus `compose.tls.yaml`, `compose.repo-ca.yaml` or `compose.proxy-ca.yaml` when you use them. |
 
 ## Internal
 

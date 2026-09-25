@@ -16,6 +16,12 @@ Security warnings matter most: Jenkins shows them to administrators for the plug
 Jenkins project updates them with every advisory. The site still works without fresh copies; it
 just shows what it knew when the image was built.
 
+The bundled copy is dated by the update-center2 commit the image pins, not by when you built the
+image: `status.json` shows it as `resources.data_date` (for update-center2 3.18.4, 2026-09-02). It
+counts as stale (`resources.stale`) once it is older than `STALE_AFTER_DAYS` (30), so a new
+air-gapped installation on bundled data can report stale data within weeks. Set up a procured copy
+when you deploy.
+
 ## Security warnings and suspensions
 
 Procure a tarball of upstream's update-center2 repository, which contains `resources/`, for example
@@ -25,8 +31,13 @@ from GitHub's archive of the `master` branch:
 https://github.com/jenkins-infra/update-center2/archive/refs/heads/master.tar.gz
 ```
 
-Store it where the update center can reach it (an Artifactory generic repository works), note its
-SHA-256, and set:
+Store it where the update center can reach it, note its SHA-256, and set the three variables below.
+The `scheduler` and `uc` containers fetch `RESOURCES_URL`, `POPULARITY_JSON_URL` and
+`TOOL_INSTALLERS_URL` themselves, **without credentials**, and verify HTTPS only against the image's
+system CA bundle (`REPO_CA_FILE` applies to the repo-adapter alone). So serve these files from a
+location that allows anonymous reads: for example an Artifactory generic repository with anonymous
+read access, over HTTPS with a publicly trusted certificate, or over plain HTTP inside your network.
+`RESOURCES_SHA256` still verifies the tarball whatever the transport.
 
 ```bash
 RESOURCES_SOURCE=url
