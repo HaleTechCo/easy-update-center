@@ -18,12 +18,15 @@ You need the root key from offline storage, here mounted from `/offline/root` (t
 `root-ca.key`):
 
 ```bash
-docker run --rm --user 0:0 --entrypoint sh -v "$PWD/secrets:/pki" -v /offline/root:/pki/root \
-  jenkins-uc/uc:local -c 'uc pki rotate --dir /pki && chown -R 10001:10001 /pki'
+docker run --rm --user 0:0 --entrypoint sh -v "$PWD/secrets:/pki" -v /offline/root:/pki/root:ro \
+  jenkins-uc/uc:local -c 'uc pki rotate --dir /pki && chown 10001:10001 /pki/update-center.key /pki/update-center.cert'
 ```
 
 This writes a new `secrets/update-center.key` and `secrets/update-center.cert` and keeps the
-previous pair as `*.old`. From Git Bash on Windows, run it with `MSYS_NO_PATHCONV=1` set.
+previous pair as `*.old`. The root key is mounted read-only and only read; its ownership on the
+offline media is left alone. Docker leaves an empty `secrets/root/` directory behind as the mount
+point: remove it (`sudo rmdir secrets/root` on Linux). From Git Bash on Windows, run the command with
+`MSYS_NO_PATHCONV=1` set.
 
 Then make the running services use the new files. Compose mounts each secret file as it was when
 the container started, so recreate the scheduler:

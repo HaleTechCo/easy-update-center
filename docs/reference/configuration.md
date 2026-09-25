@@ -138,8 +138,10 @@ Not for production.
 
 | Setting | Read by | Notes |
 |---|---|---|
-| `JAVA_TOOL_OPTIONS` | the JVM running update-center2 | Heap size (`-Xmx6g`) and an outbound HTTP proxy (`-Dhttps.proxyHost=... -Dhttps.proxyPort=...`). See [Host sizing](../getting-started/requirements.md#host-sizing). |
-| `COMPOSE_FILE` | `docker compose`, from `.env` | The Compose files to use. Air-gapped, `compose.yaml:compose.airgapped.yaml` (on Windows, `;` between files), plus any overrides, so plain `docker compose` commands use them. |
+| `JAVA_TOOL_OPTIONS` | the JVM running update-center2 | Heap size (`-Xmx6g`) and the generator's outbound HTTP proxy (`-Dhttps.proxyHost=... -Dhttps.proxyPort=...`). See [Host sizing](../getting-started/requirements.md#host-sizing). |
+| `HTTPS_PROXY`, `HTTP_PROXY` | Python in `uc`, `scheduler` and `repo-adapter` | The outbound proxy for everything the generator does not fetch itself: upstream resources, tool installers, listing queries. Behind a proxy, set it **and** the proxy flags in `JAVA_TOOL_OPTIONS`; neither covers the other. |
+| `NO_PROXY` | Python in `uc`, `scheduler` and `repo-adapter` | Hosts to reach directly. With a proxy set, include `repo-adapter` (and your repository's host if it is internal), for example `NO_PROXY=repo-adapter,artifactory.corp.example`. |
+| `COMPOSE_FILE` | `docker compose`, from `.env` | The Compose files every plain `docker compose` command uses (on Windows, `;` between files). Set it whenever you use an override, in either mode, so later commands keep it: `compose.yaml:compose.airgapped.yaml` air-gapped, plus `compose.tls.yaml`, `compose.repo-ca.yaml` or `compose.proxy-ca.yaml` when you use them. |
 
 ## Internal
 

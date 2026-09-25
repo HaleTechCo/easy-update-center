@@ -30,7 +30,10 @@ Edit `.env` and set `PUBLIC_URL` to your update center's origin, for example
 `https://jenkins-updates.example.com`. Other settings worth knowing now:
 
 - `GENERATE_SCHEDULE`: when to regenerate (default every six hours);
-- `JAVA_TOOL_OPTIONS`: `-Xmx6g` for the full catalog, and an outbound proxy if the host needs one;
+- `JAVA_TOOL_OPTIONS`: `-Xmx6g` for the full catalog;
+- behind an outbound proxy, set it twice, once for the generator and once for the `uc` code:
+  `-Dhttps.proxyHost=proxy.example.com -Dhttps.proxyPort=3128` in `JAVA_TOOL_OPTIONS`, and
+  `HTTPS_PROXY=http://proxy.example.com:3128` with `NO_PROXY=repo-adapter`;
 - `HTTP_PORT`: the host port for the web container (default 8080).
 
 Every setting: [Configuration reference](../reference/configuration.md).

@@ -36,7 +36,7 @@ git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
 cd jenkins-update-center
 make build
 docker save jenkins-uc/uc:local jenkins-uc/web:local | gzip > ../jenkins-uc-images.tar.gz
-git bundle create ../jenkins-uc.bundle HEAD
+git bundle create ../jenkins-uc.bundle master
 
 # on the air-gapped Docker host, with both files in the current directory
 git clone jenkins-uc.bundle jenkins-update-center

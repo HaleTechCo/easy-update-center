@@ -5,7 +5,8 @@ Every field of status.json, the public report of the last run and the live relea
 ## Where to read it
 
 - `$PUBLIC_URL/status.json`, served by the web container with `Cache-Control: no-store`. It is
-  public: it holds counts and error class names, never paths, URLs or messages from the repository.
+  public: it never holds credentials, and a failure appears only as its error class. `warnings` can
+  name plugin coordinates or the URL of an upstream-data source that failed to download.
 - `docker compose run --rm uc status` prints the same document.
 - On the data volume it is `/data/status.json`.
 

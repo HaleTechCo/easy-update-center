@@ -82,8 +82,9 @@ The boundaries they and the images draw:
 - Air-gapped, only the repo-adapter receives the repository credentials.
 - Archives and POMs from the repository are treated as untrusted input: reads are size-capped,
   only named entries are read, and XML with DOCTYPE or entity declarations is refused.
-- `status.json` is public, so it carries counts and error class names only, never paths, URLs or
-  messages from the repository.
+- `status.json` is public. It never holds credentials, and a failed run shows only the error's
+  class. Its `warnings` can name plugin coordinates or the URL of an upstream-data source that
+  failed to download.
 
 ## Not in scope
 

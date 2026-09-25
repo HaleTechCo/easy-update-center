@@ -75,7 +75,8 @@ The generator is configured through environment variables, set from the settings
   `REPO_API_URL`, `REPO_KEY` and the repository credentials when it is off;
 - the download cache, `/data/cache/<source>`, kept separate for the adapter and for direct reads;
 - GitHub credentials, `POPULARITY_JSON_URL`, `CERTIFICATE_MINIMUM_VALID_DAYS`, `CORE_AGE_DAYS`;
-- anything in `JAVA_TOOL_OPTIONS`, such as the heap size or an outbound proxy.
+- anything in `JAVA_TOOL_OPTIONS`, such as the heap size or the generator's outbound proxy (the
+  `uc` code's own downloads use `HTTPS_PROXY` instead).
 
 `REPO_URL` is passed with an explicit port (`:443` or `:80` added when missing), because the
 generator's authenticator compares ports when it answers a challenge. Downloads still use the URL
