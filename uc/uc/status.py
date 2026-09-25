@@ -1,4 +1,4 @@
-"""status.json on the data volume, served at /status.json (spec §8.4)."""
+"""status.json on the data volume, served at /status.json (docs/reference/status-json.md)."""
 
 from __future__ import annotations
 

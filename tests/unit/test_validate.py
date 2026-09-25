@@ -106,7 +106,7 @@ def test_download_map_must_cover_offered_versions(tmp_path):
 
 
 def test_a_site_without_a_core_is_valid(tmp_path):
-    """A repository with no jenkins-war publishes plugins only: no core, no tiers (spec §6 step 9)."""
+    """A repository with no jenkins-war publishes plugins only: no core, no tiers (docs/architecture/generation-pipeline.md#step-9-validate)."""
     result = validate(build(tmp_path, tiers=Tiers((), ()), core=None), tiers=Tiers((), ()))
     assert result.plugin_count == 2
     assert result.offered == OFFERED - {'war/2.528.1'}

@@ -1,4 +1,4 @@
-"""compose-check: the isolation the repo-adapter's unauthenticated GETs rely on (repo-adapter spec §3, §5.3).
+"""compose-check: the isolation the repo-adapter's unauthenticated GETs rely on (docs/architecture/repo-adapter.md#security).
 
 Reads `docker compose config --format json` on stdin; the argument names the mode.
 """

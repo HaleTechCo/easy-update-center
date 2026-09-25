@@ -1,4 +1,4 @@
-"""Settings from environment variables with per-mode defaults (spec §7.1, §11)."""
+"""Settings from environment variables with per-mode defaults (docs/reference/configuration.md)."""
 
 from __future__ import annotations
 
@@ -197,7 +197,7 @@ def with_trailing_slash(url: str) -> str:
 
 
 def with_explicit_port(url: str) -> str:
-    """Add :443/:80 when missing, so update-center2's Authenticator port check matches (spec §10)."""
+    """Add :443/:80 when missing, so update-center2's Authenticator port check matches (docs/architecture/generation-pipeline.md#step-3-environment-for-the-generator)."""
     parts = urlsplit(url)
     if parts.username or parts.password:
         msg = 'URLs must not contain credentials; use the secret files instead'

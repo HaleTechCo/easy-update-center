@@ -1,4 +1,4 @@
-"""uc generate: build, validate and publish one release (spec §6)."""
+"""uc generate: build, validate and publish one release (docs/architecture/generation-pipeline.md)."""
 
 from __future__ import annotations
 

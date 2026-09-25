@@ -1,4 +1,4 @@
-"""Artifactory and Artifact Keeper, as the adapter needs them (repo-adapter spec §2, §4.1)."""
+"""Artifactory and Artifact Keeper, as the adapter needs them (docs/architecture/repo-adapter.md#requests-it-answers)."""
 
 from __future__ import annotations
 
@@ -231,7 +231,7 @@ class RangeReader(io.RawIOBase):
 
 
 class Backend(Protocol):
-    """What the listing and the server need from a repository (spec §2)."""
+    """What the listing and the server need from a repository."""
 
     type: str
 
@@ -245,7 +245,7 @@ class Backend(Protocol):
         """Return a file's sha1; BackendError when the repository has none."""
 
     def facts(self, entry: RepoEntry, path_coordinates: Coordinates, *, plugin: bool) -> ArchiveFacts:
-        """Read what the listing needs from an archive (spec §4.2)."""
+        """Read what the listing needs from an archive (docs/architecture/repo-adapter.md#filling-gaps)."""
 
     def jar_description(self, jar_path: str) -> bytes | None:
         """Return the index.jelly of a repository .jar, None when there is none."""

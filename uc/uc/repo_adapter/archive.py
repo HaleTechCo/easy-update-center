@@ -1,4 +1,4 @@
-"""The few small entries the adapter reads from untrusted archives (repo-adapter spec §4.2, §5.2)."""
+"""The few small entries the adapter reads from untrusted archives (docs/architecture/repo-adapter.md#limits)."""
 
 from __future__ import annotations
 

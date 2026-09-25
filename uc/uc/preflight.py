@@ -1,4 +1,4 @@
-"""Checks run before every generation (spec §6 step 1)."""
+"""Checks run before every generation (docs/architecture/generation-pipeline.md#step-1-preflight)."""
 
 from __future__ import annotations
 

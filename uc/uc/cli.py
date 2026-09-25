@@ -1,4 +1,4 @@
-"""Command-line entry point: uc generate | doctor | rollback | status | schedule | repo-adapter | pki (spec §5)."""
+"""Command-line entry point: uc generate | doctor | rollback | status | schedule | repo-adapter | pki (docs/reference/cli.md)."""
 
 from __future__ import annotations
 

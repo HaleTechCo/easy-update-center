@@ -1,4 +1,4 @@
-"""uc doctor: what the generator will and won't see in the source repository (spec §10)."""
+"""uc doctor: what the generator will and won't see in the source repository (docs/reference/cli.md#uc-doctor)."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ class DoctorReport:
     missing_dependencies: list[str] = field(default_factory=list)
     unchecked: int = 0  # newest releases whose POM or manifest was unavailable
     tiers: dict | None = None
-    # From the repo-adapter's report.json (repo-adapter spec §7); None when the adapter is off.
+    # From the repo-adapter's report.json (docs/architecture/repo-adapter.md#report); None when the adapter is off.
     repo_adapter: dict | None = None
 
     def _adapter(self, name: str) -> list:

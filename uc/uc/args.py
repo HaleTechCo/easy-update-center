@@ -1,4 +1,4 @@
-"""Arguments file for update-center2 batch mode, mirroring upstream site/generate.sh:110-130 (spec §6 step 6)."""
+"""Arguments file for update-center2 batch mode, mirroring upstream site/generate.sh:110-130 (docs/architecture/generation-pipeline.md#step-6-arguments-file)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Everything update-center2 does not write itself (spec §6 step 8), as upstream site/generate.sh:135-166."""
+"""Everything update-center2 does not write itself (docs/architecture/generation-pipeline.md#step-8-layout-and-download-map), as upstream site/generate.sh:135-166."""
 
 from __future__ import annotations
 

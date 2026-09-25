@@ -1,4 +1,4 @@
-"""The gap-filled listing the adapter serves, and its report (repo-adapter spec §4.2, §7)."""
+"""The gap-filled listing the adapter serves, and its report (docs/architecture/repo-adapter.md#filling-gaps)."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ REPORT_LISTS = ('derived_poms', 'replaced_poms', 'needs_pom', 'misplaced', 'skip
 
 @dataclass
 class Report:
-    """What one listing filled in, replaced or left out, for operators and uc doctor (spec §7)."""
+    """What one listing filled in, replaced or left out, for operators and uc doctor (docs/architecture/repo-adapter.md#report)."""
 
     generated_at: str
     repo: dict
@@ -182,7 +182,7 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
 
 
 def write_report(report: Report, path: Path) -> None:
-    """Atomically, mode 0600: the paths and URLs in it are for operators, not the public (spec §7)."""
+    """Atomically, mode 0600: the paths and URLs in it are for operators, not the public."""
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.report-')
     with os.fdopen(fd, 'w', encoding='utf-8') as out:

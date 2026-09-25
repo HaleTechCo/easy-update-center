@@ -1,4 +1,4 @@
-"""Signing PKI (spec §9.1): an offline root CA and a short-lived signing certificate, via openssl."""
+"""Signing PKI (docs/architecture/signing.md): an offline root CA and a short-lived signing certificate, via openssl."""
 
 from __future__ import annotations
 

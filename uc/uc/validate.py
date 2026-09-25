@@ -1,4 +1,4 @@
-"""Checks a staged release must pass before it becomes live (spec §6 step 9)."""
+"""Checks a staged release must pass before it becomes live (docs/architecture/generation-pipeline.md#step-9-validate)."""
 
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ def offers_core(doc: Any) -> bool:
     """Return whether the site document offers a Jenkins core.
 
     With no jenkins-war in the repository, upstream still writes `core`, holding only its defaults
-    (name and size): the site then offers plugins only, which is valid (spec §6 step 9).
+    (name and size): the site then offers plugins only, which is valid.
     """
     core = doc.get('core') if isinstance(doc, dict) else None
     return isinstance(core, dict) and bool(core.get('url') or core.get('version'))
@@ -170,7 +170,7 @@ def validate_release(
     if count < min_plugins:
         problems.append(f'plugin count {count} is below MIN_PLUGINS={min_plugins}')
     if previous_plugin_count and not force and count < min_ratio * previous_plugin_count:
-        problems.append(f"plugin count {count} < {min_ratio} × {previous_plugin_count} of the live release (use 'uc generate --force' if the shrinkage is intended)")  # noqa: RUF001 - the multiplication sign is the documented message text (spec §8.4)
+        problems.append(f"plugin count {count} < {min_ratio} × {previous_plugin_count} of the live release (use 'uc generate --force' if the shrinkage is intended)")  # noqa: RUF001 - the multiplication sign is the documented message text (docs/troubleshooting.md#generation)
     if download_map is not None:
         missing_keys = offered - set(download_map)
         if missing_keys:

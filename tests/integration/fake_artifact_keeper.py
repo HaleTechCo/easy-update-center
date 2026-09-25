@@ -1,4 +1,4 @@
-"""Test-only stand-in for the Artifact Keeper 1.10 calls the repo-adapter makes (repo-adapter spec §2).
+"""Test-only stand-in for the Artifact Keeper 1.10 calls the repo-adapter makes (docs/architecture/repo-adapter.md#requests-it-answers).
 
 GET /api/v1/repositories/<key>/artifacts (Bearer only, at most 100 per page, keyset cursor) and
 GET /maven/<key>/<path> (basic or Bearer; .sha1/.sha256/.md5 side files). Like the real one it ignores Range.

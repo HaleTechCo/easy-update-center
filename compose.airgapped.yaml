@@ -1,6 +1,7 @@
 ---
-# Air-gapped override (spec §7.3): these outside hosts resolve to 127.0.0.1, so their clients fail
-# at once instead of waiting for TCP timeouts. Every other name still uses the normal resolver.
+# Air-gapped override (docs/architecture/modes.md#fast-failure-for-blocked-hosts): these outside
+# hosts resolve to 127.0.0.1, so their clients fail at once instead of waiting for TCP timeouts.
+# Every other name still uses the normal resolver.
 x-blocked-hosts: &blocked-hosts
   - "api.github.com:127.0.0.1"
   - "github.com:127.0.0.1"
@@ -10,8 +11,8 @@ x-blocked-hosts: &blocked-hosts
   - "updates.jenkins.io:127.0.0.1"
 
 # The repo-adapter is on by default in air-gapped mode, so only it gets the repository credentials
-# (repo-adapter spec §5.3): the !override lists leave them out of uc and scheduler. With
-# REPO_ADAPTER=off, add repo_username and repo_password back to both lists.
+# (docs/architecture/repo-adapter.md#security): the !override lists leave them out of uc and
+# scheduler. With REPO_ADAPTER=off, add repo_username and repo_password back to both lists.
 services:
   scheduler:
     extra_hosts: *blocked-hosts

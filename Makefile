@@ -1,4 +1,4 @@
-# Local build and test entry points (spec §12, §13). Needs Docker with Compose v2 and GNU make.
+# Local build and test entry points (see CONTRIBUTING.md#tests). Needs Docker with Compose v2 and GNU make.
 export MSYS_NO_PATHCONV := 1
 
 UC_IMAGE ?= jenkins-uc/uc:local
@@ -101,7 +101,8 @@ it-online: build
 	$(IT_ONLINE) run --rm driver $(ARGS); rc=$$?; \
 	  $(IT_ONLINE) down -v --remove-orphans >/dev/null 2>&1; exit $$rc
 
-# Full catalog, no plugin cap: records duration, cache and site size (spec S6). Takes hours on first run.
+# Full catalog, no plugin cap: records duration, cache and site size
+# (docs/getting-started/requirements.md#host-sizing). Takes hours on first run.
 it-full:
 	$(MAKE) it-online UC_EXTRA_ARGS= JAVA_TOOL_OPTIONS=-Xmx6g
 
@@ -117,7 +118,7 @@ UPSTREAM_FILES = site/generate.sh site/generate-htaccess.sh site/test/test.sh \
   src/main/java/io/jenkins/update_center/HPI.java \
   src/main/java/io/jenkins/update_center/json/TieredUpdateSitesGenerator.java
 
-# Usage: make upstream-diff TO=3.19   (compares the pinned UC2_VERSION with TO; see docs/upgrading.md)
+# Usage: make upstream-diff TO=3.19   (compares the pinned UC2_VERSION with TO; see docs/development/upgrading-upstream.md)
 upstream-diff: build-uc
 	@test -n "$(TO)" || { echo "usage: make upstream-diff TO=<update-center2 version>"; exit 2; }
 	docker run --rm --entrypoint sh -v "$(CURDIR)/uc/patches:/patches:ro" $(UC_TEST_IMAGE) -c '\

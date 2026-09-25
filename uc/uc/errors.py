@@ -10,7 +10,7 @@ class ConfigError(UcError):
 
 
 def public_summary(exc: BaseException) -> str:
-    """Return what /status.json may say about a failure: the class, never the message (spec §8.4).
+    """Return what /status.json may say about a failure: the class, never the message (docs/reference/status-json.md).
 
     The full text reaches the container log, since generate() re-raises.
     """
