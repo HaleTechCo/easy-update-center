@@ -218,7 +218,7 @@ repos:
           # references that rot most quietly are the bare `path/to/page.md#anchor` tokens in comments
           # (Python, YAML, shell, Apache .conf, Makefile, Dockerfiles, .env examples), which nobody
           # re-reads. Checks Markdown links relative to their own file, and bare tokens in any other
-          # file type relative to the repo root. Anchors follow GitLab's heading algorithm.
+          # file type relative to the repo root. Anchors follow GitLab's heading algorithm (17.0 and later).
           #
           # WHOLE-TREE, NOT THE STAGED FILES, and that is the whole point of the hook: a commit
           # renaming a heading touches no other file, so checking only the staged files' OUTGOING

@@ -10,8 +10,9 @@ links = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(links)
 
 
-def test_heading_slug_squeezes_hyphen_runs_like_gitlab():
-    assert links.heading_slug('uc.env / web.env') == 'ucenv-webenv'
+def test_heading_slug_keeps_hyphen_runs_like_gitlab_17():
+    assert links.heading_slug('uc.env / web.env') == 'ucenv--webenv'
+    assert links.heading_slug('`tools/` - pre-commit shims') == 'tools---pre-commit-shims'
     assert links.heading_slug('Step 5: .htaccess') == 'step-5-htaccess'
     assert links.heading_slug('Outbound: air-gapped') == 'outbound-air-gapped'
 
