@@ -1,0 +1,43 @@
+Third-party software in the uc image
+====================================
+
+This directory, /opt/uc/licenses/, holds the notices for the third-party software this image
+contains. The rest of the image is jenkins-update-center, under the MIT License:
+https://gitlab.com/ZacharySHale95/jenkins-update-center/-/blob/master/LICENSE
+
+1. update-center2
+   https://github.com/jenkins-infra/update-center2, the Jenkins project's update site generator,
+   built from source at the pinned tag with the two patches in jenkins-update-center's uc/patches/
+   applied. /opt/uc/generator/update-center2-*.jar, /opt/uc/site/generate-htaccess.sh and
+   /opt/uc/resources/ come from it.
+
+   The update-center2 repository contains no LICENSE file. Its source files that carry a license
+   header use the MIT License (update-center2-MIT.txt, with those files' copyright lines), and the
+   Jenkins project's governance document states: "Unless otherwise stated, all the code is under
+   the MIT license." (https://www.jenkins.io/project/governance/)
+
+2. update-center2's Java libraries
+   The unmodified jars in /opt/uc/generator/. THIRD-PARTY.txt, generated from the Maven build,
+   lists each with its coordinates, license and project URL. License and NOTICE files a library
+   includes are inside its jar under META-INF/; for the MIT-licensed libraries, each one's
+   copyright line is there or in its project. The license texts:
+
+     Apache License 2.0 ................. Apache-2.0.txt
+     MIT License ........................ MIT.txt
+     GNU Lesser General Public License .. LGPL-2.1.txt
+     BSD License (jaxen) ................ jaxen-BSD.txt
+     dom4j license (dom4j) .............. dom4j.txt
+     Bouncy Castle Licence .............. BouncyCastle.txt
+
+   - com.github.spotbugs:spotbugs-annotations is licensed under the GNU LGPL 2.1 and shipped
+     unmodified, as its own jar, which you may replace. Its source is at
+     https://github.com/spotbugs/spotbugs and on Maven Central, as the -sources.jar beside the jar.
+   - org.jvnet.hudson:crypto-util declares no license in its POM; its source files carry the MIT
+     License header (https://github.com/jenkinsci/lib-crypto-util).
+
+3. supercronic
+   https://github.com/aptible/supercronic, /usr/local/bin/supercronic. MIT License:
+   supercronic-MIT.txt.
+
+The base image, Eclipse Temurin on Ubuntu, carries its own notices: the Java runtime's in
+/opt/java/openjdk/legal/, and each Ubuntu package's in /usr/share/doc/<package>/copyright.

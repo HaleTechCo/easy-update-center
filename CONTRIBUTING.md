@@ -29,7 +29,8 @@ tools and the details of each hook: [tools/README.md](tools/README.md).
 ## Repository layout
 
 ```text
-uc/                   the uc image: Dockerfile, update-center2 patches, VersionTool, templates
+uc/                   the uc image: Dockerfile, update-center2 patches, VersionTool, templates,
+                      licenses/ (third-party notices shipped in the image)
 uc/uc/                the uc Python package (standard library only): CLI, generation, doctor,
                       PKI, status; repo_adapter/ is the repo-adapter service
 web/                  the web image: Apache configuration, entrypoint, health check
@@ -99,4 +100,6 @@ By contributing you agree that your contribution is licensed under the project's
 ## Maintainer tasks
 
 - Moving to a new update-center2 release: [Upgrading update-center2](docs/development/upgrading-upstream.md).
-- Keep [Dependencies](docs/reference/dependencies.md) in step with the Dockerfiles.
+- Keep [Dependencies](docs/reference/dependencies.md) in step with the Dockerfiles, and
+  `uc/licenses/` in step with what the uc image ships (the build checks the Java libraries:
+  [Third-party notices](docs/reference/dependencies.md#third-party-notices)).

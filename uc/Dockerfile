@@ -32,6 +32,22 @@ RUN mkdir -p /out/generator /out/site /out/tools \
  && cp -r resources /out/resources \
  && printf '{"source": "bundled", "ref": "%s", "data_date": "%s"}\n' \
       "$(git rev-parse HEAD)" "$(git log -1 --format=%cI)" > /out/resources/.uc-resources.json
+# Third-party notices for everything the image ships, in /opt/uc/licenses/: Maven lists each runtime
+# library with its license, and the build fails when a library has no known license
+# (THIRD-PARTY.properties supplies the ones whose POM declares none) or when a shipped jar is not
+# listed. See docs/reference/dependencies.md#third-party-notices.
+COPY licenses/ /licenses/
+RUN mvn -B -ntp -q org.codehaus.mojo:license-maven-plugin:2.4.0:add-third-party \
+      -Dlicense.excludedScopes=test,provided,system -Dlicense.failOnMissing=true \
+      -Dlicense.useMissingFile=true -Dlicense.missingFile=/licenses/THIRD-PARTY.properties \
+      -Dlicense.outputDirectory=/out/licenses -Dlicense.thirdPartyFilename=THIRD-PARTY.txt \
+ && cp /licenses/*.txt /out/licenses/ \
+ && sed -n 's/.*(\([^:( ]*\):\([^: ]*\):\([^ ]*\) - .*/\2-\3.jar/p' /out/licenses/THIRD-PARTY.txt > /tmp/listed \
+ && for jar in /out/generator/*.jar; do \
+      name="${jar##*/}"; \
+      case "${name}" in update-center2*) continue ;; *) ;; esac; \
+      grep -qxF "${name}" /tmp/listed || { echo "no third-party notice for ${name}" >&2; exit 1; }; \
+    done
 
 FROM eclipse-temurin:21-jre AS runtime
 ARG UC2_VERSION

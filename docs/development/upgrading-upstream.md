@@ -50,6 +50,12 @@ in that stage either way: it is still where `site/generate-htaccess.sh` and `res
 - The version in [Dependencies](../reference/dependencies.md) (and in `README.md` if it names it).
 - A `CHANGELOG.md` entry under "Unreleased".
 - Any page whose behavior the upgrade changed.
+- The third-party notices, if the build asks. `make build` fails when a new library has no known
+  license ("There are some dependencies with no license") or a shipped jar is missing from the list
+  ("no third-party notice for ..."). Find the library's license in its source or repository and
+  record it, with the evidence, in `uc/licenses/THIRD-PARTY.properties`; for a license the image does
+  not carry yet, add its text to `uc/licenses/` and a line to `uc/licenses/NOTICE.txt`. See
+  [Third-party notices](../reference/dependencies.md#third-party-notices).
 
 ## 4. Test
 
