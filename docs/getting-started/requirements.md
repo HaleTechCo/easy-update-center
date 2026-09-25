@@ -57,11 +57,25 @@ Every host each service reaches, by mode, is in the [Network reference](../refer
 
 ## Host sizing
 
-The first full-catalog online run has not been measured yet. A run capped at 25 plugins produced
-about 23.5 MB of site with 5 stable and 5 weekly tiers. For the full catalog, give the generator a
-6 GB heap (`JAVA_TOOL_OPTIONS=-Xmx6g`, so the host needs 8 GB of memory or more) and leave room on
-the `uc-data` volume for five retained releases plus the generator's download cache.
+Measured on 2026-09-25 with the full online catalog (update-center2 3.18.4, no plugin cap):
 
-The first online run reads a manifest and a POM for every plugin release (tens of thousands of
-requests) and takes hours; later runs fetch only what is new. Air-gapped sizing scales with what
-your repository holds, and is far smaller for a curated repository.
+| | Measured |
+|---|---|
+| First run | 5 hours 4 minutes |
+| Plugins published | 2,112 |
+| Tiers | 13 LTS, 20 weekly |
+| One release on disk | 303 MB |
+| Generator download cache | 49 MB |
+| Heap | `-Xmx6g` was enough |
+
+So for an online installation:
+
+- **Memory:** give the generator a 6 GB heap (`JAVA_TOOL_OPTIONS=-Xmx6g`); the host needs 8 GB or
+  more.
+- **Disk:** the `uc-data` volume holds `RETAIN_RELEASES` (5) releases, the cache and a staging copy
+  during each run: about 2 GB. Allow 3 GB for growth.
+- **Time:** the first run reads a manifest and a POM for every plugin release, tens of thousands of
+  requests, so expect hours; it is mostly network-bound. Later runs fetch only what is new.
+
+Air-gapped sizing scales with what your repository holds, and is far smaller for a curated
+repository: a run of 25 plugins produced about 23.5 MB of site.
