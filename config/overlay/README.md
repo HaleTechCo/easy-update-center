@@ -1,6 +1,7 @@
 # config/overlay/
 
-Files placed here are merged into upstream's `resources/` on every generation (spec §6 step 2).
+Files placed here are merged into upstream's `resources/` on every generation
+([generation pipeline, step 2](../../docs/architecture/generation-pipeline.md#step-2-resources)).
 This README is ignored.
 
 - `*.properties`: your lines are appended after upstream's, and later keys win. For example, to hide
@@ -22,3 +23,5 @@ This README is ignored.
   ```
 
 - Any other file (for example `index-template.html`, `platform-plugins.json`) replaces upstream's.
+
+How-to guide: [Block plugins and add warnings](../../docs/how-to/block-plugins-and-add-warnings.md).

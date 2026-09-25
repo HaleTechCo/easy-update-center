@@ -3,7 +3,8 @@
 **This directory is not project code.** Nothing here generates, signs or serves an update center.
 It holds the small helper scripts that [`.pre-commit-config.yaml`](../.pre-commit-config.yaml)
 invokes, and nothing else imports it. The update center itself is the `uc` package under
-[`uc/uc/`](../uc/uc/) and the web image under [`web/`](../web/).
+[`uc/uc/`](../uc/uc/) and the web image under [`web/`](../web/). For contributing in general, see
+[CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Setup
 
