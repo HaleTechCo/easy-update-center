@@ -7,19 +7,38 @@ mode: [Mode defaults](../reference/configuration.md#mode-defaults).
 
 ## Online
 
-- The generator reads plugins and cores from repo.jenkins-ci.org, the repository the public update
-  center uses. Its listing query needs an account: a free Jenkins community account from
-  https://accounts.jenkins.io. Anonymous queries are refused with HTTP 403.
-- Controllers download binaries from get.jenkins.io.
+- By default the generator reads plugins and cores from repo.jenkins-ci.org, the repository the
+  public update center uses. Its listing query there needs an account: a free Jenkins community
+  account from https://accounts.jenkins.io. Anonymous queries are refused with HTTP 403. It can read
+  [your own repository](#your-own-repository) instead.
+- By default controllers download binaries from get.jenkins.io.
 - Upstream data comes from the internet at every run: security warnings and suspensions from
   update-center2 on GitHub, popularity, and tool installers from updates.jenkins.io.
 - A GitHub token is recommended: without one, labels from GitHub topics are missing. See
   [GitHub token](../reference/secrets.md#github-token).
-- The repo-adapter is off: repo.jenkins-ci.org is complete, and routing its full listing through
-  the adapter would gain nothing.
+- The repo-adapter is off by default: repo.jenkins-ci.org is complete, and routing its full listing
+  through the adapter would gain nothing.
 
-A private Artifactory reachable online works too: set `REPO_URL`, `REPO_KEY` and
-`DOWNLOAD_BACKEND=artifactory`.
+### Your own repository
+
+Online mode can read your own Artifactory or Artifact Keeper instead of repo.jenkins-ci.org, and
+still fetch the upstream data live. In `.env`:
+
+```bash
+REPO_TYPE=artifact-keeper            # Artifact Keeper only; artifactory is the default
+REPO_URL=https://artifacts.corp.example/
+REPO_KEY=jenkins-plugins-local
+DOWNLOAD_BACKEND=artifactory         # controllers download from your repository, not get.jenkins.io
+DOWNLOAD_ACCESS=proxy                # only if controllers cannot read it without credentials
+CORE_AGE_DAYS=0                      # a tier for every stored core, as air-gapped
+```
+
+- `secrets/repo_username` and `secrets/repo_password` hold that repository's account, as in
+  air-gapped mode ([Secrets](../reference/secrets.md#secret-files)).
+- For a procured repository, set `REPO_ADAPTER=on` so missing POMs, descriptions and release dates
+  are filled in from the archives; it is always on for Artifact Keeper. See
+  [repo-adapter](repo-adapter.md).
+- With `DOWNLOAD_ACCESS=proxy`: [Proxy plugin downloads](../how-to/proxy-downloads.md).
 
 ## Air-gapped
 

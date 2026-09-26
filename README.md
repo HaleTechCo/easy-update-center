@@ -1,8 +1,8 @@
 # Jenkins update center, self-hosted
 
 The same update center Jenkins uses (`updates.jenkins.io`), in containers on your own host. Jenkins
-controllers and `jenkins-plugin-cli` point at it with no plugin or code change. It runs online,
-reading the public plugin repository, or fully air-gapped, reading your own.
+controllers and `jenkins-plugin-cli` point at it with no plugin or code change. It reads plugins
+from the public plugin repository or from your own, and runs online or fully air-gapped.
 
 ## What you get
 
@@ -13,8 +13,12 @@ reading the public plugin repository, or fully air-gapped, reading your own.
 - **Your own signing keys:** metadata is signed with your PKI; controllers trust your root CA.
 - **Safe publishing:** each release is validated before it goes live, the switch is atomic, the last
   five releases are kept, and `uc rollback` goes back in one command.
-- **Online or air-gapped:** plugins from repo.jenkins-ci.org, or from your Artifactory or Artifact
-  Keeper, with missing POMs, descriptions and release dates filled in from the plugins themselves.
+- **The public repository or yours:** plugins from repo.jenkins-ci.org, or from your Artifactory or
+  Artifact Keeper, with missing POMs, descriptions and release dates filled in from the plugins
+  themselves.
+- **Online or air-gapped:** online, security warnings, popularity and labels come live from
+  upstream; air-gapped, nothing is fetched from the internet, and what that makes unreachable is
+  dropped with a warning.
 - **Your own policy:** hide plugins or releases, and publish your own security warnings.
 - **Monitoring:** `status.json` reports the last run, the certificate's expiry and the age of the
   security data.
