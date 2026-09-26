@@ -15,6 +15,10 @@ once releases are published.
   repairs a `secrets/` set up the old way.
 - `make pki-init` builds the uc image only when it is missing, so it works on an offline host that
   loaded pre-built images.
+- `uc doctor` gives the repo.jenkins-ci.org URL of the real `.pom` for every POM the repo-adapter
+  derived from an archive or ignored as unusable, not only for plugins with no POM at all. In the
+  adapter's `report.json` and `uc doctor --json`, `derived_poms` entries are objects (`gav`, `url`)
+  instead of strings, and `replaced_poms` entries gain a `url`.
 
 ### Added
 

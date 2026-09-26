@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 
     from .cache import Cache
 
+# Where public plugins' and cores' real .pom files live; the report gives each POM it names a URL here.
 PUBLIC_RELEASES = 'https://repo.jenkins-ci.org/releases/'
 ARCHIVE_EXTENSIONS = ('hpi', 'jpi', 'war')
 REPORT_LISTS = ('derived_poms', 'replaced_poms', 'needs_pom', 'misplaced', 'skipped', 'dates_from_repository')
@@ -34,7 +35,7 @@ class Report:
     generated_at: str
     repo: dict
     archives: int = 0
-    derived_poms: list[str] = field(default_factory=list)
+    derived_poms: list[dict] = field(default_factory=list)
     replaced_poms: list[dict] = field(default_factory=list)
     needs_pom: list[dict] = field(default_factory=list)
     misplaced: list[dict] = field(default_factory=list)
@@ -152,12 +153,12 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
                 index.poms[pom_path] = None
                 index.rows.append(_row(key, real.directory, real.name, sha256=real.sha256, sha1=real_sha1, size=real.size, created=created, modified=modified))
                 continue
-            report.replaced_poms.append({'path': pom_path, 'reason': verdict})
+            report.replaced_poms.append({'path': pom_path, 'reason': verdict, 'url': PUBLIC_RELEASES + pom_path})
         if facts.pom is not None and unusable_reason(facts.pom, coordinates) is None:
             index.poms[pom_path] = facts.pom
             directory, _, name = pom_path.rpartition('/')
             index.rows.append(_row(key, directory, name, sha256=hashlib.sha256(facts.pom).hexdigest(), sha1=hashlib.sha1(facts.pom, usedforsecurity=False).hexdigest(), size=len(facts.pom), created=created, modified=modified))
-            report.derived_poms.append(':'.join(coordinates))
+            report.derived_poms.append({'gav': ':'.join(coordinates), 'url': PUBLIC_RELEASES + pom_path})
         else:
             report.needs_pom.append({'gav': ':'.join(coordinates), 'url': PUBLIC_RELEASES + pom_path})
 
@@ -176,7 +177,7 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
             index.poms[path] = None
             index.rows.append(_row(key, entry.directory, entry.name, sha256=entry.sha256, sha1=sha1, size=entry.size, created=entry.created, modified=entry.modified))
         else:
-            report.replaced_poms.append({'path': path, 'reason': verdict})
+            report.replaced_poms.append({'path': path, 'reason': verdict, 'url': PUBLIC_RELEASES + path})
     cache.prune()
     return index
 

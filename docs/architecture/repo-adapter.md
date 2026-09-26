@@ -155,8 +155,9 @@ After each listing the adapter writes `/data/repo-adapter/report.json` (mode 060
 replaced, dropped and dated from the repository, with paths and URLs.
 
 - `uc doctor` reads it and adds sections for POMs filled in from archives, plugins that need a real
-  `.pom` (with URLs), `.pom` files ignored, misplaced archives (with the correct paths), skipped
-  archives, and dates taken from the repository. See [uc doctor](../reference/cli.md#uc-doctor).
+  `.pom`, `.pom` files ignored (all three with the repo.jenkins-ci.org URL of the real `.pom`),
+  misplaced archives (with the correct paths), skipped archives, and dates taken from the
+  repository. See [uc doctor](../reference/cli.md#uc-doctor).
 - `status.json` is public, so it gets counts only, under `doctor.repo_adapter`, and one warning
   line when anything was dropped.
 - With the adapter off there is no report.

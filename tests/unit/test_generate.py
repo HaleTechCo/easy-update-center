@@ -186,7 +186,7 @@ def test_generation_through_the_adapter(tmp_path, secrets_dir):
     settings.repo_adapter_report_file.write_text(
         json.dumps(
             {
-                'derived_poms': ['org.jenkins-ci.plugins:git:5.2.0'],
+                'derived_poms': [{'gav': 'org.jenkins-ci.plugins:git:5.2.0', 'url': 'https://repo.jenkins-ci.org/releases/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom'}],
                 'misplaced': [{'path': 'org/jenkins-ci/plugins/caffeine-api/1/caffeine-api-1.hpi', 'correct_path': 'io/jenkins/plugins/caffeine-api/1/caffeine-api-1.hpi'}],
             }
         )

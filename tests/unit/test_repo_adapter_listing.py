@@ -15,6 +15,7 @@ AD = 'org/jenkins-ci/plugins/active-directory/2.967.vf4e254546a_b_3/active-direc
 CAFFEINE = 'io/jenkins/plugins/caffeine-api/3.2.4-208.v7e2da_a_7db_82b_/caffeine-api-3.2.4-208.v7e2da_a_7db_82b_'
 AD_GAV = ('org.jenkins-ci.plugins', 'active-directory', '2.967.vf4e254546a_b_3')
 CAFFEINE_GAV = ('io.jenkins.plugins', 'caffeine-api', '3.2.4-208.v7e2da_a_7db_82b_')
+RELEASES = 'https://repo.jenkins-ci.org/releases/'
 NGINX_404 = b'<html>\r\n<head><title>404 Not Found</title></head>\r\n<body><hr><center>nginx</center></body></html>\r\n'
 
 
@@ -36,8 +37,11 @@ def test_the_operators_test_repository(tmp_path):
     assert index.poms[f'{AD}.pom'] == pom_xml(*AD_GAV)
     assert index.poms[f'{CAFFEINE}.pom'] == pom_xml(*CAFFEINE_GAV)
     report = index.report
-    assert report.derived_poms == [':'.join(CAFFEINE_GAV), ':'.join(AD_GAV)]  # in path order
-    assert report.replaced_poms == [{'path': f'{AD}.pom', 'reason': 'not XML'}]
+    assert report.derived_poms == [  # in path order, each with where to procure the real .pom
+        {'gav': ':'.join(CAFFEINE_GAV), 'url': f'{RELEASES}{CAFFEINE}.pom'},
+        {'gav': ':'.join(AD_GAV), 'url': f'{RELEASES}{AD}.pom'},
+    ]
+    assert report.replaced_poms == [{'path': f'{AD}.pom', 'reason': 'not XML', 'url': f'{RELEASES}{AD}.pom'}]
     assert report.counts()['needs_pom'] == 0
     derived = rows[AD.rsplit('/', 1)[1] + '.pom']
     assert derived['sha256'] == hashlib.sha256(pom_xml(*AD_GAV)).hexdigest()
@@ -81,7 +85,7 @@ def test_a_manifest_without_coordinates_is_never_misplaced(tmp_path):
     data = make_hpi('org.example', 'old', '1.0', manifest_group=None, manifest_artifact=None)
     _, index = index_of({f'{base}.hpi': data}, tmp_path)
     assert index.report.misplaced == []
-    assert index.report.derived_poms == ['org.example:old:1.0']
+    assert index.report.derived_poms == [{'gav': 'org.example:old:1.0', 'url': f'{RELEASES}{base}.pom'}]
 
 
 def test_archive_dates_replace_upload_times(tmp_path):
@@ -104,6 +108,7 @@ def test_cores_get_derived_poms_and_dates(tmp_path):
     assert index.poms[f'{war}.pom'] == pom_xml('org.jenkins-ci.main', 'jenkins-war', '2.583', 'Jenkins war')
     assert rows_by_name(index)['jenkins-war-2.583.war']['modified'] == '2026-09-22T04:32:00.000Z'
     assert f'{war}.war' in index.manifests
+    assert index.report.derived_poms == [{'gav': 'org.jenkins-ci.main:jenkins-war:2.583', 'url': f'{RELEASES}{war}.pom'}]
 
 
 def test_an_unreadable_archive_is_skipped_and_the_rest_proceed(tmp_path):
@@ -139,7 +144,7 @@ def test_an_unreadable_repository_pom_is_replaced_not_fatal(tmp_path):
 
     backend = Flaky({f'{AD}.hpi': make_hpi(*AD_GAV), f'{AD}.pom': pom_xml(*AD_GAV)})
     index = build_index(backend, Cache(tmp_path / 'cache'), key='k', now=NOW)
-    assert index.report.replaced_poms == [{'path': f'{AD}.pom', 'reason': 'unreadable: RuntimeError: connection reset'}]
+    assert index.report.replaced_poms == [{'path': f'{AD}.pom', 'reason': 'unreadable: RuntimeError: connection reset', 'url': f'{RELEASES}{AD}.pom'}]
     assert index.poms[f'{AD}.pom'] == pom_xml(*AD_GAV)  # the embedded copy stands in
 
 
@@ -160,7 +165,7 @@ def test_parent_poms_pass_through_and_bogus_ones_are_reported(tmp_path):
     _, index = index_of(files, tmp_path)
     assert [r['name'] for r in index.rows] == ['plugin-4.88.pom']
     assert index.poms[parent] is None
-    assert index.report.replaced_poms == [{'path': bogus, 'reason': 'not XML'}]
+    assert index.report.replaced_poms == [{'path': bogus, 'reason': 'not XML', 'url': f'{RELEASES}{bogus}'}]
 
 
 def test_the_cache_spares_a_second_download(tmp_path):
@@ -189,6 +194,6 @@ def test_report_is_written_privately(tmp_path):
     report = read_report(path)
     assert report['repo'] == {'type': 'artifact-keeper', 'key': 'jenkins-prod-local'}
     assert report['archives'] == 1
-    assert report['derived_poms'] == [':'.join(CAFFEINE_GAV)]
+    assert report['derived_poms'] == [{'gav': ':'.join(CAFFEINE_GAV), 'url': f'{RELEASES}{CAFFEINE}.pom'}]
     assert json.loads(path.read_text())['generated_at'] == '2026-09-23T00:00:00Z'
     assert read_report(tmp_path / 'missing.json') is None

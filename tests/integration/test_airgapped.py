@@ -81,7 +81,8 @@ def test_doctor_reports_the_seeded_defects():
         }
     ]
     assert [item['reason'] for item in adapter['replaced_poms']] == ['not XML']  # the saved error page
-    derived = {gav.split(':')[1] for gav in adapter['derived_poms']}
+    derived = {item['gav'].split(':')[1] for item in adapter['derived_poms']}
+    assert all(item['url'].startswith('https://repo.jenkins-ci.org/releases/') and item['url'].endswith('.pom') for item in adapter['derived_poms'])
     assert {TOP_PLUGIN, SEEDED['html_pom'], 'uc-test-old-a', 'uc-test-old-b', 'jenkins-war'} <= derived
     assert SEEDED['real_pom'] not in derived  # the repository's own POM wins
     assert [item['gav'] for item in adapter['needs_pom']] == ['io.jenkins.uctest:uc-test-nopom:1.0']

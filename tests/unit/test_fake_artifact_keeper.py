@@ -63,5 +63,5 @@ def test_the_fake_serves_side_files_and_refuses_anonymous_reads(keeper, tmp_path
 def test_the_listing_fills_in_the_pom_from_the_fake(keeper, tmp_path):
     index = build_index(backend(keeper, tmp_path), Cache(tmp_path / 'cache'), key='jenkins-prod-local', now=dt.datetime(2026, 9, 23, tzinfo=dt.UTC))
     assert index.poms[f'{BASE}.pom'] == pom_xml(*GAV)
-    assert index.report.derived_poms == [':'.join(GAV)]
+    assert index.report.derived_poms == [{'gav': ':'.join(GAV), 'url': f'https://repo.jenkins-ci.org/releases/{BASE}.pom'}]
     assert len(index.rows) == 152  # the archive, its derived POM and 150 standalone POMs
