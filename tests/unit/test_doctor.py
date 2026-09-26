@@ -145,8 +145,8 @@ def test_run_doctor_includes_live_tiers(tmp_path, secrets_dir):
 
 
 ADAPTER_REPORT = {
-    'derived_poms': ['io.jenkins.plugins:caffeine-api:3.2.4'],
-    'replaced_poms': [{'path': 'org/x/ad/1/ad-1.pom', 'reason': 'not XML'}],
+    'derived_poms': [{'gav': 'io.jenkins.plugins:caffeine-api:3.2.4', 'url': 'https://repo.jenkins-ci.org/releases/io/jenkins/plugins/caffeine-api/3.2.4/caffeine-api-3.2.4.pom'}],
+    'replaced_poms': [{'path': 'org/x/ad/1/ad-1.pom', 'reason': 'not XML', 'url': 'https://repo.jenkins-ci.org/releases/org/x/ad/1/ad-1.pom'}],
     'needs_pom': [{'gav': 'org.jenkins-ci.plugins:polaris:1.4.0', 'url': 'https://repo.jenkins-ci.org/releases/org/jenkins-ci/plugins/polaris/1.4.0/polaris-1.4.0.pom'}],
     'misplaced': [{'path': 'org/jenkins-ci/plugins/caffeine-api/1/caffeine-api-1.hpi', 'correct_path': 'io/jenkins/plugins/caffeine-api/1/caffeine-api-1.hpi'}],
     'skipped': [{'path': 'org/x/big/1/big-1.hpi', 'reason': 'larger than 512 MiB'}],
@@ -167,8 +167,11 @@ def test_the_adapter_report_adds_sections_and_counts_its_drops(tmp_path, secrets
     assert 'procure the real .pom (1):' in text
     assert ADAPTER_REPORT['needs_pom'][0]['url'] in text
     assert '-> ' + 'io/jenkins/plugins/caffeine-api/1/caffeine-api-1.hpi' in text.replace('  ->  ', ' -> ')
-    assert 'POMs filled in from archives (1):' in text
-    assert 'org/x/ad/1/ad-1.pom: not XML' in text
+    lines = text.splitlines()
+    assert 'POMs filled in from archives; the real .pom is optional (1):' in lines
+    assert '  io.jenkins.plugins:caffeine-api:3.2.4  https://repo.jenkins-ci.org/releases/io/jenkins/plugins/caffeine-api/3.2.4/caffeine-api-3.2.4.pom' in lines
+    assert '.pom files ignored (not usable); replace with the real .pom (1):' in lines
+    assert '  org/x/ad/1/ad-1.pom: not XML  https://repo.jenkins-ci.org/releases/org/x/ad/1/ad-1.pom' in lines
     assert 'archive date 1980-02-01 is before 2004' in text
 
 

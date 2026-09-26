@@ -282,8 +282,8 @@ def format_report(report: DoctorReport, settings: Settings) -> str:
     else:
         lines.append('Nothing in the source is dropped by the generator.')
     if adapter is not None:
-        section('POMs filled in from archives', adapter['derived_poms'])
-        section('.pom files ignored (not usable)', [f'{item["path"]}: {item["reason"]}' for item in adapter['replaced_poms']])
+        section('POMs filled in from archives; the real .pom is optional', [f'{item["gav"]}  {item["url"]}' for item in adapter['derived_poms']])
+        section('.pom files ignored (not usable); replace with the real .pom', [f'{item["path"]}: {item["reason"]}  {item["url"]}' for item in adapter['replaced_poms']])
         section('dates from the repository (no usable archive date)', [f'{item["path"]}: {item["reason"]}' for item in adapter['dates_from_repository']])
     section('Stub POMs (degraded names, descriptions, SCM links)', report.stub_poms)
     section('Dependency problems', report.missing_dependencies)

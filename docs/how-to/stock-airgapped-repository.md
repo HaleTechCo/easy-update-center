@@ -112,6 +112,7 @@ and POM so dependencies can be checked before the first generation; the results 
 | skipped | Usually larger than `REPO_MAX_ARCHIVE_MB`; raise it or remove the file. |
 | not in Maven layout | Rename or move the file into Maven layout. |
 | Dependency problems | Procure the missing plugins or versions. |
-| POMs filled in from archives, `.pom` files ignored, dates from the repository | Information only. |
+| POMs filled in from archives, `.pom` files ignored | Nothing required: the embedded POM is used. To store the real `.pom` instead, procure it from the URL shown and store it beside the archive, replacing an ignored one. |
+| dates from the repository | Information only. |
 
 Every section: [uc doctor](../reference/cli.md#uc-doctor).

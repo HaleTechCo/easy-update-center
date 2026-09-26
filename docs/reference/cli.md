@@ -69,11 +69,15 @@ runs the same listing query the generator runs and prints:
   - skipped (for example larger than `REPO_MAX_ARCHIVE_MB`),
   - `.hpi`/`.jpi` without a `.pom` (repo-adapter off), `jenkins-war` without a `.pom`, files not in
     Maven layout;
-- with the repo-adapter on, what it filled in: POMs derived from archives, `.pom` files it ignored as
-  unusable, and archives whose release date came from the repository;
+- with the repo-adapter on, what it filled in: POMs derived from archives and `.pom` files it
+  ignored as unusable, each with the repo.jenkins-ci.org URL of the real `.pom` (optional: the
+  derived one works), and archives whose release date came from the repository;
 - stub POMs (no `<name>`: display names, descriptions and SCM links will be degraded);
 - dependency problems: plugins whose required plugins are absent, or present only in lower
   versions.
+
+The repo.jenkins-ci.org URLs are where public plugins and cores are published; a plugin that never
+was, such as an internal one, has no `.pom` there.
 
 | Option | Meaning |
 |---|---|

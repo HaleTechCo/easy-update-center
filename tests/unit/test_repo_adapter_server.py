@@ -89,7 +89,7 @@ def test_upstream_and_uc_read_the_gap_filled_listing(running, tmp_path):
     _, url = running({f'{BASE}.hpi': make_hpi(*GAV)})
     listing = classify(query_repository(url + 'api/', KEY, 'uc', TOKEN))  # uc's own AQL client
     assert [g.artifact_id for g in listing.plugins] == ['caffeine-api']  # paired with its derived POM
-    assert read_report(tmp_path / 'report.json')['derived_poms'] == [':'.join(GAV)]
+    assert read_report(tmp_path / 'report.json')['derived_poms'] == [{'gav': ':'.join(GAV), 'url': f'https://repo.jenkins-ci.org/releases/{BASE}.pom'}]
 
 
 def test_derived_poms_manifests_and_descriptions_are_served(running):
