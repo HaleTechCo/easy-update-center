@@ -5,8 +5,8 @@ Which page to read for which job. New here? Start with the [README](../README.md
 ## Getting started
 
 - [Requirements](getting-started/requirements.md) - host, software, accounts, network, sizing
-- [Deploy online](getting-started/online.md) - plugins from repo.jenkins-ci.org
-- [Deploy air-gapped](getting-started/airgapped.md) - plugins from your Artifactory or Artifact Keeper
+- [Deploy online](getting-started/online.md) - with internet access; plugins from repo.jenkins-ci.org or your own repository
+- [Deploy air-gapped](getting-started/airgapped.md) - nothing fetched from the internet; plugins from your Artifactory or Artifact Keeper
 
 ## How-to guides
 

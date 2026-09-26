@@ -35,7 +35,9 @@ Nothing else is installed on the host: the generator, Python and Apache all run 
 ## Accounts
 
 - **Online:** a free Jenkins community account, created at https://accounts.jenkins.io. The
-  generator's listing query against repo.jenkins-ci.org is refused anonymously (HTTP 403).
+  generator's listing query against repo.jenkins-ci.org is refused anonymously (HTTP 403). Reading
+  [your own repository](../architecture/modes.md#your-own-repository) instead, you need an account
+  for it, as air-gapped.
   Recommended: a GitHub classic token with no scopes, for plugin labels; see
   [GitHub token](../reference/secrets.md#github-token).
 - **Air-gapped:** an account that can read your repository. Artifactory: an account with read

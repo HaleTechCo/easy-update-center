@@ -1,6 +1,6 @@
 # Deploy online
 
-A production deployment that reads plugins from repo.jenkins-ci.org and sends controllers to get.jenkins.io for downloads.
+A production deployment with internet access that reads plugins from repo.jenkins-ci.org and sends controllers to get.jenkins.io for downloads, or reads your own repository instead.
 
 ## Before you start
 
@@ -34,7 +34,9 @@ Edit `.env` and set `PUBLIC_URL` to your update center's origin, for example
 - behind an outbound proxy, set it twice, once for the generator and once for the `uc` code:
   `-Dhttps.proxyHost=proxy.example.com -Dhttps.proxyPort=3128` in `JAVA_TOOL_OPTIONS`, and
   `HTTPS_PROXY=http://proxy.example.com:3128` with `NO_PROXY=repo-adapter`;
-- `HTTP_PORT`: the host port for the web container (default 8080).
+- `HTTP_PORT`: the host port for the web container (default 8080);
+- to read your own Artifactory or Artifact Keeper instead of repo.jenkins-ci.org:
+  [Your own repository](../architecture/modes.md#your-own-repository).
 
 Every setting: [Configuration reference](../reference/configuration.md).
 
@@ -52,7 +54,9 @@ printf '%s' 'your-github-user' > secrets/github_username
 printf '%s' 'ghp_...' > secrets/github_token
 ```
 
-What each file holds: [Secrets reference](../reference/secrets.md).
+Reading your own repository, `repo_username` and `repo_password` hold its account instead (for
+Artifact Keeper, a user name and an API token). What each file holds:
+[Secrets reference](../reference/secrets.md).
 
 ## 4. Create the signing keys
 
