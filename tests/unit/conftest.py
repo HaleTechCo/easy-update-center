@@ -2,6 +2,8 @@
 
 import shutil
 import sys
+import threading
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -9,6 +11,9 @@ import pytest
 from uc.pki import init_pki
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'support'))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'integration'))
+
+from fake_artifact_keeper import make_handler as keeper_handler
 
 
 @pytest.fixture(scope='session')
@@ -27,3 +32,14 @@ def secrets_dir(tmp_path, pki_material):
     (directory / 'repo_username').write_text('uc\n')
     (directory / 'repo_password').write_text('secret\n')
     return directory
+
+
+@pytest.fixture
+def releases(tmp_path):
+    """Serve a fake repo.jenkins-ci.org: files put under root at url, with generated .sha1 files."""
+    base = tmp_path / 'source'
+    httpd = ThreadingHTTPServer(('127.0.0.1', 0), keeper_handler(base, 'unused', 'unused', anonymous_read=True))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield base / 'releases', f'http://127.0.0.1:{httpd.server_address[1]}/maven/releases/'
+    httpd.shutdown()
+    httpd.server_close()
