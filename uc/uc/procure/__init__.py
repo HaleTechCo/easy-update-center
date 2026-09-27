@@ -1,4 +1,4 @@
-"""Procurement: stage what uc doctor finds missing for review, then push exactly that."""
+"""Procurement: stage what uc doctor finds missing for review, then push exactly that (docs/how-to/procure-missing-files.md)."""
 
 from __future__ import annotations
 

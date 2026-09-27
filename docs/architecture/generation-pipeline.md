@@ -85,9 +85,10 @@ as configured.
 ## Step 4: Tiers
 
 The generator is run once to write `tiers.json`: the weekly and LTS core versions that get a tiered
-site. They come from the core versions that plugins require, limited to cores released within
-`CORE_AGE_DAYS` (0: no limit). Either list may be empty; a repository with no `jenkins-war` produces
-no tiers at all.
+site. They come from the core versions plugin releases require and whose `.war` the repository
+holds, plus the next weekly after each LTS and the next stored LTS after each weekly
+([Core age](modes.md#core-age)), limited to cores released within `CORE_AGE_DAYS` (0: no limit).
+Either list may be empty; a repository with no `jenkins-war` produces no tiers at all.
 
 ## Step 5: .htaccess
 

@@ -1,4 +1,4 @@
-"""uc doctor --download-poms, --download-dependencies and --download-war: stage what the report finds missing."""
+"""uc doctor --download-poms, --download-dependencies and --download-war: stage what the report finds missing (docs/how-to/procure-missing-files.md)."""
 
 from __future__ import annotations
 

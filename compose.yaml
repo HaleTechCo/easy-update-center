@@ -71,7 +71,8 @@ services:
     restart: unless-stopped
 
   # One-shot commands. Only this service stages downloads for review and writes to the repository
-  # (uc doctor --download-* and --push): it alone mounts ./procurement and receives repo_push_auth.
+  # (uc doctor --download-* and --push, docs/how-to/procure-missing-files.md): it alone mounts
+  # ./procurement and receives repo_push_auth.
   # It runs only when an operator calls it.
   uc:
     <<: *uc

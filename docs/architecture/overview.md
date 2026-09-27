@@ -14,8 +14,10 @@ on a Java runtime, plus the `uc` command in Python) and the **web image** (Apach
 - **scheduler** runs `uc generate` on `GENERATE_SCHEDULE`, and at once when no release is live.
   Each run builds a complete new release, validates it, and swaps it in atomically. See
   [Generation pipeline](generation-pipeline.md).
-- **uc** is the same image for one-shot commands: `generate`, `doctor`, `rollback`, `status`. It
-  runs only when you call it. See [uc command reference](../reference/cli.md).
+- **uc** is the same image for one-shot commands: `generate`, `doctor`, `rollback`, `status`.
+  `doctor` can also stage missing files for review and push them
+  ([Procure missing files](../how-to/procure-missing-files.md)). It runs only when you call it. See
+  [uc command reference](../reference/cli.md).
 - **repo-adapter** answers the generator's repository requests from Artifactory or Artifact Keeper,
   and fills in POMs, descriptions and release dates from inside each plugin archive. On by default
   in air-gapped mode, idle otherwise. See [repo-adapter](repo-adapter.md).
@@ -73,6 +75,9 @@ The boundaries they and the images draw:
 
 - The signing key reaches only the `scheduler` and `uc` containers. The internet-facing `web`
   container never has it, and the root CA key is meant to live offline.
+- Only the one-shot `uc` service can write to the repository: it alone receives `repo_push_auth`
+  and mounts the staging folder `./procurement`. The scheduler, the repo-adapter and the web
+  container never do, and `make compose-check` asserts it.
 - Every container runs as a non-root user (uid 10001 for the uc image, 33 for web) with a read-only
   root filesystem; only `/data` and `/tmp` are writable, and `web` mounts `/data` read-only.
 - The repo-adapter's file reads need no credentials, because the generator cannot answer an
@@ -91,6 +96,5 @@ The boundaries they and the images draw:
 - Hosting or copying plugin binaries: they stay where they are, as with updates.jenkins.io.
 - Kubernetes packaging (a Helm chart).
 - Exporting a site from one network and importing it into another.
-- A tool to procure plugins together with their POMs.
 - An internal-only plugin site for plugins that are not on the public update center.
 - Caching proxies or high availability; one stack serves one update center.

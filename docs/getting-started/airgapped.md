@@ -183,6 +183,11 @@ services:
       - ./secrets/repo-ca.crt:/etc/ssl/uc-repo-ca.crt:ro
     environment:
       REPO_CA_FILE: /etc/ssl/uc-repo-ca.crt
+  uc:  # uc doctor --push talks to the repository directly, not through the repo-adapter
+    volumes:
+      - ./secrets/repo-ca.crt:/etc/ssl/uc-repo-ca.crt:ro
+    environment:
+      REPO_CA_FILE: /etc/ssl/uc-repo-ca.crt
 ```
 
 Copy the CA's PEM file to `secrets/repo-ca.crt` and add the override to `COMPOSE_FILE` in `.env`:

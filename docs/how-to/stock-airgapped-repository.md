@@ -64,8 +64,11 @@ org/jenkins-ci/main/jenkins-war/<version>/jenkins-war-<version>.war
 ```
 
 Its POM is optional. Every stored core that a plugin requires gets a tier (`CORE_AGE_DAYS=0`, the
-air-gapped default). Without any core the site offers plugins only, with no tiers: controllers still
-see every plugin in `current/`, but no core upgrade. See [Core age](../architecture/modes.md#core-age).
+air-gapped default). A required core the repository lacks costs its tier, and a missing weekly one
+can cost an LTS tier too: `uc doctor` lists them, and `uc doctor --download-war required` stages them
+([Procure missing files](procure-missing-files.md)). Without any core the site offers plugins only,
+with no tiers: controllers still see every plugin in `current/`, but no core upgrade. See
+[Core age](../architecture/modes.md#core-age).
 
 ## POMs
 
@@ -107,11 +110,12 @@ and POM so dependencies can be checked before the first generation; the results 
 | Section | What to do |
 |---|---|
 | Jenkins cores with a POM: none | Store at least one `jenkins-war`, unless a plugins-only site is what you want. |
-| no POM in the repository or the archive | Procure the real `.pom` from the URL shown and store it beside the `.hpi`. |
+| no POM in the repository or the archive | Procure the real `.pom` from the URL shown (`uc doctor --download-poms` stages it) and store it beside the `.hpi`. |
 | misplaced | Move the file to the path shown. |
 | skipped | Usually larger than `REPO_MAX_ARCHIVE_MB`; raise it or remove the file. |
 | not in Maven layout | Rename or move the file into Maven layout. |
-| Dependency problems | Procure the missing plugins or versions. |
+| Dependency problems | Procure the missing plugins or versions (`uc doctor --download-dependencies` stages them). |
+| Cores plugins require that the repository lacks | Store them for their tiers (`uc doctor --download-war required` stages them). |
 | POMs filled in from archives, `.pom` files ignored | Nothing required: the embedded POM is used. To store the real `.pom` instead, procure it from the URL shown and store it beside the archive, replacing an ignored one. |
 | dates from the repository | Information only. |
 

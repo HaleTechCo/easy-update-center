@@ -60,7 +60,7 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 | `REPO_ADAPTER` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web | Whether the generator reads the repository through the [repo-adapter](../architecture/repo-adapter.md). `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is refused. The service stays idle when off. |
 | `REPO_ADAPTER_URL` | `http://repo-adapter:8081/artifactory/` | generate, doctor | Where `uc` finds the adapter. Change it only with a non-default Compose layout. |
 | `REPO_ADAPTER_DIR` | `/data/repo-adapter` | generate, doctor, repo-adapter | The adapter's token, cache and `report.json`. |
-| `REPO_CA_FILE` | none | repo-adapter | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca). |
+| `REPO_CA_FILE` | none | repo-adapter, doctor | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca). `uc doctor --push` and the downloads verify against it too. |
 | `REPO_MAX_ARCHIVE_MB` | `512` | repo-adapter | Archives larger than this are skipped and reported. Minimum 1. |
 
 ## Downloads
@@ -147,7 +147,7 @@ Not for production.
 
 | Setting | Default | Read by | Notes |
 |---|---|---|---|
-| `PROCUREMENT_SOURCE_URL` | `https://repo.jenkins-ci.org/releases/` | doctor | Where `uc doctor --download-poms`, `--download-dependencies` and `--download-war` fetch files from, by Maven path, each checked against the `.sha1` beside it. Set it to reach repo.jenkins-ci.org through your own proxy repository. Air-gapped, downloads are refused unless it is set. Must not contain credentials. |
+| `PROCUREMENT_SOURCE_URL` | `https://repo.jenkins-ci.org/releases/` | doctor | Where `uc doctor --download-poms`, `--download-dependencies` and `--download-war` fetch files from, by Maven path, each checked against the `.sha1` beside it. Set it to reach repo.jenkins-ci.org through your own proxy repository. Air-gapped, downloads are refused unless it is set. Must not contain credentials. See [Procure missing files](../how-to/procure-missing-files.md). |
 
 ## Internal
 

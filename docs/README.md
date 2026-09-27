@@ -12,6 +12,7 @@ Which page to read for which job. New here? Start with the [README](../README.md
 
 - [Configure Jenkins controllers](how-to/configure-jenkins.md)
 - [Stock an air-gapped repository](how-to/stock-airgapped-repository.md)
+- [Procure missing POMs, dependencies and cores](how-to/procure-missing-files.md)
 - [Keep upstream data fresh](how-to/keep-upstream-data-fresh.md)
 - [Enable TLS](how-to/enable-tls.md)
 - [Proxy plugin downloads](how-to/proxy-downloads.md)

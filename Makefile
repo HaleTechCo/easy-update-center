@@ -80,7 +80,7 @@ secrets-permissions: uc-image
 	@$(IN_SECRETS) $(UC_IMAGE) -c '$(FIX_SECRETS)'
 	@echo "secrets/: yours; the containers read their files through their group"
 
-# uc doctor --download-* stages files into ./procurement for review.
+# uc doctor --download-* stages files into ./procurement for review (docs/how-to/procure-missing-files.md).
 # The uc container runs as uid 10001: it gets the folder for the run, and the host user gets it back
 # after, also when the run fails. Usage: make procure-download ARGS="--download-poms --download-dependencies"
 PROCUREMENT = $(CURDIR)/procurement
