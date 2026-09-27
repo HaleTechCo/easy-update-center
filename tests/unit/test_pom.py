@@ -3,7 +3,7 @@
 import pytest
 
 from archivefixture import pom_xml
-from uc.pom import pom_coordinates, safe_root, unusable_reason
+from uc.pom import dependency_group, pom_coordinates, safe_root, unusable_reason
 
 GIT = ('org.jenkins-ci.plugins', 'git', '5.2.0')
 NGINX_404 = b'<html>\r\n<head><title>404 Not Found</title></head>\r\n<body>\r\n<center><h1>404 Not Found</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n'
@@ -48,3 +48,22 @@ def test_safe_root_refuses_what_the_byte_check_cannot_see():
     assert safe_root(utf16) is None  # a declaration the ASCII byte check would miss
     assert safe_root('<project/>'.encode('utf-16-le')) is None  # UTF-16 without a BOM is full of NULs
     assert safe_root(b'<project>\xff</project>') is None  # not UTF-8
+
+
+def test_dependency_group_comes_from_the_dependencies():
+    data = pom_xml(*GIT, dependencies=[('org.jenkins-ci.plugins', 'mailer', '534.v1'), ('io.jenkins.plugins', 'caffeine-api', '3.2.4')])
+    assert dependency_group(data, 'caffeine-api') == 'io.jenkins.plugins'
+    assert dependency_group(data, 'absent') is None
+
+
+def test_dependency_group_resolves_the_projects_own_group():
+    assert dependency_group(pom_xml(*GIT, dependencies=[('${project.groupId}', 'git-client', '6.0')]), 'git-client') == 'org.jenkins-ci.plugins'
+
+
+def test_any_other_property_is_unknown():
+    assert dependency_group(pom_xml(*GIT, dependencies=[('${corp.group}', 'x', '1')]), 'x') is None
+
+
+def test_no_pom_or_not_xml_is_unknown():
+    assert dependency_group(None, 'x') is None
+    assert dependency_group(NGINX_404, 'x') is None
