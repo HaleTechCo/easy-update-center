@@ -143,6 +143,12 @@ Not for production.
 | `NO_PROXY` | Python in `uc`, `scheduler` and `repo-adapter` | Hosts to reach directly. With a proxy set, include `repo-adapter` (and your repository's host if it is internal), for example `NO_PROXY=repo-adapter,artifactory.corp.example`. |
 | `COMPOSE_FILE` | `docker compose`, from `.env` | The Compose files every plain `docker compose` command uses (on Windows, `;` between files). Set it whenever you use an override, in either mode, so later commands keep it: `compose.yaml:compose.airgapped.yaml` air-gapped, plus `compose.tls.yaml`, `compose.repo-ca.yaml` or `compose.proxy-ca.yaml` when you use them. |
 
+## Procurement
+
+| Setting | Default | Read by | Notes |
+|---|---|---|---|
+| `PROCUREMENT_SOURCE_URL` | `https://repo.jenkins-ci.org/releases/` | doctor | Where `uc doctor --download-poms`, `--download-dependencies` and `--download-war` fetch files from, by Maven path, each checked against the `.sha1` beside it. Set it to reach repo.jenkins-ci.org through your own proxy repository. Air-gapped, downloads are refused unless it is set. Must not contain credentials. |
+
 ## Internal
 
 Set by the image or derived from `SECRETS_DIR`; change them only to run `uc` outside the containers
@@ -161,3 +167,4 @@ or with a non-default layout.
 | `REPO_PASSWORD_FILE` | `${SECRETS_DIR}/repo_password` | |
 | `GITHUB_USERNAME_FILE` | `${SECRETS_DIR}/github_username` | |
 | `GITHUB_TOKEN_FILE` | `${SECRETS_DIR}/github_token` | |
+| `REPO_PUSH_AUTH_FILE` | `${SECRETS_DIR}/repo_push_auth` | |
