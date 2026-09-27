@@ -214,3 +214,42 @@ def test_rollback_restores_the_previous_release(release):
     assert uc('rollback').returncode == 0
     assert json.loads(Path('/data/status.json').read_text())['live_release'] == first
     assert Path('/data/live').readlink() == Path(f'releases/{first}')
+
+
+PUSH = {
+    'REPO_URL': os.environ['PUSH_REPO_URL'],
+    'REPO_KEY': 'procure',
+    'REPO_ADAPTER_URL': 'http://repo-adapter-push:8081/artifactory/',
+    'REPO_ADAPTER_DIR': '/data-push/repo-adapter',
+    'UC_DATA_DIR': '/data-push',
+    'PROCUREMENT_SOURCE_URL': 'http://upstream:8081/maven/releases/',
+    'REPO_PUSH_AUTH_FILE': '/pki/repo_push_auth',
+}
+PROCURED = {
+    'io/jenkins/uctest/uc-test-needs-dep/1.0/uc-test-needs-dep-1.0.pom',
+    'io/jenkins/uctest/uc-test-dep/1.0/uc-test-dep-1.0.hpi',
+    'io/jenkins/uctest/uc-test-dep/1.0/uc-test-dep-1.0.pom',
+    'org/jenkins-ci/plugins/uc-test-dep2/1.0/uc-test-dep2-1.0.hpi',
+    'org/jenkins-ci/plugins/uc-test-dep2/1.0/uc-test-dep2-1.0.pom',
+    'org/jenkins-ci/main/jenkins-war/2.999.1/jenkins-war-2.999.1.war',
+    'org/jenkins-ci/main/jenkins-war/2.999.1/jenkins-war-2.999.1.pom',
+}
+
+
+def test_procurement_round_trip(tmp_path):
+    stage = str(tmp_path / 'stage')
+    staged = uc('doctor', '--fetch', '--download-poms', '--download-dependencies', '--download-war', 'required', '--since', '2.999.1', '--staging', stage, env=PUSH)
+    assert staged.returncode == 0, staged.stdout[-4000:] + staged.stderr[-4000:]
+    files = json.loads(Path(stage, 'procurement.json').read_text())['files']
+    assert set(files) == PROCURED
+    assert files['org/jenkins-ci/plugins/uc-test-dep2/1.0/uc-test-dep2-1.0.hpi']['reason'] == 'uc-test-dep 1.0 requires uc-test-dep2 1.0'  # found through the fallback groups
+    pushed = uc('doctor', '--push', '--staging', stage, env=PUSH)
+    assert pushed.returncode == 0, pushed.stdout[-4000:] + pushed.stderr[-4000:]
+    assert '7 uploaded, 0 already present, 0 problem(s)' in pushed.stdout
+    after = uc('doctor', '--fetch', '--json', env=PUSH)
+    assert after.returncode == 0, after.stdout[-4000:] + after.stderr[-4000:]
+    report = json.loads(after.stdout)
+    assert report['missing_dependencies'] == []
+    assert report['missing_cores'] == []
+    assert report['cores'] == ['2.999.1']
+    assert report['repo_adapter']['derived_poms'] == []

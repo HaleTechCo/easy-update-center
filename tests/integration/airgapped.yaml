@@ -78,7 +78,8 @@ services:
       - >-
         uc pki init --out /pki && cp /pki/root-ca.crt /trust/ &&
         printf uc > /pki/repo_username && printf uc-secret > /pki/repo_password &&
-        printf uc:uc-secret > /pki/download_proxy_auth && chmod -R a+rX /pki /trust
+        printf uc:uc-secret > /pki/download_proxy_auth &&
+        printf uc:uc-secret > /pki/repo_push_auth && chmod -R a+rX /pki /trust
     volumes:
       - pki:/pki
       - trust:/trust
@@ -119,6 +120,69 @@ services:
     volumes:
       - seed:/seed:ro
       - ../../tests:/tests:ro
+
+  # ---- the procurement round trip: a fake repo.jenkins-ci.org, and a writable repository per type ----
+  upstream:
+    <<: *uc-test
+    networks: [airgap]
+    entrypoint: ["python3", "/tests/integration/fake_artifact_keeper.py", "--root", "/seed/upstream", "--port", "8081",
+                 "--user", "unused", "--token", "unused", "--anonymous-read"]
+    volumes:
+      - seed:/seed:ro
+      - ../../tests:/tests:ro
+
+  push-init:
+    <<: *uc-test
+    profiles: ["seed"]
+    network_mode: none
+    entrypoint: ["sh", "-c", "rm -rf /push/* && cp -a /seed/push-template/. /push/"]
+    volumes:
+      - seed:/seed:ro
+      - push-repo:/push
+
+  keeper-push:
+    <<: *uc-test
+    networks: [airgap]
+    entrypoint: ["python3", "/tests/integration/fake_artifact_keeper.py", "--root", "/push", "--port", "8081",
+                 "--user", "uc", "--token", "uc-secret"]
+    volumes:
+      - push-repo:/push
+      - ../../tests:/tests:ro
+
+  artifactory-push:
+    <<: *uc-test
+    networks: [airgap]
+    entrypoint: ["python3", "/tests/integration/fake_artifactory.py", "--root", "/push", "--port", "8081",
+                 "--credentials", "uc:uc-secret"]
+    volumes:
+      - push-repo:/push
+      - ../../tests:/tests:ro
+
+  repo-adapter-push:
+    <<: *uc-test
+    networks: [airgap]
+    extra_hosts: *blocked-hosts
+    entrypoint: ["python3", "-m", "uc", "repo-adapter"]
+    environment:
+      MODE: airgapped
+      PUBLIC_URL: "http://web:8080"
+      REPO_TYPE: ${IT_REPO_TYPE:-artifactory}
+      REPO_URL: ${IT_PUSH_URL:-http://artifactory-push:8081/artifactory/}
+      REPO_KEY: procure
+      SECRETS_DIR: /pki
+      UC_DATA_DIR: /data
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=3)"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    depends_on:
+      keeper-push: {condition: service_started}
+      artifactory-push: {condition: service_started}
+    volumes:
+      - uc-data-push:/data
+      - pki:/pki:ro
+      - ../../uc/uc:/opt/uc/python/uc:ro
 
   repo-adapter:
     <<: *uc-test
@@ -201,11 +265,14 @@ services:
       LTS_NEW: ${LTS_NEW:-x}
       WEEKLY: ${WEEKLY:-x}
       SEED_TOP_PLUGIN: ${SEED_TOP_PLUGIN:-timestamper}
+      PUSH_REPO_URL: ${IT_PUSH_URL:-http://artifactory-push:8081/artifactory/}
     entrypoint: ["python3", "-m", "pytest", "-p", "no:cacheprovider", "-q", "-x", "/tests/integration/test_airgapped.py"]
     depends_on:
       artifactory: {condition: service_started}
       keeper: {condition: service_started}
       repo-adapter: {condition: service_healthy}
+      repo-adapter-push: {condition: service_healthy}
+      upstream: {condition: service_started}
       web: {condition: service_started}
       web-proxy: {condition: service_started}
       jenkins-lts-old: {condition: service_healthy}
@@ -215,6 +282,7 @@ services:
       - uc-data:/data
       - uc-data-proxy:/data-proxy
       - uc-data-age:/data-age
+      - uc-data-push:/data-push
       - pki:/pki:ro
       - seed:/seed:ro
       - ../../tests:/tests:ro
@@ -238,3 +306,5 @@ volumes:
   uc-data:
   uc-data-proxy:
   uc-data-age:
+  push-repo:
+  uc-data-push:
