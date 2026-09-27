@@ -114,7 +114,7 @@ IT_DIR = tests/integration
 IT_AIR = docker compose -f $(IT_DIR)/airgapped.yaml --env-file $(IT_DIR)/.versions.env
 # Each repository type gets a fresh update center (its data volumes) against the same seeded repository.
 IT_TYPES ?= artifactory artifact-keeper
-IT_STATE = uc-it-airgapped_uc-data uc-it-airgapped_uc-data-proxy uc-it-airgapped_uc-data-age
+IT_STATE = uc-it-airgapped_uc-data uc-it-airgapped_uc-data-proxy uc-it-airgapped_uc-data-age uc-it-airgapped_uc-data-push uc-it-airgapped_push-repo
 
 it-airgapped: build
 	docker compose -f $(IT_DIR)/airgapped.yaml --profile seed run --rm -T seed-versions > $(IT_DIR)/.versions.env
@@ -126,7 +126,7 @@ it-airgapped: build
 	  echo "== air-gapped run against $$type"; \
 	  env="--env-file $(IT_DIR)/types/$$type.env"; \
 	  $(IT_AIR) $$env rm --stop --force >/dev/null 2>&1; docker volume rm -f $(IT_STATE) >/dev/null; \
-	  $(IT_AIR) $$env run --rm driver $(ARGS) && $(IT_AIR) $$env run --rm plugin-cli || { rc=1; break; }; \
+	  $(IT_AIR) $$env --profile seed run --rm push-init && $(IT_AIR) $$env run --rm driver $(ARGS) && $(IT_AIR) $$env run --rm plugin-cli || { rc=1; break; }; \
 	done; \
 	$(IT_AIR) --profile seed down -v --remove-orphans >/dev/null 2>&1; exit $$rc
 
