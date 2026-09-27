@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from sitefixture import uc_document, write_site
 from uc.cli import EXIT_LOCKED, main
 from uc.publish import RunLock
@@ -103,3 +105,24 @@ def test_doctor_refuses_a_bad_since_before_listing(monkeypatch, tmp_path, secret
     use_env(monkeypatch, tmp_path, secrets_dir)
     assert main(['doctor', '--since', 'two']) == 1
     assert '--since takes a Jenkins version' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('extra', [['--download-poms'], ['--download-war', '2.479.1'], ['--fetch'], ['--json'], ['--since', '2.479.1']])
+def test_push_runs_on_its_own(extra, capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        main(['doctor', '--push', *extra])
+    assert exit_info.value.code == 2
+    assert '--push runs on its own' in capsys.readouterr().err
+
+
+def test_dry_run_needs_push(capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        main(['doctor', '--dry-run'])
+    assert exit_info.value.code == 2
+    assert '--dry-run only applies to --push' in capsys.readouterr().err
+
+
+def test_push_with_nothing_staged_exits_1(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    assert main(['doctor', '--push', '--staging', str(tmp_path / 'empty')]) == 1
+    assert 'uc: error: nothing to push' in capsys.readouterr().err
