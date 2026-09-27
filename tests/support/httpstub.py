@@ -1,6 +1,6 @@
 """A threaded HTTP server that answers with canned responses and records every request.
 
-A route is (status, headers, body), or a callable taking (headers, body) and returning one.
+A route is (status, headers, body), or a callable taking (headers, body) and returning one. A HEAD request gets its route's status and headers, without the body.
 """
 
 from __future__ import annotations
@@ -55,9 +55,11 @@ class StubServer:
                     self.send_header(key, value)
                 self.send_header('Content-Length', str(len(payload)))
                 self.end_headers()
-                self.wfile.write(payload)
+                if self.command != 'HEAD':
+                    self.wfile.write(payload)
 
             do_GET = _handle  # noqa: N815 - http.server dispatches on the do_<METHOD> name
+            do_HEAD = _handle  # noqa: N815 - same; headers only
             do_POST = _handle  # noqa: N815 - same
             do_PUT = _handle  # noqa: N815 - same
 

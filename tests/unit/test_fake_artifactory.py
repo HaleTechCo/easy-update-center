@@ -110,3 +110,39 @@ def test_the_fake_accepts_an_upload_once_and_serves_its_sha1(writable, tmp_path)
     assert (tmp_path / 'jenkins/org/example/new/1.0/new-1.0.pom').read_bytes() == b'<project/>'
     with urllib.request.urlopen(urllib.request.Request(url + '.sha1', headers={'Authorization': basic})) as response:
         assert response.read().decode() == hashlib.sha1(b'<project/>', usedforsecurity=False).hexdigest()
+
+
+def test_client_checksums_are_served_only_when_the_upload_sent_one(tmp_path):
+    httpd = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(tmp_path, 'uc:secret', anonymous_read=True, checksum_policy='client'))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f'http://127.0.0.1:{httpd.server_address[1]}/artifactory/jenkins/org/example/'
+    basic = 'Basic ' + base64.b64encode(b'uc:secret').decode()
+    digest = hashlib.sha1(b'<project/>', usedforsecurity=False).hexdigest()
+
+    def put_with(url, data, sha1):
+        request = urllib.request.Request(url, data=data, method='PUT', headers={'Authorization': basic, 'X-Checksum-Sha1': sha1})
+        try:
+            with urllib.request.urlopen(request) as response:
+                return response.status
+        except urllib.error.HTTPError as exc:
+            return exc.code
+
+    def status(url, method='GET'):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, method=method)) as response:
+                return response.status, response.read()
+        except urllib.error.HTTPError as exc:
+            return exc.code, b''
+
+    try:
+        assert put(base + 'plain/1.0/plain-1.0.pom', b'<project/>', basic) == 201
+        assert status(base + 'plain/1.0/plain-1.0.pom.sha1') == (404, b'')
+        assert status(base + 'plain/1.0/plain-1.0.pom', 'HEAD') == (200, b'')
+        assert put_with(base + 'bad/1.0/bad-1.0.pom', b'<project/>', '0' * 40) == 409
+        assert not (tmp_path / 'jenkins/org/example/bad/1.0/bad-1.0.pom').exists()
+        assert put_with(base + 'good/1.0/good-1.0.pom', b'<project/>', digest) == 201
+        assert status(base + 'good/1.0/good-1.0.pom.sha1') == (200, digest.encode())
+        assert status(base + 'none/1.0/none-1.0.pom', 'HEAD') == (404, b'')
+    finally:
+        httpd.shutdown()
+        httpd.server_close()

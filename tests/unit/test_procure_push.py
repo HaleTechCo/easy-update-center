@@ -2,6 +2,7 @@
 
 import hashlib
 import io
+import socket
 import sys
 import threading
 from http.server import ThreadingHTTPServer
@@ -48,6 +49,33 @@ def artifactory(tmp_path):
     httpd.server_close()
 
 
+@pytest.fixture
+def client_checksums(tmp_path):
+    """Serve a fake Artifactory with the client checksum policy, the default for Artifactory's local repositories."""
+    httpd, url = serve(artifactory_handler(tmp_path / 'repo', 'uc:tok', anonymous_read=False, checksum_policy='client'))
+    yield tmp_path / 'repo' / 'jenkins', url + 'artifactory/'
+    httpd.shutdown()
+    httpd.server_close()
+
+
+class RecordingHttp(Http):
+    """An Http that records the method and URL of every request."""
+
+    def __init__(self):
+        """Verify TLS against the system bundle; nothing recorded yet."""
+        super().__init__(None)
+        self.calls = []
+
+    def request(self, url, **kwargs):
+        """Record the request, then make it."""
+        self.calls.append((kwargs.get('method') or 'GET', url))
+        return super().request(url, **kwargs)
+
+
+def sha1(data):
+    return hashlib.sha1(data, usedforsecurity=False).hexdigest()
+
+
 def keeper_settings(tmp_path, secrets_dir, url, auth='uc:tok'):
     (secrets_dir / 'repo_push_auth').write_text(auth + '\n')
     return make_settings(tmp_path, secrets_dir, REPO_TYPE='artifact-keeper', REPO_URL=url, REPO_KEY='jenkins', REPO_ADAPTER='on')
@@ -60,9 +88,14 @@ def staged(stage_dir, files, **fields):
     staging.save()
 
 
-def run(settings, stage_dir, *, dry_run=False):
+def run(settings, stage_dir, *, dry_run=False, http=None):
     out = io.StringIO()
-    return push(settings, stage_dir, dry_run=dry_run, out=out), out.getvalue().splitlines()
+    return push(settings, stage_dir, dry_run=dry_run, out=out, http=http), out.getvalue().splitlines()
+
+
+def artifactory_settings(tmp_path, secrets_dir, url):
+    (secrets_dir / 'repo_push_auth').write_text('uc:tok')
+    return make_settings(tmp_path, secrets_dir, REPO_URL=url, REPO_KEY='jenkins')
 
 
 def test_push_uploads_what_the_repository_lacks_and_verifies_it(keeper, tmp_path, secrets_dir):
@@ -190,3 +223,63 @@ def test_push_uploads_the_bytes_it_verified_even_if_the_file_changes_after(keepe
     assert code == 0
     assert (repo / POM).read_bytes() == b'<project/>'
     assert f'uploaded  {POM}' in out.getvalue().splitlines()
+
+
+def test_artifactory_with_client_checksums_records_the_sha1_sent_with_the_upload(client_checksums, tmp_path, secrets_dir):
+    repo, url = client_checksums
+    staged(tmp_path / 'stage', {POM: b'<project/>', HPI: b'hpi bytes'})
+    code, lines = run(artifactory_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
+    assert code == 0, lines
+    assert (repo / POM).read_bytes() == b'<project/>'
+    assert (repo / f'{POM}.sha1').read_text() == sha1(b'<project/>')
+    assert f'uploaded  {HPI}' in lines
+    assert f'uploaded  {POM}' in lines
+
+
+@pytest.mark.parametrize('dry_run', [False, True])
+def test_a_path_the_repository_holds_without_a_checksum_is_never_uploaded(client_checksums, tmp_path, secrets_dir, dry_run):
+    repo, url = client_checksums
+    publish(repo, POM, b'<other/>')
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    http = RecordingHttp()
+    code, lines = run(artifactory_settings(tmp_path, secrets_dir, url), tmp_path / 'stage', dry_run=dry_run, http=http)
+    assert code == 1
+    assert f'ERROR     {POM}  (the repository holds this path but publishes no checksum for it; check it by hand)' in lines
+    assert (repo / POM).read_bytes() == b'<other/>'
+    assert [method for method, _ in http.calls] == ['GET', 'HEAD']
+
+
+def test_an_unreachable_repository_is_an_error_and_nothing_is_uploaded(tmp_path, secrets_dir):
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        port = sock.getsockname()[1]
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    http = RecordingHttp()
+    code, lines = run(keeper_settings(tmp_path, secrets_dir, f'http://127.0.0.1:{port}/'), tmp_path / 'stage', http=http)
+    assert code == 1
+    assert [line for line in lines if line.startswith(f'ERROR     {POM}  (GET http://127.0.0.1:{port}/maven/jenkins/{POM}.sha1 failed: ')]
+    assert [method for method, _ in http.calls] == ['GET']
+
+
+def test_an_upload_the_repository_then_reports_with_another_sha1_failed(tmp_path, secrets_dir):
+    data = b'<project/>'
+    answers = iter([(404, {}, b''), (200, {}, b'0' * 40)])
+    routes = {('GET', f'/maven/jenkins/{POM}.sha1'): lambda _headers, _body: next(answers), ('HEAD', f'/maven/jenkins/{POM}'): (404, {}, b''), ('PUT', f'/maven/jenkins/{POM}'): (201, {}, b'')}
+    staged(tmp_path / 'stage', {POM: data})
+    with StubServer(routes) as stub:
+        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+    assert code == 1
+    assert f'FAILED    {POM}  (HTTP 201, repository sha1 {"0" * 40})' in lines
+    [(_, _, headers, body)] = [request for request in stub.requests if request[0] == 'PUT']
+    assert body == data
+    assert {key.lower(): value for key, value in headers.items()}['x-checksum-sha1'] == sha1(data)
+
+
+def test_an_unexpected_answer_to_the_existence_check_is_an_error(tmp_path, secrets_dir):
+    routes = {('GET', f'/maven/jenkins/{POM}.sha1'): (404, {}, b''), ('HEAD', f'/maven/jenkins/{POM}'): (403, {}, b'')}
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    with StubServer(routes) as stub:
+        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+    assert code == 1
+    assert f'ERROR     {POM}  (the repository answered HTTP 403)' in lines
+    assert [request[0] for request in stub.requests] == ['GET', 'HEAD']

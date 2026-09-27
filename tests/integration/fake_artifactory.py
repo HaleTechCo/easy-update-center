@@ -3,6 +3,9 @@
 POST /artifactory/api/search/aql, GET /artifactory/<repo>/<path>, GET /artifactory/<repo>/<path>!/<entry>, PUT /artifactory/<repo>/<path> (201, or 409 when the path exists) and <path>.sha1.
 update-center2 answers 401 challenges with credentials, so private reads use WWW-Authenticate: Basic.
 File reads honour a single Range, as Artifactory does (the repo-adapter reads archive dates that way).
+Checksum policy 'server' (the default) serves every file's <path>.sha1. 'client' is Artifactory's default for
+local repositories: <path>.sha1 exists only when the upload sent X-Checksum-Sha1 (stored beside the file), an
+upload whose X-Checksum-Sha1 does not match its body is refused with 409, and files put on disk get 404.
 """
 
 from __future__ import annotations
@@ -50,12 +53,12 @@ def aql_results(root: Path, repository: str) -> list[dict]:
     return sorted(results, key=lambda r: (r['path'], r['name']))
 
 
-def read_artifact(root: Path, relative: str) -> bytes | None:
+def read_artifact(root: Path, relative: str, *, server_checksums: bool = True) -> bytes | None:
     archive, separator, entry = relative.partition('!/')
     target = (root / archive).resolve()
     if not target.is_relative_to(root.resolve()):
         return None
-    if not separator and not target.is_file() and target.suffix == '.sha1' and target.with_suffix('').is_file():
+    if server_checksums and not separator and not target.is_file() and target.suffix == '.sha1' and target.with_suffix('').is_file():
         return hashlib.sha1(target.with_suffix('').read_bytes(), usedforsecurity=False).hexdigest().encode()
     if not target.is_file():
         return None
@@ -68,8 +71,9 @@ def read_artifact(root: Path, relative: str) -> bytes | None:
         return None
 
 
-def make_handler(root: Path, credentials: str, *, anonymous_read: bool):
+def make_handler(root: Path, credentials: str, *, anonymous_read: bool, checksum_policy: str = 'server'):
     expected = 'Basic ' + base64.b64encode(credentials.encode()).decode()
+    client = checksum_policy == 'client'
 
     class Handler(BaseHTTPRequestHandler):
         def _send(self, status: int, body: bytes = b'', content_type: str = 'application/octet-stream', headers: dict[str, str] | None = None) -> None:
@@ -109,7 +113,7 @@ def make_handler(root: Path, credentials: str, *, anonymous_read: bool):
             if not anonymous_read and not self._authorized():
                 return self._challenge()
             relative = urllib.parse.unquote(self.path[len(PREFIX) :].split('?', 1)[0])
-            data = read_artifact(root, relative)
+            data = read_artifact(root, relative, server_checksums=not client)
             if data is None:
                 return self._send(404)
             match = _RANGE.match(self.headers.get('Range', '')) if '!/' not in relative else None
@@ -135,8 +139,14 @@ def make_handler(root: Path, credentials: str, *, anonymous_read: bool):
                 return self._send(400)
             if target.exists():
                 return self._send(409, b'{"errors":[{"status":409,"message":"exists"}]}', 'application/json')
+            claimed = (self.headers.get('X-Checksum-Sha1') or '').lower()
+            actual = hashlib.sha1(data, usedforsecurity=False).hexdigest()
+            if client and claimed and claimed != actual:
+                return self._send(409, json.dumps({'errors': [{'status': 409, 'message': f'Checksum policy rejected the artifact: client sha1 {claimed}, actual sha1 {actual}'}]}).encode(), 'application/json')
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
+            if client and claimed:
+                target.with_name(target.name + '.sha1').write_text(actual)
             return self._send(201)
 
         do_HEAD = do_GET  # noqa: N815 - http.server dispatches on the do_<METHOD> name
@@ -150,8 +160,9 @@ def main() -> None:
     parser.add_argument('--port', type=int, default=8081)
     parser.add_argument('--credentials', required=True, help='username:password')
     parser.add_argument('--anonymous-read', action='store_true', help='allow file reads without credentials')
+    parser.add_argument('--checksum-policy', choices=('server', 'client'), default='server', help="client: serve <path>.sha1 only for uploads that sent X-Checksum-Sha1, as Artifactory's local repositories do by default")
     args = parser.parse_args()
-    handler = make_handler(args.root, args.credentials, anonymous_read=args.anonymous_read)
+    handler = make_handler(args.root, args.credentials, anonymous_read=args.anonymous_read, checksum_policy=args.checksum_policy)
     ThreadingHTTPServer(('0.0.0.0', args.port), handler).serve_forever()
 
 

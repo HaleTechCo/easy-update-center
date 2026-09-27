@@ -52,9 +52,20 @@ class Target:
             raise ProcureError(msg)
         return parse_sha1(response.body)
 
-    def put(self, path: str, data: bytes) -> int:
-        """Upload data to path and return the HTTP status."""
-        headers = {**self.headers, 'Content-Type': 'application/octet-stream'}
+    def exists(self, path: str) -> bool:
+        """Return whether the repository holds path (HEAD answers 200) or not (404); raise ProcureError on any other answer."""
+        try:
+            response = self.http.request(self.base + path, headers=self.headers, limit=SIDE_FILE_LIMIT, method='HEAD', timeout=TIMEOUT, truncate=True)
+        except BackendError as exc:
+            raise ProcureError(str(exc)) from exc
+        if response.status not in {HTTPStatus.OK, HTTPStatus.NOT_FOUND}:
+            msg = f'the repository answered HTTP {response.status}'
+            raise ProcureError(msg)
+        return response.status == HTTPStatus.OK
+
+    def put(self, path: str, data: bytes, sha1: str) -> int:
+        """Upload data to path with its sha1, which Artifactory records and verifies (Artifact Keeper ignores it), and return the HTTP status."""
+        headers = {**self.headers, 'Content-Type': 'application/octet-stream', 'X-Checksum-Sha1': sha1}
         try:
             response = self.http.request(self.base + path, headers=headers, limit=SIDE_FILE_LIMIT, data=data, method='PUT', timeout=LONG_TIMEOUT, truncate=True)
         except BackendError as exc:
@@ -87,6 +98,7 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
             continue
         try:
             have = target.sha1(path)
+            held = have is None and target.exists(path)  # Artifactory publishes no .sha1 for a file uploaded without one
         except ProcureError as exc:
             problems += 1
             say('ERROR', path, str(exc))
@@ -100,11 +112,15 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
             hint = '; delete it in the repository first' if staged.replaces_unusable else ''
             say('DIFFERENT', path, f'the repository holds another file (sha1 {have}){hint}')
             continue
+        if held:
+            problems += 1
+            say('ERROR', path, 'the repository holds this path but publishes no checksum for it; check it by hand')
+            continue
         if dry_run:
             say('would put', path)
             continue
         try:
-            status = target.put(path, data)
+            status = target.put(path, data, staged.sha1)
             after = target.sha1(path)
         except ProcureError as exc:
             problems += 1
