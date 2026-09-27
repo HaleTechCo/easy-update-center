@@ -1,5 +1,7 @@
 """The test-only fake speaks the same three calls update-center2 makes, as seen by our own clients."""
 
+import base64
+import hashlib
 import io
 import sys
 import threading
@@ -87,3 +89,32 @@ def test_private_reads_challenge_for_basic_auth(server):
         urllib.request.urlopen(url)
     assert err.value.code == 401
     assert err.value.headers['WWW-Authenticate'] == 'Basic realm="Artifactory Realm"'
+
+
+@pytest.fixture
+def writable(tmp_path):
+    httpd = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(tmp_path, 'uc:secret', anonymous_read=False))
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield f'http://127.0.0.1:{httpd.server_address[1]}/artifactory/'
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def put(url, data, auth=None):
+    request = urllib.request.Request(url, data=data, method='PUT', headers={'Authorization': auth} if auth else {})
+    try:
+        with urllib.request.urlopen(request) as response:
+            return response.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+
+
+def test_the_fake_accepts_an_upload_once_and_serves_its_sha1(writable, tmp_path):
+    basic = 'Basic ' + base64.b64encode(b'uc:secret').decode()
+    url = writable + 'jenkins/org/example/new/1.0/new-1.0.pom'
+    assert put(url, b'<project/>') == 401
+    assert put(url, b'<project/>', basic) == 201
+    assert put(url, b'<other/>', basic) == 409
+    assert (tmp_path / 'jenkins/org/example/new/1.0/new-1.0.pom').read_bytes() == b'<project/>'
+    with urllib.request.urlopen(urllib.request.Request(url + '.sha1', headers={'Authorization': basic})) as response:
+        assert response.read().decode() == hashlib.sha1(b'<project/>', usedforsecurity=False).hexdigest()

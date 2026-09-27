@@ -59,6 +59,7 @@ class StubServer:
 
             do_GET = _handle  # noqa: N815 - http.server dispatches on the do_<METHOD> name
             do_POST = _handle  # noqa: N815 - same
+            do_PUT = _handle  # noqa: N815 - same
 
             def log_message(self, *args) -> None:
                 pass
