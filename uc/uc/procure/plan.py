@@ -1,0 +1,92 @@
+"""What --download-poms and --download-war stage, worked out from the doctor report."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+from uc.aql import WAR_ARTIFACT, WAR_GROUP, Gav
+from uc.doctor import CORE_VERSION
+
+from . import ProcureError
+from .stager import Wanted
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from uc.doctor import DoctorReport
+
+REQUIRED = 'required'
+
+
+def pom_path(gav: str) -> str:
+    """Return the Maven path of the .pom for 'group:artifact:version'."""
+    group, artifact, version = gav.split(':')
+    return Gav(group, artifact, version, 'pom').maven_path
+
+
+def plan_poms(report: DoctorReport) -> list[Wanted]:
+    """Return every POM the report names (missing, derived from an archive, or unusable) once, in path order."""
+    wanted: dict[str, Wanted] = {}
+    adapter = report.repo_adapter
+    if adapter is None:
+        for archive in report.hpi_without_pom:
+            path = archive.rsplit('.', 1)[0] + '.pom'
+            wanted[path] = Wanted(path, 'pom', f'no .pom beside {archive}: the generator drops it without one')
+        return [wanted[path] for path in sorted(wanted)]
+    for item in adapter.get('derived_poms') or []:
+        path = pom_path(item['gav'])
+        wanted[path] = Wanted(path, 'pom', f'real POM for {item["gav"]}; the one derived from its archive works meanwhile')
+    for item in adapter.get('needs_pom') or []:
+        path = pom_path(item['gav'])
+        wanted[path] = Wanted(path, 'pom', f'{item["gav"]} has no POM in the repository or its archive: the generator drops it without one')
+    for item in adapter.get('replaced_poms') or []:
+        wanted[item['path']] = Wanted(item['path'], 'pom', f'replaces an unusable .pom ({item["reason"]}): delete the one in the repository before pushing', replaces_unusable=True)
+    return [wanted[path] for path in sorted(wanted)]
+
+
+def check_war_args(values: Sequence[str]) -> None:
+    """Refuse --download-war values that are neither a Jenkins version nor 'required', before anything runs."""
+    for value in values:
+        if value != REQUIRED and not CORE_VERSION.match(value):
+            msg = f'--download-war takes a Jenkins version such as 2.479.1, or required (got {value!r})'
+            raise ProcureError(msg)
+
+
+@dataclass(frozen=True)
+class CorePlan:
+    """The core files to stage, and notes on versions left out."""
+
+    files: list[Wanted] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+
+def plan_cores(values: Sequence[str], report: DoctorReport) -> CorePlan:
+    """Resolve --download-war values (versions, or 'required') into the .war and .pom of each core to stage."""
+    check_war_args(values)
+    stocked = set(report.cores)
+    reasons: dict[str, str] = {}
+    notes: list[str] = []
+    for value in values:
+        if value != REQUIRED:
+            if value in stocked:
+                notes.append(f'skipped   jenkins-war {value}  (already in the repository)')
+            else:
+                reasons[value] = 'requested'
+            continue
+        if report.required_cores is None:
+            msg = '--download-war required is not available when the source is the public repo.jenkins-ci.org; name the versions instead'
+            raise ProcureError(msg)
+        if report.core_floor is None:
+            msg = 'the repository holds no Jenkins core, so "required" has no floor: add --since <oldest version your controllers run>'
+            raise ProcureError(msg)
+        if not report.missing_cores:
+            notes.append(f'no required core at or above {report.core_floor} is missing')
+        for core in report.missing_cores:
+            count = core['required_by']
+            reasons.setdefault(core['version'], f'required by {count} plugin release{"" if count == 1 else "s"}, e.g. {core["example"]}')
+    files: list[Wanted] = []
+    for version, reason in reasons.items():
+        war = Gav(WAR_GROUP, WAR_ARTIFACT, version, 'war')
+        files += [Wanted(war.maven_path, 'core', reason), Wanted(war.with_extension('pom').maven_path, 'core', reason)]
+    return CorePlan(files, notes)
