@@ -83,3 +83,23 @@ def test_pki_init_and_show(tmp_path, capsys):
     shown = capsys.readouterr().out
     assert 'update-center.cert: CN=Jenkins Update Center Signing' in shown
     assert 'root-ca.crt: CN=Jenkins Update Center Root CA' in shown
+
+
+def test_doctor_downloads_are_refused_air_gapped_before_listing(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    assert main(['doctor', '--download-poms', '--staging', str(tmp_path / 'stage')]) == 1
+    assert 'uc: error: downloads need repo.jenkins-ci.org' in capsys.readouterr().err
+    assert not (tmp_path / 'stage').exists()
+
+
+def test_doctor_refuses_a_bad_war_version_before_listing(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
+    assert main(['doctor', '--download-war', '2.479.x']) == 1
+    assert '--download-war takes a Jenkins version' in capsys.readouterr().err
+
+
+def test_doctor_refuses_a_bad_since_before_listing(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    assert main(['doctor', '--since', 'two']) == 1
+    assert '--since takes a Jenkins version' in capsys.readouterr().err
