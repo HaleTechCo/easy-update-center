@@ -55,7 +55,7 @@ The scheduler runs the same command on `GENERATE_SCHEDULE`.
 
 ```bash
 docker compose run --rm uc doctor [--fetch] [--json] [--since VERSION]
-docker compose run --rm uc doctor [--download-poms] [--download-dependencies] [--download-war VERSION|required ...] [--since VERSION] [--staging DIR]
+docker compose run --rm uc doctor [--fetch] [--download-poms] [--download-dependencies] [--download-war VERSION|required ...] [--since VERSION] [--staging DIR]
 docker compose run --rm uc doctor --push [--dry-run] [--staging DIR]
 ```
 
@@ -78,27 +78,27 @@ runs the same listing query the generator runs and prints:
 - dependency problems: plugins whose required plugins are absent, or present only in lower
   versions;
 - cores plugin releases require that the repository lacks, at or above the oldest core it holds (or
-  --since), each with its repo.jenkins-ci.org URL; not for the public repository.
+  `--since`), each with its repo.jenkins-ci.org URL; not for the public repository.
 
 The repo.jenkins-ci.org URLs are where public plugins and cores are published; a plugin that never
 was, such as an internal one, has no `.pom` there.
 
 | Option | Meaning |
 |---|---|
-| `--fetch` | Download the POMs and manifests missing from the generator's cache, so dependencies can be checked before the first generation. Without it, unchecked items are counted and reported. |
+| `--fetch` | Download the POMs and manifests missing from the generator's cache, so dependencies and required cores can be checked before the first generation. Without it, unchecked items are counted and reported, and a download run may miss what they need: use it with the download options. |
 | `--json` | Print the full report as JSON. |
 | `--since VERSION` | The floor for required cores, instead of the oldest core in the repository. |
 | `--download-poms` | Stage the real `.pom` of every plugin whose POM is missing, derived or unusable. |
 | `--download-dependencies` | Stage missing required dependencies, transitively, each with its `.pom`. |
-| `--download-war VERSION` | Stage that core's `.war` and `.pom`; `required` stages every required core the repository lacks above the floor. Repeatable. |
+| `--download-war VERSION` | Stage that core's `.war` and `.pom`; `required` stages every required core the repository lacks at or above the floor. Repeatable. |
 | `--staging DIR` | The staging folder (default `/procurement`, `./procurement` on the host). |
 | `--push` | Upload the files `procurement.json` lists to the repository, never overwriting. On its own only. |
 | `--dry-run` | With `--push`: check each file, upload nothing. |
 
 Exits 1 when anything will be dropped or a dependency is missing, else 0. A download run exits 0
 when everything planned is staged, else 1; a push, 0 when every listed file ends up in the
-repository with the recorded content. `--push` with any other doctor option, or `--dry-run` without
-`--push`, exits 2. How to use them:
+repository with the recorded content. `--push` with a download option, `--fetch`, `--json` or
+`--since`, or `--dry-run` without `--push`, exits 2. How to use them:
 [Procure missing POMs, dependencies and cores](../how-to/procure-missing-files.md). What the
 repository must contain: [Stock an air-gapped repository](../how-to/stock-airgapped-repository.md).
 

@@ -62,7 +62,19 @@ def test_one_run_stages_poms_cores_and_dependencies(releases, tmp_path, secrets_
     assert set(files) == {AD_POM, WAR + '.war', WAR + '.pom', MAILER + '.hpi', MAILER + '.pom'}
     lines = out.getvalue().splitlines()
     assert f'note      {MAILER}.hpi  (requires Jenkins 2.541.3, newer than 2.462.3, the newest core in the repository)' in lines
+    assert not [line for line in lines if line.startswith('warning')]
     assert lines[-1] == f'5 staged, 0 kept, 0 problem(s); review {tmp_path / "stage"}, then run uc doctor --push'
+
+
+def test_a_run_on_unchecked_releases_says_to_fetch(releases, tmp_path, secrets_dir):
+    _, url = releases
+    out = io.StringIO()
+    settings = make_settings(tmp_path, secrets_dir, PROCUREMENT_SOURCE_URL=url)
+    code = download(inspection(DoctorReport(unchecked=2, cores_unchecked=3)), settings, poms=False, dependencies=True, wars=[], staging_dir=tmp_path / 'stage', versions=versions(), out=out)
+    assert code == 0
+    lines = out.getvalue().splitlines()
+    assert lines[-2] == 'warning   2 plugin release(s) not checked for dependencies and 3 for required cores (POM or manifest unavailable); run with --fetch so dependencies and required cores are complete'
+    assert lines[-1].startswith('0 staged, 0 kept, 0 problem(s)')
 
 
 def test_a_failure_exits_1_and_the_rest_is_staged(releases, tmp_path, secrets_dir):

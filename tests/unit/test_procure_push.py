@@ -155,6 +155,7 @@ def test_a_dry_run_uploads_nothing(keeper, tmp_path, secrets_dir):
     code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage', dry_run=True)
     assert code == 0
     assert f'would put {POM}' in lines
+    assert f'0 uploaded, 1 would put, 0 already present, 0 problem(s) -> {url}maven/jenkins/' in lines
     assert not (repo / POM).exists()
 
 
@@ -283,3 +284,15 @@ def test_an_unexpected_answer_to_the_existence_check_is_an_error(tmp_path, secre
     assert code == 1
     assert f'ERROR     {POM}  (the repository answered HTTP 403)' in lines
     assert [request[0] for request in stub.requests] == ['GET', 'HEAD']
+
+
+def test_an_unreadable_staged_file_is_reported_and_the_push_goes_on(keeper, tmp_path, secrets_dir):
+    repo, url = keeper
+    staged(tmp_path / 'stage', {POM: b'<project/>', HPI: b'hpi bytes'})
+    (tmp_path / 'stage' / HPI).chmod(0o000)  # the unit tests run as uid 10001, so this really is unreadable
+    code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
+    assert code == 1
+    assert [line for line in lines if line.startswith(f'TAMPERED  {HPI}  (cannot read it: [Errno 13] Permission denied')]
+    assert not (repo / HPI).exists()
+    assert (repo / POM).read_bytes() == b'<project/>'
+    assert f'1 uploaded, 0 already present, 1 problem(s) -> {url}maven/jenkins/' in lines

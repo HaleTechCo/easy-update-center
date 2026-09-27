@@ -32,10 +32,13 @@ without the separate push step.
 ## 1. Stage
 
 ```bash
-make procure-download ARGS="--download-poms --download-dependencies --download-war required"
+make procure-download ARGS="--fetch --download-poms --download-dependencies --download-war required"
 ```
 
-It prints the doctor report, then one line per file. The options combine freely:
+It prints the doctor report, then one line per file. Keep `--fetch`: it reads the POMs and manifests
+the generator has not cached yet, and without them the run cannot see every missing dependency or
+required core (a `warning` line before the summary then says how many releases went unchecked). The
+download options combine freely:
 
 | Option | Stages |
 |---|---|
@@ -46,9 +49,9 @@ It prints the doctor report, then one line per file. The options combine freely:
 
 `make procure-download` lends `./procurement/` to the container (uid 10001) for the run and hands it
 back to you afterwards. On Docker Desktop, plain Compose works too:
-`docker compose run --rm uc doctor --download-poms`. A run exits 0 when everything planned is staged,
-1 otherwise; files it could not get are listed as `FAILED` with the reason. Running it again keeps
-what is already staged and downloads only what is missing or changed.
+`docker compose run --rm uc doctor --fetch --download-poms`. A run exits 0 when everything planned is
+staged, 1 otherwise; files it could not get are listed as `FAILED` with the reason. Running it again
+keeps what is already staged and downloads only what is missing or changed.
 
 ## 2. Review
 
@@ -85,7 +88,7 @@ checksum for it.
 | `present` | The repository already holds the same file; also shown when the same file arrives from elsewhere while pushing (an HTTP 409 whose sha1 matches). |
 | `would put` | Dry run: it would be uploaded. |
 | `DIFFERENT` | The repository holds another file at that path; it is left alone. |
-| `TAMPERED` | The staged file changed, or is missing, since it was downloaded; download it again. |
+| `TAMPERED` | The staged file changed, or is missing, since it was downloaded: download it again. Or it cannot be read: check its permissions. |
 | `ERROR`, `FAILED` | The repository refused or failed (for example 401: check `secrets/repo_push_auth`), or holds the path but publishes no checksum for it (check that file by hand). |
 
 Push exits 0 when every listed file ends up in the repository with the recorded content.

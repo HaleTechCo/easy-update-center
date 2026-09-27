@@ -61,7 +61,7 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 | `REPO_ADAPTER_URL` | `http://repo-adapter:8081/artifactory/` | generate, doctor | Where `uc` finds the adapter. Change it only with a non-default Compose layout. |
 | `REPO_ADAPTER_DIR` | `/data/repo-adapter` | generate, doctor, repo-adapter | The adapter's token, cache and `report.json`. |
 | `REPO_CA_FILE` | none | repo-adapter, doctor | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca). `uc doctor --push` and the downloads verify against it too. |
-| `REPO_MAX_ARCHIVE_MB` | `512` | repo-adapter | Archives larger than this are skipped and reported. Minimum 1. |
+| `REPO_MAX_ARCHIVE_MB` | `512` | repo-adapter, doctor | Archives larger than this are skipped and reported. `uc doctor --download-dependencies` and `--download-war` download none larger either. Minimum 1. |
 
 ## Downloads
 

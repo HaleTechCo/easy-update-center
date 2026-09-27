@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 FALLBACK_GROUPS = ('org.jenkins-ci.plugins', 'io.jenkins.plugins', 'org.jenkins-ci.plugins.workflow', 'org.jenkinsci.plugins', 'io.jenkins.blueocean')
 ARCHIVE_EXTENSIONS = ('hpi', 'jpi')
 _COORDINATE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.+-]*$')  # untrusted manifest values: safe in a path and in VersionTool's line protocol
+_GROUP = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*$')  # untrusted POM values: dot-separated names, each a path segment
 
 
 @dataclass(frozen=True)
@@ -70,7 +71,7 @@ def _valid(needs: list[Need], stager: Stager) -> list[Need]:
     kept = []
     for need in needs:
         if _COORDINATE.match(need.artifact) and _COORDINATE.match(need.version):
-            kept.append(need)
+            kept.append(need if need.group is None or _GROUP.match(need.group) else dataclasses.replace(need, group=None))  # a group that is not one never reaches a URL: the known groups are tried instead
         else:
             stager.problem(f'{need.artifact} {need.version}', f'not a plugin name and version (required by {need.required_by})')
     return kept
