@@ -5,16 +5,25 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from httpstub import StubServer
 from uc.aql import Gav, RepoFile, classify
 from uc.doctor import (
     ArtifactSource,
+    DoctorError,
+    DoctorReport,
     analyze,
     attach_adapter_report,
+    attach_core_check,
+    check_since,
+    find_missing_cores,
     format_report,
+    inspect_repository,
     is_stub_pom,
     parse_dependencies,
     parse_manifest,
+    required_cores,
     run_doctor,
 )
 from uc.model import Credentials
@@ -191,3 +200,131 @@ def test_format_report(tmp_path, secrets_dir):
     assert 'Dropped by the generator: 1' in text
     assert 'org/jenkins-ci/plugins/orphan/1.0/orphan-1.0.hpi' in text
     assert 'Not checked (POM or manifest unavailable; run with --fetch): 1' in text
+
+
+class ReleaseSource:
+    """Stands in for ArtifactSource: manifests looked up by (artifactId, version)."""
+
+    def __init__(self, manifests):
+        """Serve the given manifest texts, keyed by (artifactId, version)."""
+        self.manifests = manifests
+
+    def pom(self, gav):
+        """Return no POM: the core check reads manifests only."""
+        return self.manifests.get(('pom', gav.artifact_id))
+
+    def manifest(self, gav):
+        """Return the manifest for gav's release, or None."""
+        return self.manifests.get((gav.artifact_id, gav.version))
+
+
+def core_manifest(version, key='Jenkins-Version'):
+    return f'Manifest-Version: 1.0\r\n{key}: {version}\r\n\r\n'
+
+
+def test_each_missing_dependency_is_recorded_as_data():
+    listing = classify(plugin('ad', '2.0', 'hpi', 'pom') + plugin('mailer', '400.v1', 'hpi', 'pom'))
+    manifests = {
+        'ad': 'Manifest-Version: 1.0\r\nPlugin-Dependencies: mailer:534.v1,ionicons-api:94.v1,matrix:3.0;resolution:=optional\r\n\r\n',
+        'mailer': 'Manifest-Version: 1.0\r\n\r\n',
+    }
+    report = analyze(listing, versions(), FakeSource({}, manifests))
+    assert report.missing_dependency_details == [
+        {'plugin': 'ad', 'plugin_group': 'org.jenkins-ci.plugins', 'plugin_version': '2.0', 'dependency': 'ionicons-api', 'required': '94.v1'},
+        {'plugin': 'ad', 'plugin_group': 'org.jenkins-ci.plugins', 'plugin_version': '2.0', 'dependency': 'mailer', 'required': '534.v1'},
+    ]
+    assert report.missing_dependencies == ['ad:2.0 requires ionicons-api 94.v1 (not in the repository)', 'ad:2.0 requires mailer >= 534.v1 (newest available: 400.v1)']
+
+
+def test_required_cores_cover_every_release_once():
+    listing = classify(plugin('ad', '1.0', 'hpi', 'jpi', 'pom') + plugin('ad', '2.0', 'hpi', 'pom') + plugin('old', '1.0', 'hpi', 'pom') + plugin('gone', '1.0', 'hpi', 'pom') + plugin('odd', '1.0', 'hpi', 'pom'))
+    source = ReleaseSource(
+        {
+            ('ad', '1.0'): core_manifest('2.479.1'),
+            ('ad', '2.0'): core_manifest('2.541.3'),
+            ('old', '1.0'): core_manifest('1.625.3', key='Hudson-Version'),
+            ('odd', '1.0'): core_manifest('2.60-SNAPSHOT'),
+        }
+    )
+    required, unchecked = required_cores(listing, source)
+    assert required == {'2.479.1': ['org.jenkins-ci.plugins:ad:1.0'], '2.541.3': ['org.jenkins-ci.plugins:ad:2.0'], '1.625.3': ['org.jenkins-ci.plugins:old:1.0']}
+    assert unchecked == 1  # gone: no manifest
+
+
+REQUIRED = {'1.625.3': ['g:old:1'], '2.479.1': ['g:a:1', 'g:b:1'], '2.541.3': ['g:c:1'], '2.555.1': ['g:d:1']}
+
+
+def test_missing_cores_start_at_the_oldest_stocked_core():
+    floor, missing, below = find_missing_cores(REQUIRED, ['2.479.1', '2.528.3'], None, versions())
+    assert floor == '2.479.1'
+    assert [core['version'] for core in missing] == ['2.541.3', '2.555.1']
+    assert missing[0] == {
+        'version': '2.541.3',
+        'url': 'https://repo.jenkins-ci.org/releases/org/jenkins-ci/main/jenkins-war/2.541.3/jenkins-war-2.541.3.war',
+        'required_by': 1,
+        'example': 'g:c:1',
+    }
+    assert below == 1  # 1.625.3
+
+
+def test_since_sets_the_floor():
+    floor, missing, below = find_missing_cores(REQUIRED, [], '2.500.1', versions())
+    assert floor == '2.500.1'
+    assert [core['version'] for core in missing] == ['2.541.3', '2.555.1']
+    assert below == 2
+
+
+def test_without_a_core_or_since_there_is_no_floor():
+    assert find_missing_cores(REQUIRED, [], None, versions()) == (None, [], 0)
+
+
+@pytest.mark.parametrize('since', ['2.x', 'latest', '2.462.1\n2.479.1', ''])
+def test_since_must_be_a_jenkins_version(since):
+    with pytest.raises(DoctorError, match='--since takes a Jenkins version'):
+        check_since(since)
+
+
+def test_the_core_check_fills_the_report():
+    listing = classify(plugin('ad', '2.0', 'hpi', 'pom') + plugin('jenkins-war', '2.462.3', 'war', 'pom', group='org/jenkins-ci/main'))
+    report = analyze(listing, versions(), ReleaseSource({}))
+    attach_core_check(report, listing, ReleaseSource({('ad', '2.0'): core_manifest('2.479.1')}), versions(), since=None)
+    assert report.required_cores == {'2.479.1': ['org.jenkins-ci.plugins:ad:2.0']}
+    assert report.core_floor == '2.462.3'
+    assert [core['version'] for core in report.missing_cores] == ['2.479.1']
+
+
+def test_the_report_lists_missing_cores(tmp_path, secrets_dir):
+    report = DoctorReport(
+        required_cores={'2.479.1': ['g:a:1'], '2.541.3': ['g:c:1']},
+        core_floor='2.479.1',
+        missing_cores=[{'version': '2.541.3', 'url': 'U', 'required_by': 1, 'example': 'g:c:1'}],
+        missing_cores_below_floor=2,
+    )
+    lines = format_report(report, make_settings(tmp_path, secrets_dir)).splitlines()
+    assert 'Cores plugins require that the repository lacks, at or above 2.479.1 (1):' in lines
+    assert '  2.541.3  U  (required by 1 release, e.g. g:c:1)' in lines
+    assert '2 older required cores below 2.479.1 not listed' in lines
+
+
+def test_without_any_core_the_report_says_how_to_choose_a_floor(tmp_path, secrets_dir):
+    report = DoctorReport(required_cores={'2.479.1': ['g:a:1'], '2.541.3': ['g:c:1']})
+    text = format_report(report, make_settings(tmp_path, secrets_dir))
+    assert 'No Jenkins core in the repository: plugins require 2 cores, from 2.479.1 to 2.541.3.' in text
+    assert 'uc doctor --download-war required --since <oldest version your controllers run>' in text
+
+
+def test_the_public_repository_is_not_checked_for_cores(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, MODE='online', REPO_URL='https://repo.jenkins-ci.org/', REPO_KEY='releases')
+    report = run_doctor(settings, CREDS, fetch=False, versions=versions(), query=lambda *_args: plugin('git', '5.2.0', 'hpi', 'pom'))
+    assert report.required_cores is None
+    assert 'Cores plugins require' not in format_report(report, settings)
+
+
+def test_inspect_repository_returns_the_listing_and_source_it_used(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir)
+    inspection = inspect_repository(settings, CREDS, fetch=False, versions=versions(), query=lambda *_args: plugin('git', '5.2.0', 'hpi', 'pom'))
+    assert [g.artifact_id for g in inspection.listing.plugins] == ['git']
+    assert isinstance(inspection.source, ArtifactSource)
+    assert inspection.report.plugins == 1
+    assert inspection.report.required_cores == {}
+    assert inspection.report.cores_unchecked == 1  # no cache, no --fetch
