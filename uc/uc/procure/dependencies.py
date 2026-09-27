@@ -60,9 +60,10 @@ def resolve_dependencies(inspection: Inspection, stager: Stager, versions: Versi
         requirer = Gav(detail['plugin_group'], detail['plugin'], detail['plugin_version'], 'hpi')
         group = dependency_group(inspection.source.pom(requirer), detail['dependency'])
         needs.append(Need(detail['dependency'], detail['required'], f'{detail["plugin"]} {detail["plugin_version"]}', group))
-    failed: set[tuple[str, str]] = set()
+    failed: set[tuple[str, str]] = set()  # (artifactId, minimum) that could not be staged this run
+    visited: set[tuple[str, str]] = set()  # (artifactId, version) staged or checked this run: each once, so cycles end
     while needs:
-        needs = _round(_valid(needs, stager), repository, stager, versions, failed)
+        needs = _round(_valid(needs, stager), repository, stager, versions, failed=failed, visited=visited)
 
 
 def _valid(needs: list[Need], stager: Stager) -> list[Need]:
@@ -94,30 +95,45 @@ def _highest(needs: list[Need], versions: VersionTool) -> list[Need]:
     return [chosen[artifact] for artifact in sorted(chosen)]
 
 
-def _unmet(needs: list[Need], repository: dict[str, str], staged: dict[str, Gav], versions: VersionTool) -> list[Need]:
-    pairs = [(need, have) for need in needs for have in (repository.get(need.artifact), staged[need.artifact].version if need.artifact in staged else None) if have is not None]
-    order = versions.compare_many([(have, need.version) for need, have in pairs])
-    met = {need.artifact for (need, _), cmp in zip(pairs, order, strict=True) if cmp >= 0}
-    return [need for need in needs if need.artifact not in met]
+def _met(needs: list[Need], repository: dict[str, str], staged: dict[str, Gav], versions: VersionTool) -> dict[str, str]:
+    """Map each need's artifactId to what already satisfies it: 'repository' before 'staged'; needs nothing satisfies are left out."""
+    candidates = [(need, where, have) for need in needs for where, have in (('repository', repository.get(need.artifact)), ('staged', staged[need.artifact].version if need.artifact in staged else None)) if have is not None]
+    order = versions.compare_many([(have, need.version) for need, _, have in candidates])
+    met: dict[str, str] = {}
+    for (need, where, _), cmp in zip(candidates, order, strict=True):
+        if cmp >= 0:
+            met.setdefault(need.artifact, where)
+    return met
 
 
-def _round(needs: list[Need], repository: dict[str, str], stager: Stager, versions: VersionTool, failed: set[tuple[str, str]]) -> list[Need]:
+def _round(needs: list[Need], repository: dict[str, str], stager: Stager, versions: VersionTool, *, failed: set[tuple[str, str]], visited: set[tuple[str, str]]) -> list[Need]:
     if not needs:
         return []
     staged = _staged_plugins(stager)
+    chosen = _highest(needs, versions)
+    met = _met(chosen, repository, staged, versions)
     following: list[Need] = []
-    for need in _unmet(_highest(needs, versions), repository, staged, versions):
-        if (need.artifact, need.version) in failed:
+    for need in chosen:
+        where = met.get(need.artifact)
+        if where == 'repository':
             continue
-        gav = _locate(need, stager)
-        if gav is None:
-            failed.add((need.artifact, need.version))
-            continue
-        previous = staged.get(need.artifact)
-        if previous is not None:  # a higher minimum supersedes what an earlier run staged
-            for old in (previous.maven_path, previous.with_extension('pom').maven_path):
-                if old in stager.staging.files and stager.staging.files[old].kind == 'dependency':
-                    stager.staging.remove(old)
+        if where == 'staged':  # staged earlier: stage() keeps it when intact and downloads it again when not, and its own needs are followed again
+            gav = staged[need.artifact]
+            if (gav.artifact_id, gav.version) in visited:
+                continue
+        else:
+            if (need.artifact, need.version) in failed:
+                continue
+            gav = _locate(need, stager)
+            if gav is None:
+                failed.add((need.artifact, need.version))
+                continue
+            previous = staged.get(need.artifact)
+            if previous is not None:  # a higher minimum supersedes what an earlier run staged
+                for old in (previous.maven_path, previous.with_extension('pom').maven_path):
+                    if old in stager.staging.files and stager.staging.files[old].kind == 'dependency':
+                        stager.staging.remove(old)
+        visited.add((gav.artifact_id, gav.version))
         reason = f'{need.required_by} requires {need.artifact} {need.version}'
         if not (stager.stage(Wanted(gav.maven_path, 'dependency', reason)) and stager.stage(Wanted(gav.with_extension('pom').maven_path, 'dependency', reason))):
             failed.add((need.artifact, need.version))

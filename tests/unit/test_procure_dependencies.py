@@ -147,3 +147,43 @@ def test_optional_dependencies_and_cycles_end_the_walk(releases, tmp_path):
     stager, _ = run(tmp_path, url, listing=repository((PLUGINS, 'active-directory', '2.0')), details=[missing('active-directory', '2.0', 'mailer', '534.v1')])
     assert set(stager.staging.files) == {path(PLUGINS, 'mailer', '534.v1', 'hpi'), path(PLUGINS, 'mailer', '534.v1', 'pom')}
     assert stager.problems == 0
+
+
+def test_a_cycle_between_staged_dependencies_ends_and_each_is_staged_once(releases, tmp_path):
+    root, url = releases
+    release(root, PLUGINS, 'mailer', '534.v1', requires='display-url-api:2.0')
+    release(root, PLUGINS, 'display-url-api', '2.0', requires='mailer:500.v1')
+    stager, _ = run(tmp_path, url, listing=repository((PLUGINS, 'active-directory', '2.0')), details=[missing('active-directory', '2.0', 'mailer', '534.v1')])
+    assert len(stager.staging.files) == 4
+    assert (stager.staged, stager.kept, stager.problems) == (4, 0, 0)
+
+
+def test_a_rerun_downloads_a_staged_dependency_that_went_missing(releases, tmp_path):
+    root, url = releases
+    release(root, PLUGINS, 'mailer', '534.v1')
+    listing, details = repository((PLUGINS, 'active-directory', '2.0')), [missing('active-directory', '2.0', 'mailer', '534.v1')]
+    first, _ = run(tmp_path, url, listing=listing, details=details)
+    first.staging.save()
+    hpi = path(PLUGINS, 'mailer', '534.v1', 'hpi')
+    (tmp_path / 'stage' / hpi).unlink()
+    second, out = run(tmp_path, url, listing=listing, details=details)
+    assert second.staging.intact(hpi)
+    assert (second.staged, second.kept, second.problems) == (1, 1, 0)
+    assert f'staged    {hpi}  (active-directory 2.0 requires mailer 534.v1)' in out.getvalue().splitlines()
+
+
+def test_a_rerun_stages_what_a_staged_dependency_needs_once_the_source_has_it(releases, tmp_path):
+    root, url = releases
+    release(root, PLUGINS, 'mailer', '534.v1', requires='display-url-api:2.0')
+    listing, details = repository((PLUGINS, 'active-directory', '2.0')), [missing('active-directory', '2.0', 'mailer', '534.v1')]
+    first, _ = run(tmp_path, url, listing=listing, details=details)
+    first.staging.save()
+    assert first.problems == 1
+    release(root, PLUGINS, 'display-url-api', '2.0', core='2.462.1')
+    second, _ = run(tmp_path, url, listing=listing, details=details)
+    display = path(PLUGINS, 'display-url-api', '2.0', 'hpi')
+    assert second.problems == 0
+    assert set(second.staging.files) == {path(PLUGINS, 'mailer', '534.v1', 'hpi'), path(PLUGINS, 'mailer', '534.v1', 'pom'), display, path(PLUGINS, 'display-url-api', '2.0', 'pom')}
+    assert second.staging.files[display].reason == 'mailer 534.v1 requires display-url-api 2.0'
+    assert second.staging.files[display].required_core == '2.462.1'
+    assert (second.staged, second.kept) == (2, 2)
