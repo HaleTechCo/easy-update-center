@@ -6,19 +6,25 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import publish, status
 from .config import load_settings
-from .doctor import format_report, inspect_repository
+from .doctor import check_since, format_report, inspect_repository
 from .errors import UcError
 from .generate import generate
 from .pki import DEFAULT_ORG, ROOT_CERT, ROOT_KEY, SIGNING_CERT, SIGNING_KEY, cert_info, init_pki, rotate_signing
 from .preflight import load_credentials
+from .procure.download import check_download_allowed, download
+from .procure.plan import check_war_args
 from .repo_adapter.server import serve
 from .schedule import run_schedule
 from .timeutil import iso, utcnow
 from .validate import count_plugins
 from .versions import VersionTool
+
+if TYPE_CHECKING:
+    from .config import Settings
 
 EXIT_LOCKED = 75
 
@@ -34,6 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = sub.add_parser('doctor', help='report what the generator will see in the source repository')
     doctor.add_argument('--fetch', action='store_true', help='download POMs and manifests missing from the cache')
     doctor.add_argument('--json', action='store_true', help='print the report as JSON')
+    doctor.add_argument('--download-poms', action='store_true', help='stage the real .pom of every plugin whose POM is missing, derived or unusable')
+    doctor.add_argument('--download-dependencies', action='store_true', help='stage missing required dependencies, transitively, each with its .pom')
+    doctor.add_argument('--download-war', action='append', default=[], metavar='VERSION', help='stage jenkins-war VERSION, or with "required" every required core the repository lacks; repeatable')
+    doctor.add_argument('--since', metavar='VERSION', help='floor for required cores (default: the oldest core in the repository)')
+    doctor.add_argument('--staging', type=Path, default=Path('/procurement'), help='the staging folder (default: /procurement)')
 
     rollback = sub.add_parser('rollback', help='point live at an earlier release')
     rollback.add_argument('release', nargs='?', help='release id (default: the one before live)')
@@ -80,9 +91,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(f'published release {generate(settings, force=args.force)}')
         return 0
     if args.command == 'doctor':
-        report = inspect_repository(settings, load_credentials(settings), fetch=args.fetch, versions=VersionTool.from_settings(settings)).report
-        print(json.dumps(report.to_dict(), indent=2) if args.json else format_report(report, settings))
-        return report.exit_code()
+        return _doctor(args, settings)
     if args.command == 'rollback':
         with publish.RunLock(settings.data_dir):
             target = publish.rollback(settings.data_dir, args.release)
@@ -101,6 +110,22 @@ def _dispatch(args: argparse.Namespace) -> int:
         return 0
     msg = f'unhandled command {args.command}'
     raise AssertionError(msg)
+
+
+def _doctor(args: argparse.Namespace, settings: Settings) -> int:
+    downloading = args.download_poms or args.download_dependencies or bool(args.download_war)
+    check_since(args.since)
+    if downloading:
+        check_download_allowed(settings)
+        check_war_args(args.download_war)
+    versions = VersionTool.from_settings(settings)
+    inspection = inspect_repository(settings, load_credentials(settings), fetch=args.fetch, versions=versions, since=args.since)
+    report = inspection.report
+    print(json.dumps(report.to_dict(), indent=2) if args.json else format_report(report, settings))
+    if not downloading:
+        return report.exit_code()
+    out = sys.stderr if args.json else sys.stdout  # keep stdout valid JSON
+    return download(inspection, settings, poms=args.download_poms, dependencies=args.download_dependencies, wars=args.download_war, staging_dir=args.staging, versions=versions, out=out)
 
 
 def _pki(args: argparse.Namespace) -> int:
