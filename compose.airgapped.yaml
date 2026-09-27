@@ -19,6 +19,6 @@ services:
     secrets: !override [update-center.key, update-center.cert, root-ca.crt, github_username, github_token]
   uc:
     extra_hosts: *blocked-hosts
-    secrets: !override [update-center.key, update-center.cert, root-ca.crt, github_username, github_token]
+    secrets: !override [update-center.key, update-center.cert, root-ca.crt, github_username, github_token, repo_push_auth]
   repo-adapter:
     extra_hosts: *blocked-hosts

@@ -30,7 +30,8 @@ set_perms() { # set_perms OWNER:GROUP MODE FILE... - files that do not exist are
 chown "${owner}" "${dir}"
 find "${dir}" -maxdepth 1 -type f -exec chown "${owner}" {} +
 set_perms "$2:${uc_group}" 0640 "${dir}/update-center.key" "${dir}/update-center.key.old" \
-    "${dir}/repo_username" "${dir}/repo_password" "${dir}/github_username" "${dir}/github_token"
+    "${dir}/repo_username" "${dir}/repo_password" "${dir}/github_username" "${dir}/github_token" \
+    "${dir}/repo_push_auth"
 set_perms "$2:${uc_group}" 0644 "${dir}/update-center.cert" "${dir}/update-center.cert.old" "${dir}/root-ca.crt"
 set_perms "$2:${web_group}" 0640 "${dir}/download_proxy_auth"
 set_perms "${owner}" 0644 "${dir}/repo-ca.crt" "${dir}/proxy-ca.crt"

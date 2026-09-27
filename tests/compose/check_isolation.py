@@ -1,4 +1,4 @@
-"""compose-check: the isolation the repo-adapter's unauthenticated GETs rely on (docs/architecture/repo-adapter.md#security).
+"""compose-check: the isolation the repo-adapter's unauthenticated GETs rely on, and that only the one-shot uc service can write to the repository (docs/architecture/overview.md#networks-and-trust-boundaries).
 
 Reads `docker compose config --format json` on stdin; the argument names the mode.
 """
@@ -7,6 +7,8 @@ import json
 import sys
 
 REPO_SECRETS = {'repo_username', 'repo_password'}
+PUSH_SECRET = 'repo_push_auth'
+STAGING = '/procurement'
 
 
 def networks(service: dict) -> set[str]:
@@ -15,6 +17,10 @@ def networks(service: dict) -> set[str]:
 
 def secrets(service: dict) -> set[str]:
     return {s['source'] for s in service.get('secrets') or []}
+
+
+def mounts(service: dict) -> set[str]:
+    return {volume.get('target') for volume in service.get('volumes') or []}
 
 
 def main() -> None:
@@ -35,6 +41,15 @@ def main() -> None:
         problems.append(f'repo-adapter secrets are {sorted(secrets(adapter))}')
     if REPO_SECRETS & secrets(web):
         problems.append('web receives the repository credentials')
+    for name, service in sorted(services.items()):
+        if name == 'uc':
+            continue
+        if PUSH_SECRET in secrets(service):
+            problems.append(f'{name} receives {PUSH_SECRET}, the repository write credential')
+        if STAGING in mounts(service):
+            problems.append(f'{name} mounts the staging folder {STAGING}')
+    if 'uc' in services and (PUSH_SECRET not in secrets(services['uc']) or STAGING not in mounts(services['uc'])):
+        problems.append(f'uc must receive {PUSH_SECRET} and mount {STAGING}')
     for problem in problems:
         print(f'compose-check ({mode}): {problem}')
     if problems:
