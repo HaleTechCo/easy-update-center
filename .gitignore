@@ -8,6 +8,9 @@ data/
 secrets/*
 !secrets/README.md
 
+# Downloads staged for review by uc doctor --download-* (docs/how-to/procure-missing-files.md)
+procurement/
+
 # Integration-test scratch (make it-airgapped, make it-online)
 tests/integration/.versions.env
 tests/integration/.results/

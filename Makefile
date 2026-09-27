@@ -13,7 +13,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro" \
              -v "$(CURDIR)/tools:/tools:ro"
 
-.PHONY: build build-uc build-web uc-image test test-unit test-web test-routing test-secrets pki-init pki-rotate secrets-placeholders secrets-permissions compose-check it-airgapped it-clean it-online it-full upstream-diff
+.PHONY: build build-uc build-web uc-image test test-unit test-web test-routing test-secrets pki-init pki-rotate secrets-placeholders secrets-permissions procure-download procure-push compose-check it-airgapped it-clean it-online it-full upstream-diff
 
 build: build-uc build-web
 
@@ -56,7 +56,7 @@ HOST_GID ?= $(shell id -g)
 IN_SECRETS = docker run --rm --user 0:0 --entrypoint sh -v "$(CURDIR)/secrets:/pki" \
   -v "$(CURDIR)/scripts/secrets-permissions.sh:/usr/local/bin/secrets-permissions.sh:ro"
 FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh /pki $(HOST_UID) $(HOST_GID)
-SECRET_FILES = repo_username repo_password github_username github_token download_proxy_auth
+SECRET_FILES = repo_username repo_password github_username github_token download_proxy_auth repo_push_auth
 
 # Creates the root CA and signing certificate in ./secrets. Refuses to overwrite existing files.
 pki-init: uc-image
@@ -79,6 +79,22 @@ secrets-permissions: uc-image
 	@mkdir -p secrets
 	@$(IN_SECRETS) $(UC_IMAGE) -c '$(FIX_SECRETS)'
 	@echo "secrets/: yours; the containers read their files through their group"
+
+# uc doctor --download-* stages files into ./procurement for review.
+# The uc container runs as uid 10001: it gets the folder for the run, and the host user gets it back
+# after, also when the run fails. Usage: make procure-download ARGS="--download-poms --download-dependencies"
+PROCUREMENT = $(CURDIR)/procurement
+IN_PROCUREMENT = docker run --rm --user 0:0 --entrypoint sh -v "$(PROCUREMENT):/procurement" $(UC_IMAGE) -c
+
+procure-download: uc-image
+	@mkdir -p procurement
+	@$(IN_PROCUREMENT) 'chown -R 10001:10001 /procurement'
+	docker compose run --rm uc doctor $(ARGS); rc=$$?; \
+	  $(IN_PROCUREMENT) 'chown -R $(HOST_UID):$(HOST_GID) /procurement'; exit $$rc
+
+# Usage: make procure-push [ARGS=--dry-run]
+procure-push:
+	docker compose run --rm uc doctor --push $(ARGS)
 
 # UC_ENV_FILE selects the services' env_file; --env-file only feeds compose's own interpolation.
 # check_isolation.py asserts the network and secret boundaries the repo-adapter relies on.

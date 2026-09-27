@@ -36,7 +36,7 @@ deny() { # deny DESCRIPTION UID:GID COMMAND - COMMAND must fail
 
 fresh() { # a secrets/ owned by the host user, with credentials the host user wrote and a new PKI
     rm -rf /work && mkdir -p "${dir}" && chown "${host}" /work "${dir}"
-    as "${host}" "cd ${dir} && printf svc > repo_username && printf pw > repo_password && : > github_username && : > github_token && printf u:p > download_proxy_auth && printf readme > README.md"
+    as "${host}" "cd ${dir} && printf svc > repo_username && printf pw > repo_password && : > github_username && : > github_token && printf u:p > download_proxy_auth && printf readme > README.md && printf u:t > repo_push_auth"
     uc pki init --out "${dir}" > /dev/null # as root, as the pki-init recipe runs it
 }
 
@@ -49,16 +49,16 @@ expect_usable() { # every party can do exactly what it needs, and no more
     allow "${label}: host user creates files in secrets/" "${host}" "touch ${dir}/new && rm ${dir}/new"
     allow "${label}: host user rewrites repo_password" "${host}" "printf pw2 > ${dir}/repo_password"
     allow "${label}: host user can move the root key" "${host}" "test -r ${dir}/root/root-ca.key && test -w ${dir}/root && test -w ${dir}"
-    for f in update-center.key update-center.cert root-ca.crt repo_username repo_password github_username github_token; do
+    for f in update-center.key update-center.cert root-ca.crt repo_username repo_password github_username github_token repo_push_auth; do
         allow "${label}: uc containers read ${f}" "${uc}" "cat ${dir}/${f} > /dev/null"
     done
     deny "${label}: uc containers cannot read download_proxy_auth" "${uc}" "cat ${dir}/download_proxy_auth"
     deny "${label}: uc containers cannot read root-ca.key" "${uc}" "cat ${dir}/root/root-ca.key"
     allow "${label}: web reads download_proxy_auth" "${web}" "cat ${dir}/download_proxy_auth > /dev/null"
-    for f in update-center.key repo_password; do
+    for f in update-center.key repo_password repo_push_auth; do
         deny "${label}: web cannot read ${f}" "${web}" "cat ${dir}/${f}"
     done
-    for f in update-center.key repo_password github_token download_proxy_auth root/root-ca.key; do
+    for f in update-center.key repo_password github_token download_proxy_auth root/root-ca.key repo_push_auth; do
         deny "${label}: another user cannot read ${f}" "${other}" "cat ${dir}/${f}"
     done
     allow "${label}: README.md left alone" "${host}" "test \"\$(stat -c %u:%g:%a ${dir}/README.md)\" = 1000:1000:644"
