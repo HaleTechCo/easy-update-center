@@ -22,6 +22,14 @@ once releases are published.
 
 ### Added
 
+- `uc doctor --download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage
+  the real POMs, the missing required dependencies (transitively, each with its POM) and Jenkins
+  cores from repo.jenkins-ci.org (`PROCUREMENT_SOURCE_URL`) into `./procurement/`, with
+  `procurement.json` recording each file's source, sha1 and reason for review; `uc doctor --push`
+  uploads exactly those files to the repository with the new `secrets/repo_push_auth`, never
+  overwriting. `make procure-download` and `make procure-push` wrap them. `uc doctor` also lists the
+  cores plugins require that the repository lacks, from the oldest core it holds (or `--since`). After
+  upgrading, run `make secrets-placeholders` once so Compose finds `secrets/repo_push_auth`.
 - Third-party notices in the uc image, `/opt/uc/licenses/`: update-center2's MIT license with the
   Jenkins project's governance statement, every bundled Java library with its license (generated
   by the build, which fails on a library with no known license), and the license texts.

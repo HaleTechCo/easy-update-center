@@ -1,4 +1,4 @@
-"""uc doctor --push: upload the files procurement.json lists to the repository, never overwriting."""
+"""uc doctor --push: upload the files procurement.json lists to the repository, never overwriting (docs/how-to/procure-missing-files.md#3-push)."""
 
 from __future__ import annotations
 

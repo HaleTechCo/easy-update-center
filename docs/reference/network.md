@@ -34,6 +34,8 @@ asserts this layout.
 | `raw.githubusercontent.com` | `scheduler`, `uc` | Plugin popularity (`POPULARITY_JSON_URL`). |
 | `updates.jenkins.io` | `scheduler`, `uc` | Tool installer metadata (`TOOL_INSTALLERS_URL`). It redirects to `mirrors.updates.jenkins.io`. |
 | `reports.jenkins.io` | `scheduler`, `uc` | Issue trackers, maintainers and health scores. Optional: the run warns and continues without them. |
+| `PROCUREMENT_SOURCE_URL`'s host (default `repo.jenkins-ci.org`) | `uc` | Only for `uc doctor --download-*`: the files it stages. |
+| `REPO_URL`'s host | `uc` | Only for `uc doctor --push`, when `REPO_URL` is your repository. |
 
 `uc doctor --fetch` reads from `repo.jenkins-ci.org` too. The air-gapped override also blocks
 `github.com` as a precaution. Behind an outbound HTTP proxy, set it for
@@ -50,6 +52,8 @@ tool installers itself.
 | `POPULARITY_JSON_URL`'s host | `scheduler`, `uc` | Only when set. |
 | `TOOL_INSTALLERS_URL`'s host | `scheduler`, `uc` | Only when set. |
 | `DOWNLOAD_BACKEND_URL`'s host | `web` | Only with `DOWNLOAD_ACCESS=proxy`. |
+| `PROCUREMENT_SOURCE_URL`'s host | `uc` | Only for `uc doctor --download-*`, and only when set. |
+| `REPO_URL`'s host | `uc` | Only for `uc doctor --push`. |
 
 `compose.airgapped.yaml` maps `api.github.com`, `github.com`, `codeload.github.com`,
 `raw.githubusercontent.com`, `reports.jenkins.io` and `updates.jenkins.io` to 127.0.0.1 in the

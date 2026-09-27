@@ -33,9 +33,11 @@ A tier is a complete site for one core version, offering only the plugin version
 - `dynamic-<version>/` for weekly cores, for example `dynamic-2.540/`;
 - `dynamic-stable-<version>/` for LTS cores, for example `dynamic-stable-2.528.1/`.
 
-The generator derives the tier list from the core versions plugins declare as their minimum, limited
-by `CORE_AGE_DAYS`. See [Step 4: Tiers](../architecture/generation-pipeline.md#step-4-tiers). A
-repository with no core produces no tiers: every request goes to `current/`.
+The generator derives the tier list from the core versions plugin releases declare as their minimum
+and whose `.war` the repository holds; each LTS tier also brings the next weekly tier, and each
+weekly one the next LTS release in the repository, limited by `CORE_AGE_DAYS`. See
+[Step 4: Tiers](../architecture/generation-pipeline.md#step-4-tiers). A repository with no core
+produces no tiers: every request goes to `current/`.
 
 ## Version routing
 

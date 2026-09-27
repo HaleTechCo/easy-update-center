@@ -16,6 +16,8 @@ from the public plugin repository or from your own, and runs online or fully air
 - **The public repository or yours:** plugins from repo.jenkins-ci.org, or from your Artifactory or
   Artifact Keeper, with missing POMs, descriptions and release dates filled in from the plugins
   themselves.
+- **Procurement help:** `uc doctor` stages the real POMs, missing dependencies and cores your
+  repository lacks for review, and pushes exactly what you approved.
 - **Online or air-gapped:** online, security warnings, popularity and labels come live from
   upstream; air-gapped, nothing is fetched from the internet, and what that makes unreachable is
   dropped with a warning.
