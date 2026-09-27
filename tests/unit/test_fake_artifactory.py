@@ -16,6 +16,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'integration'))
 
 from fake_artifactory import aql_results, make_handler
+from httpclient import put
 from uc.aql import Gav, classify, query_repository
 from uc.doctor import ArtifactSource
 
@@ -98,15 +99,6 @@ def writable(tmp_path):
     yield f'http://127.0.0.1:{httpd.server_address[1]}/artifactory/'
     httpd.shutdown()
     httpd.server_close()
-
-
-def put(url, data, auth=None):
-    request = urllib.request.Request(url, data=data, method='PUT', headers={'Authorization': auth} if auth else {})
-    try:
-        with urllib.request.urlopen(request) as response:
-            return response.status
-    except urllib.error.HTTPError as exc:
-        return exc.code
 
 
 def test_the_fake_accepts_an_upload_once_and_serves_its_sha1(writable, tmp_path):
