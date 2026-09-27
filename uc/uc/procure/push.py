@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import sys
 from http import HTTPStatus
 from typing import TYPE_CHECKING, TextIO
@@ -11,7 +12,7 @@ from uc.config import read_secret
 from uc.repo_adapter.backends import LONG_TIMEOUT, TIMEOUT, BackendError, Http
 
 from . import ProcureError
-from .staging import MANIFEST, Staging, sha1_of
+from .staging import MANIFEST, Staging
 from .upstream import SIDE_FILE_LIMIT, parse_sha1
 
 if TYPE_CHECKING:
@@ -51,11 +52,11 @@ class Target:
             raise ProcureError(msg)
         return parse_sha1(response.body)
 
-    def put(self, path: str, file: Path) -> int:
-        """Upload file to path and return the HTTP status."""
+    def put(self, path: str, data: bytes) -> int:
+        """Upload data to path and return the HTTP status."""
         headers = {**self.headers, 'Content-Type': 'application/octet-stream'}
         try:
-            response = self.http.request(self.base + path, headers=headers, limit=SIDE_FILE_LIMIT, data=file.read_bytes(), method='PUT', timeout=LONG_TIMEOUT, truncate=True)
+            response = self.http.request(self.base + path, headers=headers, limit=SIDE_FILE_LIMIT, data=data, method='PUT', timeout=LONG_TIMEOUT, truncate=True)
         except BackendError as exc:
             raise ProcureError(str(exc)) from exc
         return response.status
@@ -79,7 +80,8 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
     root = staging_dir.resolve()
     for path, staged in sorted(staging.files.items()):
         file = staging_dir / path
-        if not file.is_file() or not file.resolve().is_relative_to(root) or sha1_of(file) != staged.sha1:
+        data = file.read_bytes() if file.is_file() and file.resolve().is_relative_to(root) else None
+        if data is None or hashlib.sha1(data, usedforsecurity=False).hexdigest() != staged.sha1:
             problems += 1
             say('TAMPERED', path, 'changed or missing since it was downloaded; download it again')
             continue
@@ -102,7 +104,7 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
             say('would put', path)
             continue
         try:
-            status = target.put(path, file)
+            status = target.put(path, data)
             after = target.sha1(path)
         except ProcureError as exc:
             problems += 1

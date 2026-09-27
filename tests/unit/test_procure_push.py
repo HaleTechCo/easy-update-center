@@ -14,6 +14,7 @@ from procurefixture import SOURCE, publish, stage
 from uc.procure import ProcureError
 from uc.procure.push import push
 from uc.procure.staging import Staging
+from uc.repo_adapter.backends import Http
 from ucsupport import make_settings
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'integration'))
@@ -162,3 +163,30 @@ def test_a_conflict_with_the_same_content_is_present(tmp_path, secrets_dir):
         code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
     assert code == 0
     assert f'present   {POM}  (the same file arrived while pushing)' in lines
+
+
+class TamperingHttp:
+    """Wraps a real Http, corrupting a file on disk right after the first request goes out."""
+
+    def __init__(self, real, file, data):
+        """Forward every request to real; before the very first one, replace file's content with data."""
+        self.real, self.file, self.data, self.calls = real, file, data, 0
+
+    def request(self, *args, **kwargs):
+        """Corrupt file before the first request, then forward to the wrapped Http."""
+        self.calls += 1
+        if self.calls == 1:
+            self.file.write_bytes(self.data)
+        return self.real.request(*args, **kwargs)
+
+
+def test_push_uploads_the_bytes_it_verified_even_if_the_file_changes_after(keeper, tmp_path, secrets_dir):
+    repo, url = keeper
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    file = tmp_path / 'stage' / POM
+    http = TamperingHttp(Http(None), file, b'<evil/>')
+    out = io.StringIO()
+    code = push(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage', dry_run=False, out=out, http=http)
+    assert code == 0
+    assert (repo / POM).read_bytes() == b'<project/>'
+    assert f'uploaded  {POM}' in out.getvalue().splitlines()
