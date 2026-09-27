@@ -3,6 +3,8 @@
 import io
 from pathlib import Path
 
+import pytest
+
 from archivefixture import make_hpi, pom_xml
 from procurefixture import publish
 from uc.aql import RepoFile, classify
@@ -59,9 +61,28 @@ def missing(plugin, version, dependency, required, group=PLUGINS):
     return {'plugin': plugin, 'plugin_group': group, 'plugin_version': version, 'dependency': dependency, 'required': required}
 
 
-def run(tmp_path, url, *, listing, details, poms=None):
+class RecordingHttp(Http):
+    """An Http that records the URL of every request and download."""
+
+    def __init__(self):
+        """Verify TLS against the system bundle; nothing recorded yet."""
+        super().__init__(None)
+        self.urls = []
+
+    def request(self, url, **kwargs):
+        """Record the URL, then make the request."""
+        self.urls.append(url)
+        return super().request(url, **kwargs)
+
+    def download(self, url, **kwargs):
+        """Record the URL, then download it."""
+        self.urls.append(url)
+        return super().download(url, **kwargs)
+
+
+def run(tmp_path, url, *, listing, details, poms=None, http=None):
     out = io.StringIO()
-    stager = Stager(Staging.open(tmp_path / 'stage', url), Upstream(url, Http(None), limit=1 << 20), out)
+    stager = Stager(Staging.open(tmp_path / 'stage', url), Upstream(url, http or Http(None), limit=1 << 20), out)
     resolve_dependencies(Inspection(DoctorReport(missing_dependency_details=details), listing, Poms(poms or {})), stager, versions())
     return stager, out
 
@@ -187,3 +208,16 @@ def test_a_rerun_stages_what_a_staged_dependency_needs_once_the_source_has_it(re
     assert second.staging.files[display].reason == 'mailer 534.v1 requires display-url-api 2.0'
     assert second.staging.files[display].required_core == '2.462.1'
     assert (second.staged, second.kept) == (2, 2)
+
+
+@pytest.mark.parametrize('group', ['evil group', 'org..evil', 'org/evil', '../evil', 'evil.'])
+def test_a_group_that_is_not_a_maven_group_falls_back_to_the_known_groups(releases, tmp_path, group):
+    root, url = releases
+    release(root, PLUGINS, 'mailer', '534.v1')
+    ad_pom = pom_xml(PLUGINS, 'active-directory', '2.0', dependencies=[(group, 'mailer', '534.v1')])
+    http = RecordingHttp()
+    stager, _ = run(tmp_path, url, listing=repository((PLUGINS, 'active-directory', '2.0')), details=[missing('active-directory', '2.0', 'mailer', '534.v1')], poms={'active-directory': ad_pom}, http=http)
+    assert set(stager.staging.files) == {path(PLUGINS, 'mailer', '534.v1', 'hpi'), path(PLUGINS, 'mailer', '534.v1', 'pom')}
+    assert stager.problems == 0
+    assert http.urls
+    assert [requested for requested in http.urls if not requested.startswith(f'{url}org/jenkins-ci/plugins/mailer/')] == []

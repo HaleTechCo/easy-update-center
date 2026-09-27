@@ -3,6 +3,7 @@
 import hashlib
 import json
 import re
+import stat
 
 import pytest
 
@@ -42,6 +43,8 @@ def test_committed_files_are_recorded_and_saved(tmp_path):
         'replaces_unusable': False,
     }
     assert (tmp_path / 'stage' / POM).read_bytes() == b'<project/>'
+    assert stat.S_IMODE((tmp_path / 'stage' / POM).stat().st_mode) == 0o644
+    assert stat.S_IMODE((tmp_path / 'stage' / MANIFEST).stat().st_mode) == 0o644
     assert not list((tmp_path / 'stage').glob('.part-*'))
     assert Staging.open(tmp_path / 'stage', SOURCE).files == staging.files
 

@@ -82,7 +82,7 @@ secrets-permissions: uc-image
 
 # uc doctor --download-* stages files into ./procurement for review (docs/how-to/procure-missing-files.md).
 # The uc container runs as uid 10001: it gets the folder for the run, and the host user gets it back
-# after, also when the run fails. Usage: make procure-download ARGS="--download-poms --download-dependencies"
+# after, also when the run fails. Usage: make procure-download ARGS="--fetch --download-poms --download-dependencies"
 PROCUREMENT = $(CURDIR)/procurement
 IN_PROCUREMENT = docker run --rm --user 0:0 --entrypoint sh -v "$(PROCUREMENT):/procurement" $(UC_IMAGE) -c
 

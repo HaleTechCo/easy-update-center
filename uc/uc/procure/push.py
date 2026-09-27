@@ -83,7 +83,7 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
         raise ProcureError(msg)
     staging = Staging.open(staging_dir, settings.procurement_source_url)
     target = Target(settings.maven_url, http or Http(settings.repo_ca_file), push_headers(settings))
-    uploaded = present = problems = 0
+    uploaded = would_put = present = problems = 0
 
     def say(label: str, path: str, detail: str = '') -> None:
         print(f'{label:<9} {path}' + (f'  ({detail})' if detail else ''), file=out)
@@ -91,7 +91,12 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
     root = staging_dir.resolve()
     for path, staged in sorted(staging.files.items()):
         file = staging_dir / path
-        data = file.read_bytes() if file.is_file() and file.resolve().is_relative_to(root) else None
+        try:
+            data = file.read_bytes() if file.is_file() and file.resolve().is_relative_to(root) else None
+        except OSError as exc:
+            problems += 1
+            say('TAMPERED', path, f'cannot read it: {exc}')
+            continue
         if data is None or hashlib.sha1(data, usedforsecurity=False).hexdigest() != staged.sha1:
             problems += 1
             say('TAMPERED', path, 'changed or missing since it was downloaded; download it again')
@@ -117,6 +122,7 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
             say('ERROR', path, 'the repository holds this path but publishes no checksum for it; check it by hand')
             continue
         if dry_run:
+            would_put += 1
             say('would put', path)
             continue
         try:
@@ -135,6 +141,7 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
         else:
             problems += 1
             say('FAILED', path, f'HTTP {status}, repository sha1 {after or "none"}')
-    print(f'{uploaded} uploaded, {present} already present, {problems} problem(s) -> {settings.maven_url}', file=out)
+    planned = f'{would_put} would put, ' if dry_run else ''
+    print(f'{uploaded} uploaded, {planned}{present} already present, {problems} problem(s) -> {settings.maven_url}', file=out)
     print('run uc doctor --fetch to confirm what the generator will see', file=out)
     return 1 if problems else 0

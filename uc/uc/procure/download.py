@@ -60,7 +60,10 @@ def download(
             resolve_dependencies(inspection, stager, versions)
     finally:
         staging.save()
-    _newer_cores(staging, inspection.report, versions, out)
+    report = inspection.report
+    _newer_cores(staging, report, versions, out)
+    if report.unchecked or report.cores_unchecked:  # manifests missing from the cache hide dependencies and required cores
+        print(f'warning   {report.unchecked} plugin release(s) not checked for dependencies and {report.cores_unchecked} for required cores (POM or manifest unavailable); run with --fetch so dependencies and required cores are complete', file=out)
     print(f'{stager.staged} staged, {stager.kept} kept, {stager.problems} problem(s); review {staging_dir}, then run uc doctor --push', file=out)
     return 1 if stager.problems else 0
 
