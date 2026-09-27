@@ -35,7 +35,7 @@ asserts this layout.
 | `updates.jenkins.io` | `scheduler`, `uc` | Tool installer metadata (`TOOL_INSTALLERS_URL`). It redirects to `mirrors.updates.jenkins.io`. |
 | `reports.jenkins.io` | `scheduler`, `uc` | Issue trackers, maintainers and health scores. Optional: the run warns and continues without them. |
 | `PROCUREMENT_SOURCE_URL`'s host (default `repo.jenkins-ci.org`) | `uc` | Only for `uc doctor --download-*`: the files it stages. |
-| `REPO_URL`'s host | `uc` | Only for `uc doctor --push`, when `REPO_URL` is your repository. |
+| `REPO_URL`'s host, when it is your own repository | `scheduler`, `uc` (`REPO_ADAPTER` off); `repo-adapter` (`REPO_ADAPTER` on, always for Artifact Keeper); `uc` for `uc doctor --push` | The listing, POMs and manifests instead of repo.jenkins-ci.org, and the uploads of `uc doctor --push`. |
 
 `uc doctor --fetch` reads from `repo.jenkins-ci.org` too. The air-gapped override also blocks
 `github.com` as a precaution. Behind an outbound HTTP proxy, set it for
