@@ -65,6 +65,11 @@ def test_required_needs_a_floor_when_the_repository_has_no_core():
         plan_cores(['required'], DoctorReport(required_cores={'2.479.1': ['g:a:1']}))
 
 
+def test_required_needs_a_floor_even_when_no_core_is_required():
+    with pytest.raises(ProcureError, match='add --since'):
+        plan_cores(['required'], DoctorReport(required_cores={}))
+
+
 def test_required_is_refused_for_the_public_repository():
     with pytest.raises(ProcureError, match=r'public repo\.jenkins-ci\.org'):
         plan_cores(['required'], DoctorReport())

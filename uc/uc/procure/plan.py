@@ -78,10 +78,8 @@ def plan_cores(values: Sequence[str], report: DoctorReport) -> CorePlan:
             msg = '--download-war required is not available when the source is the public repo.jenkins-ci.org; name the versions instead'
             raise ProcureError(msg)
         if report.core_floor is None:
-            if report.required_cores:
-                msg = 'the repository holds no Jenkins core, so "required" has no floor: add --since <oldest version your controllers run>'
-                raise ProcureError(msg)
-            continue
+            msg = 'the repository holds no Jenkins core, so "required" has no floor: add --since <oldest version your controllers run>'
+            raise ProcureError(msg)
         if not report.missing_cores:
             notes.append(f'no required core at or above {report.core_floor} is missing')
         for core in report.missing_cores:
