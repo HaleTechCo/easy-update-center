@@ -6,6 +6,7 @@ import base64
 import contextlib
 import hashlib
 import json
+import re
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
@@ -13,11 +14,12 @@ from typing import TYPE_CHECKING, Protocol
 from urllib.parse import urlsplit
 
 from . import aql, http
+from .config import PUBLIC_RELEASES_URL
 from .errors import UcError
 from .pom import safe_root
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
 
     from .aql import Gav, Listing
@@ -26,6 +28,7 @@ if TYPE_CHECKING:
     from .versions import VersionTool
 
 HTTP_NOT_FOUND = 404
+CORE_VERSION = re.compile(r'^[0-9]+\.[0-9]+(\.[0-9]+)?$')
 
 
 class DoctorError(UcError):
@@ -47,6 +50,15 @@ class DoctorReport:
     tiers: dict | None = None
     # From the repo-adapter's report.json (docs/architecture/repo-adapter.md#report); None when the adapter is off.
     repo_adapter: dict | None = None
+    # Each required dependency that is absent or too old, as data (uc doctor --download-dependencies).
+    missing_dependency_details: list[dict] = field(default_factory=list)
+    # Core versions plugin releases require, ascending, with the releases requiring each; None when not
+    # checked (the public repository). See docs/architecture/modes.md#core-age.
+    required_cores: dict[str, list[str]] | None = None
+    core_floor: str | None = None
+    missing_cores: list[dict] = field(default_factory=list)
+    missing_cores_below_floor: int = 0
+    cores_unchecked: int = 0  # plugin releases whose manifest was unavailable for the core check
 
     def _adapter(self, name: str) -> list:
         return (self.repo_adapter or {}).get(name) or []
@@ -210,7 +222,7 @@ def analyze(listing: Listing, versions: VersionTool, source: Source) -> DoctorRe
         if newest.get(gav.artifact_id) == gav.version and (gav.artifact_id not in latest or gav.extension == 'hpi'):
             latest[gav.artifact_id] = gav
 
-    checks: list[tuple[str, str, str, str, str]] = []  # plugin, version, dependency, required, available
+    checks: list[tuple[Gav, str, str, str]] = []  # plugin release, dependency, required, available
     for artifact_id, gav in sorted(latest.items()):
         pom, manifest = source.pom(gav), source.manifest(gav)
         if pom is None or manifest is None:
@@ -224,13 +236,111 @@ def analyze(listing: Listing, versions: VersionTool, source: Source) -> DoctorRe
                 continue
             if name not in latest:
                 report.missing_dependencies.append(f'{artifact_id}:{gav.version} requires {name} {required} (not in the repository)')
+                report.missing_dependency_details.append(dependency_detail(gav, name, required))
             else:
-                checks.append((artifact_id, gav.version, name, required, latest[name].version))
-    results = versions.compare_many([(available, required) for *_, required, available in checks])
-    for (artifact_id, version, name, required, available), cmp in zip(checks, results, strict=False):
+                checks.append((gav, name, required, latest[name].version))
+    results = versions.compare_many([(available, required) for _, _, required, available in checks])
+    for (gav, name, required, available), cmp in zip(checks, results, strict=False):
         if cmp < 0:
-            report.missing_dependencies.append(f'{artifact_id}:{version} requires {name} >= {required} (newest available: {available})')
+            report.missing_dependencies.append(f'{gav.artifact_id}:{gav.version} requires {name} >= {required} (newest available: {available})')
+            report.missing_dependency_details.append(dependency_detail(gav, name, required))
     return report
+
+
+def dependency_detail(gav: Gav, dependency: str, required: str) -> dict[str, str]:
+    """Return one missing or too-old required dependency as data, naming the plugin release that requires it."""
+    return {'plugin': gav.artifact_id, 'plugin_group': gav.group_id, 'plugin_version': gav.version, 'dependency': dependency, 'required': required}
+
+
+def required_jenkins_version(attributes: Mapping[str, str]) -> str | None:
+    """Return the core a plugin release requires: Jenkins-Version, or Hudson-Version for old builds; None unless a plain version."""
+    value = (attributes.get('Jenkins-Version') or attributes.get('Hudson-Version') or '').strip()
+    return value if CORE_VERSION.match(value) else None
+
+
+def required_cores(listing: Listing, source: Source) -> tuple[dict[str, list[str]], int]:
+    """Map each core the repository's plugin releases require to those releases, and count releases whose manifest is unavailable.
+
+    Every release counts, as update-center2's TieredUpdateSitesGenerator counts them when it picks tiers.
+    """
+    required: dict[str, list[str]] = {}
+    unchecked = 0
+    seen: set[tuple[str, str, str]] = set()
+    for gav in listing.plugins:
+        release = (gav.group_id, gav.artifact_id, gav.version)
+        if release in seen:
+            continue
+        seen.add(release)
+        manifest = source.manifest(gav)
+        if manifest is None:
+            unchecked += 1
+            continue
+        version = required_jenkins_version(parse_manifest(manifest))
+        if version is not None:
+            required.setdefault(version, []).append(':'.join(release))
+    return required, unchecked
+
+
+def check_since(since: str | None) -> None:
+    """Refuse a --since that is not a Jenkins version."""
+    if since is not None and not CORE_VERSION.match(since):
+        msg = f'--since takes a Jenkins version such as 2.462.1 (got {since!r})'
+        raise DoctorError(msg)
+
+
+def find_missing_cores(required: Mapping[str, list[str]], stocked: Sequence[str], since: str | None, versions: VersionTool) -> tuple[str | None, list[dict], int]:
+    """Return the floor (since, else the oldest stocked core), the required cores the repository lacks at or above it, and how many it lacks below it."""
+    check_since(since)
+    floor = since or (stocked[0] if stocked else None)
+    if floor is None:
+        return None, [], 0
+    have = set(stocked)
+    lacking = versions.sort(version for version in required if version not in have)
+    order = versions.compare_many([(version, floor) for version in lacking])
+    missing = [{'version': version, 'url': PUBLIC_RELEASES_URL + aql.Gav(aql.WAR_GROUP, aql.WAR_ARTIFACT, version, 'war').maven_path, 'required_by': len(required[version]), 'example': min(required[version])} for version, cmp in zip(lacking, order, strict=True) if cmp >= 0]
+    return floor, missing, sum(1 for cmp in order if cmp < 0)
+
+
+def attach_core_check(report: DoctorReport, listing: Listing, source: Source, versions: VersionTool, *, since: str | None) -> DoctorReport:
+    """Add the cores plugin releases require, and those the repository lacks at or above the floor, to the report."""
+    required, report.cores_unchecked = required_cores(listing, source)
+    report.required_cores = {version: required[version] for version in versions.sort(required)}
+    report.core_floor, report.missing_cores, report.missing_cores_below_floor = find_missing_cores(required, report.cores, since, versions)
+    return report
+
+
+@dataclass(frozen=True)
+class Inspection:
+    """One doctor run: the report, and the listing and source it was built from (uc doctor --download-*)."""
+
+    report: DoctorReport
+    listing: Listing
+    source: Source
+
+
+def inspect_repository(
+    settings: Settings,
+    creds: Credentials,
+    *,
+    fetch: bool,
+    versions: VersionTool,
+    since: str | None = None,
+    query: Callable[..., list[aql.RepoFile]] = aql.query_repository,
+) -> Inspection:
+    """List the source repository and analyze it, adding the repo-adapter's report, the core check (not for the public repository) and the live release's tiers."""
+    check_since(since)
+    files = query(settings.source_api_url, settings.repo_key, creds.repo_username, creds.repo_password)
+    listing = aql.classify(files)
+    source = ArtifactSource.from_settings(settings, creds, allow_network=fetch)
+    report = analyze(listing, versions, source)
+    attach_adapter_report(report, settings)
+    if not settings.public_repository:
+        attach_core_check(report, listing, source, versions, since=since)
+    tiers_file = settings.data_dir / 'live' / 'tiers.json'
+    if tiers_file.is_file():
+        with contextlib.suppress(ValueError):
+            report.tiers = json.loads(tiers_file.read_text(encoding='utf-8'))
+    return Inspection(report, listing, source)
 
 
 def run_doctor(
@@ -239,17 +349,11 @@ def run_doctor(
     *,
     fetch: bool,
     versions: VersionTool,
+    since: str | None = None,
     query: Callable[..., list[aql.RepoFile]] = aql.query_repository,
 ) -> DoctorReport:
-    """List the source repository and analyze it, adding the repo-adapter's report and the live release's tiers when present."""
-    files = query(settings.source_api_url, settings.repo_key, creds.repo_username, creds.repo_password)
-    report = analyze(aql.classify(files), versions, ArtifactSource.from_settings(settings, creds, allow_network=fetch))
-    attach_adapter_report(report, settings)
-    tiers_file = settings.data_dir / 'live' / 'tiers.json'
-    if tiers_file.is_file():
-        with contextlib.suppress(ValueError):
-            report.tiers = json.loads(tiers_file.read_text(encoding='utf-8'))
-    return report
+    """List the source repository and analyze it (see inspect_repository)."""
+    return inspect_repository(settings, creds, fetch=fetch, versions=versions, since=since, query=query).report
 
 
 def format_report(report: DoctorReport, settings: Settings) -> str:
@@ -287,6 +391,27 @@ def format_report(report: DoctorReport, settings: Settings) -> str:
         section('dates from the repository (no usable archive date)', [f'{item["path"]}: {item["reason"]}' for item in adapter['dates_from_repository']])
     section('Stub POMs (degraded names, descriptions, SCM links)', report.stub_poms)
     section('Dependency problems', report.missing_dependencies)
+    if report.required_cores is not None:
+        lines.extend(core_lines(report))
     if report.unchecked:
         lines.append(f'Not checked (POM or manifest unavailable; run with --fetch): {report.unchecked}')
     return '\n'.join(lines)
+
+
+def core_lines(report: DoctorReport) -> list[str]:
+    """Return the report's lines on required cores the repository lacks."""
+    required = list(report.required_cores or {})
+    lines: list[str] = []
+    if report.core_floor is None:
+        if required:
+            lines.append(f'No Jenkins core in the repository: plugins require {len(required)} cores, from {required[0]} to {required[-1]}. Stage the ones your controllers need with: uc doctor --download-war required --since <oldest version your controllers run>')
+    else:
+        if report.missing_cores:
+            lines.append(f'Cores plugins require that the repository lacks, at or above {report.core_floor} ({len(report.missing_cores)}):')
+            lines.extend(f'  {core["version"]}  {core["url"]}  (required by {core["required_by"]} release{"" if core["required_by"] == 1 else "s"}, e.g. {core["example"]})' for core in report.missing_cores)
+        below = report.missing_cores_below_floor
+        if below:
+            lines.append(f'{below} older required core{"" if below == 1 else "s"} below {report.core_floor} not listed')
+    if report.cores_unchecked:
+        lines.append(f'Required cores not checked (manifest unavailable; run with --fetch): {report.cores_unchecked}')
+    return lines

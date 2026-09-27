@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import publish, status
 from .config import load_settings
-from .doctor import format_report, run_doctor
+from .doctor import format_report, inspect_repository
 from .errors import UcError
 from .generate import generate
 from .pki import DEFAULT_ORG, ROOT_CERT, ROOT_KEY, SIGNING_CERT, SIGNING_KEY, cert_info, init_pki, rotate_signing
@@ -80,7 +80,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(f'published release {generate(settings, force=args.force)}')
         return 0
     if args.command == 'doctor':
-        report = run_doctor(settings, load_credentials(settings), fetch=args.fetch, versions=VersionTool.from_settings(settings))
+        report = inspect_repository(settings, load_credentials(settings), fetch=args.fetch, versions=VersionTool.from_settings(settings)).report
         print(json.dumps(report.to_dict(), indent=2) if args.json else format_report(report, settings))
         return report.exit_code()
     if args.command == 'rollback':
