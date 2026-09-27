@@ -62,6 +62,23 @@ def pom_coordinates(data: bytes) -> Coordinates | None:
     return group, artifact, version
 
 
+def dependency_group(data: bytes | None, artifact: str) -> str | None:
+    """Return the groupId a POM's <dependencies> give artifact; ${project.groupId} is the POM's own group, and any other property or no entry gives None."""
+    root = safe_root(data) if data else None
+    if root is None or _local(root.tag) != 'project':
+        return None
+    dependencies = next((child for child in root if _local(child.tag) == 'dependencies'), None)
+    for dependency in dependencies if dependencies is not None else ():
+        if _local(dependency.tag) != 'dependency' or _child_text(dependency, 'artifactId') != artifact:
+            continue
+        group = _child_text(dependency, 'groupId') or ''
+        if group in {'${project.groupId}', '${pom.groupId}'}:
+            own = pom_coordinates(data)
+            return own[0] if own else None
+        return group if group and '${' not in group else None
+    return None
+
+
 def unusable_reason(data: bytes, expected: Coordinates) -> str | None:
     """None when the POM is usable for the expected coordinates; otherwise a short reason for the report."""
     if declares_entities(data):

@@ -9,17 +9,20 @@ import zipfile
 DATE = (2024, 5, 1, 12, 30, 0)
 
 
-def pom_xml(group: str, artifact: str, version: str, name: str = 'Test plugin') -> bytes:
-    return (f'<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>{group}</groupId><artifactId>{artifact}</artifactId><version>{version}</version><packaging>hpi</packaging><name>{name}</name></project>').encode()
+def pom_xml(group: str, artifact: str, version: str, name: str = 'Test plugin', dependencies: tuple = ()) -> bytes:
+    deps = ''.join(f'<dependency><groupId>{g}</groupId><artifactId>{a}</artifactId><version>{v}</version></dependency>' for g, a, v in dependencies)
+    return (f'<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion><groupId>{group}</groupId><artifactId>{artifact}</artifactId><version>{version}</version><packaging>hpi</packaging><name>{name}</name>' + (f'<dependencies>{deps}</dependencies>' if deps else '') + '</project>').encode()
 
 
-def manifest(group: str | None, artifact: str | None, version: str, extra: str = '') -> str:
+def manifest(group: str | None, artifact: str | None, version: str, extra: str = '', *, jenkins_version: str = '2.479.1', dependencies: str = '') -> str:
     lines = ['Manifest-Version: 1.0']
     if group:
         lines.append(f'Group-Id: {group}')
     if artifact:
         lines.append(f'Artifact-Id: {artifact}')
-    lines += [f'Short-Name: {artifact or "x"}', f'Plugin-Version: {version}', 'Jenkins-Version: 2.479.1']
+    lines += [f'Short-Name: {artifact or "x"}', f'Plugin-Version: {version}', f'Jenkins-Version: {jenkins_version}']
+    if dependencies:
+        lines.append(f'Plugin-Dependencies: {dependencies}')
     return '\r\n'.join(lines) + '\r\n' + extra + '\r\n'
 
 
@@ -37,7 +40,20 @@ def _jar(entries: dict[str, bytes]) -> bytes:
 
 
 def make_hpi(
-    group: str, artifact: str, version: str, *, layout: str = 'maven', embed_pom: bool = True, pom: bytes | None = None, manifest_group: str | None = '', manifest_artifact: str | None = '', description: bytes | None = b'<div>An excellent plugin.</div>', date: tuple = DATE, unix_time: int | None = None
+    group: str,
+    artifact: str,
+    version: str,
+    *,
+    layout: str = 'maven',
+    embed_pom: bool = True,
+    pom: bytes | None = None,
+    manifest_group: str | None = '',
+    manifest_artifact: str | None = '',
+    description: bytes | None = b'<div>An excellent plugin.</div>',
+    date: tuple = DATE,
+    unix_time: int | None = None,
+    jenkins_version: str = '2.479.1',
+    dependencies: str = '',
 ) -> bytes:
     """Build a plugin archive (.hpi) in one of three layouts.
 
@@ -51,7 +67,7 @@ def make_hpi(
         info = zipfile.ZipInfo('META-INF/MANIFEST.MF', date_time=date)
         if unix_time is not None:
             info.extra = extended_timestamp(unix_time)
-        archive.writestr(info, manifest(group_in_manifest, artifact_in_manifest, version))
+        archive.writestr(info, manifest(group_in_manifest, artifact_in_manifest, version, jenkins_version=jenkins_version, dependencies=dependencies))
         if embed_pom and layout != 'gradle':
             archive.writestr(f'META-INF/maven/{group}/{artifact}/pom.xml', pom or pom_xml(group, artifact, version))
         inner = {'index.jelly': description} if description is not None else {}
