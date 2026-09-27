@@ -1,7 +1,7 @@
 """Test-only stand-in for the Artifact Keeper 1.10 calls the repo-adapter makes (docs/architecture/repo-adapter.md#requests-it-answers).
 
 GET /api/v1/repositories/<key>/artifacts (Bearer only, at most 100 per page, keyset cursor) and
-GET /maven/<key>/<path> (basic or Bearer; .sha1/.sha256/.md5 side files). Like the real one it ignores Range.
+GET /maven/<key>/<path> (basic or Bearer; .sha1/.sha256/.md5 side files), and PUT /maven/<key>/<path> (201, or 409 when the path exists, as the real one). Like the real one it ignores Range.
 """
 
 from __future__ import annotations
@@ -107,6 +107,22 @@ def make_handler(root: Path, user: str, token: str, *, anonymous_read: bool):
                     return self._send(200, HASHES[suffix](original.read_bytes()).hexdigest().encode(), 'text/plain')
                 return self._send(404)
             return self._send(404, b'Repository not found', 'text/plain')
+
+        def do_PUT(self) -> None:
+            data = self.rfile.read(int(self.headers.get('Content-Length') or 0))
+            parts = self.path.partition('?')[0].strip('/').split('/')
+            if len(parts) < 3 or parts[0] != 'maven':
+                return self._send(404, b'Repository not found', 'text/plain')
+            if self.headers.get('Authorization', '') not in (bearer, basic):
+                return self._send(401, b'Authentication required', 'text/plain')
+            target = (root / parts[1] / urllib.parse.unquote('/'.join(parts[2:]))).resolve()
+            if not target.is_relative_to(root.resolve()):
+                return self._send(400)
+            if target.exists():
+                return self._send(409, b'{"code":"CONFLICT","message":"Artifact already exists"}', 'application/json')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            return self._send(201)
 
     return Handler
 

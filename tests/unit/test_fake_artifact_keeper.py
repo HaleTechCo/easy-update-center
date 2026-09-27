@@ -1,5 +1,6 @@
 """The test-only fake Artifact Keeper, as the adapter's Artifact Keeper backend sees it."""
 
+import base64
 import datetime as dt
 import sys
 import threading
@@ -15,6 +16,7 @@ from archivefixture import make_hpi, pom_xml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'integration'))
 
 from fake_artifact_keeper import make_handler
+from httpclient import put
 from uc.repo_adapter.backends import ArtifactKeeperBackend, Http
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import build_index
@@ -65,3 +67,14 @@ def test_the_listing_fills_in_the_pom_from_the_fake(keeper, tmp_path):
     assert index.poms[f'{BASE}.pom'] == pom_xml(*GAV)
     assert index.report.derived_poms == [{'gav': ':'.join(GAV), 'url': f'https://repo.jenkins-ci.org/releases/{BASE}.pom'}]
     assert len(index.rows) == 152  # the archive, its derived POM and 150 standalone POMs
+
+
+def test_the_fake_accepts_an_upload_once(keeper, tmp_path):
+    basic = 'Basic ' + base64.b64encode(b'zac:tok').decode()
+    url = f'{keeper}maven/jenkins-prod-local/org/example/new/1.0/new-1.0.pom'
+    stored = tmp_path / 'jenkins-prod-local' / 'org/example/new/1.0/new-1.0.pom'
+    assert put(url, b'<project/>') == 401
+    assert put(url, b'<project/>', basic) == 201
+    assert stored.read_bytes() == b'<project/>'
+    assert put(url, b'<other/>', basic) == 409
+    assert stored.read_bytes() == b'<project/>'

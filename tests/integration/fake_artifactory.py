@@ -1,6 +1,6 @@
-"""Test-only stand-in for the three Artifactory calls update-center2 makes (CONTRIBUTING.md#tests).
+"""Test-only stand-in for the Artifactory calls update-center2 makes, plus uploads (CONTRIBUTING.md#tests).
 
-POST /artifactory/api/search/aql, GET /artifactory/<repo>/<path>, GET /artifactory/<repo>/<path>!/<entry>.
+POST /artifactory/api/search/aql, GET /artifactory/<repo>/<path>, GET /artifactory/<repo>/<path>!/<entry>, PUT /artifactory/<repo>/<path> (201, or 409 when the path exists) and <path>.sha1.
 update-center2 answers 401 challenges with credentials, so private reads use WWW-Authenticate: Basic.
 File reads honour a single Range, as Artifactory does (the repo-adapter reads archive dates that way).
 """
@@ -53,7 +53,11 @@ def aql_results(root: Path, repository: str) -> list[dict]:
 def read_artifact(root: Path, relative: str) -> bytes | None:
     archive, separator, entry = relative.partition('!/')
     target = (root / archive).resolve()
-    if not target.is_relative_to(root.resolve()) or not target.is_file():
+    if not target.is_relative_to(root.resolve()):
+        return None
+    if not separator and not target.is_file() and target.suffix == '.sha1' and target.with_suffix('').is_file():
+        return hashlib.sha1(target.with_suffix('').read_bytes(), usedforsecurity=False).hexdigest().encode()
+    if not target.is_file():
         return None
     if not separator:
         return target.read_bytes()
@@ -118,6 +122,22 @@ def make_handler(root: Path, credentials: str, *, anonymous_read: bool):
                 return self._send(206, data[start : end + 1], headers={'Content-Range': f'bytes {start}-{end}/{len(data)}', 'Accept-Ranges': 'bytes'})
             self._send(200, data)
             return None
+
+        def do_PUT(self) -> None:
+            data = self.rfile.read(int(self.headers.get('Content-Length') or 0))
+            if not self.path.startswith(PREFIX):
+                return self._send(404)
+            if not self._authorized():
+                return self._challenge()
+            relative = urllib.parse.unquote(self.path[len(PREFIX) :].split('?', 1)[0])
+            target = (root / relative).resolve()
+            if '!/' in relative or not target.is_relative_to(root.resolve()):
+                return self._send(400)
+            if target.exists():
+                return self._send(409, b'{"errors":[{"status":409,"message":"exists"}]}', 'application/json')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            return self._send(201)
 
         do_HEAD = do_GET  # noqa: N815 - http.server dispatches on the do_<METHOD> name
 
