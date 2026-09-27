@@ -21,6 +21,8 @@ ACCESS_MODES = ('redirect', 'proxy')
 RESOURCE_SOURCES = ('github', 'url', 'bundled')
 
 PUBLIC_ARTIFACTORY_URL = 'https://repo.jenkins-ci.org/'
+# Where public plugins' and cores' real files live: the default download source, and the URLs uc doctor prints.
+PUBLIC_RELEASES_URL = PUBLIC_ARTIFACTORY_URL + 'releases/'
 UPSTREAM_MIRROR_URL = 'https://get.jenkins.io'
 UPSTREAM_POPULARITY_URL = 'https://raw.githubusercontent.com/jenkins-infra/infra-statistics/gh-pages/plugin-installation-trend/latestNumbers.json'
 UPSTREAM_TOOL_INSTALLERS_URL = 'https://updates.jenkins.io/updates/'
@@ -57,6 +59,8 @@ class Settings:
     download_backend: str
     download_backend_url: str
     download_access: str
+    procurement_source_url: str
+    procurement_source_set: bool
     retain_releases: int
     min_plugins: int
     min_plugin_ratio: float
@@ -75,6 +79,7 @@ class Settings:
     repo_password_file: Path
     github_username_file: Path
     github_token_file: Path
+    repo_push_auth_file: Path
 
     @property
     def downloads_root_url(self) -> str:
@@ -130,6 +135,18 @@ class Settings:
     def source_api_url(self) -> str:
         """Artifactory-style API base URL for AQL queries: the adapter's, or the repository's."""
         return self.repo_adapter_url + 'api/' if self.repo_adapter else self.repo_api_url
+
+    @property
+    def public_repository(self) -> bool:
+        """Return whether the source repository is repo.jenkins-ci.org, which uc never writes to."""
+        return urlsplit(self.repo_url).hostname == urlsplit(PUBLIC_ARTIFACTORY_URL).hostname
+
+    @property
+    def maven_url(self) -> str:
+        """Return the repository's Maven-layout root, where files are read and written by path."""
+        if self.repo_type == 'artifact-keeper':
+            return f'{self.repo_url}maven/{self.repo_key}/'
+        return f'{self.repo_url}{self.repo_key}/'
 
     @property
     def repo_adapter_token_file(self) -> Path:
@@ -268,6 +285,12 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         msg = 'RESOURCES_URL must be set when RESOURCES_SOURCE=url'
         raise ConfigError(msg)
 
+    procurement_source = _get(env, 'PROCUREMENT_SOURCE_URL')
+    source_parts = urlsplit(procurement_source)
+    if source_parts.username or source_parts.password:
+        msg = 'PROCUREMENT_SOURCE_URL must not contain credentials'
+        raise ConfigError(msg)
+
     secrets_dir = Path(_get(env, 'SECRETS_DIR', '/run/secrets'))
 
     def secret(var: str, name: str) -> Path:
@@ -299,6 +322,8 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         download_backend=backend,
         download_backend_url=backend_url,
         download_access=_choice(env, 'DOWNLOAD_ACCESS', 'redirect', ACCESS_MODES),
+        procurement_source_url=with_trailing_slash(procurement_source or PUBLIC_RELEASES_URL),
+        procurement_source_set=bool(procurement_source),
         retain_releases=_int(env, 'RETAIN_RELEASES', 5, minimum=1),
         min_plugins=_int(env, 'MIN_PLUGINS', 1),
         min_plugin_ratio=_ratio(env, 'MIN_PLUGIN_RATIO', 0.9),
@@ -317,4 +342,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         repo_password_file=secret('REPO_PASSWORD_FILE', 'repo_password'),
         github_username_file=secret('GITHUB_USERNAME_FILE', 'github_username'),
         github_token_file=secret('GITHUB_TOKEN_FILE', 'github_token'),
+        repo_push_auth_file=secret('REPO_PUSH_AUTH_FILE', 'repo_push_auth'),
     )

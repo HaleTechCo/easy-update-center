@@ -209,3 +209,31 @@ def test_read_secret(tmp_path):
     assert read_secret(tmp_path / 'empty') is None
     (tmp_path / 'value').write_text('s3cret\n')
     assert read_secret(tmp_path / 'value') == 's3cret'
+
+
+def test_procurement_defaults():
+    s = load_settings(AIRGAPPED)
+    assert s.procurement_source_url == 'https://repo.jenkins-ci.org/releases/'
+    assert s.procurement_source_set is False
+    assert s.repo_push_auth_file == Path('/run/secrets/repo_push_auth')
+
+
+def test_procurement_source_can_point_at_a_proxy_repository():
+    s = load_settings({**AIRGAPPED, 'PROCUREMENT_SOURCE_URL': 'https://artifacts.corp/maven/jenkins-remote'})
+    assert s.procurement_source_url == 'https://artifacts.corp/maven/jenkins-remote/'
+    assert s.procurement_source_set is True
+
+
+def test_procurement_source_must_not_carry_credentials():
+    with pytest.raises(ConfigError, match='PROCUREMENT_SOURCE_URL must not contain credentials'):
+        load_settings({**AIRGAPPED, 'PROCUREMENT_SOURCE_URL': 'https://u:p@mirror.corp/releases/'})  # pragma: allowlist secret
+
+
+def test_maven_url_follows_the_repository_type():
+    assert load_settings(AIRGAPPED).maven_url == 'https://artifactory.corp/artifactory/jenkins-local/'
+    assert load_settings(KEEPER).maven_url == 'https://ak.corp/maven/jenkins-prod-local/'
+
+
+def test_the_public_repository_is_recognised_by_its_host():
+    assert load_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com'}).public_repository is True
+    assert load_settings(AIRGAPPED).public_repository is False

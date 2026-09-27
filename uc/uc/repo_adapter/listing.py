@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from uc.aql import Gav, RepoFile, to_gav
+from uc.config import PUBLIC_RELEASES_URL
 from uc.pom import Coordinates, unusable_reason
 from uc.timeutil import iso
 
@@ -22,8 +23,6 @@ if TYPE_CHECKING:
 
     from .cache import Cache
 
-# Where public plugins' and cores' real .pom files live; the report gives each POM it names a URL here.
-PUBLIC_RELEASES = 'https://repo.jenkins-ci.org/releases/'
 ARCHIVE_EXTENSIONS = ('hpi', 'jpi', 'war')
 REPORT_LISTS = ('derived_poms', 'replaced_poms', 'needs_pom', 'misplaced', 'skipped', 'dates_from_repository')
 
@@ -153,14 +152,14 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
                 index.poms[pom_path] = None
                 index.rows.append(_row(key, real.directory, real.name, sha256=real.sha256, sha1=real_sha1, size=real.size, created=created, modified=modified))
                 continue
-            report.replaced_poms.append({'path': pom_path, 'reason': verdict, 'url': PUBLIC_RELEASES + pom_path})
+            report.replaced_poms.append({'path': pom_path, 'reason': verdict, 'url': PUBLIC_RELEASES_URL + pom_path})
         if facts.pom is not None and unusable_reason(facts.pom, coordinates) is None:
             index.poms[pom_path] = facts.pom
             directory, _, name = pom_path.rpartition('/')
             index.rows.append(_row(key, directory, name, sha256=hashlib.sha256(facts.pom).hexdigest(), sha1=hashlib.sha1(facts.pom, usedforsecurity=False).hexdigest(), size=len(facts.pom), created=created, modified=modified))
-            report.derived_poms.append({'gav': ':'.join(coordinates), 'url': PUBLIC_RELEASES + pom_path})
+            report.derived_poms.append({'gav': ':'.join(coordinates), 'url': PUBLIC_RELEASES_URL + pom_path})
         else:
-            report.needs_pom.append({'gav': ':'.join(coordinates), 'url': PUBLIC_RELEASES + pom_path})
+            report.needs_pom.append({'gav': ':'.join(coordinates), 'url': PUBLIC_RELEASES_URL + pom_path})
 
     for path, entry in sorted(poms.items()):  # POMs without an archive: parent POMs and the like
         if path in consumed:
@@ -177,7 +176,7 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
             index.poms[path] = None
             index.rows.append(_row(key, entry.directory, entry.name, sha256=entry.sha256, sha1=sha1, size=entry.size, created=entry.created, modified=entry.modified))
         else:
-            report.replaced_poms.append({'path': path, 'reason': verdict, 'url': PUBLIC_RELEASES + path})
+            report.replaced_poms.append({'path': path, 'reason': verdict, 'url': PUBLIC_RELEASES_URL + path})
     cache.prune()
     return index
 
