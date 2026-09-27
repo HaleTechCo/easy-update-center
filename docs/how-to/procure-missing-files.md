@@ -75,6 +75,10 @@ The first time you push to a repository, run the dry run first, then a real push
 `uc doctor --fetch` (next section), so a misconfigured `repo_push_auth` or a changed file shows up
 before anything is written.
 
+Push sends each file's sha1 with the upload (`X-Checksum-Sha1`), so Artifactory can verify it, and
+never uploads over a path the repository already holds, even when the repository publishes no
+checksum for it.
+
 | Result | Meaning |
 |---|---|
 | `uploaded` | Uploaded, and the repository's sha1 matches. |
@@ -82,7 +86,7 @@ before anything is written.
 | `would put` | Dry run: it would be uploaded. |
 | `DIFFERENT` | The repository holds another file at that path; it is left alone. |
 | `TAMPERED` | The staged file changed, or is missing, since it was downloaded; download it again. |
-| `ERROR`, `FAILED` | The repository refused or failed (for example 401: check `secrets/repo_push_auth`). |
+| `ERROR`, `FAILED` | The repository refused or failed (for example 401: check `secrets/repo_push_auth`), or holds the path but publishes no checksum for it (check that file by hand). |
 
 Push exits 0 when every listed file ends up in the repository with the recorded content.
 

@@ -78,3 +78,18 @@ def test_the_fake_accepts_an_upload_once(keeper, tmp_path):
     assert stored.read_bytes() == b'<project/>'
     assert put(url, b'<other/>', basic) == 409
     assert stored.read_bytes() == b'<project/>'
+
+
+def test_the_fake_answers_head_without_a_body(keeper):
+    basic = 'Basic ' + base64.b64encode(b'zac:tok').decode()
+
+    def head(path):
+        request = urllib.request.Request(f'{keeper}maven/jenkins-prod-local/{path}', method='HEAD', headers={'Authorization': basic})
+        try:
+            with urllib.request.urlopen(request) as response:
+                return response.status, response.read()
+        except urllib.error.HTTPError as exc:
+            return exc.code, b''
+
+    assert head(f'{BASE}.hpi') == (200, b'')
+    assert head('org/example/absent/1.0/absent-1.0.pom') == (404, b'')

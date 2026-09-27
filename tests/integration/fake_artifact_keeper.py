@@ -1,7 +1,7 @@
 """Test-only stand-in for the Artifact Keeper 1.10 calls the repo-adapter makes (docs/architecture/repo-adapter.md#requests-it-answers).
 
 GET /api/v1/repositories/<key>/artifacts (Bearer only, at most 100 per page, keyset cursor) and
-GET /maven/<key>/<path> (basic or Bearer; .sha1/.sha256/.md5 side files), and PUT /maven/<key>/<path> (201, or 409 when the path exists, as the real one). Like the real one it ignores Range.
+GET or HEAD /maven/<key>/<path> (basic or Bearer; .sha1/.sha256/.md5 side files), and PUT /maven/<key>/<path> (201, or 409 when the path exists, as the real one). Like the real one it ignores Range.
 """
 
 from __future__ import annotations
@@ -79,7 +79,8 @@ def make_handler(root: Path, user: str, token: str, *, anonymous_read: bool):
             self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            if self.command != 'HEAD':
+                self.wfile.write(body)
 
         def do_GET(self) -> None:
             path, _, raw_query = self.path.partition('?')
@@ -123,6 +124,8 @@ def make_handler(root: Path, user: str, token: str, *, anonymous_read: bool):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
             return self._send(201)
+
+        do_HEAD = do_GET  # noqa: N815 - http.server dispatches on the do_<METHOD> name; _send leaves out the body
 
     return Handler
 
