@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import json
 import sys
 from http import HTTPStatus
 from typing import TYPE_CHECKING, TextIO
@@ -12,7 +13,7 @@ from uc.config import read_secret
 from uc.repo_adapter.backends import LONG_TIMEOUT, TIMEOUT, BackendError, Http
 
 from . import ProcureError
-from .staging import MANIFEST, Staging
+from .staging import MANIFEST, Staging, check_path
 from .upstream import SIDE_FILE_LIMIT, parse_sha1
 
 if TYPE_CHECKING:
@@ -21,6 +22,34 @@ if TYPE_CHECKING:
     from uc.config import Settings
 
 UPLOADED = (HTTPStatus.OK, HTTPStatus.CREATED)
+REASON_LIMIT = 200
+# Deleting a release in Artifact Keeper leaves a tombstone with its checksum; other bytes at that path are
+# refused with 409 until its storage garbage collection reaps the tombstone (cleanup_soft_deleted_artifact_checked).
+TOMBSTONE = 'Artifact Keeper keeps a deleted release as a tombstone until its storage garbage collection runs'
+
+
+def repository_reason(body: bytes) -> str:
+    """Return the reason a repository gives for refusing a request: its JSON error's message, or its plain text; empty for HTML."""
+    text = body.decode('utf-8', 'replace').strip()
+    try:
+        data = json.loads(text)
+    except ValueError:
+        data = None
+    if isinstance(data, dict):
+        errors = data.get('errors')  # Artifactory: {"errors": [{"status": 409, "message": "..."}]}
+        error = errors[0] if isinstance(errors, list) and errors and isinstance(errors[0], dict) else data
+        text = str(error.get('message') or '')
+    elif text.startswith('<'):
+        text = ''
+    return ' '.join(''.join(ch if ch.isprintable() else ' ' for ch in text).split())[:REASON_LIMIT]
+
+
+def _in_layout(path: str) -> bool:
+    try:
+        check_path(path)
+    except ProcureError:
+        return False
+    return True
 
 
 def push_headers(settings: Settings) -> dict[str, str]:
@@ -63,14 +92,14 @@ class Target:
             raise ProcureError(msg)
         return response.status == HTTPStatus.OK
 
-    def put(self, path: str, data: bytes, sha1: str) -> int:
-        """Upload data to path with its sha1, which Artifactory records and verifies (Artifact Keeper ignores it), and return the HTTP status."""
+    def put(self, path: str, data: bytes, sha1: str) -> tuple[int, str]:
+        """Upload data to path with its sha1, which Artifactory records and verifies (Artifact Keeper ignores it); return the HTTP status and, when refused, the repository's reason."""
         headers = {**self.headers, 'Content-Type': 'application/octet-stream', 'X-Checksum-Sha1': sha1}
         try:
             response = self.http.request(self.base + path, headers=headers, limit=SIDE_FILE_LIMIT, data=data, method='PUT', timeout=LONG_TIMEOUT, truncate=True)
         except BackendError as exc:
             raise ProcureError(str(exc)) from exc
-        return response.status
+        return response.status, '' if response.status in UPLOADED else repository_reason(response.body)
 
 
 def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = sys.stdout, http: Http | None = None) -> int:
@@ -84,6 +113,7 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
     staging = Staging.open(staging_dir, settings.procurement_source_url)
     target = Target(settings.maven_url, http or Http(settings.repo_ca_file), push_headers(settings))
     uploaded = would_put = present = problems = 0
+    artifact_keeper = settings.repo_type == 'artifact-keeper'
 
     def say(label: str, path: str, detail: str = '') -> None:
         print(f'{label:<9} {path}' + (f'  ({detail})' if detail else ''), file=out)
@@ -114,7 +144,9 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
             continue
         if have is not None:
             problems += 1
-            hint = '; delete it in the repository first' if staged.replaces_unusable else ''
+            hint = ''
+            if staged.replaces_unusable:
+                hint = '; delete it in the repository first' + (", then run Artifact Keeper's storage garbage collection" if artifact_keeper else '')
             say('DIFFERENT', path, f'the repository holds another file (sha1 {have}){hint}')
             continue
         if held:
@@ -126,7 +158,7 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
             say('would put', path)
             continue
         try:
-            status = target.put(path, data, staged.sha1)
+            status, reason = target.put(path, data, staged.sha1)
             after = target.sha1(path)
         except ProcureError as exc:
             problems += 1
@@ -140,8 +172,16 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
             say('present', path, 'the same file arrived while pushing')
         else:
             problems += 1
-            say('FAILED', path, f'HTTP {status}, repository sha1 {after or "none"}')
+            detail = f'HTTP {status}' + (f': {reason}' if reason else '') + f', repository sha1 {after or "none"}'
+            if artifact_keeper and status == HTTPStatus.CONFLICT and after is None:
+                detail += f'; {TOMBSTONE}'
+            say('FAILED', path, detail)
+    unlisted = staging.unrecorded()
+    for path in unlisted:
+        hint = 'record it with uc doctor --stage-local' if _in_layout(path) else 'not a Maven path'
+        say('unlisted', path, f'not in procurement.json, so not pushed; {hint}')
     planned = f'{would_put} would put, ' if dry_run else ''
-    print(f'{uploaded} uploaded, {planned}{present} already present, {problems} problem(s) -> {settings.maven_url}', file=out)
+    ignored = f', {len(unlisted)} not in procurement.json' if unlisted else ''
+    print(f'{uploaded} uploaded, {planned}{present} already present, {problems} problem(s){ignored} -> {settings.maven_url}', file=out)
     print('run uc doctor --fetch to confirm what the generator will see', file=out)
     return 1 if problems else 0

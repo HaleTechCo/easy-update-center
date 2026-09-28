@@ -16,7 +16,7 @@ from . import ProcureError
 
 MANIFEST = 'procurement.json'
 FORMAT = 1
-KINDS = ('pom', 'dependency', 'core')
+KINDS = ('pom', 'dependency', 'core', 'local')
 EXTENSIONS = ('hpi', 'jpi', 'war', 'pom')
 SHA1 = re.compile(r'^[0-9a-f]{40}$')
 
@@ -29,7 +29,7 @@ class StagedFile:
     url: str
     sha1: str
     size: int
-    kind: str  # pom, dependency or core
+    kind: str  # pom, dependency, core, or local (placed by hand, recorded by uc doctor --stage-local)
     reason: str
     staged_at: str
     required_core: str | None = None  # plugin archives: the manifest's Jenkins-Version
@@ -123,6 +123,20 @@ class Staging:
             msg = f'cannot write {target}: {exc}'
             raise ProcureError(msg) from exc
         self.files[staged.path] = staged
+
+    def unrecorded(self) -> list[str]:
+        """Return the folder's files that procurement.json does not list, in path order: files placed by hand, or anything else.
+
+        procurement.json itself and unfinished downloads (.part-*) are left out.
+        """
+        if not self.root.is_dir():
+            return []
+        found = []
+        for file in self.root.rglob('*'):
+            path = file.relative_to(self.root).as_posix()
+            if file.is_file() and path != MANIFEST and not file.name.startswith('.part-') and path not in self.files:
+                found.append(path)
+        return sorted(found)
 
     def remove(self, path: str) -> None:
         """Forget path and delete its file."""
