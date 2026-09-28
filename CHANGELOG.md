@@ -30,6 +30,10 @@ once releases are published.
   overwriting. `make procure-download` and `make procure-push` wrap them. `uc doctor` also lists the
   cores plugins require that the repository lacks, from the oldest core it holds (or `--since`). After
   upgrading, run `make secrets-placeholders` once so Compose finds `secrets/repo_push_auth`.
+  `uc doctor --stage-local` records files placed in `./procurement/` by hand, after the checks a
+  download gets; push reports any file in the folder that `procurement.json` does not list, and shows
+  the repository's reason when it refuses an upload (with a pointer to Artifact Keeper's storage
+  garbage collection for its 409 on a deleted release).
 - Third-party notices in the uc image, `/opt/uc/licenses/`: update-center2's MIT license with the
   Jenkins project's governance statement, every bundled Java library with its license (generated
   by the build, which fails on a library with no known license), and the license texts.

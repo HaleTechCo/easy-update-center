@@ -127,6 +127,16 @@ def test_a_different_file_is_left_alone(keeper, tmp_path, secrets_dir):
     assert code == 1
     assert (repo / POM).read_bytes() == b'<html>404</html>'
     digest = hashlib.sha1(b'<html>404</html>', usedforsecurity=False).hexdigest()
+    assert f"DIFFERENT {POM}  (the repository holds another file (sha1 {digest}); delete it in the repository first, then run Artifact Keeper's storage garbage collection)" in lines
+
+
+def test_on_artifactory_a_different_file_only_needs_deleting(artifactory, tmp_path, secrets_dir):
+    repo, url = artifactory
+    publish(repo, POM, b'<html>404</html>')
+    staged(tmp_path / 'stage', {POM: b'<project/>'}, replaces_unusable=True)
+    code, lines = run(artifactory_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
+    assert code == 1
+    digest = hashlib.sha1(b'<html>404</html>', usedforsecurity=False).hexdigest()
     assert f'DIFFERENT {POM}  (the repository holds another file (sha1 {digest}); delete it in the repository first)' in lines
 
 
@@ -296,3 +306,41 @@ def test_an_unreadable_staged_file_is_reported_and_the_push_goes_on(keeper, tmp_
     assert not (repo / HPI).exists()
     assert (repo / POM).read_bytes() == b'<project/>'
     assert f'1 uploaded, 0 already present, 1 problem(s) -> {url}maven/jenkins/' in lines
+
+
+TOMBSTONE = 'Artifact Keeper keeps a deleted release as a tombstone until its storage garbage collection runs'
+
+
+@pytest.mark.parametrize(
+    ('artifact_keeper', 'reply', 'detail'),
+    [
+        (True, (409, {'Content-Type': 'application/json'}, b'{"code":"CONFLICT","message":"Artifact version already exists and is immutable"}'), f'HTTP 409: Artifact version already exists and is immutable, repository sha1 none; {TOMBSTONE}'),
+        (False, (409, {'Content-Type': 'application/json'}, b'{"errors":[{"status":409,"message":"Checksum policy rejects the upload"}]}'), 'HTTP 409: Checksum policy rejects the upload, repository sha1 none'),
+        (True, (500, {'Content-Type': 'text/html'}, b'<html><body>Internal Server Error</body></html>'), 'HTTP 500, repository sha1 none'),
+        (False, (400, {'Content-Type': 'text/plain'}, b'  Bad\n request:   path   rejected  '), 'HTTP 400: Bad request: path rejected, repository sha1 none'),
+    ],
+)
+def test_a_refused_upload_reports_the_repositorys_reason(tmp_path, secrets_dir, artifact_keeper, reply, detail):
+    prefix = '/maven/jenkins/' if artifact_keeper else '/artifactory/jenkins/'
+    routes = {('GET', f'{prefix}{POM}.sha1'): (404, {}, b''), ('HEAD', f'{prefix}{POM}'): (404, {}, b''), ('PUT', f'{prefix}{POM}'): reply}
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    with StubServer(routes) as stub:
+        settings = keeper_settings(tmp_path, secrets_dir, stub.url + '/') if artifact_keeper else artifactory_settings(tmp_path, secrets_dir, stub.url + '/artifactory/')
+        code, lines = run(settings, tmp_path / 'stage')
+    assert code == 1
+    assert f'FAILED    {POM}  ({detail})' in lines
+
+
+def test_files_procurement_json_does_not_list_are_reported_not_pushed(keeper, tmp_path, secrets_dir):
+    repo, url = keeper
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    publish(tmp_path / 'stage', HPI, b'hpi bytes')  # copied in by hand
+    (tmp_path / 'stage' / 'notes.txt').write_text('reviewed')
+    (tmp_path / 'stage' / '.part-abc123').write_bytes(b'')  # a download interrupted mid-way
+    code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
+    assert code == 0
+    assert not (repo / HPI).exists()
+    assert f'unlisted  {HPI}  (not in procurement.json, so not pushed; record it with uc doctor --stage-local)' in lines
+    assert 'unlisted  notes.txt  (not in procurement.json, so not pushed; not a Maven path)' in lines
+    assert not [line for line in lines if '.part-' in line]
+    assert f'1 uploaded, 0 already present, 0 problem(s), 2 not in procurement.json -> {url}maven/jenkins/' in lines

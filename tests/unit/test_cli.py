@@ -115,6 +115,29 @@ def test_push_runs_on_its_own(extra, capsys):
     assert '--push runs on its own' in capsys.readouterr().err
 
 
+@pytest.mark.parametrize('extra', [['--download-poms'], ['--download-war', '2.479.1'], ['--fetch'], ['--json'], ['--since', '2.479.1']])
+def test_stage_local_runs_on_its_own(extra, capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        main(['doctor', '--stage-local', *extra])
+    assert exit_info.value.code == 2
+    assert '--stage-local runs on its own' in capsys.readouterr().err
+
+
+def test_push_and_stage_local_are_separate_runs(capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        main(['doctor', '--push', '--stage-local'])
+    assert exit_info.value.code == 2
+    assert '--push runs on its own' in capsys.readouterr().err
+
+
+def test_stage_local_needs_neither_a_source_nor_the_repository(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)  # air-gapped, no PROCUREMENT_SOURCE_URL, an unreachable repository
+    staging = tmp_path / 'stage'
+    staging.mkdir()
+    assert main(['doctor', '--stage-local', '--staging', str(staging)]) == 0
+    assert capsys.readouterr().out.splitlines() == [f'0 recorded, 0 refused; review {staging}, then run uc doctor --push']
+
+
 def test_dry_run_needs_push(capsys):
     with pytest.raises(SystemExit) as exit_info:
         main(['doctor', '--dry-run'])

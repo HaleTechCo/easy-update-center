@@ -16,6 +16,7 @@ from .generate import generate
 from .pki import DEFAULT_ORG, ROOT_CERT, ROOT_KEY, SIGNING_CERT, SIGNING_KEY, cert_info, init_pki, rotate_signing
 from .preflight import load_credentials
 from .procure.download import check_download_allowed, download
+from .procure.local import stage_local
 from .procure.plan import check_war_args
 from .procure.push import push
 from .repo_adapter.server import serve
@@ -48,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument('--staging', type=Path, default=Path('/procurement'), help='the staging folder (default: /procurement)')
     doctor.add_argument('--push', action='store_true', help='upload the files procurement.json lists to the repository, never overwriting')
     doctor.add_argument('--dry-run', action='store_true', help='with --push: check each file, upload nothing')
+    doctor.add_argument('--stage-local', action='store_true', help='record the files placed in the staging folder by hand, after the checks a download gets')
 
     rollback = sub.add_parser('rollback', help='point live at an earlier release')
     rollback.add_argument('release', nargs='?', help='release id (default: the one before live)')
@@ -91,8 +93,10 @@ def main(argv: list[str] | None = None) -> int:
 
 def _check_doctor_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     downloading = args.download_poms or args.download_dependencies or args.download_war
-    if args.push and (downloading or args.fetch or args.json or args.since):
+    if args.push and (downloading or args.stage_local or args.fetch or args.json or args.since):
         parser.error('--push runs on its own: review the staged files between downloading and pushing')
+    if args.stage_local and (downloading or args.fetch or args.json or args.since):
+        parser.error('--stage-local runs on its own: it records files already in the staging folder')
     if args.dry_run and not args.push:
         parser.error('--dry-run only applies to --push')
 
@@ -129,6 +133,8 @@ def _dispatch(args: argparse.Namespace) -> int:
 def _doctor(args: argparse.Namespace, settings: Settings) -> int:
     if args.push:
         return push(settings, args.staging, dry_run=args.dry_run)
+    if args.stage_local:
+        return stage_local(args.staging, settings.procurement_source_url, out=sys.stdout)
     downloading = args.download_poms or args.download_dependencies or bool(args.download_war)
     check_since(args.since)
     if downloading:

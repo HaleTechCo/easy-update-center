@@ -53,6 +53,23 @@ back to you afterwards. On Docker Desktop, plain Compose works too:
 staged, 1 otherwise; files it could not get are listed as `FAILED` with the reason. Running it again
 keeps what is already staged and downloads only what is missing or changed.
 
+### Files you place by hand
+
+Push uploads only what `procurement.json` lists, so a file you copy into `./procurement/` yourself (a
+WAR downloaded elsewhere, a plugin from another source) must be recorded first. Put it at its Maven
+path, then:
+
+```bash
+make procure-download ARGS=--stage-local
+```
+
+It records every `.hpi`, `.jpi`, `.war` and `.pom` in the folder that `procurement.json` does not list
+yet, with the reason `added by hand`, after the checks a download gets: a plugin's manifest must name
+the group, artifact and version of its path, a `.pom` must be a usable POM for its path, and a `.war`
+must be a readable archive. Anything refused is listed as `REFUSED` with the reason, and the run then
+exits 1. It needs no network access, so it works air-gapped too. `--stage-local` runs on its own:
+download and record hand-placed files in separate runs.
+
 ## 2. Review
 
 Everything staged is in `./procurement/`, in the paths it will have in the repository, and listed in
@@ -62,7 +79,11 @@ Everything staged is in `./procurement/`, in the paths it will have in the repos
 - `required_core`: for a plugin, the Jenkins version it needs; the run also points out any newer than
   the newest core in the repository;
 - `replaces_unusable`: the repository holds an unusable file at this path (such as a saved error page).
-  Delete that file in the repository before pushing: push never overwrites.
+  Delete that file in the repository before pushing: push never overwrites. On Artifact Keeper,
+  deleting a release leaves a tombstone that refuses different bytes at that path (HTTP 409,
+  `Artifact version already exists and is immutable`) until its storage garbage collection has run:
+  as an Artifact Keeper administrator, `POST /api/v1/repositories/<key>/storage-gc` with
+  `{"dry_run": true}`, then `{"dry_run": false}` (it also runs on Artifact Keeper's own schedule).
 
 Remove what your process rejects by deleting its entry from `procurement.json` (and the file). Push
 refuses a file whose content changed, or that went missing, after it was downloaded.
@@ -89,9 +110,11 @@ checksum for it.
 | `would put` | Dry run: it would be uploaded. |
 | `DIFFERENT` | The repository holds another file at that path; it is left alone. |
 | `TAMPERED` | The staged file changed, or is missing, since it was downloaded: download it again. Or it cannot be read: check its permissions. |
-| `ERROR`, `FAILED` | The repository refused or failed (for example 401: check `secrets/repo_push_auth`), or holds the path but publishes no checksum for it (check that file by hand). |
+| `ERROR`, `FAILED` | The repository refused or failed (for example 401: check `secrets/repo_push_auth`), or holds the path but publishes no checksum for it (check that file by hand). `FAILED` shows the repository's own reason when it gives one; a 409 from Artifact Keeper after you deleted a file is its tombstone (see [Review](#2-review)). |
+| `unlisted` | In the folder but not in `procurement.json`, so not pushed: record it with `--stage-local` ([Files you place by hand](#files-you-place-by-hand)) or delete it. The summary counts these. |
 
-Push exits 0 when every listed file ends up in the repository with the recorded content.
+Push exits 0 when every listed file ends up in the repository with the recorded content; unlisted
+files do not change the exit code.
 
 ## 4. Confirm
 
