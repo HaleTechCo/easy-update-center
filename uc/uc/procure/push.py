@@ -13,7 +13,7 @@ from uc.config import read_secret
 from uc.repo_adapter.backends import LONG_TIMEOUT, TIMEOUT, BackendError, Http
 
 from . import ProcureError
-from .staging import MANIFEST, Staging, check_path
+from .staging import MANIFEST, Staging, in_layout
 from .upstream import SIDE_FILE_LIMIT, parse_sha1
 
 if TYPE_CHECKING:
@@ -42,14 +42,6 @@ def repository_reason(body: bytes) -> str:
     elif text.startswith('<'):
         text = ''
     return ' '.join(''.join(ch if ch.isprintable() else ' ' for ch in text).split())[:REASON_LIMIT]
-
-
-def _in_layout(path: str) -> bool:
-    try:
-        check_path(path)
-    except ProcureError:
-        return False
-    return True
 
 
 def push_headers(settings: Settings) -> dict[str, str]:
@@ -178,7 +170,7 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
             say('FAILED', path, detail)
     unlisted = staging.unrecorded()
     for path in unlisted:
-        hint = 'record it with uc doctor --stage-local' if _in_layout(path) else 'not a Maven path'
+        hint = 'record it with uc doctor --stage-local' if in_layout(path) else 'not a Maven path'
         say('unlisted', path, f'not in procurement.json, so not pushed; {hint}')
     planned = f'{would_put} would put, ' if dry_run else ''
     ignored = f', {len(unlisted)} not in procurement.json' if unlisted else ''

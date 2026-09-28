@@ -58,6 +58,7 @@ docker compose run --rm uc doctor [--fetch] [--json] [--since VERSION]
 docker compose run --rm uc doctor [--fetch] [--download-poms] [--download-dependencies] [--download-war VERSION|required ...] [--since VERSION] [--staging DIR]
 docker compose run --rm uc doctor --push [--dry-run] [--staging DIR]
 docker compose run --rm uc doctor --stage-local [--staging DIR]
+docker compose run --rm uc doctor --clean [--dry-run] [--staging DIR]
 ```
 
 Reports what the generator will and will not see in the source repository, without generating. It
@@ -94,14 +95,16 @@ was, such as an internal one, has no `.pom` there.
 | `--download-war VERSION` | Stage that core's `.war` and `.pom`; `required` stages every required core the repository lacks at or above the floor. Repeatable. |
 | `--staging DIR` | The staging folder (default `/procurement`, `./procurement` on the host). |
 | `--push` | Upload the files `procurement.json` lists to the repository, never overwriting. On its own only. |
-| `--dry-run` | With `--push`: check each file, upload nothing. |
+| `--dry-run` | With `--push` or `--clean`: check each file, change nothing. |
 | `--stage-local` | Record the `.hpi`, `.jpi`, `.war` and `.pom` files placed in the staging folder by hand that `procurement.json` does not list yet, after the checks a download gets. Needs no network. On its own only. |
+| `--clean` | Delete the staged files, listed or placed by hand, that the repository holds with the same content, with their `procurement.json` entries. On its own only. |
 
 Exits 1 when anything will be dropped or a dependency is missing, else 0. A download run exits 0
 when everything planned is staged, else 1; a push, 0 when every listed file ends up in the
-repository with the recorded content; `--stage-local`, 0 unless it refused a file. `--push` with a
-download option, `--stage-local`, `--fetch`, `--json` or `--since`, `--stage-local` with a download
-option, `--fetch`, `--json` or `--since`, or `--dry-run` without `--push`, exits 2. How to use them:
+repository with the recorded content; `--stage-local`, 0 unless it refused a file; `--clean`, 0
+unless a file differs from the repository's or could not be checked or deleted. `--push`,
+`--stage-local` and `--clean` each run on their own: combined with one another, a download option,
+`--fetch`, `--json` or `--since`, they exit 2, as does `--dry-run` without `--push` or `--clean`. How to use them:
 [Procure missing POMs, dependencies and cores](../how-to/procure-missing-files.md). What the
 repository must contain: [Stock an air-gapped repository](../how-to/stock-airgapped-repository.md).
 

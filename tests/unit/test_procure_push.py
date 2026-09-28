@@ -3,10 +3,6 @@
 import hashlib
 import io
 import socket
-import sys
-import threading
-from http.server import ThreadingHTTPServer
-from pathlib import Path
 
 import pytest
 
@@ -18,44 +14,8 @@ from uc.procure.staging import Staging
 from uc.repo_adapter.backends import Http
 from ucsupport import make_settings
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'integration'))
-
-from fake_artifact_keeper import make_handler as keeper_handler
-from fake_artifactory import make_handler as artifactory_handler
-
 POM = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.pom'
 HPI = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.hpi'
-
-
-def serve(handler):
-    httpd = ThreadingHTTPServer(('127.0.0.1', 0), handler)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    return httpd, f'http://127.0.0.1:{httpd.server_address[1]}/'
-
-
-@pytest.fixture
-def keeper(tmp_path):
-    httpd, url = serve(keeper_handler(tmp_path / 'repo', 'uc', 'tok', anonymous_read=False))
-    yield tmp_path / 'repo' / 'jenkins', url
-    httpd.shutdown()
-    httpd.server_close()
-
-
-@pytest.fixture
-def artifactory(tmp_path):
-    httpd, url = serve(artifactory_handler(tmp_path / 'repo', 'uc:tok', anonymous_read=False))
-    yield tmp_path / 'repo' / 'jenkins', url + 'artifactory/'
-    httpd.shutdown()
-    httpd.server_close()
-
-
-@pytest.fixture
-def client_checksums(tmp_path):
-    """Serve a fake Artifactory with the client checksum policy, the default for Artifactory's local repositories."""
-    httpd, url = serve(artifactory_handler(tmp_path / 'repo', 'uc:tok', anonymous_read=False, checksum_policy='client'))
-    yield tmp_path / 'repo' / 'jenkins', url + 'artifactory/'
-    httpd.shutdown()
-    httpd.server_close()
 
 
 class RecordingHttp(Http):

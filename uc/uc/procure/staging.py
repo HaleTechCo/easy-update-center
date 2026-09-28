@@ -46,6 +46,15 @@ def check_path(path: str) -> str:
     return path
 
 
+def in_layout(path: str) -> bool:
+    """Return whether path is a relative Maven path to a .hpi, .jpi, .war or .pom."""
+    try:
+        check_path(path)
+    except ProcureError:
+        return False
+    return True
+
+
 def sha1_of(file: Path) -> str:
     """Return the file's sha1 as 40 lower-case hex digits."""
     digest = hashlib.sha1(usedforsecurity=False)
@@ -139,9 +148,9 @@ class Staging:
         return sorted(found)
 
     def remove(self, path: str) -> None:
-        """Forget path and delete its file."""
-        self.files.pop(path, None)
+        """Delete path's file and forget it; when the delete fails (OSError), path stays recorded."""
         self.file(path).unlink(missing_ok=True)
+        self.files.pop(path, None)
 
     def save(self) -> None:
         """Write procurement.json atomically, files in path order."""
