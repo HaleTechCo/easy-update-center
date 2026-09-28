@@ -123,11 +123,29 @@ def test_stage_local_runs_on_its_own(extra, capsys):
     assert '--stage-local runs on its own' in capsys.readouterr().err
 
 
-def test_push_and_stage_local_are_separate_runs(capsys):
+@pytest.mark.parametrize('extra', [['--download-poms'], ['--download-war', '2.479.1'], ['--fetch'], ['--json'], ['--since', '2.479.1']])
+def test_clean_runs_on_its_own(extra, capsys):
     with pytest.raises(SystemExit) as exit_info:
-        main(['doctor', '--push', '--stage-local'])
+        main(['doctor', '--clean', *extra])
     assert exit_info.value.code == 2
-    assert '--push runs on its own' in capsys.readouterr().err
+    assert '--clean runs on its own' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(('flags', 'message'), [(['--push', '--stage-local'], '--push runs on its own'), (['--push', '--clean'], '--push runs on its own'), (['--stage-local', '--clean'], '--stage-local runs on its own')])
+def test_push_stage_local_and_clean_are_separate_runs(flags, message, capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        main(['doctor', *flags])
+    assert exit_info.value.code == 2
+    assert message in capsys.readouterr().err
+
+
+def test_clean_dry_run_on_an_empty_folder(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    (secrets_dir / 'repo_push_auth').write_text('uc:tok')
+    staging = tmp_path / 'stage'
+    staging.mkdir()
+    assert main(['doctor', '--clean', '--dry-run', '--staging', str(staging)]) == 0
+    assert capsys.readouterr().out.splitlines() == ['0 removed, 0 would remove, 0 kept, 0 problem(s) -> http://artifactory:8081/artifactory/jenkins/']
 
 
 def test_stage_local_needs_neither_a_source_nor_the_repository(monkeypatch, tmp_path, secrets_dir, capsys):
@@ -142,7 +160,7 @@ def test_dry_run_needs_push(capsys):
     with pytest.raises(SystemExit) as exit_info:
         main(['doctor', '--dry-run'])
     assert exit_info.value.code == 2
-    assert '--dry-run only applies to --push' in capsys.readouterr().err
+    assert '--dry-run only applies to --push and --clean' in capsys.readouterr().err
 
 
 def test_push_with_nothing_staged_exits_1(monkeypatch, tmp_path, secrets_dir, capsys):

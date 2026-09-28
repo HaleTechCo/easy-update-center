@@ -13,7 +13,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro" \
              -v "$(CURDIR)/tools:/tools:ro"
 
-.PHONY: build build-uc build-web uc-image test test-unit test-web test-routing test-secrets pki-init pki-rotate secrets-placeholders secrets-permissions procure-download procure-push compose-check it-airgapped it-clean it-online it-full upstream-diff
+.PHONY: build build-uc build-web uc-image test test-unit test-web test-routing test-secrets pki-init pki-rotate secrets-placeholders secrets-permissions procure-download procure-clean procure-push compose-check it-airgapped it-clean it-online it-full upstream-diff
 
 build: build-uc build-web
 
@@ -80,16 +80,19 @@ secrets-permissions: uc-image
 	@$(IN_SECRETS) $(UC_IMAGE) -c '$(FIX_SECRETS)'
 	@echo "secrets/: yours; the containers read their files through their group"
 
-# uc doctor --download-* stages files into ./procurement for review (docs/how-to/procure-missing-files.md).
-# The uc container runs as uid 10001: it gets the folder for the run, and the host user gets it back
-# after, also when the run fails. Usage: make procure-download ARGS="--fetch --download-poms --download-dependencies"
+# uc doctor --download-* stages files into ./procurement for review, and uc doctor --clean deletes the
+# ones the repository already holds (docs/how-to/procure-missing-files.md). The uc container runs as
+# uid 10001: it gets the folder for the run, and the host user gets it back after, also when the run
+# fails. Usage: make procure-download ARGS="--fetch --download-poms --download-dependencies"
+#               make procure-clean [ARGS=--dry-run]
 PROCUREMENT = $(CURDIR)/procurement
 IN_PROCUREMENT = docker run --rm --user 0:0 --entrypoint sh -v "$(PROCUREMENT):/procurement" $(UC_IMAGE) -c
 
-procure-download: uc-image
+procure-clean: DOCTOR_MODE = --clean
+procure-download procure-clean: uc-image
 	@mkdir -p procurement
 	@$(IN_PROCUREMENT) 'chown -R 10001:10001 /procurement'
-	docker compose run --rm uc doctor $(ARGS); rc=$$?; \
+	docker compose run --rm uc doctor $(DOCTOR_MODE) $(ARGS); rc=$$?; \
 	  $(IN_PROCUREMENT) 'chown -R $(HOST_UID):$(HOST_GID) /procurement'; exit $$rc
 
 # Usage: make procure-push [ARGS=--dry-run]

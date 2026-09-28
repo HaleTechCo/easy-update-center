@@ -33,7 +33,9 @@ once releases are published.
   `uc doctor --stage-local` records files placed in `./procurement/` by hand, after the checks a
   download gets; push reports any file in the folder that `procurement.json` does not list, and shows
   the repository's reason when it refuses an upload (with a pointer to Artifact Keeper's storage
-  garbage collection for its 409 on a deleted release).
+  garbage collection for its 409 on a deleted release). `uc doctor --clean` (`make procure-clean`)
+  deletes the staged files the repository already holds with the same content, with their entries,
+  so the folder keeps only what still needs pushing.
 - Third-party notices in the uc image, `/opt/uc/licenses/`: update-center2's MIT license with the
   Jenkins project's governance statement, every bundled Java library with its license (generated
   by the build, which fails on a library with no known license), and the license texts.

@@ -114,7 +114,8 @@ checksum for it.
 | `unlisted` | In the folder but not in `procurement.json`, so not pushed: record it with `--stage-local` ([Files you place by hand](#files-you-place-by-hand)) or delete it. The summary counts these. |
 
 Push exits 0 when every listed file ends up in the repository with the recorded content; unlisted
-files do not change the exit code.
+files do not change the exit code. After a push that failed partway, run it again: files already in
+the repository show as `present`. To keep only what is still missing, [clean up](#5-clean-up) first.
 
 ## 4. Confirm
 
@@ -123,6 +124,33 @@ docker compose run --rm uc doctor --fetch
 ```
 
 The next generation publishes the new files; `docker compose run --rm uc generate` publishes at once.
+
+## 5. Clean up
+
+Once files are in the repository, their staged copies can go:
+
+```bash
+make procure-clean ARGS=--dry-run   # list what would be deleted, change nothing
+make procure-clean
+```
+
+It checks every `.hpi`, `.jpi`, `.war` and `.pom` in `./procurement/`, listed in `procurement.json` or
+placed by hand, against the repository. It deletes only the files the repository holds with the same
+content (the same sha1), with their `procurement.json` entries and any folder left empty, so what
+remains is what still needs pushing. Like push, it reads the repository with
+`secrets/repo_push_auth` and runs on its own; like `make procure-download`, `make procure-clean` lends
+`./procurement/` to the container for the run.
+
+| Result | Meaning |
+|---|---|
+| `removed` | The repository holds the same file: the staged copy and its entry are deleted. With `already gone from the folder`, only the entry was left. |
+| `would remove` | Dry run: it would be deleted. |
+| `kept` | The repository does not hold it yet: push it (or, when it is missing from the folder too, download it again). |
+| `DIFFERENT` | The repository holds another file at that path, or the staged file changed since it was downloaded: kept for you to look into. |
+| `ERROR` | It could not be checked (for example 401: check `secrets/repo_push_auth`) or deleted: kept. |
+
+It exits 0 unless a file is `DIFFERENT` or an `ERROR`. `procurement.json`, unfinished downloads and
+files outside the Maven layout are left alone.
 
 ## Limits
 
