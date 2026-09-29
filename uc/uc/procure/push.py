@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import json
 import sys
 from http import HTTPStatus
@@ -53,6 +54,24 @@ def push_headers(settings: Settings) -> dict[str, str]:
     return {'Authorization': 'Basic ' + base64.b64encode(f'{user}:{token}'.encode()).decode()}
 
 
+class _Sha1Sink(io.RawIOBase):
+    """A writable stream that keeps nothing but the sha1 of what is written to it."""
+
+    def __init__(self) -> None:
+        """Start with the sha1 of nothing."""
+        super().__init__()
+        self.digest = hashlib.sha1(usedforsecurity=False)
+
+    def writable(self) -> bool:
+        """Accept writes."""
+        return True
+
+    def write(self, data: bytes) -> int:
+        """Add data to the sha1."""
+        self.digest.update(data)
+        return len(data)
+
+
 class Target:
     """The repository's Maven layout, read and written by path with the push account."""
 
@@ -83,6 +102,15 @@ class Target:
             msg = f'the repository answered HTTP {response.status}'
             raise ProcureError(msg)
         return response.status == HTTPStatus.OK
+
+    def stored_sha1(self, path: str, limit: int) -> str:
+        """Return the sha1 of the bytes the repository serves at path, streamed; raise ProcureError when the download fails or passes limit bytes."""
+        sink = _Sha1Sink()
+        try:
+            self.http.download(self.base + path, headers=self.headers, out=sink, limit=limit)
+        except BackendError as exc:
+            raise ProcureError(str(exc)) from exc
+        return sink.digest.hexdigest()
 
     def put(self, path: str, data: bytes, sha1: str) -> tuple[int, str]:
         """Upload data to path with its sha1, which Artifactory records and verifies (Artifact Keeper ignores it); return the HTTP status and, when refused, the repository's reason."""
@@ -141,13 +169,27 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
                 hint = '; delete it in the repository first' + (", then run Artifact Keeper's storage garbage collection" if artifact_keeper else '')
             say('DIFFERENT', path, f'the repository holds another file (sha1 {have}){hint}')
             continue
-        if held:
+        # Artifact Keeper serves bytes it stored without recording them (an upload cut off between the two) but
+        # publishes no .sha1 for them; uploading the same bytes again records them.
+        unrecorded = held and artifact_keeper
+        if unrecorded:
+            try:
+                stored = target.stored_sha1(path, staged.size)
+            except ProcureError as exc:
+                problems += 1
+                say('ERROR', path, f'cannot compare the copy Artifact Keeper stored without recording it: {exc}')
+                continue
+            if stored != staged.sha1:
+                problems += 1
+                say('DIFFERENT', path, f'Artifact Keeper stored other bytes here without recording them (sha1 {stored}); delete them from its storage, then push again')
+                continue
+        elif held:
             problems += 1
             say('ERROR', path, 'the repository holds this path but publishes no checksum for it; check it by hand')
             continue
         if dry_run:
             would_put += 1
-            say('would put', path)
+            say('would put', path, 'Artifact Keeper stored the same bytes without recording them; uploading them again records them' if unrecorded else '')
             continue
         try:
             status, reason = target.put(path, data, staged.sha1)
@@ -158,7 +200,7 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
             continue
         if after == staged.sha1 and status in UPLOADED:
             uploaded += 1
-            say('uploaded', path)
+            say('uploaded', path, 'Artifact Keeper had stored the same bytes without recording them' if unrecorded else '')
         elif after == staged.sha1 and status == HTTPStatus.CONFLICT:
             present += 1
             say('present', path, 'the same file arrived while pushing')

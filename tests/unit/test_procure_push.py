@@ -304,3 +304,56 @@ def test_files_procurement_json_does_not_list_are_reported_not_pushed(keeper, tm
     assert 'unlisted  notes.txt  (not in procurement.json, so not pushed; not a Maven path)' in lines
     assert not [line for line in lines if '.part-' in line]
     assert f'1 uploaded, 0 already present, 0 problem(s), 2 not in procurement.json -> {url}maven/jenkins/' in lines
+
+
+def unrecorded(stored, *, recorded=b'<project/>'):
+    """Artifact Keeper serving bytes it stored without recording them: no .sha1 until an upload records the file."""
+    answers = iter([(404, {}, b''), (200, {}, sha1(recorded).encode())])
+    return {
+        ('GET', f'/maven/jenkins/{POM}.sha1'): lambda _headers, _body: next(answers),
+        ('HEAD', f'/maven/jenkins/{POM}'): (200, {}, b''),
+        ('GET', f'/maven/jenkins/{POM}'): (200, {}, stored),
+        ('PUT', f'/maven/jenkins/{POM}'): (201, {}, b''),
+    }
+
+
+def calls(stub):
+    return [(method, path.removeprefix(f'/maven/jenkins/{POM}') or 'file') for method, path, _, _ in stub.requests]
+
+
+def test_bytes_artifact_keeper_stored_without_recording_them_are_uploaded_again_to_record_them(tmp_path, secrets_dir):
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    with StubServer(unrecorded(b'<project/>')) as stub:
+        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+    assert code == 0
+    assert f'uploaded  {POM}  (Artifact Keeper had stored the same bytes without recording them)' in lines
+    assert calls(stub) == [('GET', '.sha1'), ('HEAD', 'file'), ('GET', 'file'), ('PUT', 'file'), ('GET', '.sha1')]
+    [(_, _, _, body)] = [request for request in stub.requests if request[0] == 'PUT']
+    assert body == b'<project/>'
+
+
+def test_a_dry_run_compares_the_unrecorded_bytes_and_uploads_nothing(tmp_path, secrets_dir):
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    with StubServer(unrecorded(b'<project/>')) as stub:
+        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage', dry_run=True)
+    assert code == 0
+    assert f'would put {POM}  (Artifact Keeper stored the same bytes without recording them; uploading them again records them)' in lines
+    assert ('PUT', 'file') not in calls(stub)
+
+
+def test_other_bytes_artifact_keeper_stored_without_recording_them_are_left_alone(tmp_path, secrets_dir):
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    with StubServer(unrecorded(b'<other/>')) as stub:
+        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+    assert code == 1
+    assert f'DIFFERENT {POM}  (Artifact Keeper stored other bytes here without recording them (sha1 {sha1(b"<other/>")}); delete them from its storage, then push again)' in lines
+    assert ('PUT', 'file') not in calls(stub)
+
+
+def test_unrecorded_bytes_larger_than_the_staged_file_stop_the_comparison(tmp_path, secrets_dir):
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    with StubServer(unrecorded(b'<project/>' + b' ' * (3 << 20))) as stub:
+        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+    assert code == 1
+    assert [line for line in lines if line.startswith(f'ERROR     {POM}  (cannot compare the copy Artifact Keeper stored without recording it: ') and line.endswith('is larger than 10 bytes)')], lines
+    assert ('PUT', 'file') not in calls(stub)
