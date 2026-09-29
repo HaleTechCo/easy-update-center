@@ -6,6 +6,7 @@ import socket
 
 import pytest
 
+from httpstub import StubServer
 from procurefixture import SOURCE, publish, stage
 from uc.procure import ProcureError
 from uc.procure.clean import clean
@@ -198,3 +199,14 @@ def test_the_public_repository_is_never_compared(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, MODE='online', REPO_URL='https://repo.jenkins-ci.org/', REPO_KEY='releases')
     with pytest.raises(ProcureError, match=r'public repo\.jenkins-ci\.org'):
         clean(settings, tmp_path, dry_run=True)
+
+
+def test_bytes_artifact_keeper_stored_without_recording_them_are_kept_for_push(tmp_path, secrets_dir):
+    routes = {('GET', f'/maven/jenkins/{POM}.sha1'): (404, {}, b''), ('HEAD', f'/maven/jenkins/{POM}'): (200, {}, b'')}
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    with StubServer(routes) as stub:
+        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+    assert code == 0
+    assert (tmp_path / 'stage' / POM).is_file()
+    assert lines == [line('kept', POM, 'Artifact Keeper stored it without recording it; push checks it and records it'), f'0 removed, 1 kept, 0 problem(s) -> {stub.url}/maven/jenkins/']
+    assert [request[0] for request in stub.requests] == ['GET', 'HEAD']

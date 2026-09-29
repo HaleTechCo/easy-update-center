@@ -35,7 +35,9 @@ once releases are published.
   the repository's reason when it refuses an upload (with a pointer to Artifact Keeper's storage
   garbage collection for its 409 on a deleted release). `uc doctor --clean` (`make procure-clean`)
   deletes the staged files the repository already holds with the same content, with their entries,
-  so the folder keeps only what still needs pushing.
+  so the folder keeps only what still needs pushing. On Artifact Keeper, push records a file an
+  upload cut off by its request timeout left stored but unrecorded, when the stored bytes are the
+  staged file's; the how-to covers that timeout and a proxy's upload limit for large files.
 - Third-party notices in the uc image, `/opt/uc/licenses/`: update-center2's MIT license with the
   Jenkins project's governance statement, every bundled Java library with its license (generated
   by the build, which fails on a library with no known license), and the license texts.

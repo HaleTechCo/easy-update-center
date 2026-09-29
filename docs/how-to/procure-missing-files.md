@@ -101,21 +101,46 @@ before anything is written.
 
 Push sends each file's sha1 with the upload (`X-Checksum-Sha1`), so Artifactory can verify it, and
 never uploads over a path the repository already holds, even when the repository publishes no
-checksum for it.
+checksum for it. The one exception replaces nothing: bytes Artifact Keeper stored without recording
+them, when they are the staged file's ([Large files](#large-files)).
 
 | Result | Meaning |
 |---|---|
-| `uploaded` | Uploaded, and the repository's sha1 matches. |
+| `uploaded` | Uploaded, and the repository's sha1 matches. With `Artifact Keeper had stored the same bytes without recording them`, the upload recorded a copy an earlier upload left behind ([Large files](#large-files)). |
 | `present` | The repository already holds the same file; also shown when the same file arrives from elsewhere while pushing (an HTTP 409 whose sha1 matches). |
 | `would put` | Dry run: it would be uploaded. |
-| `DIFFERENT` | The repository holds another file at that path; it is left alone. |
+| `DIFFERENT` | The repository holds another file at that path, or Artifact Keeper stored other bytes there without recording them; it is left alone. |
 | `TAMPERED` | The staged file changed, or is missing, since it was downloaded: download it again. Or it cannot be read: check its permissions. |
-| `ERROR`, `FAILED` | The repository refused or failed (for example 401: check `secrets/repo_push_auth`), or holds the path but publishes no checksum for it (check that file by hand). `FAILED` shows the repository's own reason when it gives one; a 409 from Artifact Keeper after you deleted a file is its tombstone (see [Review](#2-review)). |
+| `ERROR`, `FAILED` | The repository refused or failed (for example 401: check `secrets/repo_push_auth`), or Artifactory holds the path but publishes no checksum for it (check that file by hand). `FAILED` shows the repository's own reason when it gives one; a 409 from Artifact Keeper after you deleted a file is its tombstone (see [Review](#2-review)); a 503 `request timed out`, a 502 or a broken connection on a large file is a timeout ([Large files](#large-files)). |
 | `unlisted` | In the folder but not in `procurement.json`, so not pushed: record it with `--stage-local` ([Files you place by hand](#files-you-place-by-hand)) or delete it. The summary counts these. |
 
 Push exits 0 when every listed file ends up in the repository with the recorded content; unlisted
 files do not change the exit code. After a push that failed partway, run it again: files already in
 the repository show as `present`. To keep only what is still missing, [clean up](#5-clean-up) first.
+
+### Large files
+
+Jenkins WARs are close to 100 MB, and push sends each file in a single request. Two limits between
+push and the repository can cut such an upload off:
+
+- **Artifact Keeper's request timeout.** Artifact Keeper aborts any request to its Maven path that
+  takes longer than `GLOBAL_REQUEST_TIMEOUT_SECS` (default 120 seconds), however much of the file has
+  arrived. On a slow uplink a WAR then fails with `HTTP 503: Server overloaded, please retry: request
+  timed out`, or, when the connection is cut mid-upload, with a broken pipe, a dropped connection or
+  an HTTP 502 from a proxy in front. Raise the setting on the Artifact Keeper server, for example to
+  `600`. The same limit applies when controllers download a core through the update center, which
+  fetches it from the same path.
+- **A proxy's upload limit.** Cloudflare's proxy accepts at most 100 MB per request on its Free and
+  Pro plans. When the repository's hostname goes through it, push with a hostname that bypasses the
+  proxy for that run (one that reaches Artifact Keeper directly, with a certificate the uc container
+  trusts): `docker compose run --rm -e REPO_URL=https://<direct-host>/ uc doctor --push`.
+
+A timed-out upload can leave Artifact Keeper with the file's bytes stored but not recorded. It serves
+them on download, but its UI, its `.sha1` and the update center do not see them, and its storage
+garbage collection does not remove them. Push recognizes this: when the stored bytes are the staged
+file's, it uploads them again, which records them; when they differ, it reports `DIFFERENT` and leaves
+them, and only deleting them from Artifact Keeper's storage on its server clears the path. Clean keeps
+the staged file for push.
 
 ## 4. Confirm
 
@@ -145,7 +170,7 @@ remains is what still needs pushing. Like push, it reads the repository with
 |---|---|
 | `removed` | The repository holds the same file: the staged copy and its entry are deleted. With `already gone from the folder`, only the entry was left. |
 | `would remove` | Dry run: it would be deleted. |
-| `kept` | The repository does not hold it yet: push it (or, when it is missing from the folder too, download it again). |
+| `kept` | The repository does not hold it yet, or Artifact Keeper stored it without recording it ([Large files](#large-files)): push it (or, when it is missing from the folder too, download it again). |
 | `DIFFERENT` | The repository holds another file at that path, or the staged file changed since it was downloaded: kept for you to look into. |
 | `ERROR` | It could not be checked (for example 401: check `secrets/repo_push_auth`) or deleted: kept. |
 

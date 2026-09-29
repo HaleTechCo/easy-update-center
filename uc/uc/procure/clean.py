@@ -66,7 +66,10 @@ def clean(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO =
             problems += 1
             say('ERROR', path, str(exc))
             continue
-        if held:
+        if held and settings.repo_type == 'artifact-keeper':  # stored without a record: not in the repository for anyone else
+            kept += 1
+            say('kept', path, 'Artifact Keeper stored it without recording it; push checks it and records it')
+        elif held:
             problems += 1
             say('ERROR', path, 'the repository holds this path but publishes no checksum for it; check it by hand')
         elif have is None:
