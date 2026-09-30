@@ -80,7 +80,8 @@ runs the same listing query the generator runs and prints:
 - dependency problems: plugins whose required plugins are absent, or present only in lower
   versions;
 - cores plugin releases require that the repository lacks, at or above the oldest core it holds (or
-  `--since`), each with its repo.jenkins-ci.org URL; not for the public repository.
+  `--since`), each with its repo.jenkins-ci.org URL; not for the public repository. Older ones are
+  counted, with the oldest of them and the `--since` that stages them.
 
 The repo.jenkins-ci.org URLs are where public plugins and cores are published; a plugin that never
 was, such as an internal one, has no `.pom` there.
