@@ -28,7 +28,8 @@ once releases are published.
   `procurement.json` recording each file's source, sha1 and reason for review; `uc doctor --push`
   uploads exactly those files to the repository with the new `secrets/repo_push_auth`, never
   overwriting. `make procure-download` and `make procure-push` wrap them. `uc doctor` also lists the
-  cores plugins require that the repository lacks, from the oldest core it holds (or `--since`). After
+  cores plugins require that the repository lacks, from the oldest core it holds (or `--since`), and
+  names the oldest one below that floor with the `--since` that stages it. After
   upgrading, run `make secrets-placeholders` once so Compose finds `secrets/repo_push_auth`.
   `uc doctor --stage-local` records files placed in `./procurement/` by hand, after the checks a
   download gets; push reports any file in the folder that `procurement.json` does not list, and shows

@@ -58,6 +58,7 @@ class DoctorReport:
     core_floor: str | None = None
     missing_cores: list[dict] = field(default_factory=list)
     missing_cores_below_floor: int = 0
+    oldest_core_below_floor: str | None = None  # the oldest of those: the --since that stages them all
     cores_unchecked: int = 0  # plugin releases whose manifest was unavailable for the core check
 
     def _adapter(self, name: str) -> list:
@@ -288,24 +289,25 @@ def check_since(since: str | None) -> None:
         raise DoctorError(msg)
 
 
-def find_missing_cores(required: Mapping[str, list[str]], stocked: Sequence[str], since: str | None, versions: VersionTool) -> tuple[str | None, list[dict], int]:
-    """Return the floor (since, else the oldest stocked core), the required cores the repository lacks at or above it, and how many it lacks below it."""
+def find_missing_cores(required: Mapping[str, list[str]], stocked: Sequence[str], since: str | None, versions: VersionTool) -> tuple[str | None, list[dict], int, str | None]:
+    """Return the floor (since, else the oldest stocked core), the required cores the repository lacks at or above it, and how many it lacks below it and the oldest of those."""
     check_since(since)
     floor = since or (stocked[0] if stocked else None)
     if floor is None:
-        return None, [], 0
+        return None, [], 0, None
     have = set(stocked)
     lacking = versions.sort(version for version in required if version not in have)
     order = versions.compare_many([(version, floor) for version in lacking])
     missing = [{'version': version, 'url': PUBLIC_RELEASES_URL + aql.Gav(aql.WAR_GROUP, aql.WAR_ARTIFACT, version, 'war').maven_path, 'required_by': len(required[version]), 'example': min(required[version])} for version, cmp in zip(lacking, order, strict=True) if cmp >= 0]
-    return floor, missing, sum(1 for cmp in order if cmp < 0)
+    below = sum(1 for cmp in order if cmp < 0)
+    return floor, missing, below, lacking[0] if below else None  # lacking is ascending: those below the floor come first
 
 
 def attach_core_check(report: DoctorReport, listing: Listing, source: Source, versions: VersionTool, *, since: str | None) -> DoctorReport:
     """Add the cores plugin releases require, and those the repository lacks at or above the floor, to the report."""
     required, report.cores_unchecked = required_cores(listing, source)
     report.required_cores = {version: required[version] for version in versions.sort(required)}
-    report.core_floor, report.missing_cores, report.missing_cores_below_floor = find_missing_cores(required, report.cores, since, versions)
+    report.core_floor, report.missing_cores, report.missing_cores_below_floor, report.oldest_core_below_floor = find_missing_cores(required, report.cores, since, versions)
     return report
 
 
@@ -409,9 +411,16 @@ def core_lines(report: DoctorReport) -> list[str]:
         if report.missing_cores:
             lines.append(f'Cores plugins require that the repository lacks, at or above {report.core_floor} ({len(report.missing_cores)}):')
             lines.extend(f'  {core["version"]}  {core["url"]}  (required by {core["required_by"]} release{"" if core["required_by"] == 1 else "s"}, e.g. {core["example"]})' for core in report.missing_cores)
-        below = report.missing_cores_below_floor
+        below, oldest = report.missing_cores_below_floor, report.oldest_core_below_floor
         if below:
-            lines.append(f'{below} older required core{"" if below == 1 else "s"} below {report.core_floor} not listed')
+            if below == 1:
+                lines.append(f'1 older required core below {report.core_floor} not listed: {oldest}')
+                lines.append(f'  To stage it: uc doctor --download-war required --since {oldest}')
+            else:
+                lines.append(f'{below} older required cores below {report.core_floor} not listed, the oldest {oldest}')
+                lines.append(f'  To stage them: uc doctor --download-war required --since {oldest} (a later version stages only those from it up)')
+            if report.cores and report.core_floor == report.cores[0]:  # the floor is the repository's oldest core, which an older one replaces
+                lines.append(f'  Warning: once pushed, {oldest} is the oldest core in the repository, and so the floor: every later --download-war required also stages the missing cores plugins require from {oldest} up, for plugins you add later too')
     if report.cores_unchecked:
         lines.append(f'Required cores not checked (manifest unavailable; run with --fetch): {report.cores_unchecked}')
     return lines

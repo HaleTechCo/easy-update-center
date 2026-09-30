@@ -45,7 +45,7 @@ download options combine freely:
 | `--download-poms` | The real `.pom` of every plugin whose POM is missing, derived from its archive, or unusable. |
 | `--download-dependencies` | Each required dependency the repository lacks or holds only in an older version, at the highest minimum any plugin declares, with its `.pom`; then their dependencies, until nothing is missing. Optional dependencies are skipped. |
 | `--download-war VERSION` | That core's `.war` and `.pom`. Repeatable. |
-| `--download-war required` | Every core plugins require that the repository lacks, at or above the oldest core it holds, or `--since VERSION`. With no core in the repository, `--since` is needed: use the oldest version your controllers run. It is also refused for the public repository: name the versions instead. |
+| `--download-war required` | Every core plugins require that the repository lacks, at or above the oldest core it holds, or `--since VERSION`. With no core in the repository, `--since` is needed: use the oldest version your controllers run. It is also refused for the public repository: name the versions instead. Older required cores are left out; the report names the oldest and the `--since` that stages them. Once an older core is in the repository, it is the floor for every later run. |
 
 `make procure-download` lends `./procurement/` to the container (uid 10001) for the run and hands it
 back to you afterwards. On Docker Desktop, plain Compose works too:
