@@ -55,6 +55,16 @@ def in_layout(path: str) -> bool:
     return True
 
 
+def prune_empty(folder: Path, root: Path) -> None:
+    """Remove folder, then its parents up to but not including root, while they are empty."""
+    while folder != root and folder.is_relative_to(root):
+        try:
+            folder.rmdir()
+        except OSError:  # not empty, or already gone
+            return
+        folder = folder.parent
+
+
 def sha1_of(file: Path) -> str:
     """Return the file's sha1 as 40 lower-case hex digits."""
     digest = hashlib.sha1(usedforsecurity=False)

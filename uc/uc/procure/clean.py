@@ -9,7 +9,7 @@ from uc.repo_adapter.backends import Http
 
 from . import ProcureError
 from .push import Target, push_headers
-from .staging import Staging, in_layout, sha1_of
+from .staging import Staging, in_layout, prune_empty, sha1_of
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -17,16 +17,6 @@ if TYPE_CHECKING:
     from uc.config import Settings
 
 GONE = 'already gone from the folder'
-
-
-def _prune(folder: Path, root: Path) -> None:
-    """Remove folder, then its parents up to but not including root, while they are empty."""
-    while folder != root and folder.is_relative_to(root):
-        try:
-            folder.rmdir()
-        except OSError:  # not empty, or already gone
-            return
-        folder = folder.parent
 
 
 def clean(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = sys.stdout, http: Http | None = None) -> int:
@@ -88,7 +78,7 @@ def clean(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO =
                 problems += 1
                 say('ERROR', path, f'cannot delete it: {exc}')
                 continue
-            _prune(file.parent, staging_dir)
+            prune_empty(file.parent, staging_dir)
             removed += 1
             forgotten = forgotten or recorded is not None
             say('removed', path, '' if here else GONE)
