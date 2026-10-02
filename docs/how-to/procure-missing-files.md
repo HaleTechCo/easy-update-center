@@ -67,7 +67,8 @@ It records every `.hpi`, `.jpi`, `.war` and `.pom` in the folder that `procureme
 yet, with the reason `added by hand`, after the checks a download gets: a plugin's manifest must name
 the group, artifact and version of its path, a `.pom` must be a usable POM for its path, and a `.war`
 must be a readable archive. Anything refused is listed as `REFUSED` with the reason, and the run then
-exits 1. It needs no network access, so it works air-gapped too. `--stage-local` runs on its own:
+exits 1. A file you put anywhere else in the folder, such as its top level, is refused with the Maven
+path it belongs at, from the coordinates its manifest or POM declares: move it there and run again. It needs no network access, so it works air-gapped too. `--stage-local` runs on its own:
 download and record hand-placed files in separate runs.
 
 ## 2. Review

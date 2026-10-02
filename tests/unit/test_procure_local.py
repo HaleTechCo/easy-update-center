@@ -111,3 +111,27 @@ def test_one_refusal_does_not_stop_the_rest(tmp_path):
     assert code == 1
     assert set(Staging.open(tmp_path, SOURCE).files) == {WAR + '.war'}
     assert lines[-1] == summary(tmp_path, 1, 1)
+
+
+@pytest.mark.parametrize(
+    ('name', 'data', 'detail'),
+    [
+        ('active-directory-2.967.v1.hpi', make_hpi(PLUGINS, 'active-directory', '2.967.v1'), f'its manifest names {PLUGINS}:active-directory:2.967.v1: it belongs at {AD}.hpi'),
+        ('jenkins.war', make_war('2.479.1'), f'its manifest names org.jenkins-ci.main:jenkins-war:2.479.1: it belongs at {WAR}.war'),
+        ('active-directory.pom', pom_xml(PLUGINS, 'active-directory', '2.967.v1'), f'its POM names {PLUGINS}:active-directory:2.967.v1: it belongs at {AD}.pom'),
+    ],
+    ids=['plugin', 'core', 'pom'],
+)
+def test_a_file_outside_the_maven_layout_is_told_where_it_belongs(tmp_path, name, data, detail):
+    publish(tmp_path, f'downloads/{name}', data)
+    code, lines = run(tmp_path)
+    assert code == 1
+    assert f'REFUSED   downloads/{name}  (not at a Maven path; {detail})' in lines
+    assert Staging.open(tmp_path, SOURCE).files == {}
+
+
+def test_a_plugin_whose_manifest_names_no_group_cannot_be_placed_for_you(tmp_path):
+    publish(tmp_path, 'active-directory.hpi', make_hpi(PLUGINS, 'active-directory', '2.967.v1', manifest_group=None))
+    code, lines = run(tmp_path)
+    assert code == 1
+    assert "REFUSED   active-directory.hpi  (not a Maven path to a .hpi, .jpi, .war or .pom: 'active-directory.hpi')" in lines

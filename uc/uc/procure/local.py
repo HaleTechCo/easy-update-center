@@ -5,9 +5,9 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING, TextIO
 
-from uc.aql import Gav, RepoFile, to_gav
-from uc.doctor import required_jenkins_version
-from uc.pom import unusable_reason
+from uc.aql import WAR_ARTIFACT, WAR_GROUP, Gav, RepoFile, to_gav
+from uc.doctor import CORE_VERSION, required_jenkins_version
+from uc.pom import pom_coordinates, unusable_reason
 from uc.repo_adapter.archive import SMALL_ENTRY_LIMIT
 from uc.timeutil import iso, utcnow
 
@@ -47,7 +47,14 @@ def stage_local(root: Path, source: str, *, out: TextIO = sys.stdout) -> int:
 
 def check_local(file: Path, path: str, inside: Path) -> str | None:
     """Check a file placed by hand the way a download is checked; return the core a plugin requires (None for a POM or core)."""
-    check_path(path)
+    try:
+        check_path(path)
+    except ProcureError as exc:
+        belongs = belongs_at(file, path.rsplit('.', 1)[-1]) if file.resolve().is_relative_to(inside) else None
+        if belongs is None:
+            raise
+        msg = f'not at a Maven path; {belongs}'
+        raise ProcureError(msg) from exc
     directory, _, name = path.rpartition('/')
     gav = to_gav(RepoFile(directory, name))
     if gav is None or not file.resolve().is_relative_to(inside):
@@ -74,6 +81,32 @@ def check_local(file: Path, path: str, inside: Path) -> str | None:
         msg = f'its manifest names {":".join(declared)}: it belongs at {Gav(*declared, gav.extension).maven_path}'
         raise ProcureError(msg)
     return required_jenkins_version(manifest)
+
+
+def belongs_at(file: Path, extension: str) -> str | None:
+    """Say which Maven path a file belongs at, from the coordinates its manifest or POM declares; None when it declares none."""
+    try:
+        if extension == 'pom':
+            coordinates = pom_coordinates(file.read_bytes()) if file.stat().st_size <= SMALL_ENTRY_LIMIT else None
+            source = 'its POM'
+        else:
+            manifest = archive_manifest(file)
+            if extension == 'war':
+                version = manifest.get('Jenkins-Version', '').strip()
+                coordinates = (WAR_GROUP, WAR_ARTIFACT, version) if CORE_VERSION.match(version) else None
+            else:
+                coordinates = (manifest.get('Group-Id', ''), manifest.get('Artifact-Id', ''), manifest.get('Plugin-Version', ''))
+            source = 'its manifest'
+    except (OSError, ProcureError):
+        return None
+    if coordinates is None or not all(coordinates):
+        return None
+    target = Gav(*coordinates, extension).maven_path
+    try:
+        check_path(target)  # the coordinates come from the file: only name a well-formed path
+    except ProcureError:
+        return None
+    return f'{source} names {":".join(coordinates)}: it belongs at {target}'
 
 
 def _say(out: TextIO, label: str, path: str, detail: str) -> None:
