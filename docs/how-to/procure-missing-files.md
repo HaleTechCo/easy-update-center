@@ -56,19 +56,30 @@ keeps what is already staged and downloads only what is missing or changed.
 ### Files you place by hand
 
 Push uploads only what `procurement.json` lists, so a file you copy into `./procurement/` yourself (a
-WAR downloaded elsewhere, a plugin from another source) must be recorded first. Put it at its Maven
-path, then:
+WAR downloaded elsewhere, a plugin from another source) must be recorded first. Put it in the folder,
+then:
 
 ```bash
-make procure-download ARGS=--stage-local
+make procure-download ARGS=--stage-local          # check and record; report misplaced files
+make procure-download ARGS="--stage-local --fix"  # move misplaced files first, then record them
 ```
 
 It records every `.hpi`, `.jpi`, `.war` and `.pom` in the folder that `procurement.json` does not list
 yet, with the reason `added by hand`, after the checks a download gets: a plugin's manifest must name
-the group, artifact and version of its path, a `.pom` must be a usable POM for its path, and a `.war`
-must be a readable archive. Anything refused is listed as `REFUSED` with the reason, and the run then
-exits 1. It needs no network access, so it works air-gapped too. `--stage-local` runs on its own:
-download and record hand-placed files in separate runs.
+the group, artifact and version of its path, a core's `Jenkins-Version` (when its manifest has one)
+the version of its path, and a `.pom` must be a usable POM for its path; archives must be readable.
+Anything refused is listed as `REFUSED` with the reason, and the run then exits 1.
+
+A file at the wrong path, or outside the Maven layout (such as the folder's top level), is refused
+with the Maven path it belongs at, from the coordinates its manifest or POM declares. Move it there
+yourself, or add `--fix`: each such file is moved (`moved`, with its new path), any folder it leaves
+empty is removed, and it is then checked and recorded. `--fix` never moves a file onto a path that
+holds another file, that `procurement.json` lists, or that leads out of the folder; it refuses that
+file instead. A file that declares no coordinates, such as a plugin whose manifest names no group,
+stays where it is.
+
+It needs no network access, so it works air-gapped too. `--stage-local` runs on its own: download and
+record hand-placed files in separate runs.
 
 ## 2. Review
 

@@ -51,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument('--push', action='store_true', help='upload the files procurement.json lists to the repository, never overwriting')
     doctor.add_argument('--dry-run', action='store_true', help='with --push or --clean: check each file, change nothing')
     doctor.add_argument('--stage-local', action='store_true', help='record the files placed in the staging folder by hand, after the checks a download gets')
+    doctor.add_argument('--fix', action='store_true', help='with --stage-local: first move each file to the Maven path it declares')
     doctor.add_argument('--clean', action='store_true', help='delete the staged files the repository already holds with the same content')
 
     rollback = sub.add_parser('rollback', help='point live at an earlier release')
@@ -103,6 +104,8 @@ def _check_doctor_args(parser: argparse.ArgumentParser, args: argparse.Namespace
         parser.error('--clean runs on its own: it compares the staging folder with the repository')
     if args.dry_run and not (args.push or args.clean):
         parser.error('--dry-run only applies to --push and --clean')
+    if args.fix and not args.stage_local:
+        parser.error('--fix only applies to --stage-local')
 
 
 def _dispatch(args: argparse.Namespace) -> int:
@@ -138,7 +141,7 @@ def _doctor(args: argparse.Namespace, settings: Settings) -> int:
     if args.push:
         return push(settings, args.staging, dry_run=args.dry_run)
     if args.stage_local:
-        return stage_local(args.staging, settings.procurement_source_url, out=sys.stdout)
+        return stage_local(args.staging, settings.procurement_source_url, fix=args.fix, out=sys.stdout)
     if args.clean:
         return clean(settings, args.staging, dry_run=args.dry_run, out=sys.stdout)
     downloading = args.download_poms or args.download_dependencies or bool(args.download_war)

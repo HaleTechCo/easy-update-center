@@ -32,7 +32,8 @@ once releases are published.
   names the oldest one below that floor with the `--since` that stages it. After
   upgrading, run `make secrets-placeholders` once so Compose finds `secrets/repo_push_auth`.
   `uc doctor --stage-local` records files placed in `./procurement/` by hand, after the checks a
-  download gets; push reports any file in the folder that `procurement.json` does not list, and shows
+  download gets, and names the Maven path a misplaced file belongs at (`--fix` moves it there); push
+  reports any file in the folder that `procurement.json` does not list, and shows
   the repository's reason when it refuses an upload (with a pointer to Artifact Keeper's storage
   garbage collection for its 409 on a deleted release). `uc doctor --clean` (`make procure-clean`)
   deletes the staged files the repository already holds with the same content, with their entries,

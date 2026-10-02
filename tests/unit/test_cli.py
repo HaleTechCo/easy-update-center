@@ -156,6 +156,13 @@ def test_stage_local_needs_neither_a_source_nor_the_repository(monkeypatch, tmp_
     assert capsys.readouterr().out.splitlines() == [f'0 recorded, 0 refused; review {staging}, then run uc doctor --push']
 
 
+def test_fix_needs_stage_local(capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        main(['doctor', '--fix'])
+    assert exit_info.value.code == 2
+    assert '--fix only applies to --stage-local' in capsys.readouterr().err
+
+
 def test_dry_run_needs_push(capsys):
     with pytest.raises(SystemExit) as exit_info:
         main(['doctor', '--dry-run'])
