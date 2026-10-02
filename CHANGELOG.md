@@ -22,24 +22,25 @@ once releases are published.
 
 ### Added
 
-- `uc doctor --download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage
-  the real POMs, the missing required dependencies (transitively, each with its POM) and Jenkins
-  cores from repo.jenkins-ci.org (`PROCUREMENT_SOURCE_URL`) into `./procurement/`, with
-  `procurement.json` recording each file's source, sha1 and reason for review; `uc doctor --push`
-  uploads exactly those files to the repository with the new `secrets/repo_push_auth`, never
-  overwriting. `make procure-download` and `make procure-push` wrap them. `uc doctor` also lists the
-  cores plugins require that the repository lacks, from the oldest core it holds (or `--since`), and
-  names the oldest one below that floor with the `--since` that stages it. After
-  upgrading, run `make secrets-placeholders` once so Compose finds `secrets/repo_push_auth`.
-  `uc doctor --stage-local` records files placed in `./procurement/` by hand, after the checks a
-  download gets, and names the Maven path a misplaced file belongs at (`--fix` moves it there); push
-  reports any file in the folder that `procurement.json` does not list, and shows
-  the repository's reason when it refuses an upload (with a pointer to Artifact Keeper's storage
-  garbage collection for its 409 on a deleted release). `uc doctor --clean` (`make procure-clean`)
-  deletes the staged files the repository already holds with the same content, with their entries,
-  so the folder keeps only what still needs pushing. On Artifact Keeper, push records a file an
-  upload cut off by its request timeout left stored but unrecorded, when the stored bytes are the
-  staged file's; the how-to covers that timeout and a proxy's upload limit for large files.
+- Procurement with `uc doctor`, through a staging folder, `./procurement/`, whose `procurement.json`
+  records each file's source, sha1 and reason for review:
+  - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the real
+    POMs, the missing required dependencies (transitively, each with its POM) and Jenkins cores from
+    repo.jenkins-ci.org (`PROCUREMENT_SOURCE_URL`). `make procure-download` wraps them.
+  - `--stage-local` records files placed in the folder by hand, after the checks a download gets: a
+    plugin's manifest coordinates and a core's `Jenkins-Version` must match the path. It names the
+    Maven path a misplaced file belongs at, and `--fix` moves it there.
+  - `--push` (`make procure-push`) uploads exactly the listed files with the new
+    `secrets/repo_push_auth`, never overwriting. It reports files in the folder that
+    `procurement.json` does not list, and the repository's reason when it refuses an upload (with a
+    pointer to Artifact Keeper's storage garbage collection for its 409 on a deleted release). On
+    Artifact Keeper, it records a file that an upload cut off by the request timeout left stored but
+    unrecorded, when the stored bytes are the staged file's.
+  - `--clean` (`make procure-clean`) deletes the staged files the repository already holds with the
+    same content, with their entries, so the folder keeps only what still needs pushing.
+  - The report lists the cores plugins require that the repository lacks, from the oldest core it
+    holds (or `--since`), and names the oldest one below that floor with the `--since` that stages it.
+  - After upgrading, run `make secrets-placeholders` once so Compose finds `secrets/repo_push_auth`.
 - Third-party notices in the uc image, `/opt/uc/licenses/`: update-center2's MIT license with the
   Jenkins project's governance statement, every bundled Java library with its license (generated
   by the build, which fails on a library with no known license), and the license texts.

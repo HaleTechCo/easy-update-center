@@ -17,7 +17,8 @@ from the public plugin repository or from your own, and runs online or fully air
   Artifact Keeper, with missing POMs, descriptions and release dates filled in from the plugins
   themselves.
 - **Procurement help:** `uc doctor` stages the real POMs, missing dependencies and cores your
-  repository lacks for review, and pushes exactly what you approved.
+  repository lacks for review, records files you add by hand (moving misplaced ones), pushes exactly
+  what you approved, and cleans up what the repository then holds.
 - **Online or air-gapped:** online, security warnings, popularity and labels come live from
   upstream; air-gapped, nothing is fetched from the internet, and what that makes unreachable is
   dropped with a warning.

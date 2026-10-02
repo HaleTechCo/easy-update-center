@@ -116,6 +116,7 @@ and POM so dependencies can be checked before the first generation; the results 
 | not in Maven layout | Rename or move the file into Maven layout. |
 | Dependency problems | Procure the missing plugins or versions (`uc doctor --download-dependencies` stages them). |
 | Cores plugins require that the repository lacks | Store them for their tiers (`uc doctor --download-war required` stages them). |
+| older required cores below the oldest core in the repository | Only for controllers that old: the line names the `--since` that stages them. Once stored, the oldest becomes the floor for every later `--download-war required`. |
 | POMs filled in from archives, `.pom` files ignored | Nothing required: the embedded POM is used. To store the real `.pom` instead, procure it from the URL shown and store it beside the archive, replacing an ignored one. |
 | dates from the repository | Information only. |
 

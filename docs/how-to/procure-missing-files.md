@@ -1,14 +1,16 @@
 # Procure missing POMs, dependencies and cores
 
-How to let `uc doctor` download what your repository lacks, review it, and push it into the repository.
+How to let `uc doctor` download what your repository lacks, review it, push it into the repository,
+and clean up afterwards.
 
 ## When to use it
 
 `uc doctor` reports what the generator will drop or degrade: plugins without a usable POM, required
 dependencies the repository lacks, and cores plugins require (without which their tiers are missing).
 It can also fetch those files from repo.jenkins-ci.org into a staging folder, `./procurement/`, for your
-team to review, then push exactly the reviewed files to the repository. Nothing reaches the repository
-without the separate push step.
+team to review, then push exactly the reviewed files to the repository. Files you obtain elsewhere go
+through the same folder. Nothing reaches the repository without the separate push step, and once the
+files are in, their staged copies can be cleaned up.
 
 ## Before you start
 
@@ -16,8 +18,9 @@ without the separate push step.
   refused unless `PROCUREMENT_SOURCE_URL` points at a copy the update center can reach.
 - The repository must be your own (`REPO_URL`, `REPO_KEY`): push never writes to repo.jenkins-ci.org.
 - An account that can write to the repository, as `user:token`, in `secrets/repo_push_auth` (Artifact
-  Keeper: a user name and an API token with the `write:artifacts` scope). Keep it separate from the
-  read-only `repo_username`/`repo_password`: only the one-shot `uc` service ever receives it.
+  Keeper: a user name and an API token with the `write:artifacts` scope). Push writes with it; clean
+  only reads with it. Keep it separate from the read-only `repo_username`/`repo_password`: only the
+  one-shot `uc` service ever receives it.
 
   ```bash
   make secrets-placeholders        # creates secrets/repo_push_auth if missing

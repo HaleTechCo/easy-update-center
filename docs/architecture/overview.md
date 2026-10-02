@@ -15,8 +15,8 @@ on a Java runtime, plus the `uc` command in Python) and the **web image** (Apach
   Each run builds a complete new release, validates it, and swaps it in atomically. See
   [Generation pipeline](generation-pipeline.md).
 - **uc** is the same image for one-shot commands: `generate`, `doctor`, `rollback`, `status`.
-  `doctor` can also stage missing files for review and push them
-  ([Procure missing files](../how-to/procure-missing-files.md)). It runs only when you call it. See
+  `doctor` can also stage missing files, or record ones you add by hand, for review, push them and
+  clean up afterwards ([Procure missing files](../how-to/procure-missing-files.md)). It runs only when you call it. See
   [uc command reference](../reference/cli.md).
 - **repo-adapter** answers the generator's repository requests from Artifactory or Artifact Keeper,
   and fills in POMs, descriptions and release dates from inside each plugin archive. On by default
