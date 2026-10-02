@@ -27,7 +27,10 @@ Nothing else is installed on the host: the generator, Python and Apache all run 
 - **A bare origin, with its own hostname.** No path: upstream's routing redirects to absolute paths
   such as `/current/...`, and `jenkins-plugin-cli` ignores any path. You cannot serve it under
   `https://tools.example.com/jenkins-updates/`.
-- **Reachable by every controller**, so not `localhost`.
+- **Reachable by every controller**, so not `localhost`. That includes a controller in a container on
+  the update center's own machine: inside a container, `localhost` is the container itself. For a
+  trial on Docker Desktop, `http://host.docker.internal:<port>` reaches the host from containers and
+  from the host alike.
 - **Written into the signed metadata.** Every download URL starts with it, so changing it later
   means publishing a new release (`docker compose run --rm uc generate`).
 - `https://` is recommended; see [Enable TLS](../how-to/enable-tls.md).

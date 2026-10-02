@@ -55,6 +55,8 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 | Controllers get 401 or 403 from the repository | They follow the redirect to a repository that needs credentials. Use [proxy mode](how-to/proxy-downloads.md). |
 | `/download/...` returns 502 with `DOWNLOAD_ACCESS=proxy` | The backend's certificate does not verify against `DOWNLOAD_PROXY_CA_FILE` ([Backend with a private CA](how-to/proxy-downloads.md#backend-with-a-private-ca)), or the backend is unreachable from the web container. |
 | Download URLs point at an old hostname | `PUBLIC_URL` changed after the live release was generated: run `docker compose run --rm uc generate`. |
+| HTTP 403 `Artifact download is blocked by the repository's scan policy` | An Artifact Keeper scan policy on the repository blocks downloads, for example of artifacts not scanned yet. It blocks the POMs and archives the repo-adapter reads as well as the files controllers download, so generations drop plugins too. Change the policy so it does not block this repository's downloads. |
+| Core downloads through Artifact Keeper stop partway | Its request timeout (`GLOBAL_REQUEST_TIMEOUT_SECS`, 120 seconds by default) also cuts downloads from its Maven path, which `DOWNLOAD_ACCESS=proxy` fetches from: raise it ([Large files](how-to/procure-missing-files.md#large-files)). |
 
 ## Web container
 
@@ -66,6 +68,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 | It exits with `TLS_CERT_FILE and TLS_KEY_FILE must both be readable` | Set both, and mount both files readable by uid 33 ([Enable TLS](how-to/enable-tls.md)). |
 | It exits with `set DOWNLOAD_BACKEND_URL, or REPO_URL and REPO_KEY` | `DOWNLOAD_BACKEND=artifactory` needs to know the repository. |
 | Redirects name the wrong host or port | `PUBLIC_URL` is not the origin clients use. Redirects always use `PUBLIC_URL`. |
+| The browser gets an empty response (`NS_ERROR_NET_EMPTY_RESPONSE`; curl: `Empty reply from server`) while the container is healthy and its log shows no request | Docker Desktop's forwarding of the published port went stale, often after sleep or a network change. Run `docker compose up -d --force-recreate web`; if that does not help, restart Docker Desktop. |
 
 ## repo-adapter
 
@@ -79,6 +82,22 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 | `uc doctor`: "no POM in the repository or the archive" | A plugin built with Gradle. Procure its real `.pom` from the URL shown and store it beside the `.hpi`. |
 | Release dates look wrong for some plugins | They fell back to the upload time; `uc doctor` lists them under "dates from the repository" with the reason ([Release dates](architecture/repo-adapter.md#release-dates)). |
 
+## Procurement
+
+The commands of [Procure missing POMs, dependencies and cores](how-to/procure-missing-files.md).
+
+| Symptom | Cause and fix |
+|---|---|
+| `--stage-local`: `REFUSED ... it belongs at <path>; --fix moves it there` | A file you added is not at the Maven path its manifest or POM declares. Move it there, or run `--stage-local --fix` ([Files you place by hand](how-to/procure-missing-files.md#files-you-place-by-hand)). |
+| `--stage-local`: `REFUSED ... not a Maven path to a .hpi, .jpi, .war or .pom` | The file declares no coordinates to place it by, such as a plugin whose manifest names no group. Find its group and move it to its Maven path by hand. |
+| Push lists files as `unlisted` and skips them | They were added by hand and not recorded: run `make procure-download ARGS=--stage-local`. |
+| Push: `FAILED ... HTTP 503: Server overloaded, please retry: request timed out`, a broken pipe, a dropped connection or an HTTP 502, on large files | Artifact Keeper's request timeout, or a proxy's upload limit ([Large files](how-to/procure-missing-files.md#large-files)). |
+| Push: `FAILED ... HTTP 409: Artifact version already exists and is immutable` after you deleted the file | Artifact Keeper keeps the deleted release as a tombstone: run its storage garbage collection ([Review](how-to/procure-missing-files.md#2-review)). |
+| Push: `DIFFERENT ... Artifact Keeper stored other bytes here without recording them` | An earlier upload left other bytes at that path. Delete them from Artifact Keeper's storage on its server, then push again ([Large files](how-to/procure-missing-files.md#large-files)). |
+| Push or clean: `ERROR ... the repository holds this path but publishes no checksum for it` | Artifactory holds the file without a `.sha1`: compare it with the staged file by hand. |
+| `uc doctor`: `older required core(s) below <version> not listed` | Information: plugins require cores older than the oldest one stored. Stage them only for controllers that old; the next lines give the `--since` that does it and what storing them does to the floor ([Stage](how-to/procure-missing-files.md#1-stage)). |
+| `the repository holds no Jenkins core, so "required" has no floor` | Add `--since <oldest version your controllers run>` to `--download-war required`. |
+
 ## Jenkins controllers
 
 | Symptom | Cause and fix |
@@ -88,3 +107,4 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 | Plugins are offered that the controller cannot install | Their dependencies are missing from the repository. `uc doctor` lists them under dependency problems. |
 | `jenkins-plugin-cli` downloads from the wrong host | `JENKINS_UC` has a path; set it to the bare origin ([jenkins-plugin-cli](how-to/configure-jenkins.md#jenkins-plugin-cli-and-the-jenkins-docker-image)). |
 | The controller cannot reach the update center at all | From the controller's host, `curl https://jenkins-updates.example.com/uctest.json` (your `PUBLIC_URL`) must print `{}`. |
+| A controller in a container on the update center's machine gets `java.net.ConnectException` checking the update site | Inside the container, `localhost` is the container itself. Set `PUBLIC_URL` to a name the container can reach (on Docker Desktop, `http://host.docker.internal:<port>`), run `docker compose up -d` and `docker compose run --rm uc generate`, and use that URL for the update site: redirects and download URLs all use `PUBLIC_URL` ([A hostname for PUBLIC_URL](getting-started/requirements.md#a-hostname-for-public_url)). |
