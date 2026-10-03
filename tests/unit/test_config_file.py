@@ -102,6 +102,19 @@ def test_a_directory_in_place_of_the_file_is_explained(tmp_path):
         load_settings(ONLINE, config_file=tmp_path / 'uc.toml')
 
 
+def test_a_file_that_is_not_utf8_is_explained(tmp_path):
+    path = tmp_path / 'uc.toml'
+    path.write_text('retain_releases = 4\n', encoding='utf-16')
+    with pytest.raises(ConfigError, match='is not UTF-8 text: save it as UTF-8'):
+        load_settings(ONLINE, config_file=path)
+
+
+def test_a_path_under_a_regular_file_is_explained(tmp_path):
+    (tmp_path / 'afile').write_text('x', encoding='utf-8')
+    with pytest.raises(ConfigError, match=r'uc.toml cannot be read: '):
+        load_settings(ONLINE, config_file=tmp_path / 'afile' / 'uc.toml')
+
+
 @pytest.mark.skipif(os.getuid() == 0, reason='root reads any file')
 def test_an_unreadable_file_is_explained(tmp_path):
     path = toml(tmp_path, 'retain_releases = 4\n')

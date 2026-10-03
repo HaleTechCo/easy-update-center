@@ -347,6 +347,12 @@ def read_config_file(path: Path) -> dict[str, str]:
     except PermissionError:
         msg = f'{path} is not readable by uid {os.getuid()}: make it readable by everyone (chmod 644)'
         raise ConfigError(msg) from None
+    except UnicodeDecodeError:
+        msg = f'{path} is not UTF-8 text: save it as UTF-8'
+        raise ConfigError(msg) from None
+    except OSError as exc:
+        msg = f'{path} cannot be read: {exc.strerror or exc}'
+        raise ConfigError(msg) from None
     try:
         document = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
