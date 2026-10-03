@@ -67,6 +67,11 @@ How the pieces fit: [Architecture overview](docs/architecture/overview.md).
 Unit tests read `uc/uc/`, `uc/templates/` and `tools/` straight from the working tree, so they need
 no rebuild. Changing `uc/java/VersionTool.java` or a Dockerfile needs `make build` first.
 
+The example settings files (`config/uc.example.toml`, `.env.online.example`,
+`.env.airgapped.example`) are generated from the settings registry, `uc/uc/settings.py`. After
+changing a setting there, run `make examples`; `make test-unit` fails while a committed copy is out
+of date.
+
 ## Lint
 
 ```bash

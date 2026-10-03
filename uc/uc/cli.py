@@ -12,6 +12,7 @@ from . import configview, publish, status
 from .config import apply_process_env, load_settings
 from .doctor import check_since, format_report, inspect_repository
 from .errors import UcError
+from .examples import example_env, example_toml
 from .generate import generate
 from .pki import DEFAULT_ORG, ROOT_CERT, ROOT_KEY, SIGNING_CERT, SIGNING_KEY, cert_info, init_pki, rotate_signing
 from .preflight import load_credentials
@@ -22,6 +23,7 @@ from .procure.plan import check_war_args
 from .procure.push import push
 from .repo_adapter.server import serve
 from .schedule import run_schedule
+from .settings import MODES
 from .timeutil import iso, utcnow
 from .validate import count_plugins
 from .versions import VersionTool
@@ -62,6 +64,8 @@ def build_parser() -> argparse.ArgumentParser:
     shows = config_cmd.add_mutually_exclusive_group()
     shows.add_argument('--json', action='store_true', help='print the settings as JSON')
     shows.add_argument('--check', action='store_true', help='only check the settings')
+    shows.add_argument('--example', choices=('toml', 'env'), help='print an example settings file that lists every setting')
+    config_cmd.add_argument('--mode', choices=MODES, help='with --example: the mode the example is for (default: online)')
     sub.add_parser('schedule', help='run generate on GENERATE_SCHEDULE (the scheduler service)')
 
     adapter = sub.add_parser('repo-adapter', help='serve the repository to the generator (the repo-adapter service)')
@@ -88,6 +92,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == 'doctor':
         _check_doctor_args(parser, args)
+    if args.command == 'config':
+        _check_config_args(parser, args)
     try:
         return _dispatch(args)
     except publish.LockBusyError as exc:
@@ -96,6 +102,11 @@ def main(argv: list[str] | None = None) -> int:
     except UcError as exc:
         print(f'uc: error: {exc}', file=sys.stderr)
         return 1
+
+
+def _check_config_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if args.mode is not None and args.example is None:
+        parser.error('--mode only applies to --example')
 
 
 def _check_doctor_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
@@ -167,6 +178,10 @@ def _doctor(args: argparse.Namespace, settings: Settings) -> int:
 
 
 def _config(args: argparse.Namespace) -> int:
+    if args.example:
+        mode = args.mode or 'online'
+        print(example_toml(mode) if args.example == 'toml' else example_env(mode), end='')
+        return 0
     return configview.run(as_json=args.json, check=args.check)
 
 
