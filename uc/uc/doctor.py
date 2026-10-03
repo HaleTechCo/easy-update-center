@@ -10,17 +10,19 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 from urllib.parse import urlsplit
 
-from . import aql, http
+from . import aql, http, status
 from .config import PUBLIC_RELEASES_URL
 from .errors import UcError
 from .pom import safe_root
+from .timeutil import iso
 
 if TYPE_CHECKING:
+    import datetime as dt
     from collections.abc import Callable, Mapping, Sequence
-    from pathlib import Path
 
     from .aql import Gav, Listing
     from .config import Settings
@@ -29,6 +31,8 @@ if TYPE_CHECKING:
 
 HTTP_NOT_FOUND = 404
 CORE_VERSION = re.compile(r'^[0-9]+\.[0-9]+(\.[0-9]+)?$')
+REPORT_FILE = Path('doctor') / 'report.json'
+"""Where uc doctor --record saves the full report, under the data directory; web does not serve it."""
 
 
 class DoctorError(UcError):
@@ -85,6 +89,7 @@ class DoctorReport:
             'stub_poms': len(self.stub_poms),
             'missing_dependencies': len(self.missing_dependencies),
             'unchecked': self.unchecked,
+            'missing_cores': len(self.missing_cores) if self.required_cores is not None else None,
             'repo_adapter': ({name: len(self._adapter(name)) for name in ADAPTER_SECTIONS} if self.repo_adapter is not None else None),
         }
 
@@ -356,6 +361,18 @@ def run_doctor(
 ) -> DoctorReport:
     """List the source repository and analyze it (see inspect_repository)."""
     return inspect_repository(settings, creds, fetch=fetch, versions=versions, since=since, query=query).report
+
+
+def record(report: DoctorReport, data_dir: Path, now: dt.datetime) -> Path:
+    """Save report as the latest: in full as data_dir/doctor/report.json, its counts in status.json's doctor block; return the report's path."""
+    path = data_dir / REPORT_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name('.report.json.tmp')
+    tmp.write_text(json.dumps(report.to_dict(), indent=2) + '\n', encoding='utf-8')
+    tmp.chmod(0o644)
+    tmp.replace(path)
+    status.update_status(data_dir, doctor={**report.summary(), 'checked_at': iso(now)})
+    return path
 
 
 def format_report(report: DoctorReport, settings: Settings) -> str:

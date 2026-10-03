@@ -20,6 +20,7 @@ GROUPS = (
     'Downloads',
     'Upstream data',
     'Generation',
+    'Doctor',
     'Signing',
     'Web and TLS',
     'Procurement',
@@ -168,6 +169,10 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('RETAIN_RELEASES', 'int', 'Generation', 'Releases kept for rollback.', default='5', minimum=1),
     Setting('MIN_PLUGINS', 'int', 'Generation', 'A release with fewer plugins is refused.', default='1'),
     Setting('MIN_PLUGIN_RATIO', 'ratio', 'Generation', "A release with fewer than this share of the live release's plugins is refused, unless run with uc generate --force.", default='0.9'),
+    # Doctor
+    Setting('DOCTOR_FETCH', 'bool', 'Doctor', 'uc doctor downloads the POMs and manifests missing from the cache, so it can check every dependency and required core (--fetch).', default='false'),
+    Setting('DOCTOR_SINCE', 'str', 'Doctor', 'The floor for required cores (--since); empty means the oldest core in the repository.'),
+    Setting('DOCTOR_JSON', 'bool', 'Doctor', 'uc doctor prints its report as JSON (--json).', default='false'),
     # Signing
     Setting('CERTIFICATE_MINIMUM_VALID_DAYS', 'int', 'Signing', 'Generation stops when the signing certificate expires within this many days.', default='30'),
     Setting('SIGNING_CERT_DAYS', 'int', 'Signing', 'Read and validated, but it has no effect today: uc pki sets the lifetime.', default='365', minimum=1),

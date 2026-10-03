@@ -47,6 +47,9 @@ class Settings:
     public_url: str
     uc_id: str
     generate_schedule: str
+    doctor_fetch: bool
+    doctor_since: str
+    doctor_json: bool
     resources_source: str
     resources_ref: str
     resources_url: str
@@ -346,6 +349,9 @@ def settings_from(r: Resolver) -> Settings:
         public_url=public_url,
         uc_id=r.raw('UC_ID'),
         generate_schedule=r.raw('GENERATE_SCHEDULE'),
+        doctor_fetch=_bool(r, 'DOCTOR_FETCH'),
+        doctor_since=r.raw('DOCTOR_SINCE'),
+        doctor_json=_bool(r, 'DOCTOR_JSON'),
         resources_source=resources_source,
         resources_ref=r.raw('RESOURCES_REF'),
         resources_url=resources_url,

@@ -1,6 +1,7 @@
 """Unit tests for uc.doctor: manifest and dependency parsing, repository analysis and the report."""
 
 import base64
+import datetime as dt
 import hashlib
 import json
 from pathlib import Path
@@ -23,10 +24,12 @@ from uc.doctor import (
     is_stub_pom,
     parse_dependencies,
     parse_manifest,
+    record,
     required_cores,
     run_doctor,
 )
 from uc.model import Credentials
+from uc.status import read_status
 from uc.versions import VersionTool
 from ucsupport import make_settings
 
@@ -352,3 +355,17 @@ def test_inspect_repository_returns_the_listing_and_source_it_used(tmp_path, sec
     assert inspection.report.plugins == 1
     assert inspection.report.required_cores == {}
     assert inspection.report.cores_unchecked == 1  # no cache, no --fetch
+
+
+def test_record_saves_the_report_and_its_counts(tmp_path):
+    report = DoctorReport(plugins=3, cores=['2.462.1'], hpi_without_pom=['a'], required_cores={'2.479.1': ['x']}, missing_cores=[{'version': '2.479.1'}])
+    path = record(report, tmp_path, dt.datetime(2026, 10, 3, 5, 30, tzinfo=dt.UTC))
+    assert path == tmp_path / 'doctor' / 'report.json'
+    assert json.loads(path.read_text(encoding='utf-8'))['plugins'] == 3
+    assert path.stat().st_mode & 0o777 == 0o644
+    block = read_status(tmp_path)['doctor']
+    assert (block['plugins'], block['hpi_without_pom'], block['missing_cores'], block['checked_at']) == (3, 1, 1, '2026-10-03T05:30:00Z')
+
+
+def test_missing_cores_is_null_when_cores_were_not_checked():
+    assert DoctorReport().summary()['missing_cores'] is None

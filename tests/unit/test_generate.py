@@ -17,7 +17,7 @@ from uc.model import Tiers
 from uc.pki import cert_der_b64
 from uc.preflight import PreflightError
 from uc.publish import LockBusyError, RunLock, create_staging, list_releases, live_release
-from uc.status import read_status
+from uc.status import read_status, write_status
 from uc.validate import ValidationError
 from ucsupport import make_settings
 
@@ -72,6 +72,8 @@ def test_airgapped_generation_publishes(tmp_path, secrets_dir):
     assert status['tiers'] == {'weekly': ['2.540'], 'stable': ['2.528.1']}
     assert status['plugin_count'] == 2
     assert status['doctor']['plugins'] == 2
+    assert status['doctor']['missing_cores'] is None
+    assert status['doctor']['checked_at'].endswith('Z')
     assert any('GitHub credentials not set' in w for w in status['warnings'])
     assert (data / 'resources' / 'last-good' / 'warnings.json').is_file()
     assert not list((data / 'releases').glob('*.staging'))
@@ -241,3 +243,12 @@ def test_post_publish_failure_still_reports_the_new_live_release(tmp_path, secre
     status = read_status(data)
     assert status['live_release'] == '20260922T030000Z'
     assert status['last_run']['result'] == 'failed'
+
+
+def test_a_generation_without_doctor_counts_keeps_the_recorded_ones(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, MODE='online', REPO_URL='', REPO_KEY='', REPO_ADAPTER='', RESOURCES_SOURCE='bundled', TOOL_INSTALLERS_URL='')
+    recorded = {'plugins': 9, 'checked_at': '2026-10-03T05:30:00Z'}
+    write_status(settings.data_dir, {'doctor': recorded})
+    tools = Toolchain(run_jar=FakeJar(TIERS, cert_der_b64(settings.signing_cert_file)), aql_query=no_query, http_get=no_network)
+    generate(settings, tools=tools, now=T1, base_env={})
+    assert read_status(settings.data_dir)['doctor'] == recorded

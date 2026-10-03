@@ -1,6 +1,8 @@
 """Unit tests for uc.status: reading, writing and updating status.json."""
 
-from uc.status import read_status, update_status, write_status
+import threading
+
+from uc.status import locked, read_status, update_status, write_status
 
 
 def test_status_roundtrip(tmp_path):
@@ -15,3 +17,28 @@ def test_status_roundtrip(tmp_path):
 def test_corrupt_status_reads_as_empty(tmp_path):
     (tmp_path / 'status.json').write_text('{not json')
     assert read_status(tmp_path) == {}
+
+
+def test_writers_wait_for_each_other(tmp_path):
+    write_status(tmp_path, {'live_release': 'a'})
+    done = threading.Event()
+
+    def writer():
+        update_status(tmp_path, doctor={'plugins': 1})
+        done.set()
+
+    with locked(tmp_path):
+        thread = threading.Thread(target=writer)
+        thread.start()
+        assert not done.wait(0.3)
+    thread.join(5)
+    assert done.is_set()
+    assert read_status(tmp_path) == {'live_release': 'a', 'doctor': {'plugins': 1}}
+
+
+def test_keep_holds_a_field_the_writer_has_no_value_for(tmp_path):
+    write_status(tmp_path, {'doctor': {'plugins': 1}, 'old': True})
+    write_status(tmp_path, {'live_release': 'b', 'doctor': None}, keep=('doctor',))
+    assert read_status(tmp_path) == {'live_release': 'b', 'doctor': {'plugins': 1}}
+    write_status(tmp_path, {'doctor': {'plugins': 2}}, keep=('doctor',))
+    assert read_status(tmp_path) == {'doctor': {'plugins': 2}}

@@ -156,7 +156,7 @@ def _build_and_publish(
         versions = tools.versions or VersionTool.from_settings(settings)
         report = doctor.analyze(listing, versions, doctor.ArtifactSource.from_settings(settings, creds, allow_network=False))
         doctor.attach_adapter_report(report, settings)
-        doctor_summary = report.summary()
+        doctor_summary = {**report.summary(), 'checked_at': iso(utcnow())}
         if report.dropped:
             warnings.append(f"{report.dropped} artifact(s) in the source are dropped by the generator; run 'uc doctor'")
 
@@ -195,4 +195,5 @@ def _build_and_publish(
             'warnings': warnings,
             'doctor': doctor_summary,
         },
+        keep=('doctor',),
     )

@@ -44,11 +44,13 @@ and `warnings`, so the other fields keep describing the live release. `uc rollba
 | `tiers` | object | The tiered sites: `weekly` and `stable`, lists of core versions. Both empty when the repository holds no core. |
 | `plugin_count` | integer | Plugins offered by the live release's `current/` site. |
 | `warnings` | list of strings | What the last run could not do but published anyway, for example "GitHub credentials not set: plugin labels from GitHub topics are omitted" or dropped artifacts. Review them. |
-| `doctor` | object or null | With `DOWNLOAD_BACKEND=artifactory` (the air-gapped default), counts from the same checks as `uc doctor`; `null` otherwise. |
+| `doctor` | object or null | Counts from the same checks as `uc doctor`: from each generation with `DOWNLOAD_BACKEND=artifactory` (the air-gapped default), and from every `uc doctor --record` (scheduled with `DOCTOR_SCHEDULE`) whatever the backend. A generation that computes none keeps the last recorded counts. `null` until either has run. |
 | `doctor.plugins` | integer | Plugins with a POM in the repository listing. |
 | `doctor.cores` | list of strings | Core versions with a POM. |
 | `doctor.hpi_without_pom`, `doctor.war_without_pom`, `doctor.non_maven`, `doctor.stub_poms`, `doctor.missing_dependencies` | integer | How many of each problem `uc doctor` would list. |
 | `doctor.unchecked` | integer | Items whose POM or manifest was not in the cache, so were not checked. |
+| `doctor.missing_cores` | integer or null | Cores plugin releases require that the repository lacks, at or above the floor; `null` when the run did not check cores (a generation, or the public repository). |
+| `doctor.checked_at` | string | When these counts were taken (ISO 8601, UTC). |
 | `doctor.repo_adapter` | object or null | With the repo-adapter on, counts of `derived_poms`, `replaced_poms`, `needs_pom`, `misplaced`, `skipped`, `dates_from_repository` (see [Report](../architecture/repo-adapter.md#report)); `null` when it is off. |
 
 What to alert on: [Monitor](../how-to/monitor.md).

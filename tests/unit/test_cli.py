@@ -7,9 +7,10 @@ from pathlib import Path
 import pytest
 
 from sitefixture import uc_document, write_site
-from uc.cli import EXIT_LOCKED, main
+from uc.cli import EXIT_LOCKED, build_parser, doctor_options, main
 from uc.publish import RunLock
 from uc.status import read_status, write_status
+from ucsupport import make_settings
 
 
 def use_env(monkeypatch, tmp_path, secrets_dir):
@@ -212,3 +213,17 @@ def test_config_options_that_need_another(argv, message, capsys):
     with pytest.raises(SystemExit):
         main(argv)
     assert message in capsys.readouterr().err
+
+
+def test_doctor_options_come_from_the_settings_unless_given(tmp_path, secrets_dir):
+    parser = build_parser()
+    configured = make_settings(tmp_path, secrets_dir, DOCTOR_FETCH='true', DOCTOR_JSON='yes', DOCTOR_SINCE='2.462.1')
+    assert doctor_options(parser.parse_args(['doctor']), configured) == (True, True, '2.462.1')
+    assert doctor_options(parser.parse_args(['doctor', '--no-fetch', '--no-json', '--since', '2.479.1']), configured) == (False, False, '2.479.1')
+    assert doctor_options(parser.parse_args(['doctor']), make_settings(tmp_path, secrets_dir)) == (False, False, None)
+
+
+def test_record_only_applies_to_a_report_run(capsys):
+    with pytest.raises(SystemExit):
+        main(['doctor', '--push', '--record'])
+    assert '--record only applies to a report run' in capsys.readouterr().err
