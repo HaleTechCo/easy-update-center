@@ -131,6 +131,27 @@ docker compose run --rm uc status
 Prints `status.json`, the same document served at `$PUBLIC_URL/status.json`. Fields:
 [status.json reference](status-json.md). Prints `{}` before the first run.
 
+## uc config
+
+```bash
+docker compose run --rm uc config [--json | --check]
+```
+
+Shows every setting with its value and where it came from: `environment`, `uc.toml: <key>`, `mode`
+(the default for the mode), `derived` (worked out from other settings, as `REPO_URL` and the secret
+paths are) or `default`. For a secret file it shows the path and whether the file is `present`,
+`empty` or `missing`, never its contents. When the scheduler started with other settings than these,
+it ends with the command that applies them.
+Credentials inside a URL setting are shown as `***`.
+
+| Option | Meaning |
+|---|---|
+| `--json` | The same as a JSON list of objects with `env`, `key`, `value`, `source` and `note`. |
+| `--check` | Only check the settings: prints `configuration ok`, or the error. |
+
+An invalid configuration exits 1; without options, after printing every value it could work out.
+How settings combine: [How settings are read](configuration.md#how-settings-are-read).
+
 ## uc schedule
 
 ```bash

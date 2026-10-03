@@ -184,3 +184,16 @@ def test_commands_export_jvm_options_from_the_settings_file(monkeypatch, tmp_pat
     monkeypatch.setenv('JAVA_TOOL_OPTIONS', '')  # monkeypatch restores it after the test
     assert main(['status']) == 0
     assert os.environ['JAVA_TOOL_OPTIONS'] == '-Xmx6g'
+
+
+def test_config_check(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    assert main(['config', '--check']) == 0
+    assert capsys.readouterr().out == 'configuration ok\n'
+
+
+def test_config_json_and_check_are_exclusive(capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        main(['config', '--json', '--check'])
+    assert exit_info.value.code == 2
+    assert 'not allowed with argument' in capsys.readouterr().err

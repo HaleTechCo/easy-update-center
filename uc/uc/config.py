@@ -8,10 +8,12 @@ An empty environment variable means "not set" and falls through, except for the 
 from __future__ import annotations
 
 import difflib
+import hashlib
+import json
 import os
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
@@ -492,3 +494,9 @@ def read_secret(path: Path) -> str | None:
     except FileNotFoundError:
         return None
     return value or None
+
+
+def settings_digest(settings: Settings) -> str:
+    """Return a fingerprint of every setting: the scheduler records it at start, and uc config compares it to tell whether the running services use the current settings."""
+    text = json.dumps(asdict(settings), default=str, sort_keys=True)
+    return hashlib.sha256(text.encode('utf-8')).hexdigest()
