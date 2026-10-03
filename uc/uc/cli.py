@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from . import configview, publish, status
 from .config import apply_process_env, load_settings, load_web_settings
-from .doctor import check_since, format_report, inspect_repository
+from .doctor import check_since, format_report, inspect_repository, record
 from .errors import UcError
 from .examples import example_env, example_toml
 from .generate import generate
@@ -44,12 +44,13 @@ def build_parser() -> argparse.ArgumentParser:
     generate_cmd.add_argument('--force', action='store_true', help='skip the plugin-count ratio check once')
 
     doctor = sub.add_parser('doctor', help='report what the generator will see in the source repository')
-    doctor.add_argument('--fetch', action='store_true', help='download POMs and manifests missing from the cache')
-    doctor.add_argument('--json', action='store_true', help='print the report as JSON')
+    doctor.add_argument('--fetch', action=argparse.BooleanOptionalAction, help='download POMs and manifests missing from the cache (default: DOCTOR_FETCH, off)')
+    doctor.add_argument('--json', action=argparse.BooleanOptionalAction, help='print the report as JSON (default: DOCTOR_JSON, off)')
     doctor.add_argument('--download-poms', action='store_true', help='stage the real .pom of every plugin whose POM is missing, derived or unusable')
     doctor.add_argument('--download-dependencies', action='store_true', help='stage missing required dependencies, transitively, each with its .pom')
     doctor.add_argument('--download-war', action='append', default=[], metavar='VERSION', help='stage jenkins-war VERSION, or with "required" every required core the repository lacks; repeatable')
-    doctor.add_argument('--since', metavar='VERSION', help='floor for required cores (default: the oldest core in the repository)')
+    doctor.add_argument('--since', metavar='VERSION', help='floor for required cores (default: DOCTOR_SINCE, else the oldest core in the repository)')
+    doctor.add_argument('--record', action='store_true', help='also save the report as the latest: /data/doctor/report.json, and its counts in status.json')
     doctor.add_argument('--staging', type=Path, default=Path('/procurement'), help='the staging folder (default: /procurement)')
     doctor.add_argument('--push', action='store_true', help='upload the files procurement.json lists to the repository, never overwriting')
     doctor.add_argument('--dry-run', action='store_true', help='with --push or --clean: check each file, change nothing')
@@ -126,6 +127,8 @@ def _check_doctor_args(parser: argparse.ArgumentParser, args: argparse.Namespace
         parser.error('--dry-run only applies to --push and --clean')
     if args.fix and not args.stage_local:
         parser.error('--fix only applies to --stage-local')
+    if args.record and (args.push or args.stage_local or args.clean):
+        parser.error('--record only applies to a report run')
 
 
 def _dispatch(args: argparse.Namespace) -> int:
@@ -160,6 +163,14 @@ def _dispatch(args: argparse.Namespace) -> int:
     raise AssertionError(msg)
 
 
+def doctor_options(args: argparse.Namespace, settings: Settings) -> tuple[bool, bool, str | None]:
+    """Return fetch, json and since for a doctor run: each option given on the command line, else its setting."""
+    fetch = settings.doctor_fetch if args.fetch is None else args.fetch
+    as_json = settings.doctor_json if args.json is None else args.json
+    since = args.since if args.since is not None else (settings.doctor_since or None)
+    return fetch, as_json, since
+
+
 def _doctor(args: argparse.Namespace, settings: Settings) -> int:
     if args.push:
         return push(settings, args.staging, dry_run=args.dry_run)
@@ -167,18 +178,21 @@ def _doctor(args: argparse.Namespace, settings: Settings) -> int:
         return stage_local(args.staging, settings.procurement_source_url, fix=args.fix, out=sys.stdout)
     if args.clean:
         return clean(settings, args.staging, dry_run=args.dry_run, out=sys.stdout)
+    fetch, as_json, since = doctor_options(args, settings)
     downloading = args.download_poms or args.download_dependencies or bool(args.download_war)
-    check_since(args.since)
+    check_since(since)
     if downloading:
         check_download_allowed(settings)
         check_war_args(args.download_war)
     versions = VersionTool.from_settings(settings)
-    inspection = inspect_repository(settings, load_credentials(settings), fetch=args.fetch, versions=versions, since=args.since)
+    inspection = inspect_repository(settings, load_credentials(settings), fetch=fetch, versions=versions, since=since)
     report = inspection.report
-    print(json.dumps(report.to_dict(), indent=2) if args.json else format_report(report, settings))
+    print(json.dumps(report.to_dict(), indent=2) if as_json else format_report(report, settings))
+    out = sys.stderr if as_json else sys.stdout  # keep stdout valid JSON
+    if args.record:
+        print(f'saved the report as {record(report, settings.data_dir, utcnow())}', file=out)
     if not downloading:
         return report.exit_code()
-    out = sys.stderr if args.json else sys.stdout  # keep stdout valid JSON
     return download(inspection, settings, poms=args.download_poms, dependencies=args.download_dependencies, wars=args.download_war, staging_dir=args.staging, versions=versions, out=out)
 
 

@@ -65,6 +65,8 @@ All state lives on one Compose volume, `uc-data`, mounted at `/data`:
 | `cache/` | The generator's download cache (manifests, POMs), one directory per source, so later runs fetch only what is new. |
 | `resources/last-good/` | The last upstream `resources/` copy that produced a published release, used when a fetch fails. |
 | `repo-adapter/` | The repo-adapter's access token, its content-addressed cache and `report.json`. |
+| `doctor/report.json` | The last report `uc doctor --record` saved. Not served. |
+| `.status.lock` | Held briefly by every write to `status.json`. |
 | `status.json` | The public [status](../reference/status-json.md), served at `/status.json`. |
 | `.lock` | The run lock: one `uc generate` or `uc rollback` at a time. |
 

@@ -112,6 +112,16 @@ def test_generation_succeeds_offline_with_only_warnings(release):
 
 
 @pytest.mark.usefixtures('release')
+def test_doctor_record_saves_the_report_and_its_counts():
+    result = uc('doctor', '--record')
+    assert 'saved the report as /data/doctor/report.json' in result.stdout
+    status = json.loads(Path('/data/status.json').read_text(encoding='utf-8'))
+    assert status['doctor']['checked_at'].endswith('Z')
+    assert status['doctor']['missing_cores'] is not None
+    assert json.loads(Path('/data/doctor/report.json').read_text(encoding='utf-8'))['plugins'] > 0
+
+
+@pytest.mark.usefixtures('release')
 def test_descriptions_are_read_from_inside_the_archives():
     plugins = json.loads(get(WEB + '/current/update-center.actual.json'))['plugins']
     assert plugins[TOP_PLUGIN]['excerpt']  # no .jar in the repository: index.jelly from the .hpi

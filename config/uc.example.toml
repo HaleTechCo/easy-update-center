@@ -43,6 +43,14 @@ public_url = "https://jenkins-updates.example.com"
 # Cron expression for regular generation. The scheduler also generates at once when no release is live. (GENERATE_SCHEDULE)
 # schedule = "0 */6 * * *"
 
+[doctor]
+# uc doctor downloads the POMs and manifests missing from the cache, so it can check every dependency and required core (--fetch). (DOCTOR_FETCH)
+# fetch = false
+# The floor for required cores (--since); empty means the oldest core in the repository. (DOCTOR_SINCE)
+# since = ""
+# uc doctor prints its report as JSON (--json). (DOCTOR_JSON)
+# json = false
+
 [repo]
 # artifactory or artifact-keeper. Artifact Keeper is read only through the repo-adapter. (REPO_TYPE)
 # type = "artifactory"

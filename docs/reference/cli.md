@@ -54,7 +54,7 @@ The scheduler runs the same command on `GENERATE_SCHEDULE`.
 ## uc doctor
 
 ```bash
-docker compose run --rm uc doctor [--fetch] [--json] [--since VERSION]
+docker compose run --rm uc doctor [--fetch | --no-fetch] [--json | --no-json] [--since VERSION] [--record]
 docker compose run --rm uc doctor [--fetch] [--download-poms] [--download-dependencies] [--download-war VERSION|required ...] [--since VERSION] [--staging DIR]
 docker compose run --rm uc doctor --push [--dry-run] [--staging DIR]
 docker compose run --rm uc doctor --stage-local [--fix] [--staging DIR]
@@ -88,9 +88,10 @@ was, such as an internal one, has no `.pom` there.
 
 | Option | Meaning |
 |---|---|
-| `--fetch` | Download the POMs and manifests missing from the generator's cache, so dependencies and required cores can be checked before the first generation. Without it, unchecked items are counted and reported, and a download run may miss what they need: use it with the download options. |
-| `--json` | Print the full report as JSON. |
-| `--since VERSION` | The floor for required cores, instead of the oldest core in the repository. |
+| `--fetch`, `--no-fetch` | Download the POMs and manifests missing from the generator's cache, so dependencies and required cores can be checked before the first generation. Without it, unchecked items are counted and reported, and a download run may miss what they need: use it with the download options. The default is `DOCTOR_FETCH` (off). |
+| `--json`, `--no-json` | Print the full report as JSON. The default is `DOCTOR_JSON` (off). |
+| `--since VERSION` | The floor for required cores, instead of the oldest core in the repository. The default is `DOCTOR_SINCE`. |
+| `--record` | Also save the report as the latest: in full as `/data/doctor/report.json` (not served), and its counts in `status.json`'s `doctor` block with `checked_at`. The scheduler runs it on `DOCTOR_SCHEDULE`. Not with `--push`, `--stage-local` or `--clean`. |
 | `--download-poms` | Stage the real `.pom` of every plugin whose POM is missing, derived or unusable. |
 | `--download-dependencies` | Stage missing required dependencies, transitively, each with its `.pom`. |
 | `--download-war VERSION` | Stage that core's `.war` and `.pom`; `required` stages every required core the repository lacks at or above the floor. Repeatable. |

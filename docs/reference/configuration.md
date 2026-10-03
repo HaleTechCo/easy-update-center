@@ -129,6 +129,14 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 | `MIN_PLUGINS` | `min_plugins` | `1` | generate | A release with fewer plugins is refused. |
 | `MIN_PLUGIN_RATIO` | `min_plugin_ratio` | `0.9` | generate | A release with fewer than this share of the live release's plugins is refused, unless run with `uc generate --force`. Between 0 and 1. |
 
+## Doctor
+
+| Setting | uc.toml | Default | Read by | Notes |
+|---|---|---|---|---|
+| `DOCTOR_FETCH` | `[doctor] fetch` | `false` | doctor | Download the POMs and manifests missing from the generator's cache, as `--fetch` does; `--no-fetch` turns it off for one run. |
+| `DOCTOR_SINCE` | `[doctor] since` | empty: the oldest core in the repository | doctor | The floor for required cores, as `--since`. |
+| `DOCTOR_JSON` | `[doctor] json` | `false` | doctor | Print the report as JSON, as `--json`; `--no-json` turns it off for one run. |
+
 ## Signing
 
 | Setting | uc.toml | Default | Read by | Notes |
