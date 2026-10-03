@@ -25,6 +25,9 @@ from the public plugin repository or from your own, and runs online or fully air
 - **Your own policy:** hide plugins or releases, and publish your own security warnings.
 - **Monitoring:** `status.json` reports the last run, the certificate's expiry and the age of the
   security data.
+- **Settings in one file or two:** every setting in `.env` or `config/uc.toml`; `uc config` shows
+  each value and where it came from, and the scheduler can run a read-only `uc doctor` report on its
+  own schedule.
 
 ## How it works
 

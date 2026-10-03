@@ -8,6 +8,20 @@ once releases are published.
 
 ### Changed
 
+- The web container no longer reads `.env`: the one-shot `web-config` service works out its settings
+  and writes them to a volume `web` reads at start. A variable set on `web` itself, as the TLS and
+  proxy-CA overrides do, still wins. Without that file (the web image run on its own) `web` takes
+  resolved values from its environment (`DOWNLOAD_BACKEND`, `DOWNLOAD_BACKEND_URL`, ...) and no
+  longer works them out from `MODE` and `REPO_*`. `web-config` checks only the settings the web
+  container uses, so an invalid setting web does not use no longer stops it; a uc.toml that is not
+  UTF-8, or cannot be read, is reported as such.
+- `SIGNING_CERT_DAYS`, which nothing read, is replaced by `PKI_SIGNING_DAYS`, which `uc pki` reads.
+- Compose mounts all of `./config` at `/config`, in the repo-adapter too; it mounted only
+  `config/overlay/` before.
+- `DOWNLOAD_PROXY_AUTH_FILE` defaults to `${SECRETS_DIR}/download_proxy_auth`, as the other secret
+  files do.
+- `make pki-init` and `make pki-rotate` pass `.env` (when present) and `config/` to `uc pki`, so
+  `PKI_*` settings apply to them.
 - `secrets/` stays owned by you on Linux. `make pki-init`, `make secrets-placeholders` and the new
   `make pki-rotate` and `make secrets-permissions` let each container read its own files through its
   group (uc 10001, web 33) instead of handing the whole directory to uid 10001, so no step needs
@@ -22,6 +36,22 @@ once releases are published.
 
 ### Added
 
+- `config/uc.toml`: every setting can be set there as well as in `.env`, whose variables win.
+  `config/uc.example.toml` and both `.env` examples list every setting; they are generated from one
+  settings registry (`make examples`).
+- `uc config` shows each setting's value and where it came from; `--check` validates, `--example`
+  prints an example file, `--web-env` the web container's settings. Credentials inside a URL setting
+  (for example a proxy URL with user:password) show as `***`, in text and JSON, including when the
+  configuration is invalid.
+- The scheduler can run a read-only `uc doctor --record` on `DOCTOR_SCHEDULE`. `uc doctor --record`
+  saves the report as `/data/doctor/report.json` and its counts in `status.json`, with the new
+  `doctor.checked_at` and `doctor.missing_cores`.
+- Settings for what were command-line options only: `DOCTOR_FETCH`, `DOCTOR_SINCE`, `DOCTOR_JSON`,
+  `PKI_ORG`, `PKI_ROOT_DAYS`, `PKI_SIGNING_DAYS` and `REPO_ADAPTER_PORT`. `--no-fetch` and
+  `--no-json` switch a configured default off for one run.
+- `uc generate --wait` waits for a running generation or rollback instead of exiting 75; scheduled
+  generations use it.
+- `make reload` recreates the services so they read the current settings.
 - Procurement with `uc doctor`, through a staging folder, `./procurement/`, whose `procurement.json`
   records each file's source, sha1 and reason for review:
   - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the real
