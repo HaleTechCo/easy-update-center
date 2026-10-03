@@ -6,8 +6,10 @@ compares the two sets on every commit, in both directions.
 
 Where the code reads settings:
 
-* `uc/uc/settings.py`: every `Setting('NAME'` entry of the settings registry, which config.py reads
-  every setting through.
+* `uc/uc/settings.py`: every call to `Setting` whose first positional argument is a string constant,
+  found by parsing the file with `ast` (so a comment or docstring cannot create a setting). These are
+  the entries of the settings registry, which config.py reads every setting through. A file that does
+  not parse stops the check with exit status 2.
 * `web/entrypoint.sh`: every `${NAME:-...}` expansion, with or without the colon and with any of
   `-`, `=`, `?`, `+`. The script runs under `set -u`, so an optional environment variable can only
   be read through one of those forms. A name the script sets itself and then reads bare
@@ -23,28 +25,56 @@ Run from the repository root, with no arguments.
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
 PAGE = Path('docs/reference/configuration.md')
 BUNDLED_HEADING = 'Read by bundled software'
 
-REGISTRY_ENTRY = re.compile(r"Setting\(\s*'([A-Z][A-Z0-9_]*)'")
 SHELL_READ = re.compile(r'\$\{([A-Z][A-Z0-9_]*):?[-=?+]')
 COMPOSE_READ = re.compile(r'\$\{([A-Z][A-Z0-9_]*)')
 
-SOURCES: tuple[tuple[Path, re.Pattern[str]], ...] = (
-    (Path('uc/uc/settings.py'), REGISTRY_ENTRY),
-    (Path('web/entrypoint.sh'), SHELL_READ),
-    (Path('compose.yaml'), COMPOSE_READ),
-    (Path('compose.airgapped.yaml'), COMPOSE_READ),
+
+def names_read(text: str, pattern: re.Pattern[str]) -> set[str]:
+    """Return every setting name `pattern` finds in `text`."""
+    return {match.group(1) for match in pattern.finditer(text)}
+
+
+def registry_names(text: str) -> set[str]:
+    """Return the first argument of every call to `Setting` in the Python source `text`, when it is a string constant; raise SyntaxError when `text` does not parse."""
+    names: set[str] = set()
+    for node in ast.walk(ast.parse(text)):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'Setting' and node.args):
+            continue
+        first = node.args[0]
+        if isinstance(first, ast.Constant) and isinstance(first.value, str):
+            names.add(first.value)
+    return names
+
+
+def shell_reads(text: str) -> set[str]:
+    """Return the names the shell script `text` reads through a defaulted expansion."""
+    return names_read(text, SHELL_READ)
+
+
+def compose_reads(text: str) -> set[str]:
+    """Return the names the Compose file `text` interpolates."""
+    return names_read(text, COMPOSE_READ)
+
+
+SOURCES: tuple[tuple[Path, Callable[[str], set[str]]], ...] = (
+    (Path('uc/uc/settings.py'), registry_names),
+    (Path('web/entrypoint.sh'), shell_reads),
+    (Path('compose.yaml'), compose_reads),
+    (Path('compose.airgapped.yaml'), compose_reads),
 )
-"""Each file that reads settings, with the pattern that finds them in it. Order sets the reader named in reports."""
+"""Each file that reads settings, with the function that finds them in it. Order sets the reader named in reports."""
 
 DOCUMENTED_NAME = re.compile(r'`([A-Z][A-Z0-9_]*)`')
 HEADING = re.compile(r'^#{1,6}\s+(.*?)\s*#*$')
@@ -52,11 +82,6 @@ FENCE = re.compile(r'^\s*(```|~~~)')
 TABLE_SEPARATOR = re.compile(r'^\|[\s:|-]+$')
 
 USAGE = 'usage: check_settings_documented.py - run from the repository root; it takes no arguments'
-
-
-def names_read(text: str, pattern: re.Pattern[str]) -> set[str]:
-    """Return every setting name `pattern` finds in `text`."""
-    return {match.group(1) for match in pattern.finditer(text)}
 
 
 def documented(text: str) -> tuple[set[str], set[str]]:
@@ -88,8 +113,8 @@ def documented(text: str) -> tuple[set[str], set[str]]:
 def code_settings(root: Path) -> dict[str, str]:
     """Return every setting the code under `root` reads, mapped to the first source file that reads it."""
     readers: dict[str, str] = {}
-    for source, pattern in SOURCES:
-        for name in sorted(names_read((root / source).read_text(encoding='utf-8'), pattern)):
+    for source, read in SOURCES:
+        for name in sorted(read((root / source).read_text(encoding='utf-8'))):
             readers.setdefault(name, source.as_posix())
     return readers
 
@@ -103,7 +128,7 @@ def problems(readers: dict[str, str], names: set[str], bundled: set[str]) -> lis
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Compare the two sets. Return 1 if they differ, 2 on a usage error or when either side is empty, 0 otherwise.
+    """Compare the two sets. Return 1 if they differ, 2 on a usage error, an unreadable file, a settings.py that does not parse or when either side is empty, 0 otherwise.
 
     An empty side is refused rather than passed: a pattern that stopped matching after a refactor
     would otherwise report "nothing out of step" forever - a false green that looks exactly like a
@@ -119,6 +144,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         names, bundled = documented((root / PAGE).read_text(encoding='utf-8'))
     except OSError as error:
         sys.stderr.write(f'check_settings_documented.py: {error}\n')
+        return 2
+    except SyntaxError as error:
+        sys.stderr.write(f'check_settings_documented.py: uc/uc/settings.py does not parse: {error.msg} (line {error.lineno})\n')
         return 2
     if not readers or not names:
         sys.stderr.write('check_settings_documented.py: found no settings in the code, or none documented; a pattern no longer matches\n')

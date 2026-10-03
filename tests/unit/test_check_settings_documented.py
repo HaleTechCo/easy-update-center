@@ -60,7 +60,29 @@ PAGE = """# Configuration reference
 
 
 def test_registry_entries_are_read():
-    assert hook.names_read(SETTINGS_PY, hook.REGISTRY_ENTRY) == {'MODE', 'RETAIN_RELEASES'}
+    assert hook.registry_names(SETTINGS_PY) == {'MODE', 'RETAIN_RELEASES'}
+
+
+def test_registry_names_ignore_comments_and_docstrings():
+    text = '''"""A docstring: Setting('IN_A_DOCSTRING', 'str')."""
+# Setting('IN_A_COMMENT', 'str')
+SETTINGS = (Setting('REAL', 'str', 'g', 'x.'),)
+note = "Setting('IN_A_STRING'"
+'''
+    assert hook.registry_names(text) == {'REAL'}
+
+
+def test_registry_names_need_a_string_constant_first_argument():
+    text = "Setting(NAME, 'x')\nSetting(env='KEYWORD')\nSetting()\nother.Setting('ATTRIBUTE')\n"
+    assert hook.registry_names(text) == set()
+
+
+def test_main_refuses_a_settings_file_that_does_not_parse(tmp_path, monkeypatch, capsys):
+    _tree(tmp_path, '| Setting |\n|---|\n| `MODE` |\n| `TLS_KEY_FILE` |\n| `UC_IMAGE` |\n')
+    (tmp_path / 'uc' / 'uc' / 'settings.py').write_text("Setting('MODE',\n", encoding='utf-8')
+    monkeypatch.chdir(tmp_path)
+    assert hook.main([]) == 2
+    assert 'uc/uc/settings.py does not parse' in capsys.readouterr().err
 
 
 def test_shell_reads_are_the_defaulted_expansions_only():
