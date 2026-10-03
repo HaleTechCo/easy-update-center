@@ -34,6 +34,7 @@ class Row:
     value: str
     source: str  # env, file, mode, derived or default
     note: str = ''  # for secret files: present, empty, missing or unreadable
+    restart: bool = False  # read when a service starts: a change needs make reload
 
 
 def rows(r: Resolver, settings: Settings | None) -> list[Row]:
@@ -44,7 +45,7 @@ def rows(r: Resolver, settings: Settings | None) -> list[Row]:
 def _row(setting: Setting, r: Resolver, settings: Settings | None) -> Row:
     if setting.env_only:
         given = r.env.get(setting.env, '').strip()
-        return Row(setting.env, '', _redact(setting, given or setting.default), 'env' if given else 'default')
+        return Row(setting.env, '', _redact(setting, given or setting.default), 'env' if given else 'default', restart=setting.restart)
     source = r.source(setting.env)
     if source == 'default' and setting.derived:
         source = 'derived'
@@ -52,7 +53,7 @@ def _row(setting: Setting, r: Resolver, settings: Settings | None) -> Row:
         source = 'mode'
     value = _show(getattr(settings, setting.attribute)) if settings is not None and setting.attribute else r.raw(setting.env)
     note = _presence(Path(value)) if setting.secret_file and value else ''
-    return Row(setting.env, toml_label(setting.env), _redact(setting, value), source, note)
+    return Row(setting.env, toml_label(setting.env), _redact(setting, value), source, note, setting.restart)
 
 
 def _redact(setting: Setting, value: str) -> str:
@@ -99,8 +100,8 @@ def format_rows(shown: list[Row], config_file: Path) -> str:
         lines += ['', group]
         for row in members:
             where = f'uc.toml: {row.key}' if row.source == 'file' else SOURCE_NAMES.get(row.source, row.source)
-            note = f'; {row.note}' if row.note else ''
-            lines.append(f'  {row.env} = {row.value}  ({where}{note})')
+            notes = ''.join(f'; {note}' for note in (row.note, 'restart' if row.restart else '') if note)
+            lines.append(f'  {row.env} = {row.value}  ({where}{notes})')
     return '\n'.join(lines) + '\n'
 
 

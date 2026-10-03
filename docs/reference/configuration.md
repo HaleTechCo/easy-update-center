@@ -60,8 +60,11 @@ and which you can run by hand; "doctor" means `uc doctor`.
 
   `make reload` checks the settings first and recreates nothing when they are invalid. A
   generation in progress restarts, as it always has when the scheduler is recreated.
-- `uc config` ends with that command when the scheduler started with other settings than the
-  current ones.
+- `uc config` marks `restart` the settings that are read when a service starts (the schedules,
+  the web container's settings, the repo-adapter's, the proxy variables and the data and secret
+  paths those use); they need `make reload`, and the rest (`RETAIN_RELEASES`,
+  `JAVA_TOOL_OPTIONS`, ...) apply at the next run. It ends with that command only when the
+  scheduler started with other values of the `restart` settings than the current ones.
 - `PUBLIC_URL` and the download settings are written into each release: after changing them,
   also publish a new release with `docker compose run --rm uc generate`.
 

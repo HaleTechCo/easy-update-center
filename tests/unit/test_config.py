@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from uc.config import load_settings, load_web_settings, read_secret, with_explicit_port
+from uc.config import load_settings, load_web_settings, read_secret, settings_digest, with_explicit_port
 from uc.errors import ConfigError
 
 AIRGAPPED = {
@@ -304,3 +304,17 @@ def test_web_settings_refuse_a_malformed_repository_url():
     env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'REPO_URL': 'http://[bad/', 'REPO_KEY': 'jenkins'}
     with pytest.raises(ConfigError, match='REPO_URL is not a valid URL: '):
         load_web_settings(env, config_file=Path('/nonexistent/uc.toml'))
+
+
+def test_equal_settings_have_equal_digests():
+    assert settings_digest(load_settings(AIRGAPPED)) == settings_digest(load_settings(dict(AIRGAPPED)))
+
+
+@pytest.mark.parametrize(('name', 'value'), [('GENERATE_SCHEDULE', '0 1 * * *'), ('DOWNLOAD_ACCESS', 'proxy'), ('REPO_MAX_ARCHIVE_MB', '64'), ('HTTPS_PROXY', 'http://proxy:3128')])
+def test_changing_a_restart_setting_changes_the_digest(name, value):
+    assert settings_digest(load_settings({**AIRGAPPED, name: value})) != settings_digest(load_settings(AIRGAPPED))
+
+
+@pytest.mark.parametrize(('name', 'value'), [('RETAIN_RELEASES', '9'), ('JAVA_TOOL_OPTIONS', '-Xmx1g'), ('UC_EXTRA_ARGS', '--max-plugins 5'), ('MIN_PLUGINS', '3')])
+def test_changing_an_unmarked_setting_keeps_the_digest(name, value):
+    assert settings_digest(load_settings({**AIRGAPPED, name: value})) == settings_digest(load_settings(AIRGAPPED))

@@ -13,7 +13,7 @@ import json
 import os
 import re
 import tomllib
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
@@ -601,6 +601,7 @@ def read_secret(path: Path) -> str | None:
 
 
 def settings_digest(settings: Settings) -> str:
-    """Return a fingerprint of every setting: the scheduler records it at start, and uc config compares it to tell whether the running services use the current settings."""
-    text = json.dumps(asdict(settings), default=str, sort_keys=True)
+    """Return a fingerprint of the settings the services read when they start (the registry's restart settings): the scheduler records it, and uc config compares it to tell whether the running services use the current ones."""
+    marked = {setting.env: getattr(settings, setting.attribute) for setting in SETTINGS if setting.restart and setting.attribute}
+    text = json.dumps(marked, default=str, sort_keys=True)
     return hashlib.sha256(text.encode('utf-8')).hexdigest()

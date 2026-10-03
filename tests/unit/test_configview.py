@@ -2,6 +2,9 @@
 
 import io
 import json
+import os
+
+import pytest
 
 from uc.config import load_settings, settings_digest
 from uc.configview import run
@@ -35,14 +38,14 @@ def test_json_rows_give_each_value_and_its_source(tmp_path, secrets_dir):
     code, out, _ = show(env_for(tmp_path, secrets_dir), settings_file(tmp_path), as_json=True)
     assert code == 0
     rows = {row['env']: row for row in json.loads(out)}
-    assert rows['MODE'] == {'env': 'MODE', 'key': 'mode', 'value': 'airgapped', 'source': 'env', 'note': ''}
-    assert rows['RETAIN_RELEASES'] == {'env': 'RETAIN_RELEASES', 'key': 'retain_releases', 'value': '7', 'source': 'file', 'note': ''}
+    assert rows['MODE'] == {'env': 'MODE', 'key': 'mode', 'value': 'airgapped', 'source': 'env', 'note': '', 'restart': True}
+    assert rows['RETAIN_RELEASES'] == {'env': 'RETAIN_RELEASES', 'key': 'retain_releases', 'value': '7', 'source': 'file', 'note': '', 'restart': False}
     assert (rows['CORE_AGE_DAYS']['value'], rows['CORE_AGE_DAYS']['source']) == ('0', 'mode')
     assert (rows['REPO_ADAPTER']['value'], rows['REPO_ADAPTER']['source']) == ('true', 'derived')
     assert (rows['UC_ID']['value'], rows['UC_ID']['source']) == ('default', 'default')
     assert (rows['SIGNING_KEY_FILE']['source'], rows['SIGNING_KEY_FILE']['note']) == ('derived', 'present')
     assert rows['GITHUB_TOKEN_FILE']['note'] == 'missing'
-    assert rows['UC_IMAGE'] == {'env': 'UC_IMAGE', 'key': '', 'value': 'jenkins-uc/uc:local', 'source': 'default', 'note': ''}
+    assert rows['UC_IMAGE'] == {'env': 'UC_IMAGE', 'key': '', 'value': 'jenkins-uc/uc:local', 'source': 'default', 'note': '', 'restart': False}
 
 
 def test_text_groups_the_settings_and_names_the_file(tmp_path, secrets_dir):
@@ -52,7 +55,7 @@ def test_text_groups_the_settings_and_names_the_file(tmp_path, secrets_dir):
     assert out.startswith(f'Settings file: {path} (read)\n')
     assert '\nGeneration\n' in out
     assert '  RETAIN_RELEASES = 7  (uc.toml: retain_releases)\n' in out
-    assert '  MODE = airgapped  (environment)\n' in out
+    assert '  MODE = airgapped  (environment; restart)\n' in out
     assert f'  SIGNING_KEY_FILE = {secrets_dir}/update-center.key  (derived; present)\n' in out
 
 
@@ -128,3 +131,52 @@ def test_check_fails_on_a_bad_doctor_since(tmp_path, secrets_dir):
     code, _, err = show(env_for(tmp_path, secrets_dir, DOCTOR_SINCE='latest'), tmp_path / 'none.toml', check=True)
     assert code == 1
     assert 'DOCTOR_SINCE must be a Jenkins version' in err
+
+
+def test_restart_settings_are_marked_in_the_text_and_the_json(tmp_path, secrets_dir):
+    env, path = env_for(tmp_path, secrets_dir), tmp_path / 'none.toml'
+    _, text, _ = show(env, path)
+    assert '  PUBLIC_URL = https://uc.example.com  (environment; restart)\n' in text
+    assert '  RETAIN_RELEASES = 5  (default)\n' in text
+    _, out, _ = show(env, path, as_json=True)
+    by_name = {row['env']: row for row in json.loads(out)}
+    assert by_name['PUBLIC_URL']['restart'] is True
+    assert by_name['GENERATE_SCHEDULE']['restart'] is True
+    assert by_name['RETAIN_RELEASES']['restart'] is False
+    assert by_name['COMPOSE_FILE']['restart'] is False
+
+
+def test_the_reload_hint_ignores_a_change_to_an_unmarked_setting(tmp_path, secrets_dir):
+    path = tmp_path / 'none.toml'
+    state = tmp_path / 'data' / 'scheduler.json'
+    state.parent.mkdir()
+    state.write_text(json.dumps({'started_at': 'x', 'settings_digest': settings_digest(load_settings(env_for(tmp_path, secrets_dir), config_file=path))}), encoding='utf-8')
+    _, out, _ = show(env_for(tmp_path, secrets_dir, RETAIN_RELEASES='9'), path)
+    assert 'note:' not in out
+    _, out, _ = show(env_for(tmp_path, secrets_dir, PUBLIC_URL='https://other.example.com'), path)
+    assert 'note: the scheduler started at x with other settings' in out
+
+
+@pytest.mark.parametrize('options', [{'as_json': True}, {'check': True}])
+def test_an_invalid_configuration_prints_nothing_on_stdout_with_json_or_check(tmp_path, secrets_dir, options):
+    code, out, err = show(env_for(tmp_path, secrets_dir, RETAIN_RELEASES='0'), tmp_path / 'none.toml', **options)
+    assert (code, out) == (1, '')
+    assert 'uc: error: RETAIN_RELEASES must be >= 1 (got 0)' in err
+
+
+def test_an_empty_secret_file_is_noted(tmp_path, secrets_dir):
+    (secrets_dir / 'repo_password').write_text('\n')
+    _, out, _ = show(env_for(tmp_path, secrets_dir), tmp_path / 'none.toml')
+    assert f'  REPO_PASSWORD_FILE = {secrets_dir / "repo_password"}  (derived; empty; restart)\n' in out
+
+
+def test_an_unreadable_secret_file_is_noted(tmp_path, secrets_dir):
+    if os.geteuid() == 0:
+        pytest.skip('root reads any file')
+    secret = secrets_dir / 'repo_password'
+    secret.chmod(0)
+    try:
+        _, out, _ = show(env_for(tmp_path, secrets_dir), tmp_path / 'none.toml')
+    finally:
+        secret.chmod(0o600)
+    assert f'  REPO_PASSWORD_FILE = {secret}  (derived; unreadable; restart)\n' in out

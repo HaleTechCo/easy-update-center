@@ -42,7 +42,9 @@ once releases are published.
 - `uc config` shows each setting's value and where it came from; `--check` validates, `--example`
   prints an example file, `--web-env` the web container's settings. Credentials inside a URL setting
   (for example a proxy URL with user:password) show as `***`, in text and JSON, including when the
-  configuration is invalid.
+  configuration is invalid. Settings read only when a service starts are marked `restart` (a
+  `"restart"` field in `--json`), and the note to run `make reload` appears only when one of them
+  changed, not for settings every run re-reads, such as `RETAIN_RELEASES`.
 - The scheduler can run a read-only `uc doctor --record` on `DOCTOR_SCHEDULE`. `uc doctor --record`
   saves the report as `/data/doctor/report.json` and its counts in `status.json`, with the new
   `doctor.checked_at`, `doctor.missing_cores` and `doctor.recorded_at` (when the last report was

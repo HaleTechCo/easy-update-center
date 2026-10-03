@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -47,13 +48,22 @@ def crontab_text(settings: Settings) -> str:
 
 
 def write_state(settings: Settings, now: dt.datetime) -> None:
-    """Record when the scheduler started and with which settings, in data/scheduler.json, for uc config's reload hint."""
+    """Record when the scheduler started and with which settings, in data/scheduler.json, for uc config's reload hint; a failed write is reported and the scheduler goes on."""
     path = settings.data_dir / SCHEDULER_STATE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f'.{SCHEDULER_STATE}.tmp')
-    tmp.write_text(json.dumps({'started_at': iso(now), 'settings_digest': settings_digest(settings)}, indent=2, sort_keys=True) + '\n', encoding='utf-8')
-    tmp.chmod(0o644)
-    tmp.replace(path)
+    text = json.dumps({'started_at': iso(now), 'settings_digest': settings_digest(settings)}, indent=2, sort_keys=True) + '\n'
+    tmp = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, name = tempfile.mkstemp(dir=path.parent, prefix=f'.{SCHEDULER_STATE}.', suffix='.tmp')
+        tmp = Path(name)
+        with os.fdopen(descriptor, 'w', encoding='utf-8') as handle:
+            handle.write(text)
+        tmp.chmod(0o644)
+        tmp.replace(path)
+    except OSError as exc:
+        print(f'uc schedule: could not record the start in {path}: {exc.strerror or exc}; uc config cannot tell when a restart is needed', flush=True)
+        if tmp is not None:
+            tmp.unlink(missing_ok=True)
 
 
 def run_schedule(

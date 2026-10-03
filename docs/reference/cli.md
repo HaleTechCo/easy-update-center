@@ -144,8 +144,10 @@ docker compose run --rm uc config --web-env [--out FILE]
 Shows every setting with its value and where it came from: `environment`, `uc.toml: <key>`, `mode`
 (the default for the mode), `derived` (worked out from other settings, as `REPO_URL` and the secret
 paths are) or `default`. For a secret file it shows the path and whether the file is `present`,
-`empty` or `missing`, never its contents. When the scheduler started with other settings than these,
-it ends with the command that applies them.
+`empty` or `missing`, never its contents. A setting read only when a service starts shows `restart`
+after its source (`environment; restart`): changing it needs `make reload`; the others apply at the
+next run. When the scheduler started with other values of the `restart` settings than these, it
+ends with the command that applies them.
 Credentials inside a URL setting are shown as `***`.
 It runs in the `uc` container, which by design does not receive `download_proxy_auth` (web's) nor,
 air-gapped, `repo_username` and `repo_password` (the repo-adapter's), so those show as `missing`
@@ -153,7 +155,7 @@ there even when they are set up.
 
 | Option | Meaning |
 |---|---|
-| `--json` | The same as a JSON list of objects with `env`, `key`, `value`, `source` and `note`. |
+| `--json` | The same as a JSON list of objects with `env`, `key`, `value`, `source`, `note` and `restart` (true or false). |
 | `--check` | Only check the settings: prints `configuration ok`, or the error. |
 | `--example toml\|env` | Print an example `config/uc.toml` or `.env` that lists every setting, with the settings the mode needs set and the rest commented out at their defaults. It reads no settings, so it works before any exist. |
 | `--mode` | With `--example`: the mode the example is for, `online` (the default) or `airgapped`. |
@@ -180,7 +182,7 @@ scheduling continues. It then hands over to supercronic, which runs:
 - `uc doctor --record` on `DOCTOR_SCHEDULE`, when it is set: a read-only report whose counts go
   into `status.json`.
 
-A bad schedule stops the scheduler at start, with a message naming the setting. supercronic never
+A bad schedule stops the scheduler at start, with a message naming the setting. A start it cannot record (an unwritable data directory) is reported on one line, and the scheduler runs anyway; `uc config` then cannot tell when a restart is needed. supercronic never
 starts a job while its previous run is still going, and a scheduled generation that finds another
 generation or a rollback running waits for it.
 

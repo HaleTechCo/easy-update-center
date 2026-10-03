@@ -1,10 +1,12 @@
 """The settings registry: names, the uc.toml naming rule, types, groups and defaults (docs/reference/configuration.md#how-settings-are-read)."""
 
 import re
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
 
+from uc import config
 from uc.settings import CORE_VERSION, GROUPS, MODES, REGISTRY, SETTINGS, TYPES, env_name, toml_key, toml_label
 
 
@@ -144,3 +146,47 @@ def test_a_mode_sample_comes_before_the_common_one():
     assert REGISTRY['PUBLIC_URL'].sample_for('online') == REGISTRY['PUBLIC_URL'].sample
     assert REGISTRY['REPO_TYPE'].hint_for('online') == REGISTRY['REPO_TYPE'].online_hint
     assert REGISTRY['REPO_TYPE'].hint_for('airgapped') == ()
+
+
+REPO_ADAPTER_READS = {
+    'REPO_ADAPTER', 'REPO_ADAPTER_PORT', 'REPO_ADAPTER_DIR', 'REPO_TYPE', 'REPO_URL', 'REPO_API_URL', 'REPO_KEY', 'REPO_CA_FILE',
+    'REPO_MAX_ARCHIVE_MB', 'REPO_USERNAME_FILE', 'REPO_PASSWORD_FILE', 'UC_DATA_DIR', 'SECRETS_DIR', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY',
+}  # fmt: skip
+"""What `uc repo-adapter` reads at start (the Settings fields serve, make_server and create_adapter use, the secret files, and the proxy variables apply_process_env exports), by variable name."""
+
+
+def test_restart_marks_what_the_services_read_at_start(monkeypatch):
+    marked = {setting.env for setting in SETTINGS if setting.restart}
+    web_inputs = recorded_web_inputs(monkeypatch)
+    assert {'GENERATE_SCHEDULE', 'DOCTOR_SCHEDULE'} <= marked
+    assert web_inputs <= marked
+    assert marked >= REPO_ADAPTER_READS
+    assert marked == web_inputs | REPO_ADAPTER_READS | {'GENERATE_SCHEDULE', 'DOCTOR_SCHEDULE'}
+
+
+def test_restart_leaves_out_what_every_run_rereads():
+    for name in ('RETAIN_RELEASES', 'JAVA_TOOL_OPTIONS', 'UC_EXTRA_ARGS', 'MIN_PLUGINS'):
+        assert not REGISTRY[name].restart, name
+    assert not any(setting.restart for setting in SETTINGS if setting.env_only)
+
+
+def recorded_web_inputs(monkeypatch):
+    """Return every setting load_web_settings reads, over the modes and backends that make it read more."""
+    seen: set[str] = set()
+
+    class Recording(config.Resolver):
+        def raw(self, name):
+            seen.add(name)
+            return super().raw(name)
+
+    monkeypatch.setattr(config, 'Resolver', Recording)
+    base = {'PUBLIC_URL': 'https://uc.example.com', 'REPO_URL': 'https://repo.corp/artifactory/', 'REPO_KEY': 'jenkins'}
+    cases = [
+        {'MODE': 'online'},
+        {'MODE': 'airgapped'},
+        {'MODE': 'airgapped', 'DOWNLOAD_BACKEND': 'artifactory'},
+        {'MODE': 'airgapped', 'DOWNLOAD_BACKEND': 'artifactory', 'REPO_TYPE': 'artifact-keeper'},
+    ]
+    for case in cases:
+        config.load_web_settings({**base, **case}, config_file=Path('none.toml'))
+    return seen
