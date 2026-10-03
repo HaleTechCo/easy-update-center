@@ -126,4 +126,7 @@ file, nothing else.
   `docker compose up -d`. Run `docker compose logs web-config`, fix the setting and run
   `docker compose up -d` again. `docker compose run --rm uc config --check` before applying a
   change catches it.
+- Before it waits for the first release, `web` logs one line, `entrypoint: serving <PUBLIC_URL>;
+  downloads: <DOWNLOAD_BACKEND> <DOWNLOAD_BACKEND_URL> (<DOWNLOAD_ACCESS>)`, so `docker compose logs web`
+  shows what it is serving. It holds no secret.
 - To see what `web` will get: `docker compose run --rm uc config --web-env`.

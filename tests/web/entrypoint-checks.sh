@@ -50,6 +50,9 @@ expect_exit_with_web_env 64 "needs username:password" $'PUBLIC_URL=http://uc\nDO
 
 name="uc-web-wait-$$"
 docker run -d --name "${name}" -e PUBLIC_URL=http://uc "${image}" > /dev/null
+# shellcheck disable=SC2016 # expanded by the bash inside the container
+docker run -d --name "${name}-env" --tmpfs /run/uc-web:uid=33,gid=33 --entrypoint bash "${image}" \
+    -c 'printf "%s\n" PUBLIC_URL=http://uc DOWNLOAD_BACKEND=artifactory "DOWNLOAD_BACKEND_URL=http://backend/repo?a=b=c" > /run/uc-web/web.env && exec /usr/local/bin/entrypoint.sh' > /dev/null
 sleep 3
 if docker logs "${name}" 2>&1 | grep -q "waiting for the first published release"; then
     echo "ok: waits for the first release"
@@ -57,5 +60,12 @@ else
     echo "FAIL: web did not report that it is waiting for the first release"
     failures=$((failures + 1))
 fi
-docker rm -f "${name}" > /dev/null
+env_logs="$(docker logs "${name}-env" 2>&1)"
+if [[ "${env_logs}" == *"entrypoint: serving http://uc; downloads: artifactory http://backend/repo?a=b=c (redirect)"* ]]; then
+    echo "ok: logs what it serves, with the backend URL intact"
+else
+    echo "FAIL: web did not log what it serves: ${env_logs}"
+    failures=$((failures + 1))
+fi
+docker rm -f "${name}" "${name}-env" > /dev/null
 exit "${failures}"

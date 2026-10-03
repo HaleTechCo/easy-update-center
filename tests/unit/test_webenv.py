@@ -1,12 +1,15 @@
 """web.env: the web container's settings, worked out by uc (docs/reference/cli.md#uc-config)."""
 
+import os
+import re
 from pathlib import Path
 
 import pytest
 
+from uc.cli import main
 from uc.config import load_settings, load_web_settings
 from uc.errors import ConfigError
-from uc.webenv import web_env, write_web_env
+from uc.webenv import WEB_SETTINGS, web_env, write_web_env
 
 NO_FILE = Path('/nonexistent/uc.toml')
 WEB_FIELDS = ('public_url', 'download_backend', 'download_backend_url', 'download_access', 'download_proxy_auth_file', 'download_proxy_ca_file', 'tls_cert_file', 'tls_key_file')
@@ -78,3 +81,26 @@ AGREEMENT_ENVS = {
 def test_web_settings_agree_with_the_full_settings(env):
     web, full = load_web_settings(env, config_file=NO_FILE), load_settings(env, config_file=NO_FILE)
     assert {name: getattr(web, name) for name in WEB_FIELDS} == {name: getattr(full, name) for name in WEB_FIELDS}
+
+
+def test_the_entrypoint_reads_exactly_the_web_settings():
+    script = Path('/web/entrypoint.sh').read_text(encoding='utf-8')
+    names = re.search(r'case "\$\{name\}" in\n\s*([A-Z_]+(?: \| [A-Z_]+)*)\)', script)
+    assert names, 'the reader loop in web/entrypoint.sh has no case pattern of names'
+    assert tuple(names.group(1).split(' | ')) == WEB_SETTINGS
+
+
+@pytest.mark.skipif(not hasattr(os, 'geteuid') or os.geteuid() == 0, reason='root can write to a read-only directory')
+def test_an_unwritable_web_env_directory_is_reported_and_leaves_no_file(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv('MODE', 'online')
+    monkeypatch.setenv('PUBLIC_URL', 'https://uc.example.com')
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    out_dir = tmp_path / 'locked'
+    out_dir.mkdir()
+    out_dir.chmod(0o555)
+    try:
+        assert main(['config', '--web-env', '--out', str(out_dir / 'web.env')]) == 1
+        assert 'uc: error: cannot write' in capsys.readouterr().err
+        assert list(out_dir.iterdir()) == []
+    finally:
+        out_dir.chmod(0o755)

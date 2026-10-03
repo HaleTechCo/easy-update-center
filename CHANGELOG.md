@@ -8,6 +8,9 @@ once releases are published.
 
 ### Changed
 
+- The web container logs what it serves (`entrypoint: serving <PUBLIC_URL>; downloads: ...`) before
+  waiting for the first release. `uc config --web-env --out` writes through a unique temporary file
+  and reports a failure as `uc: error: cannot write <path>: <reason>`.
 - The web container no longer reads `.env`: the one-shot `web-config` service works out its settings
   and writes them to a volume `web` reads at start. A variable set on `web` itself, as the TLS and
   proxy-CA overrides do, still wins. Without that file (the web image run on its own) `web` takes

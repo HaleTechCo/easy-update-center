@@ -12,6 +12,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro" \
              -v "$(CURDIR)/tools:/tools:ro" \
+             -v "$(CURDIR)/web:/web:ro" \
              -v "$(CURDIR)/config/uc.example.toml:/examples/uc.example.toml:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
