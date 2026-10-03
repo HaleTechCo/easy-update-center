@@ -6,8 +6,8 @@ compares the two sets on every commit, in both directions.
 
 Where the code reads settings:
 
-* `uc/uc/config.py`: every name passed to its env readers (`_get(env, 'NAME'` and the rest of that
-  family), to `env.get('NAME'` and to `secret('NAME'`.
+* `uc/uc/settings.py`: every `Setting('NAME'` entry of the settings registry, which config.py reads
+  every setting through.
 * `web/entrypoint.sh`: every `${NAME:-...}` expansion, with or without the colon and with any of
   `-`, `=`, `?`, `+`. The script runs under `set -u`, so an optional environment variable can only
   be read through one of those forms. A name the script sets itself and then reads bare
@@ -34,12 +34,12 @@ if TYPE_CHECKING:
 PAGE = Path('docs/reference/configuration.md')
 BUNDLED_HEADING = 'Read by bundled software'
 
-PYTHON_READ = re.compile(r"(?:\(env,\s*|env\.get\(|secret\()'([A-Z][A-Z0-9_]*)'")
+REGISTRY_ENTRY = re.compile(r"Setting\(\s*'([A-Z][A-Z0-9_]*)'")
 SHELL_READ = re.compile(r'\$\{([A-Z][A-Z0-9_]*):?[-=?+]')
 COMPOSE_READ = re.compile(r'\$\{([A-Z][A-Z0-9_]*)')
 
 SOURCES: tuple[tuple[Path, re.Pattern[str]], ...] = (
-    (Path('uc/uc/config.py'), PYTHON_READ),
+    (Path('uc/uc/settings.py'), REGISTRY_ENTRY),
     (Path('web/entrypoint.sh'), SHELL_READ),
     (Path('compose.yaml'), COMPOSE_READ),
     (Path('compose.airgapped.yaml'), COMPOSE_READ),

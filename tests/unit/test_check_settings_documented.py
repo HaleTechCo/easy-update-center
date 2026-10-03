@@ -8,14 +8,18 @@ _spec = importlib.util.spec_from_file_location('check_settings_documented', TOOL
 hook = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(hook)
 
-CONFIG_PY = """
-mode = _choice(env, 'MODE', '', MODES)
-days = _int(env, 'RETAIN_RELEASES', 5, minimum=1)
-ratio = _ratio(env, 'MIN_PLUGIN_RATIO', 0.9)
-flag = _bool(env, 'ALLOW_LOCAL_PUBLIC_URL', default=False)
-url = env.get('POPULARITY_JSON_URL', UPSTREAM if online else '').strip()
-key = secret('SIGNING_KEY_FILE', 'update-center.key')
-value = _get(env, name, default)
+SETTINGS_PY = """
+SETTINGS = (
+    Setting('MODE', 'choice', 'Required', 'online or airgapped.', choices=MODES),
+    Setting(
+        'RETAIN_RELEASES',
+        'int',
+        'Generation',
+        'Releases kept for rollback.',
+    ),
+)
+setting = REGISTRY.get(name)
+value = _get(env, 'NOT_A_REGISTRY_ENTRY')
 """
 
 ENTRYPOINT_SH = """
@@ -55,8 +59,8 @@ PAGE = """# Configuration reference
 """
 
 
-def test_config_readers_env_get_and_secret_paths_are_read():
-    assert hook.names_read(CONFIG_PY, hook.PYTHON_READ) == {'MODE', 'RETAIN_RELEASES', 'MIN_PLUGIN_RATIO', 'ALLOW_LOCAL_PUBLIC_URL', 'POPULARITY_JSON_URL', 'SIGNING_KEY_FILE'}
+def test_registry_entries_are_read():
+    assert hook.names_read(SETTINGS_PY, hook.REGISTRY_ENTRY) == {'MODE', 'RETAIN_RELEASES'}
 
 
 def test_shell_reads_are_the_defaulted_expansions_only():
@@ -74,24 +78,24 @@ def test_documented_names_come_from_first_cells_outside_fences():
 
 
 def test_undocumented_setting_is_reported_with_its_reader():
-    lines = hook.problems({'MODE': 'uc/uc/config.py', 'TLS_KEY_FILE': 'web/entrypoint.sh'}, {'MODE'}, set())
+    lines = hook.problems({'MODE': 'uc/uc/settings.py', 'TLS_KEY_FILE': 'web/entrypoint.sh'}, {'MODE'}, set())
     assert lines == ['TLS_KEY_FILE is read by web/entrypoint.sh but not documented in docs/reference/configuration.md']
 
 
 def test_documented_setting_that_nothing_reads_is_reported():
-    lines = hook.problems({'MODE': 'uc/uc/config.py'}, {'MODE', 'OLD_SETTING'}, set())
+    lines = hook.problems({'MODE': 'uc/uc/settings.py'}, {'MODE', 'OLD_SETTING'}, set())
     assert lines == ['OLD_SETTING is documented in docs/reference/configuration.md but nothing reads it']
 
 
 def test_bundled_software_settings_need_no_reader():
-    assert hook.problems({'MODE': 'uc/uc/config.py'}, {'MODE', 'JAVA_TOOL_OPTIONS'}, {'JAVA_TOOL_OPTIONS'}) == []
+    assert hook.problems({'MODE': 'uc/uc/settings.py'}, {'MODE', 'JAVA_TOOL_OPTIONS'}, {'JAVA_TOOL_OPTIONS'}) == []
 
 
 def _tree(root, page):
     (root / 'uc' / 'uc').mkdir(parents=True)
     (root / 'web').mkdir()
     (root / 'docs' / 'reference').mkdir(parents=True)
-    (root / 'uc' / 'uc' / 'config.py').write_text("mode = _choice(env, 'MODE', '', MODES)\n", encoding='utf-8')
+    (root / 'uc' / 'uc' / 'settings.py').write_text("SETTINGS = (Setting('MODE', 'choice', 'Required', 'x.'),)\n", encoding='utf-8')
     (root / 'web' / 'entrypoint.sh').write_text('key="${TLS_KEY_FILE:-}"\n', encoding='utf-8')
     (root / 'compose.yaml').write_text('image: ${UC_IMAGE:-x}\n', encoding='utf-8')
     (root / 'compose.airgapped.yaml').write_text('services: {}\n', encoding='utf-8')
@@ -100,7 +104,7 @@ def _tree(root, page):
 
 def test_code_settings_names_the_first_reader(tmp_path):
     _tree(tmp_path, '')
-    assert hook.code_settings(tmp_path) == {'MODE': 'uc/uc/config.py', 'TLS_KEY_FILE': 'web/entrypoint.sh', 'UC_IMAGE': 'compose.yaml'}
+    assert hook.code_settings(tmp_path) == {'MODE': 'uc/uc/settings.py', 'TLS_KEY_FILE': 'web/entrypoint.sh', 'UC_IMAGE': 'compose.yaml'}
 
 
 def test_main_passes_when_both_sides_agree(tmp_path, monkeypatch):
