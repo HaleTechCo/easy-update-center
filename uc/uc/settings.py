@@ -224,6 +224,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('GITHUB_USERNAME_FILE', 'path', 'Internal', 'The GitHub user, ${SECRETS_DIR}/github_username by default.', derived=True, secret_file=True),
     Setting('GITHUB_TOKEN_FILE', 'path', 'Internal', 'The GitHub token, ${SECRETS_DIR}/github_token by default.', derived=True, secret_file=True),
     Setting('REPO_PUSH_AUTH_FILE', 'path', 'Internal', 'The account that can write to the repository, ${SECRETS_DIR}/repo_push_auth by default.', derived=True, secret_file=True),
+    Setting('UC_CONFIG_FILE', 'path', 'Internal', 'The settings file; a missing file is fine.', default='/config/uc.toml', env_only=True),
     # Compose
     Setting('UC_ENV_FILE', 'path', 'Compose', 'The file every service loads as env_file.', default='.env', env_only=True),
     Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler and repo-adapter.', default='jenkins-uc/uc:local', env_only=True),

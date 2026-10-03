@@ -21,6 +21,7 @@ def use_env(monkeypatch, tmp_path, secrets_dir):
         'SECRETS_DIR': str(secrets_dir),
         'UC_DATA_DIR': str(tmp_path / 'data'),
         'UC_OVERLAY_DIR': str(tmp_path / 'overlay'),
+        'UC_CONFIG_FILE': str(tmp_path / 'uc.toml'),
     }
     for key, value in values.items():
         monkeypatch.setenv(key, value)
