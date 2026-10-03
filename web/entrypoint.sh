@@ -41,6 +41,8 @@ case "${DOWNLOAD_BACKEND}" in
         ;;
     *) die "DOWNLOAD_BACKEND must be mirror or artifactory (got '${DOWNLOAD_BACKEND}')" ;;
 esac
+authority="${backend_url#*://}"
+[[ "${authority%%/*}" != *@* ]] || die "DOWNLOAD_BACKEND_URL must not contain credentials; for proxied downloads put them in the download_proxy_auth secret"
 export DOWNLOAD_BACKEND_URL="${backend_url%/}"
 
 case "${DOWNLOAD_ACCESS}" in

@@ -104,3 +104,33 @@ def test_an_unwritable_web_env_directory_is_reported_and_leaves_no_file(monkeypa
         assert list(out_dir.iterdir()) == []
     finally:
         out_dir.chmod(0o755)
+
+
+CREDENTIAL_ERROR = 'DOWNLOAD_BACKEND_URL must not contain credentials'
+CREDENTIAL_URL = 'https://user:pw@art/repo'  # pragma: allowlist secret
+
+
+@pytest.mark.parametrize('load', [load_web_settings, load_settings])
+def test_credentials_in_the_backend_url_are_refused(load, tmp_path):
+    env = {'MODE': 'online', 'PUBLIC_URL': 'https://uc', 'DOWNLOAD_BACKEND_URL': CREDENTIAL_URL}
+    with pytest.raises(ConfigError, match=CREDENTIAL_ERROR):
+        load(env, config_file=NO_FILE)
+    path = tmp_path / 'uc.toml'
+    path.write_text(f'[download]\nbackend_url = "{CREDENTIAL_URL}"\n', encoding='utf-8')
+    with pytest.raises(ConfigError, match=r'\[download\] backend_url in .*must not contain credentials'):
+        load({'MODE': 'online', 'PUBLIC_URL': 'https://uc'}, config_file=path)
+
+
+@pytest.mark.parametrize('load', [load_web_settings, load_settings])
+def test_an_at_sign_in_the_backend_url_path_or_query_is_not_a_credential(load):
+    env = {'MODE': 'online', 'PUBLIC_URL': 'https://uc', 'DOWNLOAD_BACKEND_URL': 'http://art/repo?x=a@b'}
+    assert load(env, config_file=NO_FILE).download_backend_url == 'http://art/repo?x=a@b'
+
+
+def test_web_env_refuses_a_credentialed_backend_url_at_the_command_line(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv('MODE', 'online')
+    monkeypatch.setenv('PUBLIC_URL', 'https://uc')
+    monkeypatch.setenv('DOWNLOAD_BACKEND_URL', CREDENTIAL_URL)
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    assert main(['config', '--web-env']) == 1
+    assert 'uc: error: ' + CREDENTIAL_ERROR in capsys.readouterr().err

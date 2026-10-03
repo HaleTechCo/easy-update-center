@@ -8,6 +8,8 @@ once releases are published.
 
 ### Changed
 
+- A `DOWNLOAD_BACKEND_URL` with credentials in it is refused, as `REPO_URL` is, by `uc` and by
+  the web container.
 - The web container logs what it serves (`entrypoint: serving <PUBLIC_URL>; downloads: ...`) before
   waiting for the first release. `uc config --web-env --out` writes through a unique temporary file
   and reports a failure as `uc: error: cannot write <path>: <reason>`.

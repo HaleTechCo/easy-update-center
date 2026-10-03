@@ -42,8 +42,11 @@ expect_exit 64 "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL" -e PUBL
 expect_exit 64 "needs username:password" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy
 expect_exit 64 "TLS_CERT_FILE and TLS_KEY_FILE must both be readable" -e PUBLIC_URL=http://uc -e TLS_CERT_FILE=/nope
 
-# web.env is read; names web does not read and empty values are ignored; the environment wins.
-s3_env=$'PUBLIC_URL=http://uc\nMODE=bogus\nTLS_CERT_FILE=\nDOWNLOAD_BACKEND=s3\n'
+expect_exit 64 "DOWNLOAD_BACKEND_URL must not contain credentials" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e DOWNLOAD_BACKEND_URL=https://u:pw@art/repo # pragma: allowlist secret
+
+# web.env is read; empty values are ignored; the environment wins.
+s3_env=$'PUBLIC_URL=http://uc\nTLS_CERT_FILE=\nDOWNLOAD_BACKEND=s3\n'
+expect_exit_with_web_env 64 "DOWNLOAD_BACKEND_URL must not contain credentials" $'PUBLIC_URL=http://uc\nDOWNLOAD_BACKEND=artifactory\nDOWNLOAD_BACKEND_URL=https://u:pw@art/repo\n' # pragma: allowlist secret
 expect_exit_with_web_env 64 "DOWNLOAD_BACKEND must be mirror or artifactory (got 's3')" "${s3_env}"
 expect_exit_with_web_env 64 "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL" "${s3_env}" -e DOWNLOAD_BACKEND=artifactory
 expect_exit_with_web_env 64 "needs username:password" $'PUBLIC_URL=http://uc\nDOWNLOAD_ACCESS=proxy\nDOWNLOAD_PROXY_AUTH_FILE=/nope\n'
