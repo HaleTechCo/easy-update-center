@@ -269,19 +269,13 @@ def load_web_settings(env: Mapping[str, str] | None = None, *, config_file: Path
         msg = 'PUBLIC_URL must be set'
         raise ConfigError(msg)
     backend = _choice(r, 'DOWNLOAD_BACKEND')
-    backend_url = r.raw('DOWNLOAD_BACKEND_URL')
-    if not backend_url:
-        if backend == 'mirror':
-            backend_url = UPSTREAM_MIRROR_URL
-        else:
-            repo_type, repo_url, repo_key = _repository(r, online=r.mode == 'online')
-            backend_url = _default_backend_url(backend, repo_type, repo_url, repo_key)
+    backend_url = r.raw('DOWNLOAD_BACKEND_URL') or _default_backend_url(r, backend)
     return WebSettings(
         public_url=public_url,
         download_backend=backend,
         download_backend_url=backend_url.rstrip('/'),
         download_access=_choice(r, 'DOWNLOAD_ACCESS'),
-        download_proxy_auth_file=Path(r.raw('DOWNLOAD_PROXY_AUTH_FILE') or str(Path(r.raw('SECRETS_DIR')) / 'download_proxy_auth')),
+        download_proxy_auth_file=_secret_path(r, 'DOWNLOAD_PROXY_AUTH_FILE', 'download_proxy_auth'),
         download_proxy_ca_file=r.raw('DOWNLOAD_PROXY_CA_FILE'),
         tls_cert_file=r.raw('TLS_CERT_FILE'),
         tls_key_file=r.raw('TLS_KEY_FILE'),
@@ -319,10 +313,20 @@ def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
     return repo_type, with_trailing_slash(repo_url), repo_key
 
 
-def _default_backend_url(backend: str, repo_type: str, repo_url: str, repo_key: str) -> str:
-    """Return where /download/ requests go when DOWNLOAD_BACKEND_URL is not set."""
+def _secret_path(r: Resolver, name: str, default_file: str) -> Path:
+    """Return the secret file name points at, else default_file in SECRETS_DIR."""
+    return Path(r.raw(name) or str(Path(r.raw('SECRETS_DIR')) / default_file))
+
+
+def _default_backend_url(r: Resolver, backend: str, repository: tuple[str, str, str] | None = None) -> str:
+    """Return where /download/ requests go when DOWNLOAD_BACKEND_URL is not set.
+
+    repository is the (REPO_TYPE, REPO_URL, REPO_KEY) _repository already validated; without it the repository is
+    read here, and only when the backend needs it (the mirror does not).
+    """
     if backend == 'mirror':
         return UPSTREAM_MIRROR_URL
+    repo_type, repo_url, repo_key = repository or _repository(r, online=r.mode == 'online')
     if repo_type == 'artifact-keeper':
         return f'{repo_url.rstrip("/")}/maven/{repo_key}'
     return repo_url + repo_key
@@ -350,8 +354,7 @@ def settings_from(r: Resolver) -> Settings:
     repo_ca = r.raw('REPO_CA_FILE')
 
     backend = _choice(r, 'DOWNLOAD_BACKEND')
-    default_backend_url = _default_backend_url(backend, repo_type, repo_url, repo_key)
-    backend_url = (r.raw('DOWNLOAD_BACKEND_URL') or default_backend_url).rstrip('/')
+    backend_url = (r.raw('DOWNLOAD_BACKEND_URL') or _default_backend_url(r, backend, (repo_type, repo_url, repo_key))).rstrip('/')
     data_dir = Path(r.raw('UC_DATA_DIR'))
 
     resources_source = _choice(r, 'RESOURCES_SOURCE')
@@ -367,9 +370,6 @@ def settings_from(r: Resolver) -> Settings:
         raise ConfigError(msg)
 
     secrets_dir = Path(r.raw('SECRETS_DIR'))
-
-    def secret(var: str, name: str) -> Path:
-        return Path(r.raw(var) or str(secrets_dir / name))
 
     return Settings(
         mode=mode,
@@ -401,7 +401,7 @@ def settings_from(r: Resolver) -> Settings:
         download_backend=backend,
         download_backend_url=backend_url,
         download_access=_choice(r, 'DOWNLOAD_ACCESS'),
-        download_proxy_auth_file=secret('DOWNLOAD_PROXY_AUTH_FILE', 'download_proxy_auth'),
+        download_proxy_auth_file=_secret_path(r, 'DOWNLOAD_PROXY_AUTH_FILE', 'download_proxy_auth'),
         download_proxy_ca_file=r.raw('DOWNLOAD_PROXY_CA_FILE'),
         procurement_source_url=with_trailing_slash(procurement_source or PUBLIC_RELEASES_URL),
         procurement_source_set=bool(procurement_source),
@@ -426,14 +426,14 @@ def settings_from(r: Resolver) -> Settings:
         app_dir=Path(r.raw('UC_APP_DIR')),
         secrets_dir=secrets_dir,
         config_file=r.config_file,
-        signing_key_file=secret('SIGNING_KEY_FILE', 'update-center.key'),
-        signing_cert_file=secret('SIGNING_CERT_FILE', 'update-center.cert'),
-        root_ca_file=secret('ROOT_CA_FILE', 'root-ca.crt'),
-        repo_username_file=secret('REPO_USERNAME_FILE', 'repo_username'),
-        repo_password_file=secret('REPO_PASSWORD_FILE', 'repo_password'),
-        github_username_file=secret('GITHUB_USERNAME_FILE', 'github_username'),
-        github_token_file=secret('GITHUB_TOKEN_FILE', 'github_token'),
-        repo_push_auth_file=secret('REPO_PUSH_AUTH_FILE', 'repo_push_auth'),
+        signing_key_file=_secret_path(r, 'SIGNING_KEY_FILE', 'update-center.key'),
+        signing_cert_file=_secret_path(r, 'SIGNING_CERT_FILE', 'update-center.cert'),
+        root_ca_file=_secret_path(r, 'ROOT_CA_FILE', 'root-ca.crt'),
+        repo_username_file=_secret_path(r, 'REPO_USERNAME_FILE', 'repo_username'),
+        repo_password_file=_secret_path(r, 'REPO_PASSWORD_FILE', 'repo_password'),
+        github_username_file=_secret_path(r, 'GITHUB_USERNAME_FILE', 'github_username'),
+        github_token_file=_secret_path(r, 'GITHUB_TOKEN_FILE', 'github_token'),
+        repo_push_auth_file=_secret_path(r, 'REPO_PUSH_AUTH_FILE', 'repo_push_auth'),
     )
 
 

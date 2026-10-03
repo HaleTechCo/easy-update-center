@@ -1,10 +1,11 @@
 """The settings registry: names, the uc.toml naming rule, types, groups and defaults (docs/reference/configuration.md#how-settings-are-read)."""
 
 import re
+from urllib.parse import urlsplit
 
 import pytest
 
-from uc.settings import GROUPS, MODES, REGISTRY, SETTINGS, TYPES, env_name, toml_key, toml_label
+from uc.settings import CORE_VERSION, GROUPS, MODES, REGISTRY, SETTINGS, TYPES, env_name, toml_key, toml_label
 
 
 def test_names_are_unique_upper_case_variables():
@@ -81,3 +82,65 @@ def test_settings_field_names():
     assert REGISTRY['UC_EXTRA_ARGS'].attribute == 'extra_args'
     assert REGISTRY['UC_DATA_DIR'].attribute == 'data_dir'
     assert REGISTRY['REPO_URL'].attribute == 'repo_url'
+
+
+def _samples():
+    for setting in SETTINGS:
+        for sample in (setting.sample, setting.online_sample, setting.airgapped_sample):
+            if sample:
+                yield setting, sample
+
+
+def test_secret_files_are_derived():
+    for setting in SETTINGS:
+        if setting.secret_file:
+            assert setting.derived, setting.env
+
+
+def test_active_modes_are_modes():
+    for setting in SETTINGS:
+        assert set(setting.active) <= set(MODES), setting.env
+
+
+@pytest.mark.parametrize('setting_and_sample', list(_samples()), ids=lambda pair: pair[0].env)
+def test_every_sample_parses_for_its_type(setting_and_sample):
+    setting, sample = setting_and_sample
+    if setting.type == 'int':
+        assert int(sample) >= (setting.minimum or 0)
+    elif setting.type == 'bool':
+        assert sample in {'true', 'false'}
+    elif setting.type == 'ratio':
+        assert 0 <= float(sample) <= 1
+    elif setting.type == 'version':
+        assert CORE_VERSION.match(sample)
+    elif setting.type == 'url':
+        parts = urlsplit(sample)
+        assert parts.scheme in {'http', 'https'}, setting.env
+        assert parts.netloc, setting.env
+    elif setting.type == 'choice':
+        assert sample in setting.choices
+
+
+def test_every_hint_line_and_doc_is_a_sentence():
+    for setting in SETTINGS:
+        for line in (setting.doc, *setting.hint, *setting.online_hint, *setting.airgapped_hint):
+            assert line.endswith('.'), (setting.env, line)
+
+
+def test_every_group_is_used():
+    assert {setting.group for setting in SETTINGS} == set(GROUPS)
+
+
+def test_only_url_settings_can_mean_off_when_empty():
+    for setting in SETTINGS:
+        if setting.empty_means_off:
+            assert setting.type == 'url', setting.env
+
+
+def test_a_mode_sample_comes_before_the_common_one():
+    popularity = REGISTRY['POPULARITY_JSON_URL']
+    assert popularity.sample_for('airgapped') == popularity.airgapped_sample != ''
+    assert popularity.sample_for('online') == popularity.sample == ''
+    assert REGISTRY['PUBLIC_URL'].sample_for('online') == REGISTRY['PUBLIC_URL'].sample
+    assert REGISTRY['REPO_TYPE'].hint_for('online') == REGISTRY['REPO_TYPE'].online_hint
+    assert REGISTRY['REPO_TYPE'].hint_for('airgapped') == ()
