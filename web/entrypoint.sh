@@ -62,6 +62,8 @@ if [[ -n "${TLS_CERT_FILE:-}" || -n "${TLS_KEY_FILE:-}" ]]; then
     defines+=(-D TLS -D NEED_SSL)
 fi
 
+echo "entrypoint: serving ${PUBLIC_URL}; downloads: ${DOWNLOAD_BACKEND} ${DOWNLOAD_BACKEND_URL} (${DOWNLOAD_ACCESS})" >&2
+
 # Apache refuses to start without DocumentRoot and the RewriteMap file.
 waited=0
 until [[ -e /data/live/.htdownload-map ]]; do

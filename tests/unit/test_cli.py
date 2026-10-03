@@ -219,6 +219,17 @@ def test_commands_export_jvm_options_from_the_settings_file(monkeypatch, tmp_pat
     assert os.environ['JAVA_TOOL_OPTIONS'] == '-Xmx6g'
 
 
+def test_commands_export_proxy_settings_from_the_settings_file(monkeypatch, tmp_path, secrets_dir):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    (tmp_path / 'uc.toml').write_text('https_proxy = "http://proxy.corp:3128"\nhttp_proxy = "http://proxy.corp:3129"\nno_proxy = "repo-adapter,artifactory"\n', encoding='utf-8')
+    for name in ('HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY'):
+        monkeypatch.setenv(name, '')  # monkeypatch restores them after the test
+    assert main(['status']) == 0
+    assert os.environ['HTTPS_PROXY'] == 'http://proxy.corp:3128'
+    assert os.environ['HTTP_PROXY'] == 'http://proxy.corp:3129'
+    assert os.environ['NO_PROXY'] == 'repo-adapter,artifactory'
+
+
 def test_scheduled_jobs_read_jvm_options_and_proxies_from_the_settings_file_afresh(monkeypatch, tmp_path, secrets_dir):
     use_env(monkeypatch, tmp_path, secrets_dir)
     (tmp_path / 'uc.toml').write_text('java_tool_options = "-Xmx6g"\n', encoding='utf-8')
