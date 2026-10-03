@@ -11,7 +11,10 @@ export UC_IMAGE UC_TEST_IMAGE WEB_IMAGE
 SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro" \
-             -v "$(CURDIR)/tools:/tools:ro"              -v "$(CURDIR)/config/uc.example.toml:/examples/uc.example.toml:ro"              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro"              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
+             -v "$(CURDIR)/tools:/tools:ro" \
+             -v "$(CURDIR)/config/uc.example.toml:/examples/uc.example.toml:ro" \
+             -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
+             -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
 
 .PHONY: build build-uc build-web uc-image test test-unit test-web test-routing test-secrets pki-init pki-rotate secrets-placeholders secrets-permissions examples reload procure-download procure-clean procure-push compose-check it-airgapped it-clean it-online it-full upstream-diff
 
