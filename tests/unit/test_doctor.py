@@ -4,6 +4,7 @@ import base64
 import datetime as dt
 import hashlib
 import json
+import threading
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,7 @@ from uc.doctor import (
     parse_dependencies,
     parse_manifest,
     record,
+    record_locked,
     required_cores,
     run_doctor,
 )
@@ -383,3 +385,39 @@ def test_cores_unchecked_is_null_when_cores_were_not_checked():
 def test_record_saves_cores_unchecked_in_the_doctor_block(tmp_path):
     record(DoctorReport(required_cores={}, cores_unchecked=2), tmp_path, dt.datetime(2026, 10, 3, 5, 30, tzinfo=dt.UTC))
     assert read_status(tmp_path)['doctor']['cores_unchecked'] == 2
+
+
+def test_overlapping_records_wait_for_each_other_and_leave_the_last_report_with_its_counts(tmp_path):
+    first = DoctorReport(plugins=1)
+    second = DoctorReport(plugins=2)
+    now = dt.datetime(2026, 10, 3, 5, 30, tzinfo=dt.UTC)
+    done = [threading.Event(), threading.Event()]
+
+    def run(report, finished):
+        record(report, tmp_path, now)
+        finished.set()
+
+    with record_locked(tmp_path):
+        threads = [threading.Thread(target=run, args=(report, event)) for report, event in zip((first, second), done, strict=True)]
+        for thread in threads:
+            thread.start()
+        assert not done[0].wait(0.3)
+        assert not done[1].is_set()
+        assert not (tmp_path / 'doctor' / 'report.json').exists()
+    for thread in threads:
+        thread.join(5)
+    assert all(event.is_set() for event in done)
+    saved = json.loads((tmp_path / 'doctor' / 'report.json').read_text(encoding='utf-8'))
+    assert read_status(tmp_path)['doctor']['plugins'] == saved['plugins']
+    assert sorted(path.name for path in (tmp_path / 'doctor').iterdir()) == ['.record.lock', 'report.json']
+
+
+def test_a_failed_record_removes_its_temporary_file(tmp_path, monkeypatch):
+    def boom(*_args, **_kwargs):
+        msg = 'rename blew up'
+        raise OSError(msg)
+
+    monkeypatch.setattr(Path, 'replace', boom)
+    with pytest.raises(OSError, match='rename blew up'):
+        record(DoctorReport(), tmp_path, dt.datetime(2026, 10, 3, 5, 30, tzinfo=dt.UTC))
+    assert sorted(path.name for path in (tmp_path / 'doctor').iterdir()) == ['.record.lock']

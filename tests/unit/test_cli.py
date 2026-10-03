@@ -169,6 +169,28 @@ def test_stage_local_needs_neither_a_source_nor_the_repository(monkeypatch, tmp_
     assert capsys.readouterr().out.splitlines() == [f'0 recorded, 0 refused; review {staging}, then run uc doctor --push']
 
 
+def test_doctor_record_keeps_json_output_valid_and_reports_the_saved_path_on_stderr(artifactory, monkeypatch, tmp_path, secrets_dir, capsys):
+    _, url = artifactory
+    data = use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('REPO_URL', url)
+    (secrets_dir / 'repo_password').write_text('tok')
+    assert main(['doctor', '--record', '--json', '--no-fetch']) == 0
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)['plugins'] == 0
+    assert f'saved the report as {data / "doctor" / "report.json"}' in captured.err
+    assert 'saved the report' not in captured.out
+    assert (data / 'doctor' / 'report.json').is_file()
+    assert read_status(data)['doctor']['recorded_at'].endswith('Z')
+
+
+@pytest.mark.parametrize('flag', ['--stage-local', '--clean'])
+def test_record_is_refused_with_a_staging_run(flag, capsys):
+    with pytest.raises(SystemExit) as exit_info:
+        main(['doctor', '--record', flag])
+    assert exit_info.value.code == 2
+    assert '--record only applies to a report run' in capsys.readouterr().err
+
+
 def test_fix_needs_stage_local(capsys):
     with pytest.raises(SystemExit) as exit_info:
         main(['doctor', '--fix'])

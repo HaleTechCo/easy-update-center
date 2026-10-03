@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import base64
 import contextlib
+import fcntl
 import hashlib
 import json
+import os
+import tempfile
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
@@ -22,7 +25,7 @@ from .timeutil import iso
 
 if TYPE_CHECKING:
     import datetime as dt
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
 
     from .aql import Gav, Listing
     from .config import Settings
@@ -363,18 +366,42 @@ def run_doctor(
     return inspect_repository(settings, creds, fetch=fetch, versions=versions, since=since, query=query).report
 
 
+RECORD_LOCK_FILE = REPORT_FILE.with_name('.record.lock')
+"""Held while a recorded report is saved; not the status lock, which `record` takes inside it through status.update_status."""
+
+
+@contextlib.contextmanager
+def record_locked(data_dir: Path) -> Iterator[None]:
+    """Hold data_dir/doctor/.record.lock, waiting while another uc doctor --record holds it."""
+    lock = data_dir / RECORD_LOCK_FILE
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(lock, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)  # closing the descriptor releases the lock
+
+
 def record(report: DoctorReport, data_dir: Path, now: dt.datetime) -> Path:
     """Save report as the latest: in full as data_dir/doctor/report.json, its counts in status.json's doctor block; return the report's path.
 
-    The block's recorded_at says when. Generations keep it and the block's missing_cores, which only a recorded report works out (docs/reference/status-json.md).
+    The block's recorded_at says when. Generations keep it and the block's missing_cores and cores_unchecked, which only a recorded report works out (docs/reference/status-json.md).
+    Overlapping runs take turns, so report.json always matches the last doctor block.
     """
     path = data_dir / REPORT_FILE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name('.report.json.tmp')
-    tmp.write_text(json.dumps(report.to_dict(), indent=2) + '\n', encoding='utf-8')
-    tmp.chmod(0o644)
-    tmp.replace(path)
-    status.update_status(data_dir, doctor={**report.summary(), 'checked_at': iso(now), 'recorded_at': iso(now)})
+    with record_locked(data_dir):
+        fd, name = tempfile.mkstemp(dir=path.parent, prefix='.report.', suffix='.tmp')
+        tmp = Path(name)
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+                handle.write(json.dumps(report.to_dict(), indent=2) + '\n')
+            tmp.chmod(0o644)
+            tmp.replace(path)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        status.update_status(data_dir, doctor={**report.summary(), 'checked_at': iso(now), 'recorded_at': iso(now)})
     return path
 
 
