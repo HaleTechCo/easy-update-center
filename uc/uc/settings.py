@@ -85,8 +85,12 @@ class Setting:
     secret_file: bool = False  # the path of a secret file; uc config shows whether it exists, never its contents
     derived: bool = False
     attr: str | None = None  # the Settings field, when it is not env in lower case
-    hint: tuple[str, ...] = ()  # extra comment lines in the example files
+    hint: tuple[str, ...] = ()  # extra comment lines in the example files, each a sentence ending in a period
     sample: str = ''  # the value the example files show when the default is empty
+    online_hint: tuple[str, ...] = ()  # more comment lines, in the online example only (after hint)
+    airgapped_hint: tuple[str, ...] = ()  # more comment lines, in the air-gapped example only (after hint)
+    online_sample: str = ''  # the value the online example shows, ahead of sample and the default
+    airgapped_sample: str = ''  # the value the air-gapped example shows, ahead of sample and the default
     active: tuple[str, ...] = ()  # the modes whose example files set it, uncommented
 
     @property
@@ -95,6 +99,14 @@ class Setting:
         if self.env_only:
             return None
         return self.attr or self.env.lower()
+
+    def hint_for(self, mode: str) -> tuple[str, ...]:
+        """Return the comment lines the example for mode shows: the common hint, then the mode's own."""
+        return self.hint + (self.online_hint if mode == 'online' else self.airgapped_hint)
+
+    def sample_for(self, mode: str) -> str:
+        """Return the example value for mode: the mode's own sample, else the common one; '' when there is none."""
+        return (self.online_sample if mode == 'online' else self.airgapped_sample) or self.sample
 
     def default_for(self, mode: str) -> str:
         """Return the default for mode as the environment would spell it; '' when there is none or the code derives it."""
@@ -110,7 +122,18 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('MODE', 'choice', 'Required', 'online or airgapped. It only sets defaults; every other setting can still be set explicitly.', choices=MODES, active=MODES),
     Setting('PUBLIC_URL', 'url', 'Required', 'The exact origin Jenkins uses, with no path.', sample='https://jenkins-updates.example.com', active=MODES),
     # Source repository
-    Setting('REPO_TYPE', 'choice', 'Source repository', 'artifactory or artifact-keeper. Artifact Keeper is read only through the repo-adapter.', default='artifactory', choices=REPO_TYPES),
+    Setting(
+        'REPO_TYPE',
+        'choice',
+        'Source repository',
+        'artifactory or artifact-keeper. Artifact Keeper is read only through the repo-adapter.',
+        default='artifactory',
+        choices=REPO_TYPES,
+        online_hint=(
+            'Your own Artifactory or Artifact Keeper instead of repo.jenkins-ci.org? Set REPO_TYPE, REPO_URL and REPO_KEY here.',
+            'Also set DOWNLOAD_BACKEND=artifactory, and usually CORE_AGE_DAYS=0. See docs/architecture/modes.md#your-own-repository.',
+        ),
+    ),
     Setting(
         'REPO_URL',
         'url',
@@ -133,7 +156,7 @@ SETTINGS: tuple[Setting, ...] = (
         'repo-adapter',
         'A PEM bundle added to the system bundle, for a repository behind a private CA.',
         sample='/etc/ssl/uc-repo-ca.crt',
-        hint=('Mount the bundle into the repo-adapter (and uc) and point this at it: docs/getting-started/airgapped.md#repository-behind-a-private-ca',),
+        hint=('Mount the bundle into the repo-adapter (and uc) and point this at it. See docs/getting-started/airgapped.md#repository-behind-a-private-ca.',),
     ),
     Setting('REPO_MAX_ARCHIVE_MB', 'int', 'repo-adapter', 'Archives larger than this are skipped and reported.', default='512', minimum=1),
     # Downloads
@@ -152,7 +175,7 @@ SETTINGS: tuple[Setting, ...] = (
         'redirect sends controllers to the backend; proxy streams each file through the web container.',
         default='redirect',
         choices=ACCESS_MODES,
-        hint=('Controllers cannot read the repository anonymously? Use proxy: docs/how-to/proxy-downloads.md',),
+        hint=('Controllers cannot read the repository anonymously? Use proxy. See docs/how-to/proxy-downloads.md.',),
     ),
     Setting(
         'DOWNLOAD_PROXY_CA_FILE',
@@ -160,7 +183,7 @@ SETTINGS: tuple[Setting, ...] = (
         'Downloads',
         "Proxy mode only: the CA bundle the backend's certificate must verify against.",
         default='/etc/ssl/certs/ca-certificates.crt',
-        hint=('Mount the bundle into web and point this at it: docs/how-to/proxy-downloads.md#backend-with-a-private-ca',),
+        hint=('Mount the bundle into web and point this at it. See docs/how-to/proxy-downloads.md#backend-with-a-private-ca.',),
     ),
     Setting('DOWNLOAD_PROXY_AUTH_FILE', 'path', 'Downloads', 'Proxy mode only: the file holding username:password for the backend, ${SECRETS_DIR}/download_proxy_auth by default.', derived=True, secret_file=True),
     # Upstream data
@@ -176,13 +199,41 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('RESOURCES_REF', 'str', 'Upstream data', 'The update-center2 branch, tag or commit to read with RESOURCES_SOURCE=github.', default='master'),
     Setting('RESOURCES_URL', 'url', 'Upstream data', 'Required with RESOURCES_SOURCE=url: a tarball containing resources/.', sample='https://artifactory.corp.example/artifactory/generic-local/update-center2-master.tar.gz'),
     Setting('RESOURCES_SHA256', 'str', 'Upstream data', 'With RESOURCES_SOURCE=url, the tarball must match this checksum.'),
-    Setting('POPULARITY_JSON_URL', 'url', 'Upstream data', 'Plugin install counts. Set it empty to skip them; popularity is then 0.', online=UPSTREAM_POPULARITY_URL, airgapped='', empty_means_off=True),
-    Setting('TOOL_INSTALLERS_URL', 'url', 'Upstream data', 'A directory listing of the updates/ tool-installer files. Set it empty to skip them.', online=UPSTREAM_TOOL_INSTALLERS_URL, airgapped='', empty_means_off=True),
+    Setting(
+        'POPULARITY_JSON_URL',
+        'url',
+        'Upstream data',
+        'Plugin install counts. Set it empty to skip them; popularity is then 0.',
+        online=UPSTREAM_POPULARITY_URL,
+        airgapped='',
+        empty_means_off=True,
+        airgapped_sample='https://artifactory.corp.example/artifactory/generic-local/latestNumbers.json',
+        airgapped_hint=('A copy you procured, to keep popularity. See docs/how-to/keep-upstream-data-fresh.md.',),
+    ),
+    Setting(
+        'TOOL_INSTALLERS_URL',
+        'url',
+        'Upstream data',
+        'A directory listing of the updates/ tool-installer files. Set it empty to skip them.',
+        online=UPSTREAM_TOOL_INSTALLERS_URL,
+        airgapped='',
+        empty_means_off=True,
+        airgapped_sample='https://artifactory.corp.example/artifactory/generic-local/updates/',
+        airgapped_hint=('A copy you procured, to keep the tool installers. See docs/how-to/keep-upstream-data-fresh.md.',),
+    ),
     Setting('STALE_AFTER_DAYS', 'int', 'Upstream data', 'status.json marks the resources stale when they are older than this.', default='30'),
     # Generation
     Setting('UC_ID', 'str', 'Generation', 'The update site id written into the metadata; it must match the update site id on your controllers.', default='default'),
     Setting('GENERATE_SCHEDULE', 'cron', 'Generation', 'Cron expression for regular generation. The scheduler also generates at once when no release is live.', default='0 */6 * * *'),
-    Setting('CORE_AGE_DAYS', 'int', 'Generation', 'Tiers are offered for cores released within this many days; 0 means every core a plugin requires.', online='400', airgapped='0'),
+    Setting(
+        'CORE_AGE_DAYS',
+        'int',
+        'Generation',
+        'Tiers are offered for cores released within this many days; 0 means every core a plugin requires.',
+        online='400',
+        airgapped='0',
+        airgapped_hint=('400 behaves like updates.jenkins.io (tiers only for cores released in the last 400 days).',),
+    ),
     Setting('RETAIN_RELEASES', 'int', 'Generation', 'Releases kept for rollback.', default='5', minimum=1),
     Setting('MIN_PLUGINS', 'int', 'Generation', 'A release with fewer plugins is refused.', default='1'),
     Setting('MIN_PLUGIN_RATIO', 'ratio', 'Generation', "A release with fewer than this share of the live release's plugins is refused, unless run with uc generate --force.", default='0.9'),
@@ -232,9 +283,9 @@ SETTINGS: tuple[Setting, ...] = (
         'str',
         'Read by bundled software',
         'The Compose files every plain docker compose command uses (on Windows, separate them with ;).',
-        airgapped='compose.yaml:compose.airgapped.yaml',
         env_only=True,
-        hint=('Air-gapped: uncomment this, so plain docker compose uses the air-gapped override.',),
+        airgapped_sample='compose.yaml:compose.airgapped.yaml',
+        airgapped_hint=('Its default is compose.yaml alone: uncomment this so plain docker compose uses the air-gapped override.', 'On Windows, separate the files with ;.'),
     ),
     # Internal
     Setting('UC_DATA_DIR', 'path', 'Internal', 'The data volume.', default='/data', attr='data_dir'),

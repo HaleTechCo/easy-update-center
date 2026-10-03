@@ -12,7 +12,8 @@ if TYPE_CHECKING:
 
 ENV_HEADER = """\
 # Settings for the update center in {mode} mode, one variable per setting. Copy this file to .env and
-# edit the copy; a line starting with # is at its default, so remove the # to set it.
+# edit the copy; a line starting with # is not set: it shows the default, or an example value where
+# there is none. Remove the # to set it.
 {note}# Generated from the settings registry: `uc config --example env --mode {mode}` (make examples).
 # Any of these can go in config/uc.toml instead (config/uc.example.toml); a variable here wins over it.
 # Every setting: docs/reference/configuration.md
@@ -20,7 +21,8 @@ ENV_HEADER = """\
 
 TOML_HEADER = """\
 # Settings for the update center in {mode} mode. Copy this file to config/uc.toml and edit the copy;
-# a line starting with # is at its default, so remove the # to set it.
+# a line starting with # is not set: it shows the default, or an example value where there is none.
+# Remove the # to set it.
 {note}# Generated from the settings registry: `uc config --example toml --mode {mode}` (make examples).
 # A variable in .env wins over this file: [section] key is SECTION_KEY, and a top-level key is KEY.
 # Every setting: docs/reference/configuration.md
@@ -44,7 +46,7 @@ def shown(setting: Setting, mode: str) -> tuple[bool, str]:
     """Return whether the example for mode sets setting (an uncommented line), and the value it shows."""
     if setting.env == 'MODE':
         return True, mode
-    return mode in setting.active, setting.sample or setting.default_for(mode)
+    return mode in setting.active, setting.sample_for(mode) or setting.default_for(mode)
 
 
 def example_env(mode: str) -> str:
@@ -57,7 +59,7 @@ def example_env(mode: str) -> str:
         parts.append(f'\n# ---- {group} ----\n')
         for setting in members:
             active, value = shown(setting, mode)
-            parts.append(_comments(setting))
+            parts.append(_comments(setting, mode))
             parts.append(f'{"" if active else "# "}{setting.env}={value}\n')
     return ''.join(parts)
 
@@ -72,7 +74,7 @@ def example_toml(mode: str) -> str:
         parts.append(f'\n[{section}]\n' if section else '\n')
         for setting in members:
             active, value = shown(setting, mode)
-            parts.append(_comments(setting, f' ({setting.env})'))
+            parts.append(_comments(setting, mode, f' ({setting.env})'))
             parts.append(f'{"" if active else "# "}{toml_key(setting.env)[1]} = {_toml_value(setting, value)}\n')
     return ''.join(parts)
 
@@ -81,8 +83,8 @@ def _note(mode: str) -> str:
     return ''.join(f'# {line}\n' for line in MODE_NOTES[mode])
 
 
-def _comments(setting: Setting, suffix: str = '') -> str:
-    return ''.join(f'# {line}\n' for line in (setting.doc + suffix, *setting.hint))
+def _comments(setting: Setting, mode: str, suffix: str = '') -> str:
+    return ''.join(f'# {line}\n' for line in (setting.doc + suffix, *setting.hint_for(mode)))
 
 
 def _toml_value(setting: Setting, value: str) -> str:

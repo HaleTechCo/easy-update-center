@@ -54,6 +54,10 @@ once releases are published.
   `uc repo-adapter --healthcheck`) and the default `REPO_ADAPTER_URL`, so changing the port needs no
   other edit. `DOCTOR_SINCE` is checked when the settings load: it must be a Jenkins version such as
   `2.462.1`.
+- The generated example files give the remaining guidance per mode: how to use your own repository
+  (online), what `CORE_AGE_DAYS=400` means, procured copies of the popularity and tool-installer
+  data, and `COMPOSE_FILE` for air-gapped. A commented line there is not set: it shows the default,
+  or an example value where there is none.
 - A URL setting `uc` cannot parse (for example `REPO_URL=http://[bad/`) is reported as
   `uc: error: <setting> is not a valid URL: ...` instead of a traceback.
 - `uc generate --wait` waits for a running generation or rollback instead of exiting 75; scheduled
