@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from uc.config import load_settings, load_web_settings, read_secret, with_explicit_port
+from uc.config import load_settings, load_web_settings, read_secret, settings_digest, with_explicit_port
 from uc.errors import ConfigError
 
 AIRGAPPED = {
@@ -304,3 +304,23 @@ def test_web_settings_refuse_a_malformed_repository_url():
     env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'REPO_URL': 'http://[bad/', 'REPO_KEY': 'jenkins'}
     with pytest.raises(ConfigError, match='REPO_URL is not a valid URL: '):
         load_web_settings(env, config_file=Path('/nonexistent/uc.toml'))
+
+
+def digest(env, config_file=None):
+    return settings_digest(load_settings(env, config_file=config_file or Path('/nonexistent/uc.toml')), env)
+
+
+def test_equal_settings_have_equal_digests():
+    assert digest(AIRGAPPED) == digest(dict(AIRGAPPED))
+
+
+@pytest.mark.parametrize(('name', 'value'), [('GENERATE_SCHEDULE', '0 1 * * *'), ('DOWNLOAD_ACCESS', 'proxy'), ('REPO_MAX_ARCHIVE_MB', '64'), ('HTTPS_PROXY', 'http://proxy:3128')])
+def test_changing_a_restart_setting_changes_the_digest(name, value):
+    assert digest({**AIRGAPPED, name: value}) != digest(AIRGAPPED)
+
+
+@pytest.mark.parametrize(('name', 'value', 'toml'), [('RETAIN_RELEASES', '9', 'retain_releases = 9\n'), ('JAVA_TOOL_OPTIONS', '-Xmx1g', 'java_tool_options = "-Xmx1g"\n')])
+def test_an_unmarked_setting_changes_the_digest_in_the_environment_but_not_in_uc_toml(tmp_path, name, value, toml):
+    assert digest({**AIRGAPPED, name: value}) != digest(AIRGAPPED)  # a container's environment is fixed when it is created
+    (tmp_path / 'uc.toml').write_text(toml, encoding='utf-8')
+    assert digest(AIRGAPPED, tmp_path / 'uc.toml') == digest(AIRGAPPED)

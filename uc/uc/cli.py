@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -23,7 +24,7 @@ from .procure.plan import check_war_args
 from .procure.push import push
 from .repo_adapter.server import healthcheck, serve
 from .schedule import run_schedule
-from .settings import MODES
+from .settings import MODES, REGISTRY
 from .timeutil import iso, utcnow
 from .validate import count_plugins
 from .versions import VersionTool
@@ -142,6 +143,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         healthcheck(args.port)  # reads no settings: health is the running server's, not the files'
         return 0
     settings = load_settings()
+    received = {name: os.environ[name] for name in REGISTRY if name in os.environ}  # before apply_process_env: what the container was given
     exported = apply_process_env(settings)
     if args.command == 'generate':
         print(f'published release {generate(settings, force=args.force, wait=args.wait)}')
@@ -159,7 +161,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(json.dumps(status.read_status(settings.data_dir), indent=2, sort_keys=True))
         return 0
     if args.command == 'schedule':
-        run_schedule(settings, drop_env=exported)
+        run_schedule(settings, drop_env=exported, environ=received)
         return 0
     if args.command == 'repo-adapter':
         serve(settings, port=settings.repo_adapter_port if args.port is None else args.port)

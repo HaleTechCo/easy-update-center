@@ -1,6 +1,7 @@
 """Unit tests for uc.schedule: the crontab, the recorded start, and the first run before handing over to supercronic."""
 
 import json
+import os
 
 import pytest
 
@@ -46,7 +47,7 @@ def test_the_start_is_recorded_for_uc_config(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     run(settings, tmp_path, lambda: None)
     state = json.loads((settings.data_dir / 'scheduler.json').read_text(encoding='utf-8'))
-    assert state['settings_digest'] == settings_digest(settings)
+    assert state['settings_digest'] == settings_digest(settings, os.environ)
     assert state['started_at'].endswith('Z')
 
 
@@ -73,3 +74,20 @@ def test_failed_first_run_still_schedules(tmp_path, secrets_dir):
 
     calls = run(settings, tmp_path, boom)
     assert calls[-1][0] == 'supercronic'
+
+
+def test_an_unwritable_data_directory_does_not_stop_the_scheduler(tmp_path, secrets_dir, capsys):
+    if os.geteuid() == 0:
+        pytest.skip('root can write anywhere')
+    settings = make_settings(tmp_path, secrets_dir)
+    settings.data_dir.mkdir(parents=True)
+    settings.data_dir.chmod(0o555)
+    try:
+        calls = run(settings, tmp_path, lambda: None)
+    finally:
+        settings.data_dir.chmod(0o755)
+    assert calls[-1][0] == 'supercronic'
+    out = capsys.readouterr().out
+    assert f'uc schedule: could not record the start in {settings.data_dir / "scheduler.json"}: ' in out
+    assert '; uc config cannot tell when a restart is needed' in out
+    assert not [path for path in settings.data_dir.iterdir() if path.name.startswith('.scheduler')]

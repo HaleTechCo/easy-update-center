@@ -13,7 +13,7 @@ import json
 import os
 import re
 import tomllib
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
@@ -600,7 +600,15 @@ def read_secret(path: Path) -> str | None:
     return value or None
 
 
-def settings_digest(settings: Settings) -> str:
-    """Return a fingerprint of every setting: the scheduler records it at start, and uc config compares it to tell whether the running services use the current settings."""
-    text = json.dumps(asdict(settings), default=str, sort_keys=True)
+def settings_digest(settings: Settings, environ: Mapping[str, str]) -> str:
+    """Return a fingerprint of what a running service keeps from when it started: the effective values of the restart settings, and every registry setting in environ.
+
+    environ is the environment the container received (its env_file), which is fixed when the container is created, so
+    a change in .env needs a recreate whatever the setting; a change in uc.toml matters only for the restart settings.
+    Pass a snapshot taken before apply_process_env exports anything from uc.toml. The scheduler records the digest, and
+    uc config compares it to tell whether the running services use the current settings.
+    """
+    marked = {setting.env: getattr(settings, setting.attribute) for setting in SETTINGS if setting.restart and setting.attribute}
+    given = {name: environ[name] for name in REGISTRY if name in environ}
+    text = json.dumps({'effective': marked, 'environment': given}, default=str, sort_keys=True)
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
