@@ -164,13 +164,9 @@ services:
     extra_hosts: *blocked-hosts
     entrypoint: ["python3", "-m", "uc", "repo-adapter"]
     environment:
-      MODE: airgapped
-      PUBLIC_URL: "http://web:8080"
       REPO_TYPE: ${IT_REPO_TYPE:-artifactory}
       REPO_URL: ${IT_PUSH_URL:-http://artifactory-push:8081/artifactory/}
-      REPO_KEY: procure
-      SECRETS_DIR: /pki
-      UC_DATA_DIR: /data
+      REPO_KEY: procure  # wins over uc.toml's jenkins
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=3)"]
       interval: 2s
@@ -182,6 +178,7 @@ services:
     volumes:
       - uc-data-push:/data
       - pki:/pki:ro
+      - ./uc.toml:/config/uc.toml:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 
   repo-adapter:
@@ -190,13 +187,8 @@ services:
     extra_hosts: *blocked-hosts
     entrypoint: ["python3", "-m", "uc", "repo-adapter"]
     environment:
-      MODE: airgapped
-      PUBLIC_URL: "http://web:8080"
       REPO_TYPE: ${IT_REPO_TYPE:-artifactory}
       REPO_URL: ${IT_ADAPTER_BACKEND_URL:-http://artifactory-private:8081/artifactory/}
-      REPO_KEY: jenkins
-      SECRETS_DIR: /pki
-      UC_DATA_DIR: /data
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=3)"]
       interval: 2s
@@ -208,6 +200,7 @@ services:
     volumes:
       - uc-data:/data
       - pki:/pki:ro
+      - ./uc.toml:/config/uc.toml:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 
   # web's settings, worked out by uc as in a deployment (compose.yaml's web-config).
@@ -216,13 +209,11 @@ services:
     network_mode: none
     entrypoint: ["python3", "-m", "uc", "config", "--web-env", "--out", "/run/uc-web/web.env"]
     environment:
-      MODE: airgapped
-      PUBLIC_URL: "http://web:8080"
       REPO_TYPE: ${IT_REPO_TYPE:-artifactory}
       REPO_URL: ${IT_REPO_URL:-http://artifactory:8081/artifactory/}
-      REPO_KEY: jenkins
     volumes:
       - web-config:/run/uc-web
+      - ./uc.toml:/config/uc.toml:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 
   web:
@@ -264,14 +255,9 @@ services:
     networks: [airgap]
     extra_hosts: *blocked-hosts
     environment:
-      MODE: airgapped
-      PUBLIC_URL: "http://web:8080"
       REPO_TYPE: ${IT_REPO_TYPE:-artifactory}
       REPO_URL: ${IT_ADAPTER_BACKEND_URL:-http://artifactory-private:8081/artifactory/}
-      REPO_KEY: jenkins
       REPO_ADAPTER_DIR: /data/repo-adapter  # also for runs with another UC_DATA_DIR
-      SECRETS_DIR: /pki
-      UC_DATA_DIR: /data
       DOWNLOAD_PREFIX: ${IT_DOWNLOAD_PREFIX:-http://artifactory:8081/artifactory/jenkins/}
       LTS_OLD: ${LTS_OLD:-x}
       LTS_NEW: ${LTS_NEW:-x}
@@ -297,6 +283,7 @@ services:
       - uc-data-push:/data-push
       - pki:/pki:ro
       - seed:/seed:ro
+      - ./uc.toml:/config/uc.toml:ro
       - ../../tests:/tests:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 
