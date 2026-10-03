@@ -90,9 +90,12 @@ examples: uc-image
 	$(EXAMPLE) env --mode online > .env.online.example
 	$(EXAMPLE) env --mode airgapped > .env.airgapped.example
 
-# Recreate every service so it reads the current .env and config/uc.toml
-# (docs/reference/configuration.md#when-changes-apply). A generation in progress restarts.
+# Check the settings, then recreate every service so it reads the current .env and config/uc.toml
+# (docs/reference/configuration.md#when-changes-apply). A failed check stops here, leaving every
+# service running as it was; web-config runs the check, needing no network and no secrets.
+# A generation in progress restarts.
 reload:
+	docker compose run --rm web-config config --check
 	docker compose up -d --force-recreate
 
 # uc doctor --download-* stages files into ./procurement for review, and uc doctor --clean deletes the

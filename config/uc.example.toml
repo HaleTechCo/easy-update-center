@@ -1,5 +1,8 @@
 # Settings for the update center in online mode. Copy this file to config/uc.toml and edit the copy;
 # a line starting with # is at its default, so remove the # to set it.
+# Online, the generator reads repo.jenkins-ci.org with a free Jenkins community account
+# (secrets/repo_*), and controllers download from get.jenkins.io, unless you set your own
+# repository below.
 # Generated from the settings registry: `uc config --example toml --mode online` (make examples).
 # A variable in .env wins over this file: [section] key is SECTION_KEY, and a top-level key is KEY.
 # Every setting: docs/reference/configuration.md
@@ -71,6 +74,7 @@ public_url = "https://jenkins-updates.example.com"
 # The port the repo-adapter listens on. Change REPO_ADAPTER_URL with it. (REPO_ADAPTER_PORT)
 # adapter_port = 8081
 # A PEM bundle added to the system bundle, for a repository behind a private CA. (REPO_CA_FILE)
+# Mount the bundle into the repo-adapter (and uc) and point this at it: docs/getting-started/airgapped.md#repository-behind-a-private-ca
 # ca_file = "/etc/ssl/uc-repo-ca.crt"
 # Archives larger than this are skipped and reported. (REPO_MAX_ARCHIVE_MB)
 # max_archive_mb = 512
@@ -90,6 +94,7 @@ public_url = "https://jenkins-updates.example.com"
 # Controllers cannot read the repository anonymously? Use proxy: docs/how-to/proxy-downloads.md
 # access = "redirect"
 # Proxy mode only: the CA bundle the backend's certificate must verify against. (DOWNLOAD_PROXY_CA_FILE)
+# Mount the bundle into web and point this at it: docs/how-to/proxy-downloads.md#backend-with-a-private-ca
 # proxy_ca_file = "/etc/ssl/certs/ca-certificates.crt"
 # Proxy mode only: the file holding username:password for the backend, ${SECRETS_DIR}/download_proxy_auth by default. (DOWNLOAD_PROXY_AUTH_FILE)
 # proxy_auth_file = ""

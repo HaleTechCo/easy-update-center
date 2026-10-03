@@ -92,7 +92,7 @@ was, such as an internal one, has no `.pom` there.
 | `--fetch`, `--no-fetch` | Download the POMs and manifests missing from the generator's cache, so dependencies and required cores can be checked before the first generation. Without it, unchecked items are counted and reported, and a download run may miss what they need: use it with the download options. The default is `DOCTOR_FETCH` (off). |
 | `--json`, `--no-json` | Print the full report as JSON. The default is `DOCTOR_JSON` (off). |
 | `--since VERSION` | The floor for required cores, instead of the oldest core in the repository. The default is `DOCTOR_SINCE`. |
-| `--record` | Also save the report as the latest: in full as `/data/doctor/report.json` (not served), and its counts in `status.json`'s `doctor` block with `checked_at`. The scheduler runs it on `DOCTOR_SCHEDULE`. Not with `--push`, `--stage-local` or `--clean`. |
+| `--record` | Also save the report as the latest: in full as `/data/doctor/report.json` (not served), and its counts in `status.json`'s `doctor` block with `checked_at` and `recorded_at`. The scheduler runs it on `DOCTOR_SCHEDULE`. Not with `--push`, `--stage-local` or `--clean`. |
 | `--download-poms` | Stage the real `.pom` of every plugin whose POM is missing, derived or unusable. |
 | `--download-dependencies` | Stage missing required dependencies, transitively, each with its `.pom`. |
 | `--download-war VERSION` | Stage that core's `.war` and `.pom`; `required` stages every required core the repository lacks at or above the floor. Repeatable. |
@@ -147,6 +147,9 @@ paths are) or `default`. For a secret file it shows the path and whether the fil
 `empty` or `missing`, never its contents. When the scheduler started with other settings than these,
 it ends with the command that applies them.
 Credentials inside a URL setting are shown as `***`.
+It runs in the `uc` container, which by design does not receive `download_proxy_auth` (web's) nor,
+air-gapped, `repo_username` and `repo_password` (the repo-adapter's), so those show as `missing`
+there even when they are set up.
 
 | Option | Meaning |
 |---|---|

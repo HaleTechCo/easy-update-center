@@ -59,6 +59,8 @@ def _redact(setting: Setting, value: str) -> str:
     """Return a URL setting's value with any username and password replaced by ***, so credentials never reach a terminal or a log."""
     if setting.type != 'url':
         return value
+    if '@' in value and '://' not in value:  # user:password@proxy:3128, which urllib accepts and urlsplit misreads
+        return '***@' + value.rpartition('@')[2]
     try:
         parts = urlsplit(value)
         if parts.username is None and parts.password is None:

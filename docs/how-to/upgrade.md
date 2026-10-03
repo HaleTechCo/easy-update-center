@@ -2,9 +2,9 @@
 
 How to move an installation to a newer revision of this project, and back.
 
-Your settings (`.env`), secrets (`secrets/`), overlay (`config/overlay/`) and the data volume carry
-over; only the images and the Compose files change. Read `CHANGELOG.md` for the revision you move to
-first.
+Your settings (`.env` and `config/uc.toml`), secrets (`secrets/`), overlay (`config/overlay/`) and
+the data volume carry over; only the images and the Compose files change. Read `CHANGELOG.md` for
+the revision you move to first.
 
 ## Upgrade to a newer revision
 
@@ -37,6 +37,9 @@ On Linux, if `git pull` cannot update a file under `secrets/` (such as its READM
 `make pki-init` gave `secrets/` to uid 10001: run `make secrets-permissions` first.
 
 ## Go back to the previous revision
+
+Revisions before `config/uc.toml` existed ignore it: move the settings it holds back into `.env`
+first, or the services start without them.
 
 ```bash
 git checkout <previous commit or tag>

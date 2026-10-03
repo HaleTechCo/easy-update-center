@@ -198,5 +198,7 @@ def _build_and_publish(
             'warnings': warnings,
             'doctor': doctor_summary,
         },
-        keep=('doctor',),
+        # Without counts of its own (DOWNLOAD_BACKEND=mirror) it keeps the recorded block; with them, the core check
+        # only uc doctor --record makes, and when it made it.
+        keep=('doctor', 'doctor.missing_cores', 'doctor.recorded_at'),
     )

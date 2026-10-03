@@ -112,3 +112,13 @@ def test_credentials_in_a_proxy_are_not_shown(tmp_path, secrets_dir):
         assert code == 0
         assert 's3cret' not in out
         assert 'http://***@proxy:3128' in out
+
+
+def test_credentials_in_a_proxy_without_a_scheme_are_not_shown(tmp_path, secrets_dir):
+    env = env_for(tmp_path, secrets_dir, HTTPS_PROXY='proxyuser:s3cret@proxy:3128')
+    for options in ({}, {'as_json': True}):
+        code, out, _ = show(env, tmp_path / 'none.toml', **options)
+        assert code == 0
+        assert 'proxyuser' not in out
+        assert 's3cret' not in out
+        assert '***@proxy:3128' in out

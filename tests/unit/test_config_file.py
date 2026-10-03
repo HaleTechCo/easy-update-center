@@ -144,7 +144,7 @@ def test_the_registry_defaults_are_the_defaults(env):
 def test_jvm_options_and_proxies_from_the_file_reach_the_process_environment(tmp_path):
     settings = load_settings(ONLINE, config_file=toml(tmp_path, 'java_tool_options = "-Xmx6g"\nhttps_proxy = "http://proxy:3128"\nno_proxy = "repo-adapter"\n'))
     environ = {'HTTPS_PROXY': 'http://other:8080', 'HTTP_PROXY': ''}
-    apply_process_env(settings, environ)
+    assert apply_process_env(settings, environ) == ('JAVA_TOOL_OPTIONS', 'NO_PROXY')
     assert environ == {'HTTPS_PROXY': 'http://other:8080', 'HTTP_PROXY': '', 'JAVA_TOOL_OPTIONS': '-Xmx6g', 'NO_PROXY': 'repo-adapter'}
 
 

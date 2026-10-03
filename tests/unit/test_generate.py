@@ -73,6 +73,7 @@ def test_airgapped_generation_publishes(tmp_path, secrets_dir):
     assert status['plugin_count'] == 2
     assert status['doctor']['plugins'] == 2
     assert status['doctor']['missing_cores'] is None
+    assert 'recorded_at' not in status['doctor']
     assert status['doctor']['checked_at'].endswith('Z')
     assert any('GitHub credentials not set' in w for w in status['warnings'])
     assert (data / 'resources' / 'last-good' / 'warnings.json').is_file()
@@ -252,3 +253,14 @@ def test_a_generation_without_doctor_counts_keeps_the_recorded_ones(tmp_path, se
     tools = Toolchain(run_jar=FakeJar(TIERS, cert_der_b64(settings.signing_cert_file)), aql_query=no_query, http_get=no_network)
     generate(settings, tools=tools, now=T1, base_env={})
     assert read_status(settings.data_dir)['doctor'] == recorded
+
+
+def test_a_generation_with_doctor_counts_keeps_the_recorded_core_check(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir)  # DOWNLOAD_BACKEND=artifactory, the air-gapped default
+    recorded = {'plugins': 9, 'missing_cores': 3, 'checked_at': '2026-01-01T05:30:00Z', 'recorded_at': '2026-01-01T05:30:00Z'}
+    write_status(settings.data_dir, {'doctor': recorded})
+    generate(settings, tools=tools_for(settings), now=T1, base_env={})
+    block = read_status(settings.data_dir)['doctor']
+    assert (block['missing_cores'], block['recorded_at']) == (3, '2026-01-01T05:30:00Z')
+    assert block['plugins'] == 2  # the generation's own counts
+    assert block['checked_at'] != recorded['checked_at']

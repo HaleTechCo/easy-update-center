@@ -138,7 +138,7 @@ def _dispatch(args: argparse.Namespace) -> int:
     if args.command == 'config':
         return _config(args)
     settings = load_settings()
-    apply_process_env(settings)
+    exported = apply_process_env(settings)
     if args.command == 'generate':
         print(f'published release {generate(settings, force=args.force, wait=args.wait)}')
         return 0
@@ -155,7 +155,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(json.dumps(status.read_status(settings.data_dir), indent=2, sort_keys=True))
         return 0
     if args.command == 'schedule':
-        run_schedule(settings)
+        run_schedule(settings, drop_env=exported)
         return 0
     if args.command == 'repo-adapter':
         serve(settings, port=settings.repo_adapter_port if args.port is None else args.port)
