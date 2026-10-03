@@ -27,6 +27,7 @@ from .settings import MODES
 from .timeutil import iso, utcnow
 from .validate import count_plugins
 from .versions import VersionTool
+from .webenv import web_env, write_web_env
 
 if TYPE_CHECKING:
     from .config import Settings
@@ -65,6 +66,8 @@ def build_parser() -> argparse.ArgumentParser:
     shows.add_argument('--json', action='store_true', help='print the settings as JSON')
     shows.add_argument('--check', action='store_true', help='only check the settings')
     shows.add_argument('--example', choices=('toml', 'env'), help='print an example settings file that lists every setting')
+    shows.add_argument('--web-env', action='store_true', help="print the web container's settings, as the web-config service writes them")
+    config_cmd.add_argument('--out', type=Path, help='with --web-env: write them to this file, atomically')
     config_cmd.add_argument('--mode', choices=MODES, help='with --example: the mode the example is for (default: online)')
     sub.add_parser('schedule', help='run generate on GENERATE_SCHEDULE (the scheduler service)')
 
@@ -105,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _check_config_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if args.out is not None and not args.web_env:
+        parser.error('--out only applies to --web-env')
     if args.mode is not None and args.example is None:
         parser.error('--mode only applies to --example')
 
@@ -181,6 +186,13 @@ def _config(args: argparse.Namespace) -> int:
     if args.example:
         mode = args.mode or 'online'
         print(example_toml(mode) if args.example == 'toml' else example_env(mode), end='')
+        return 0
+    if args.web_env:
+        text = web_env(load_settings())
+        if args.out is not None:
+            write_web_env(text, args.out)
+            print(f'wrote {args.out}:')
+        print(text, end='')
         return 0
     return configview.run(as_json=args.json, check=args.check)
 

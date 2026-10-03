@@ -136,6 +136,7 @@ Prints `status.json`, the same document served at `$PUBLIC_URL/status.json`. Fie
 ```bash
 docker compose run --rm uc config [--json | --check]
 docker compose run --rm uc config --example toml|env [--mode online|airgapped]
+docker compose run --rm uc config --web-env [--out FILE]
 ```
 
 Shows every setting with its value and where it came from: `environment`, `uc.toml: <key>`, `mode`
@@ -151,6 +152,8 @@ Credentials inside a URL setting are shown as `***`.
 | `--check` | Only check the settings: prints `configuration ok`, or the error. |
 | `--example toml\|env` | Print an example `config/uc.toml` or `.env` that lists every setting, with the settings the mode needs set and the rest commented out at their defaults. It reads no settings, so it works before any exist. |
 | `--mode` | With `--example`: the mode the example is for, `online` (the default) or `airgapped`. |
+| `--web-env` | Print the web container's settings as `NAME=value` lines, worked out from the settings and the mode: what the `web-config` service writes for the web container. |
+| `--out FILE` | With `--web-env`: write them to `FILE` instead, atomically. |
 
 An invalid configuration exits 1; without options, after printing every value it could work out.
 How settings combine: [How settings are read](configuration.md#how-settings-are-read).
