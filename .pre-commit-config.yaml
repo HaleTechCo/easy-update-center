@@ -235,9 +235,9 @@ repos:
 
           # Every setting the code reads must be documented in docs/reference/configuration.md,
           # and every setting documented there must still be read: tools/check_settings_documented.py
-          # compares uc/uc/config.py, web/entrypoint.sh and the compose files with the page's tables.
+          # compares the settings registry (uc/uc/settings.py), web/entrypoint.sh and the compose files with the page's tables.
           # Whole-tree and always run, like check-doc-links, for the same reason: a commit adding a
-          # setting to config.py touches no page, so only a hook that always runs notices.
+          # setting to the registry touches no page, so only a hook that always runs notices.
           - id: check-settings-documented
             name: check settings are documented
             entry: python tools/check_settings_documented.py
