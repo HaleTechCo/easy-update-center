@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import publish, status
-from .config import load_settings
+from .config import apply_process_env, load_settings
 from .doctor import check_since, format_report, inspect_repository
 from .errors import UcError
 from .generate import generate
@@ -112,6 +112,7 @@ def _dispatch(args: argparse.Namespace) -> int:
     if args.command == 'pki':
         return _pki(args)
     settings = load_settings()
+    apply_process_env(settings)
     if args.command == 'generate':
         print(f'published release {generate(settings, force=args.force)}')
         return 0

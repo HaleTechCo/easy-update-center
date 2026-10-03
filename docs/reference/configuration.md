@@ -161,6 +161,10 @@ Not for production.
 
 ## Read by bundled software
 
+These are read from the process environment by the JVM and by Python. Set in `uc.toml` and not in
+the environment, uc exports them to its own process when it starts, so the generator and uc's own
+requests see them.
+
 | Setting | uc.toml | Read by | Notes |
 |---|---|---|---|
 | `JAVA_TOOL_OPTIONS` | `java_tool_options` | the JVM running update-center2 | Heap size (`-Xmx6g`) and the generator's outbound HTTP proxy (`-Dhttps.proxyHost=... -Dhttps.proxyPort=...`). See [Host sizing](../getting-started/requirements.md#host-sizing). |

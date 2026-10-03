@@ -20,7 +20,7 @@ from .errors import ConfigError
 from .settings import REGISTRY, SECTIONS, SETTINGS, env_name, toml_key, toml_label
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, MutableMapping
 
     from .settings import Setting
 
@@ -32,6 +32,9 @@ DEFAULT_CONFIG_FILE = Path('/config/uc.toml')
 _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 _FILE_KEYS = tuple(sorted(toml_label(setting.env) for setting in SETTINGS if not setting.env_only))
 _FILE_SECTIONS = tuple(f'[{section}]' for section in SECTIONS)
+
+PROCESS_ENV = ('JAVA_TOOL_OPTIONS', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY')
+"""Settings read straight from the process environment, by the JVM and by Python's urllib."""
 
 
 @dataclass(frozen=True)
@@ -216,6 +219,15 @@ def make_resolver(env: Mapping[str, str] | None = None, *, config_file: Path | N
 def load_settings(env: Mapping[str, str] | None = None, *, config_file: Path | None = None) -> Settings:
     """Build Settings from env (default: os.environ) and uc.toml, applying the mode's defaults; raise ConfigError on bad values."""
     return settings_from(make_resolver(env, config_file=config_file))
+
+
+def apply_process_env(settings: Settings, environ: MutableMapping[str, str] | None = None) -> None:
+    """Export the JVM options and proxies uc.toml sets to environ (default: os.environ) where it leaves them unset, so the generator and urllib use them."""
+    environ = os.environ if environ is None else environ
+    for name in PROCESS_ENV:
+        value = getattr(settings, name.lower())
+        if value and not environ.get(name, '').strip():
+            environ[name] = value
 
 
 def settings_from(r: Resolver) -> Settings:
