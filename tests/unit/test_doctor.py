@@ -369,3 +369,17 @@ def test_record_saves_the_report_and_its_counts(tmp_path):
 
 def test_missing_cores_is_null_when_cores_were_not_checked():
     assert DoctorReport().summary()['missing_cores'] is None
+
+
+def test_summary_counts_the_releases_whose_manifest_was_unavailable_for_the_core_check():
+    assert DoctorReport(required_cores={}, cores_unchecked=4).summary()['cores_unchecked'] == 4
+    assert DoctorReport(required_cores={}).summary()['cores_unchecked'] == 0
+
+
+def test_cores_unchecked_is_null_when_cores_were_not_checked():
+    assert DoctorReport(cores_unchecked=0).summary()['cores_unchecked'] is None
+
+
+def test_record_saves_cores_unchecked_in_the_doctor_block(tmp_path):
+    record(DoctorReport(required_cores={}, cores_unchecked=2), tmp_path, dt.datetime(2026, 10, 3, 5, 30, tzinfo=dt.UTC))
+    assert read_status(tmp_path)['doctor']['cores_unchecked'] == 2

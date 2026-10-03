@@ -11,7 +11,7 @@ Every field of status.json, the public report of the last run and the live relea
 - On the data volume it is `/data/status.json`.
 
 A successful `uc generate` rewrites the whole document, except that it keeps what only
-`uc doctor --record` works out: `doctor.missing_cores` and `doctor.recorded_at`, and the whole
+`uc doctor --record` works out: `doctor.missing_cores`, `doctor.cores_unchecked` and `doctor.recorded_at`, and the whole
 `doctor` block when the generation computes none. A failed one changes only `mode`, `last_run` and
 `warnings`, so the other fields keep describing the live release. `uc rollback` updates
 `live_release` and `plugin_count`. Before the first run the document is empty (`{}`).
@@ -52,6 +52,7 @@ A successful `uc generate` rewrites the whole document, except that it keeps wha
 | `doctor.hpi_without_pom`, `doctor.war_without_pom`, `doctor.non_maven`, `doctor.stub_poms`, `doctor.missing_dependencies` | integer | How many of each problem `uc doctor` would list. |
 | `doctor.unchecked` | integer | Items whose POM or manifest was not in the cache, so were not checked. |
 | `doctor.missing_cores` | integer or null | Cores plugin releases require that the repository lacks, at or above the floor, from the last `uc doctor --record`; generations keep it. `null` until a recorded report has checked cores, which it never does for the public repository. |
+| `doctor.cores_unchecked` | integer or null | Plugin releases whose manifest was unavailable for the core check, from the last `uc doctor --record`; generations keep it. Above 0, `missing_cores` is incomplete. `null` until a recorded report has checked cores. |
 | `doctor.checked_at` | string | When the counts were last taken, by a generation or a recorded report (ISO 8601, UTC). `missing_cores` can be older: see `recorded_at`. |
 | `doctor.recorded_at` | string | When `uc doctor --record` last saved a report (ISO 8601, UTC); generations keep it. Absent until one has. With `DOCTOR_SCHEDULE` set, an old value means the scheduled report stopped ([Monitor](../how-to/monitor.md)). |
 | `doctor.repo_adapter` | object or null | With the repo-adapter on, counts of `derived_poms`, `replaced_poms`, `needs_pom`, `misplaced`, `skipped`, `dates_from_repository` (see [Report](../architecture/repo-adapter.md#report)); `null` when it is off. |
@@ -68,6 +69,7 @@ An air-gapped deployment after a successful run, with the doctor report schedule
   "doctor": {
     "checked_at": "2026-09-24T06:03:29Z",
     "cores": ["2.528.1", "2.528.3"],
+    "cores_unchecked": 0,
     "hpi_without_pom": 0,
     "missing_cores": 0,
     "missing_dependencies": 1,

@@ -28,6 +28,7 @@ From [status.json](../reference/status-json.md):
 | `warnings` not empty | The run published, but dropped or degraded something. | Review each line; `uc doctor` explains repository drops. |
 | `doctor.missing_dependencies` above 0 | Some offered plugins cannot be installed. | Procure the missing plugins. |
 | `doctor.missing_cores` above 0 | Plugins require cores the repository lacks, so those tiers are missing. Only the scheduled report (`uc doctor --record`, `DOCTOR_SCHEDULE`) checks cores, and generations keep its count. The full list is in `/data/doctor/report.json`. | [Procure missing files](procure-missing-files.md). |
+| `doctor.cores_unchecked` above 0 | The core check could not read that many plugin releases' manifests, so `missing_cores` and the report's required cores are incomplete. | Set `DOCTOR_FETCH=true`, or let a generation fill the cache. |
 | `doctor.recorded_at` older than twice your `DOCTOR_SCHEDULE` interval (only when `DOCTOR_SCHEDULE` is set) | The scheduled report stopped, so `missing_cores` is out of date. Generations keep this time, so it works with either backend. | `docker compose logs scheduler`. |
 
 The `doctor` counts come from each generation with `DOWNLOAD_BACKEND=artifactory`, and from the

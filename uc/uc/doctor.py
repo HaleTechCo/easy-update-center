@@ -89,6 +89,7 @@ class DoctorReport:
             'missing_dependencies': len(self.missing_dependencies),
             'unchecked': self.unchecked,
             'missing_cores': len(self.missing_cores) if self.required_cores is not None else None,
+            'cores_unchecked': self.cores_unchecked if self.required_cores is not None else None,
             'repo_adapter': ({name: len(self._adapter(name)) for name in ADAPTER_SECTIONS} if self.repo_adapter is not None else None),
         }
 

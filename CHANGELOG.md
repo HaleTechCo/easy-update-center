@@ -48,8 +48,11 @@ once releases are published.
   `RETAIN_RELEASES`.
 - The scheduler can run a read-only `uc doctor --record` on `DOCTOR_SCHEDULE`. `uc doctor --record`
   saves the report as `/data/doctor/report.json` and its counts in `status.json`, with the new
-  `doctor.checked_at`, `doctor.missing_cores` and `doctor.recorded_at` (when the last report was
-  saved). Generations keep `missing_cores` and `recorded_at`, which only the report works out.
+  `doctor.checked_at`, `doctor.missing_cores`, `doctor.cores_unchecked` (plugin releases whose
+  manifest was unavailable for the core check: above 0, the counts are incomplete) and
+  `doctor.recorded_at` (when the last report was saved). Generations keep `missing_cores`,
+  `cores_unchecked` and `recorded_at`, which only the report works out. Overlapping
+  `uc doctor --record` runs wait for each other (`doctor/.record.lock`).
 - Settings for what were command-line options only: `DOCTOR_FETCH`, `DOCTOR_SINCE`, `DOCTOR_JSON`,
   `PKI_ORG`, `PKI_ROOT_DAYS`, `PKI_SIGNING_DAYS` and `REPO_ADAPTER_PORT`. `--no-fetch` and
   `--no-json` switch a configured default off for one run.
