@@ -128,5 +128,5 @@ file, nothing else.
   change catches it.
 - Before it waits for the first release, `web` logs one line, `entrypoint: serving <PUBLIC_URL>;
   downloads: <DOWNLOAD_BACKEND> <DOWNLOAD_BACKEND_URL> (<DOWNLOAD_ACCESS>)`, so `docker compose logs web`
-  shows what it is serving. It holds no secret.
+  shows what it is serving. It holds no secret: a `DOWNLOAD_BACKEND_URL` with credentials in it is refused, by `web-config` and by the entrypoint.
 - To see what `web` will get: `docker compose run --rm uc config --web-env`.

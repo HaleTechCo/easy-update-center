@@ -269,7 +269,7 @@ def load_web_settings(env: Mapping[str, str] | None = None, *, config_file: Path
         msg = 'PUBLIC_URL must be set'
         raise ConfigError(msg)
     backend = _choice(r, 'DOWNLOAD_BACKEND')
-    backend_url = r.raw('DOWNLOAD_BACKEND_URL') or _default_backend_url(r, backend)
+    backend_url = _explicit_backend_url(r) or _default_backend_url(r, backend)
     return WebSettings(
         public_url=public_url,
         download_backend=backend,
@@ -354,7 +354,7 @@ def settings_from(r: Resolver) -> Settings:
     repo_ca = r.raw('REPO_CA_FILE')
 
     backend = _choice(r, 'DOWNLOAD_BACKEND')
-    backend_url = (r.raw('DOWNLOAD_BACKEND_URL') or _default_backend_url(r, backend, (repo_type, repo_url, repo_key))).rstrip('/')
+    backend_url = (_explicit_backend_url(r) or _default_backend_url(r, backend, (repo_type, repo_url, repo_key))).rstrip('/')
     data_dir = Path(r.raw('UC_DATA_DIR'))
 
     resources_source = _choice(r, 'RESOURCES_SOURCE')
@@ -515,6 +515,17 @@ def _choice(r: Resolver, name: str) -> str:
     if value not in choices:
         msg = f'{r.label(name)} must be one of {", ".join(choices)} (got {value!r})'
         raise ConfigError(msg)
+    return value
+
+
+def _explicit_backend_url(r: Resolver) -> str:
+    """Return DOWNLOAD_BACKEND_URL as set ('' if unset); credentials in it are refused, since web logs it and sends it to controllers."""
+    value = r.raw('DOWNLOAD_BACKEND_URL')
+    if value:
+        parts = _parse_url(r, 'DOWNLOAD_BACKEND_URL', value)
+        if parts.username or parts.password:
+            msg = f'{r.label("DOWNLOAD_BACKEND_URL")} must not contain credentials; for proxied downloads put them in secrets/download_proxy_auth'
+            raise ConfigError(msg)
     return value
 
 

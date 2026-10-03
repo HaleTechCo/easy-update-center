@@ -124,7 +124,7 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
 | `DOWNLOAD_BACKEND` | `[download] backend` | see [Mode defaults](#mode-defaults) | generate, web-config | `mirror` (get.jenkins.io layout) or `artifactory` (any Maven-layout repository, looked up through the release's download map). |
-| `DOWNLOAD_BACKEND_URL` | `[download] backend_url` | see [Mode defaults](#mode-defaults) | web-config | Where `/download/...` requests are sent. Controllers must be able to read it without credentials unless `DOWNLOAD_ACCESS=proxy`. |
+| `DOWNLOAD_BACKEND_URL` | `[download] backend_url` | see [Mode defaults](#mode-defaults) | web-config | Where `/download/...` requests are sent. It must not contain credentials (uc and web refuse them; for `DOWNLOAD_ACCESS=proxy` put them in `secrets/download_proxy_auth`). Controllers must be able to read it without credentials unless `DOWNLOAD_ACCESS=proxy`. |
 | `DOWNLOAD_ACCESS` | `[download] access` | `redirect` | web-config | `redirect` sends controllers to the backend; `proxy` streams the file through the web container. See [Proxy plugin downloads](../how-to/proxy-downloads.md). |
 | `DOWNLOAD_PROXY_CA_FILE` | `[download] proxy_ca_file` | `/etc/ssl/certs/ca-certificates.crt` | web-config | Proxy mode only: the CA bundle the backend's certificate must verify against. |
 | `DOWNLOAD_PROXY_AUTH_FILE` | `[download] proxy_auth_file` | `${SECRETS_DIR}/download_proxy_auth` | web-config | Proxy mode only: the file holding `username:password` for the backend. |
