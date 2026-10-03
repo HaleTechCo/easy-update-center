@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from uc.config import apply_process_env, load_settings
+from uc.config import PkiSettings, apply_process_env, load_pki_settings, load_settings
 from uc.errors import ConfigError
 from uc.settings import SETTINGS
 
@@ -146,3 +146,13 @@ def test_jvm_options_and_proxies_from_the_file_reach_the_process_environment(tmp
     environ = {'HTTPS_PROXY': 'http://other:8080', 'HTTP_PROXY': ''}
     apply_process_env(settings, environ)
     assert environ == {'HTTPS_PROXY': 'http://other:8080', 'HTTP_PROXY': '', 'JAVA_TOOL_OPTIONS': '-Xmx6g', 'NO_PROXY': 'repo-adapter'}
+
+
+def test_pki_settings_need_no_mode(tmp_path):
+    path = toml(tmp_path, '[pki]\norg = "Example Corp"\n')
+    assert load_pki_settings({'PKI_ROOT_DAYS': '100'}, config_file=path) == PkiSettings('Example Corp', 100, 365)
+
+
+def test_pki_days_must_be_positive(tmp_path):
+    with pytest.raises(ConfigError, match='PKI_SIGNING_DAYS must be >= 1'):
+        load_pki_settings({'PKI_SIGNING_DAYS': '0'}, config_file=tmp_path / 'none.toml')

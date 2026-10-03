@@ -8,8 +8,10 @@ import pytest
 
 from sitefixture import uc_document, write_site
 from uc.cli import EXIT_LOCKED, build_parser, doctor_options, main
+from uc.pki import cert_info
 from uc.publish import RunLock
 from uc.status import read_status, write_status
+from uc.timeutil import utcnow
 from ucsupport import make_settings
 
 
@@ -231,3 +233,24 @@ def test_record_only_applies_to_a_report_run(capsys):
 
 def test_generate_accepts_wait():
     assert build_parser().parse_args(['generate', '--wait']).wait is True
+
+
+def test_pki_init_uses_the_pki_settings(monkeypatch, tmp_path):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    (tmp_path / 'uc.toml').write_text('[pki]\norg = "Example Corp"\nsigning_days = 30\n', encoding='utf-8')
+    assert main(['pki', 'init', '--out', str(tmp_path / 'pki')]) == 0
+    signing = cert_info(tmp_path / 'pki' / 'update-center.cert')
+    assert 'Example Corp' in signing.subject
+    assert signing.days_left(utcnow()) <= 30
+    assert main(['pki', 'rotate', '--dir', str(tmp_path / 'pki'), '--days', '20']) == 0
+    assert cert_info(tmp_path / 'pki' / 'update-center.cert').days_left(utcnow()) <= 20
+
+
+def test_repo_adapter_listens_on_the_configured_port(monkeypatch, tmp_path, secrets_dir):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('REPO_ADAPTER_PORT', '9090')
+    ports = []
+    monkeypatch.setattr('uc.cli.serve', lambda _settings, port: ports.append(port))
+    assert main(['repo-adapter']) == 0
+    assert main(['repo-adapter', '--port', '7000']) == 0
+    assert ports == [9090, 7000]

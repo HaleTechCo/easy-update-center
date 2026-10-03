@@ -12,12 +12,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import UcError
+from .settings import REGISTRY
 
 ROOT_KEY = 'root-ca.key'
 ROOT_CERT = 'root-ca.crt'
 SIGNING_KEY = 'update-center.key'
 SIGNING_CERT = 'update-center.cert'
-DEFAULT_ORG = 'Jenkins Update Center'
+DEFAULT_ORG = REGISTRY['PKI_ORG'].default
 
 _EXTENSIONS = """\
 [req]

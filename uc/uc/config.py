@@ -65,6 +65,7 @@ class Settings:
     repo_adapter: bool
     repo_adapter_url: str
     repo_adapter_dir: Path
+    repo_adapter_port: int
     repo_ca_file: Path | None
     repo_max_archive_mb: int
     core_age_days: int
@@ -79,7 +80,9 @@ class Settings:
     min_plugins: int
     min_plugin_ratio: float
     certificate_minimum_valid_days: int
-    signing_cert_days: int
+    pki_org: str
+    pki_root_days: int
+    pki_signing_days: int
     stale_after_days: int
     allow_local_public_url: bool
     tls_cert_file: str
@@ -228,6 +231,21 @@ def load_settings(env: Mapping[str, str] | None = None, *, config_file: Path | N
 
 
 @dataclass(frozen=True)
+class PkiSettings:
+    """The defaults uc pki uses for the options it is not given."""
+
+    org: str
+    root_days: int
+    signing_days: int
+
+
+def load_pki_settings(env: Mapping[str, str] | None = None, *, config_file: Path | None = None) -> PkiSettings:
+    """Return uc pki's defaults (PKI_ORG, PKI_ROOT_DAYS, PKI_SIGNING_DAYS); it needs no other setting, so it runs before MODE and PUBLIC_URL are set."""
+    r = make_resolver(env, config_file=config_file)
+    return PkiSettings(org=r.raw('PKI_ORG'), root_days=_int(r, 'PKI_ROOT_DAYS'), signing_days=_int(r, 'PKI_SIGNING_DAYS'))
+
+
+@dataclass(frozen=True)
 class WebSettings:
     """The settings the web container reads: what web.env lists (uc/uc/webenv.py)."""
 
@@ -368,6 +386,7 @@ def settings_from(r: Resolver) -> Settings:
         repo_adapter=repo_adapter,
         repo_adapter_url=with_trailing_slash(r.raw('REPO_ADAPTER_URL')),
         repo_adapter_dir=Path(r.raw('REPO_ADAPTER_DIR') or str(data_dir / 'repo-adapter')),
+        repo_adapter_port=_int(r, 'REPO_ADAPTER_PORT'),
         repo_ca_file=Path(repo_ca) if repo_ca else None,
         repo_max_archive_mb=_int(r, 'REPO_MAX_ARCHIVE_MB'),
         core_age_days=_int(r, 'CORE_AGE_DAYS'),
@@ -382,7 +401,9 @@ def settings_from(r: Resolver) -> Settings:
         min_plugins=_int(r, 'MIN_PLUGINS'),
         min_plugin_ratio=_ratio(r, 'MIN_PLUGIN_RATIO'),
         certificate_minimum_valid_days=_int(r, 'CERTIFICATE_MINIMUM_VALID_DAYS'),
-        signing_cert_days=_int(r, 'SIGNING_CERT_DAYS'),
+        pki_org=r.raw('PKI_ORG'),
+        pki_root_days=_int(r, 'PKI_ROOT_DAYS'),
+        pki_signing_days=_int(r, 'PKI_SIGNING_DAYS'),
         stale_after_days=_int(r, 'STALE_AFTER_DAYS'),
         allow_local_public_url=_bool(r, 'ALLOW_LOCAL_PUBLIC_URL'),
         tls_cert_file=r.raw('TLS_CERT_FILE'),

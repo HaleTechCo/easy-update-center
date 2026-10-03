@@ -124,6 +124,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('REPO_ADAPTER', 'bool', 'repo-adapter', 'Read the repository through the repo-adapter: on by default air-gapped and always with Artifact Keeper, off otherwise.', derived=True, sample='true'),
     Setting('REPO_ADAPTER_URL', 'url', 'repo-adapter', 'Where uc finds the repo-adapter. Change it only with a non-default Compose layout.', default=DEFAULT_ADAPTER_URL),
     Setting('REPO_ADAPTER_DIR', 'path', 'repo-adapter', "The repo-adapter's token, cache and report.json, ${UC_DATA_DIR}/repo-adapter by default.", derived=True),
+    Setting('REPO_ADAPTER_PORT', 'int', 'repo-adapter', 'The port the repo-adapter listens on. Change REPO_ADAPTER_URL with it.', default='8081', minimum=1),
     Setting('REPO_CA_FILE', 'path', 'repo-adapter', 'A PEM bundle added to the system bundle, for a repository behind a private CA.', sample='/etc/ssl/uc-repo-ca.crt'),
     Setting('REPO_MAX_ARCHIVE_MB', 'int', 'repo-adapter', 'Archives larger than this are skipped and reported.', default='512', minimum=1),
     # Downloads
@@ -176,7 +177,9 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('DOCTOR_JSON', 'bool', 'Doctor', 'uc doctor prints its report as JSON (--json).', default='false'),
     # Signing
     Setting('CERTIFICATE_MINIMUM_VALID_DAYS', 'int', 'Signing', 'Generation stops when the signing certificate expires within this many days.', default='30'),
-    Setting('SIGNING_CERT_DAYS', 'int', 'Signing', 'Read and validated, but it has no effect today: uc pki sets the lifetime.', default='365', minimum=1),
+    Setting('PKI_ORG', 'str', 'Signing', 'The organization in the subjects of the certificates uc pki init and uc pki rotate create.', default='Jenkins Update Center'),
+    Setting('PKI_ROOT_DAYS', 'int', 'Signing', 'Lifetime of the root CA uc pki init creates, in days.', default='3650', minimum=1),
+    Setting('PKI_SIGNING_DAYS', 'int', 'Signing', 'Lifetime of the signing certificate uc pki init and uc pki rotate issue, in days.', default='365', minimum=1),
     # Web and TLS
     Setting('TLS_CERT_FILE', 'path', 'Web and TLS', 'With TLS_KEY_FILE, enables HTTPS on port 8443: a path inside the web container.'),
     Setting('TLS_KEY_FILE', 'path', 'Web and TLS', 'The private key for TLS_CERT_FILE.'),
