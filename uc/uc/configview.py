@@ -7,6 +7,7 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
+from urllib.parse import urlsplit, urlunsplit
 
 from .config import make_resolver, read_secret, settings_digest, settings_from
 from .errors import ConfigError
@@ -43,7 +44,7 @@ def rows(r: Resolver, settings: Settings | None) -> list[Row]:
 def _row(setting: Setting, r: Resolver, settings: Settings | None) -> Row:
     if setting.env_only:
         given = r.env.get(setting.env, '').strip()
-        return Row(setting.env, '', given or setting.default, 'env' if given else 'default')
+        return Row(setting.env, '', _redact(setting, given or setting.default), 'env' if given else 'default')
     source = r.source(setting.env)
     if source == 'default' and setting.derived:
         source = 'derived'
@@ -51,7 +52,21 @@ def _row(setting: Setting, r: Resolver, settings: Settings | None) -> Row:
         source = 'mode'
     value = _show(getattr(settings, setting.attribute)) if settings is not None and setting.attribute else r.raw(setting.env)
     note = _presence(Path(value)) if setting.secret_file and value else ''
-    return Row(setting.env, toml_label(setting.env), value, source, note)
+    return Row(setting.env, toml_label(setting.env), _redact(setting, value), source, note)
+
+
+def _redact(setting: Setting, value: str) -> str:
+    """Return a URL setting's value with any username and password replaced by ***, so credentials never reach a terminal or a log."""
+    if setting.type != 'url':
+        return value
+    try:
+        parts = urlsplit(value)
+        if parts.username is None and parts.password is None:
+            return value
+        host = parts.netloc.rpartition('@')[2]
+        return urlunsplit(parts._replace(netloc=f'***@{host}'))
+    except ValueError:
+        return value
 
 
 def _show(value: object) -> str:

@@ -95,3 +95,20 @@ def test_the_reload_hint(tmp_path, secrets_dir):
     state.write_text(json.dumps({'started_at': 'x', 'settings_digest': settings_digest(load_settings(env, config_file=path))}), encoding='utf-8')
     _, out, _ = show(env, path)
     assert 'note:' not in out
+
+
+def test_credentials_in_an_invalid_url_are_not_shown(tmp_path, secrets_dir):
+    env = env_for(tmp_path, secrets_dir, REPO_URL='https://admin:hunter2@artifactory:8081/artifactory/')
+    code, out, _ = show(env, tmp_path / 'none.toml')
+    assert code == 1
+    assert 'REPO_URL = https://***@artifactory:8081/artifactory/' in out
+    assert 'hunter2' not in out
+
+
+def test_credentials_in_a_proxy_are_not_shown(tmp_path, secrets_dir):
+    env = env_for(tmp_path, secrets_dir, HTTPS_PROXY='http://user:s3cret@proxy:3128')
+    for options in ({}, {'as_json': True}):
+        code, out, _ = show(env, tmp_path / 'none.toml', **options)
+        assert code == 0
+        assert 's3cret' not in out
+        assert 'http://***@proxy:3128' in out

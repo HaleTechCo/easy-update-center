@@ -142,6 +142,7 @@ Shows every setting with its value and where it came from: `environment`, `uc.to
 paths are) or `default`. For a secret file it shows the path and whether the file is `present`,
 `empty` or `missing`, never its contents. When the scheduler started with other settings than these,
 it ends with the command that applies them.
+Credentials inside a URL setting are shown as `***`.
 
 | Option | Meaning |
 |---|---|
