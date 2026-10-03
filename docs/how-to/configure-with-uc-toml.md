@@ -74,6 +74,7 @@ with the right spelling. `uc config --check` only validates, for a script or a p
 docker compose up -d --force-recreate      # or: make reload
 ```
 
-Each run reads the file afresh, but the schedules, the web container's settings and the
-repo-adapter's are read when those services start:
+`make reload` checks the settings first and recreates nothing when they are invalid. Each run reads
+the file afresh, but the schedules, the web container's settings and the repo-adapter's are read
+when those services start:
 [When changes apply](../reference/configuration.md#when-changes-apply).

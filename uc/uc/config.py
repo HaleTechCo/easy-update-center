@@ -287,17 +287,20 @@ def load_web_settings(env: Mapping[str, str] | None = None, *, config_file: Path
     )
 
 
-def apply_process_env(settings: Settings, environ: MutableMapping[str, str] | None = None) -> None:
-    """Export the JVM options and proxies uc.toml sets to environ (default: os.environ) where it leaves them unset, so the generator and urllib use them."""
+def apply_process_env(settings: Settings, environ: MutableMapping[str, str] | None = None) -> tuple[str, ...]:
+    """Export the JVM options and proxies uc.toml sets to environ (default: os.environ) where it leaves them unset, so the generator and urllib use them; return the names exported."""
     environ = os.environ if environ is None else environ
+    exported = []
     for name in PROCESS_ENV:
         value = getattr(settings, name.lower())
         if value and not environ.get(name, '').strip():
             environ[name] = value
+            exported.append(name)
+    return tuple(exported)
 
 
 def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
-    """Return the validated (REPO_TYPE, REPO_URL with a trailing slash, REPO_KEY)."""
+    """Return the validated (REPO_TYPE, REPO_URL with a trailing slash, REPO_KEY), for load_settings and load_web_settings alike."""
     repo_type = _choice(r, 'REPO_TYPE')
     public_repo = online and repo_type == 'artifactory'
     repo_url = r.raw('REPO_URL') or (PUBLIC_ARTIFACTORY_URL if public_repo else '')
@@ -307,6 +310,10 @@ def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
         raise ConfigError(msg)
     if not _REPOSITORY_RE.match(repo_key):
         msg = f'{r.label("REPO_KEY")} contains unsupported characters: {repo_key!r}'
+        raise ConfigError(msg)
+    parts = urlsplit(repo_url)
+    if parts.username or parts.password:
+        msg = 'URLs must not contain credentials; use the secret files instead'
         raise ConfigError(msg)
     return repo_type, with_trailing_slash(repo_url), repo_key
 
@@ -555,9 +562,6 @@ def with_trailing_slash(url: str) -> str:
 def with_explicit_port(url: str) -> str:
     """Add :443/:80 when missing, so update-center2's Authenticator port check matches (docs/architecture/generation-pipeline.md#step-3-environment-for-the-generator)."""
     parts = urlsplit(url)
-    if parts.username or parts.password:
-        msg = 'URLs must not contain credentials; use the secret files instead'
-        raise ConfigError(msg)
     if parts.port is not None or parts.scheme not in {'http', 'https'}:
         return url
     host = parts.hostname or ''

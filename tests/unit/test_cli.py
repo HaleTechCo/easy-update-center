@@ -10,6 +10,7 @@ from sitefixture import uc_document, write_site
 from uc.cli import EXIT_LOCKED, build_parser, doctor_options, main
 from uc.pki import cert_info
 from uc.publish import RunLock
+from uc.schedule import run_schedule
 from uc.status import read_status, write_status
 from uc.timeutil import utcnow
 from ucsupport import make_settings
@@ -187,6 +188,23 @@ def test_commands_export_jvm_options_from_the_settings_file(monkeypatch, tmp_pat
     monkeypatch.setenv('JAVA_TOOL_OPTIONS', '')  # monkeypatch restores it after the test
     assert main(['status']) == 0
     assert os.environ['JAVA_TOOL_OPTIONS'] == '-Xmx6g'
+
+
+def test_scheduled_jobs_read_jvm_options_and_proxies_from_the_settings_file_afresh(monkeypatch, tmp_path, secrets_dir):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    (tmp_path / 'uc.toml').write_text('java_tool_options = "-Xmx6g"\n', encoding='utf-8')
+    monkeypatch.setenv('JAVA_TOOL_OPTIONS', '')  # monkeypatch restores it after the test
+    monkeypatch.setenv('HTTPS_PROXY', 'http://proxy.corp:3128')
+    first_run, handed = {}, {}
+
+    def schedule(settings, **options):
+        run_schedule(settings, **options, generate_once=lambda: first_run.update(os.environ), exec_=lambda _file, _argv, env: handed.update(env), crontab=tmp_path / 'crontab')
+
+    monkeypatch.setattr('uc.cli.run_schedule', schedule)
+    assert main(['schedule']) == 0
+    assert first_run['JAVA_TOOL_OPTIONS'] == '-Xmx6g'  # the scheduler's own first generation
+    assert 'JAVA_TOOL_OPTIONS' not in handed  # supercronic's jobs read uc.toml again on each run
+    assert handed['HTTPS_PROXY'] == 'http://proxy.corp:3128'
 
 
 def test_config_check(monkeypatch, tmp_path, secrets_dir, capsys):

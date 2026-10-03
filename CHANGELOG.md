@@ -45,13 +45,15 @@ once releases are published.
   configuration is invalid.
 - The scheduler can run a read-only `uc doctor --record` on `DOCTOR_SCHEDULE`. `uc doctor --record`
   saves the report as `/data/doctor/report.json` and its counts in `status.json`, with the new
-  `doctor.checked_at` and `doctor.missing_cores`.
+  `doctor.checked_at`, `doctor.missing_cores` and `doctor.recorded_at` (when the last report was
+  saved). Generations keep `missing_cores` and `recorded_at`, which only the report works out.
 - Settings for what were command-line options only: `DOCTOR_FETCH`, `DOCTOR_SINCE`, `DOCTOR_JSON`,
   `PKI_ORG`, `PKI_ROOT_DAYS`, `PKI_SIGNING_DAYS` and `REPO_ADAPTER_PORT`. `--no-fetch` and
   `--no-json` switch a configured default off for one run.
 - `uc generate --wait` waits for a running generation or rollback instead of exiting 75; scheduled
   generations use it.
-- `make reload` recreates the services so they read the current settings.
+- `make reload` checks the settings, then recreates the services so they read them; with invalid
+  settings it recreates nothing.
 - Procurement with `uc doctor`, through a staging folder, `./procurement/`, whose `procurement.json`
   records each file's source, sha1 and reason for review:
   - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the real

@@ -31,7 +31,7 @@ def test_crontab_rejects_nonsense(tmp_path, secrets_dir, name, value):
 
 def run(settings, tmp_path, generate_once):
     calls = []
-    run_schedule(settings, generate_once=lambda: (calls.append('generate'), generate_once()), exec_=lambda _file, argv: calls.append(argv), crontab=tmp_path / 'crontab')
+    run_schedule(settings, generate_once=lambda: (calls.append('generate'), generate_once()), exec_=lambda _file, argv, _env: calls.append(argv), crontab=tmp_path / 'crontab')
     return calls
 
 

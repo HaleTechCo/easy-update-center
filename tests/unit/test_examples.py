@@ -26,6 +26,21 @@ def test_the_committed_examples_are_current(name, make):
     assert (COMMITTED / name).read_text(encoding='utf-8') == make(), f'{name} is out of date: run make examples'
 
 
+@pytest.mark.parametrize('make', [example_env, example_toml])
+def test_each_example_says_where_its_mode_reads_and_downloads_from(make):
+    online, airgapped = make('online'), make('airgapped')
+    assert '# Online, the generator reads repo.jenkins-ci.org with a free Jenkins community account\n# (secrets/repo_*), and controllers download from get.jenkins.io' in online
+    assert '# Air-gapped, the generator reads your repository through the repo-adapter\n# (docs/how-to/stock-airgapped-repository.md), and controllers download from it.\n' in airgapped
+    assert 'reads your repository through the repo-adapter' not in online
+    assert 'community account' not in airgapped
+
+
+def test_the_ca_settings_say_where_to_mount_the_bundle():
+    text = example_env('airgapped')
+    assert '# Mount the bundle into the repo-adapter (and uc) and point this at it: docs/getting-started/airgapped.md#repository-behind-a-private-ca\n# REPO_CA_FILE=' in text
+    assert '# Mount the bundle into web and point this at it: docs/how-to/proxy-downloads.md#backend-with-a-private-ca\n# DOWNLOAD_PROXY_CA_FILE=' in text
+
+
 @pytest.mark.parametrize('mode', MODES)
 def test_the_env_example_lists_every_setting(mode):
     text = example_env(mode)

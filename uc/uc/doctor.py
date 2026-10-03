@@ -364,14 +364,17 @@ def run_doctor(
 
 
 def record(report: DoctorReport, data_dir: Path, now: dt.datetime) -> Path:
-    """Save report as the latest: in full as data_dir/doctor/report.json, its counts in status.json's doctor block; return the report's path."""
+    """Save report as the latest: in full as data_dir/doctor/report.json, its counts in status.json's doctor block; return the report's path.
+
+    The block's recorded_at says when. Generations keep it and the block's missing_cores, which only a recorded report works out (docs/reference/status-json.md).
+    """
     path = data_dir / REPORT_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name('.report.json.tmp')
     tmp.write_text(json.dumps(report.to_dict(), indent=2) + '\n', encoding='utf-8')
     tmp.chmod(0o644)
     tmp.replace(path)
-    status.update_status(data_dir, doctor={**report.summary(), 'checked_at': iso(now)})
+    status.update_status(data_dir, doctor={**report.summary(), 'checked_at': iso(now), 'recorded_at': iso(now)})
     return path
 
 

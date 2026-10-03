@@ -364,7 +364,7 @@ def test_record_saves_the_report_and_its_counts(tmp_path):
     assert json.loads(path.read_text(encoding='utf-8'))['plugins'] == 3
     assert path.stat().st_mode & 0o777 == 0o644
     block = read_status(tmp_path)['doctor']
-    assert (block['plugins'], block['hpi_without_pom'], block['missing_cores'], block['checked_at']) == (3, 1, 1, '2026-10-03T05:30:00Z')
+    assert (block['plugins'], block['hpi_without_pom'], block['missing_cores'], block['checked_at'], block['recorded_at']) == (3, 1, 1, '2026-10-03T05:30:00Z', '2026-10-03T05:30:00Z')
 
 
 def test_missing_cores_is_null_when_cores_were_not_checked():

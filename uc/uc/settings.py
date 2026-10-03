@@ -125,7 +125,14 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('REPO_ADAPTER_URL', 'url', 'repo-adapter', 'Where uc finds the repo-adapter. Change it only with a non-default Compose layout.', default=DEFAULT_ADAPTER_URL),
     Setting('REPO_ADAPTER_DIR', 'path', 'repo-adapter', "The repo-adapter's token, cache and report.json, ${UC_DATA_DIR}/repo-adapter by default.", derived=True),
     Setting('REPO_ADAPTER_PORT', 'int', 'repo-adapter', 'The port the repo-adapter listens on. Change REPO_ADAPTER_URL with it.', default='8081', minimum=1),
-    Setting('REPO_CA_FILE', 'path', 'repo-adapter', 'A PEM bundle added to the system bundle, for a repository behind a private CA.', sample='/etc/ssl/uc-repo-ca.crt'),
+    Setting(
+        'REPO_CA_FILE',
+        'path',
+        'repo-adapter',
+        'A PEM bundle added to the system bundle, for a repository behind a private CA.',
+        sample='/etc/ssl/uc-repo-ca.crt',
+        hint=('Mount the bundle into the repo-adapter (and uc) and point this at it: docs/getting-started/airgapped.md#repository-behind-a-private-ca',),
+    ),
     Setting('REPO_MAX_ARCHIVE_MB', 'int', 'repo-adapter', 'Archives larger than this are skipped and reported.', default='512', minimum=1),
     # Downloads
     Setting('DOWNLOAD_BACKEND', 'choice', 'Downloads', 'mirror (the get.jenkins.io layout) or artifactory (any Maven-layout repository).', online='mirror', airgapped='artifactory', choices=BACKENDS),
@@ -145,7 +152,14 @@ SETTINGS: tuple[Setting, ...] = (
         choices=ACCESS_MODES,
         hint=('Controllers cannot read the repository anonymously? Use proxy: docs/how-to/proxy-downloads.md',),
     ),
-    Setting('DOWNLOAD_PROXY_CA_FILE', 'path', 'Downloads', "Proxy mode only: the CA bundle the backend's certificate must verify against.", default='/etc/ssl/certs/ca-certificates.crt'),
+    Setting(
+        'DOWNLOAD_PROXY_CA_FILE',
+        'path',
+        'Downloads',
+        "Proxy mode only: the CA bundle the backend's certificate must verify against.",
+        default='/etc/ssl/certs/ca-certificates.crt',
+        hint=('Mount the bundle into web and point this at it: docs/how-to/proxy-downloads.md#backend-with-a-private-ca',),
+    ),
     Setting('DOWNLOAD_PROXY_AUTH_FILE', 'path', 'Downloads', 'Proxy mode only: the file holding username:password for the backend, ${SECRETS_DIR}/download_proxy_auth by default.', derived=True, secret_file=True),
     # Upstream data
     Setting(
@@ -235,8 +249,8 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('REPO_PUSH_AUTH_FILE', 'path', 'Internal', 'The account that can write to the repository, ${SECRETS_DIR}/repo_push_auth by default.', derived=True, secret_file=True),
     Setting('UC_CONFIG_FILE', 'path', 'Internal', 'The settings file; a missing file is fine.', default='/config/uc.toml', env_only=True),
     # Compose
-    Setting('UC_ENV_FILE', 'path', 'Compose', 'The file every service loads as env_file.', default='.env', env_only=True),
-    Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler and repo-adapter.', default='jenkins-uc/uc:local', env_only=True),
+    Setting('UC_ENV_FILE', 'path', 'Compose', 'The file every service except web loads as env_file.', default='.env', env_only=True),
+    Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler, repo-adapter and web-config.', default='jenkins-uc/uc:local', env_only=True),
     Setting('WEB_IMAGE', 'str', 'Compose', 'The image for web.', default='jenkins-uc/web:local', env_only=True),
     Setting('HTTP_PORT', 'int', 'Compose', "Host port published for the web container's HTTP listener.", default='8080', env_only=True),
     Setting('HTTPS_PORT', 'int', 'Compose', "Host port published for the web container's TLS listener.", default='8443', env_only=True),

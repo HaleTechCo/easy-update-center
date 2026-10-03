@@ -17,7 +17,7 @@ from .timeutil import iso, utcnow
 
 if TYPE_CHECKING:
     import datetime as dt
-    from collections.abc import Callable
+    from collections.abc import Callable, Collection
 
     from .config import Settings
 
@@ -59,15 +59,18 @@ def write_state(settings: Settings, now: dt.datetime) -> None:
 def run_schedule(
     settings: Settings,
     *,
+    drop_env: Collection[str] = (),
     generate_once: Callable[[], object] | None = None,
-    exec_: Callable[[str, list[str]], object] = os.execvp,
+    exec_: Callable[[str, list[str], dict[str, str]], object] = os.execvpe,
     crontab: Path = CRONTAB,
     now: Callable[[], dt.datetime] = utcnow,
 ) -> None:
     """Check the schedules, record the start, generate a first release if none is live, then replace this process with supercronic.
 
     A bad schedule raises ScheduleError before anything else; a failed first run is logged and scheduling goes ahead.
-    With the default exec_ (os.execvp) this never returns.
+    supercronic gets this process's environment without the names in drop_env, those apply_process_env exported
+    from uc.toml: the first run uses them, and each scheduled run reads them from uc.toml afresh.
+    With the default exec_ (os.execvpe) this never returns.
     """
     text = crontab_text(settings)
     write_state(settings, now())
@@ -81,4 +84,4 @@ def run_schedule(
         except Exception:  # noqa: BLE001 - whatever fails, keep scheduling; status.json records the failure
             traceback.print_exc()
     crontab.write_text(text, encoding='utf-8')
-    exec_('supercronic', ['supercronic', '-passthrough-logs', str(crontab)])
+    exec_('supercronic', ['supercronic', '-passthrough-logs', str(crontab)], {name: value for name, value in os.environ.items() if name not in drop_env})

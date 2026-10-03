@@ -54,6 +54,13 @@ def test_airgapped_without_a_backend_url_or_repository_is_refused():
         load_web_settings({'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc'}, config_file=NO_FILE)
 
 
+@pytest.mark.parametrize('load', [load_web_settings, load_settings])
+def test_credentials_in_the_repository_url_are_refused(load):
+    env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'REPO_URL': 'https://u:p@artifactory.corp/artifactory/', 'REPO_KEY': 'jenkins'}  # pragma: allowlist secret
+    with pytest.raises(ConfigError, match=r'^URLs must not contain credentials; use the secret files instead$'):
+        load(env, config_file=NO_FILE)
+
+
 def test_an_invalid_download_access_still_fails():
     with pytest.raises(ConfigError, match='DOWNLOAD_ACCESS must be one of'):
         load_web_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc', 'DOWNLOAD_ACCESS': 'tunnel'}, config_file=NO_FILE)

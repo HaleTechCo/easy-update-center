@@ -7,7 +7,8 @@ Every setting the update center reads, its default in each mode, and which servi
 Every setting can be set in two places, and most have a default:
 
 - **The environment**: the file Compose loads as each service's `env_file`, `.env` in the project
-  directory unless `UC_ENV_FILE` names another. Every service reads the same file.
+  directory unless `UC_ENV_FILE` names another. Every service that runs the uc image (`uc`,
+  `scheduler`, `repo-adapter` and `web-config`) reads the same file.
 - **`config/uc.toml`**: an optional [TOML](https://toml.io) file, which Compose mounts at
   `/config/uc.toml` (`UC_CONFIG_FILE` names another path). `config/uc.example.toml` lists every
   setting. How to: [Configure with uc.toml](../how-to/configure-with-uc-toml.md).
@@ -57,7 +58,8 @@ and which you can run by hand; "doctor" means `uc doctor`.
   docker compose up -d --force-recreate      # or: make reload
   ```
 
-  A generation in progress restarts, as it always has when the scheduler is recreated.
+  `make reload` checks the settings first and recreates nothing when they are invalid. A
+  generation in progress restarts, as it always has when the scheduler is recreated.
 - `uc config` ends with that command when the scheduler started with other settings than the
   current ones.
 - `PUBLIC_URL` and the download settings are written into each release: after changing them,
@@ -67,8 +69,8 @@ and which you can run by hand; "doctor" means `uc doctor`.
 
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
-| `MODE` | `mode` | none | every service | `online` or `airgapped`. It only sets defaults; every setting below can still be set explicitly. |
-| `PUBLIC_URL` | `public_url` | none | every service | The exact origin Jenkins uses, with no path, for example `https://jenkins-updates.example.com`. See [A hostname for PUBLIC_URL](../getting-started/requirements.md#a-hostname-for-public_url). |
+| `MODE` | `mode` | none | every uc-image service (`web-config` resolves it for web) | `online` or `airgapped`. It only sets defaults; every setting below can still be set explicitly. |
+| `PUBLIC_URL` | `public_url` | none | every uc-image service (`web-config` resolves it for web) | The exact origin Jenkins uses, with no path, for example `https://jenkins-updates.example.com`. See [A hostname for PUBLIC_URL](../getting-started/requirements.md#a-hostname-for-public_url). |
 
 ## Mode defaults
 
@@ -103,7 +105,7 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
-| `REPO_ADAPTER` | `[repo] adapter` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web-config | Whether the generator reads the repository through the [repo-adapter](../architecture/repo-adapter.md). `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is refused. The service stays idle when off. |
+| `REPO_ADAPTER` | `[repo] adapter` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter | Whether the generator reads the repository through the [repo-adapter](../architecture/repo-adapter.md). `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is refused. The service stays idle when off. |
 | `REPO_ADAPTER_URL` | `[repo] adapter_url` | `http://repo-adapter:8081/artifactory/` | generate, doctor | Where `uc` finds the adapter. Change it only with a non-default Compose layout. |
 | `REPO_ADAPTER_DIR` | `[repo] adapter_dir` | `/data/repo-adapter` | generate, doctor, repo-adapter | The adapter's token, cache and `report.json`. |
 | `REPO_ADAPTER_PORT` | `[repo] adapter_port` | `8081` | repo-adapter | The port the repo-adapter listens on; `--port` overrides it. Change `REPO_ADAPTER_URL`, and the `repo-adapter` healthcheck in `compose.yaml`, with it. Minimum 1. |
@@ -177,8 +179,8 @@ directory, not by the containers.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `UC_ENV_FILE` | `.env` | The file every service loads as `env_file`. Lets several configurations sit side by side. |
-| `UC_IMAGE` | `jenkins-uc/uc:local` | The image for `uc`, `scheduler` and `repo-adapter`. |
+| `UC_ENV_FILE` | `.env` | The file every service except `web` loads as `env_file`. Lets several configurations sit side by side. |
+| `UC_IMAGE` | `jenkins-uc/uc:local` | The image for `uc`, `scheduler`, `repo-adapter` and `web-config`. |
 | `WEB_IMAGE` | `jenkins-uc/web:local` | The image for `web`. |
 | `HTTP_PORT` | `8080` | Host port published for the web container's HTTP listener. |
 | `HTTPS_PORT` | `8443` | Host port published for the web container's TLS listener. |

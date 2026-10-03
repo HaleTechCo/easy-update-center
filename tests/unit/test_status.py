@@ -42,3 +42,17 @@ def test_keep_holds_a_field_the_writer_has_no_value_for(tmp_path):
     assert read_status(tmp_path) == {'live_release': 'b', 'doctor': {'plugins': 1}}
     write_status(tmp_path, {'doctor': {'plugins': 2}}, keep=('doctor',))
     assert read_status(tmp_path) == {'doctor': {'plugins': 2}}
+
+
+def test_keep_holds_a_field_of_a_block_the_writer_has_no_value_for(tmp_path):
+    keep = ('doctor', 'doctor.missing_cores', 'doctor.recorded_at')
+    write_status(tmp_path, {'doctor': {'plugins': 1, 'missing_cores': 2, 'recorded_at': 'r'}})
+    write_status(tmp_path, {'doctor': {'plugins': 3, 'missing_cores': None}}, keep=keep)
+    assert read_status(tmp_path) == {'doctor': {'plugins': 3, 'missing_cores': 2, 'recorded_at': 'r'}}
+    write_status(tmp_path, {'doctor': {'plugins': 4, 'missing_cores': 5}}, keep=keep)
+    assert read_status(tmp_path) == {'doctor': {'plugins': 4, 'missing_cores': 5, 'recorded_at': 'r'}}
+    write_status(tmp_path, {'doctor': None}, keep=keep)
+    assert read_status(tmp_path) == {'doctor': {'plugins': 4, 'missing_cores': 5, 'recorded_at': 'r'}}
+    write_status(tmp_path, {})
+    write_status(tmp_path, {'doctor': {'plugins': 6, 'missing_cores': None}}, keep=keep)
+    assert read_status(tmp_path) == {'doctor': {'plugins': 6, 'missing_cores': None}}
