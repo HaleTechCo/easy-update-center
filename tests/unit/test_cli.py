@@ -13,6 +13,7 @@ from sitefixture import uc_document, write_site
 from uc.cli import EXIT_LOCKED, build_parser, doctor_options, main
 from uc.pki import cert_info
 from uc.publish import RunLock
+from uc.repo_adapter.server import record_port
 from uc.schedule import run_schedule
 from uc.status import read_status, write_status
 from uc.timeutil import utcnow
@@ -310,13 +311,47 @@ def _free_port():
         return sock.getsockname()[1]
 
 
-def test_healthcheck_succeeds_when_the_adapter_answers(monkeypatch, tmp_path, secrets_dir, healthz_port):
-    use_env(monkeypatch, tmp_path, secrets_dir)
+@pytest.fixture
+def port_file(monkeypatch, tmp_path):
+    path = tmp_path / 'adapter.port'
+    monkeypatch.setattr('uc.repo_adapter.server.PORT_FILE', path)
+    return path
+
+
+def test_healthcheck_probes_the_recorded_port_and_reads_no_settings(monkeypatch, tmp_path, port_file, healthz_port):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    (tmp_path / 'uc.toml').write_text('no_such_setting = 1\n[repo]\nadapter_port = 1\n', encoding='utf-8')
+    monkeypatch.setenv('MODE', 'bogus')
     monkeypatch.setattr('uc.cli.serve', lambda *_args, **_kwargs: pytest.fail('--healthcheck must not start a server'))
-    monkeypatch.setenv('REPO_ADAPTER_PORT', str(healthz_port))
+    record_port(healthz_port)
     assert main(['repo-adapter', '--healthcheck']) == 0
-    monkeypatch.setenv('REPO_ADAPTER_PORT', str(_free_port()))
+    port_file.write_text(f'{_free_port()}\n', encoding='utf-8')
     assert main(['repo-adapter', '--healthcheck', '--port', str(healthz_port)]) == 0
+
+
+def test_healthcheck_without_a_recorded_port_is_unhealthy(port_file, capsys):
+    assert not port_file.exists()
+    assert main(['repo-adapter', '--healthcheck']) == 1
+    assert 'uc: error: repo-adapter is not healthy: it has not recorded a port yet' in capsys.readouterr().err
+    port_file.write_text('not a port\n', encoding='utf-8')
+    assert main(['repo-adapter', '--healthcheck']) == 1
+
+
+def test_serving_records_the_port_it_bound(monkeypatch, tmp_path, secrets_dir, port_file):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    started = []
+
+    class Stub:
+        server_address = ('0.0.0.0', 4321)
+
+        def serve_forever(self):
+            started.append(True)
+
+    monkeypatch.setattr('uc.repo_adapter.server.make_server', lambda *_args, **_kwargs: Stub())
+    assert main(['repo-adapter', '--port', '0']) == 0
+    assert started
+    assert port_file.read_text(encoding='utf-8') == '4321\n'
+    assert not port_file.with_name('adapter.port.tmp').exists()
 
 
 def test_healthcheck_ignores_the_proxy_settings(monkeypatch, tmp_path, secrets_dir, healthz_port):
@@ -325,10 +360,10 @@ def test_healthcheck_ignores_the_proxy_settings(monkeypatch, tmp_path, secrets_d
     assert main(['repo-adapter', '--healthcheck', '--port', str(healthz_port)]) == 0
 
 
-def test_healthcheck_fails_with_a_message_when_nothing_listens(monkeypatch, tmp_path, secrets_dir, capsys):
-    use_env(monkeypatch, tmp_path, secrets_dir)
+@pytest.mark.usefixtures('port_file')
+def test_healthcheck_fails_with_a_message_when_nothing_listens(capsys):
     port = _free_port()
-    monkeypatch.setenv('REPO_ADAPTER_PORT', str(port))
+    record_port(port)
     assert main(['repo-adapter', '--healthcheck']) == 1
     assert f'uc: error: repo-adapter is not healthy on port {port}: ' in capsys.readouterr().err
 

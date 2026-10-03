@@ -75,7 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     adapter = sub.add_parser('repo-adapter', help='serve the repository to the generator (the repo-adapter service)')
     adapter.add_argument('--port', type=int, help='port to listen on (default: REPO_ADAPTER_PORT, 8081)')
-    adapter.add_argument('--healthcheck', action='store_true', help='do not serve: exit 0 when the adapter answers on the port, 1 otherwise (the compose healthcheck)')
+    adapter.add_argument('--healthcheck', action='store_true', help='do not serve: exit 0 when the running adapter answers (on --port, else the port it bound), 1 otherwise; reads no settings (the compose healthcheck)')
 
     pki = sub.add_parser('pki', help='manage the signing PKI').add_subparsers(dest='pki_command', required=True)
     init = pki.add_parser('init', help='create a root CA and a signing certificate')
@@ -138,6 +138,9 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _pki(args)
     if args.command == 'config':
         return _config(args)
+    if args.command == 'repo-adapter' and args.healthcheck:
+        healthcheck(args.port)  # reads no settings: health is the running server's, not the files'
+        return 0
     settings = load_settings()
     exported = apply_process_env(settings)
     if args.command == 'generate':
@@ -159,11 +162,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         run_schedule(settings, drop_env=exported)
         return 0
     if args.command == 'repo-adapter':
-        port = settings.repo_adapter_port if args.port is None else args.port
-        if args.healthcheck:
-            healthcheck(port)
-        else:
-            serve(settings, port=port)
+        serve(settings, port=settings.repo_adapter_port if args.port is None else args.port)
         return 0
     msg = f'unhandled command {args.command}'
     raise AssertionError(msg)

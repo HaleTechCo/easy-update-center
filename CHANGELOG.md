@@ -50,9 +50,10 @@ once releases are published.
 - Settings for what were command-line options only: `DOCTOR_FETCH`, `DOCTOR_SINCE`, `DOCTOR_JSON`,
   `PKI_ORG`, `PKI_ROOT_DAYS`, `PKI_SIGNING_DAYS` and `REPO_ADAPTER_PORT`. `--no-fetch` and
   `--no-json` switch a configured default off for one run.
-  `REPO_ADAPTER_PORT` also drives the repo-adapter's healthcheck (the new
-  `uc repo-adapter --healthcheck`) and the default `REPO_ADAPTER_URL`, so changing the port needs no
-  other edit. `DOCTOR_SINCE` is checked when the settings load: it must be a Jenkins version such as
+  `REPO_ADAPTER_PORT` also sets the default `REPO_ADAPTER_URL`, and the repo-adapter's healthcheck
+  (the new `uc repo-adapter --healthcheck`, which reads no settings) probes the port the running
+  adapter bound, so changing the port needs no other edit than `make reload`. `DOCTOR_SINCE` is
+  checked when the settings load: it must be a Jenkins version such as
   `2.462.1`.
 - The generated example files give the remaining guidance per mode: how to use your own repository
   (online), what `CORE_AGE_DAYS=400` means, procured copies of the popularity and tool-installer
