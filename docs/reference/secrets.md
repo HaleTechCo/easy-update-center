@@ -64,7 +64,7 @@ with group 33. `secrets/` stays yours, and each container reads its own files th
 | `root/`, `root/root-ca.key` | you | yours | 0700, 0600 |
 
 `make pki-init`, `make pki-rotate` and `make secrets-placeholders` set this up (through
-`scripts/secrets-permissions.sh`, run as root in the uc image), so no step needs `sudo`, and you can
+`scripts/secrets-permissions.sh`, run as root by the `setup` service), so no step needs `sudo`, and you can
 write credentials before or after creating the keys. Writing into an existing file, as
 `printf '%s' '...' > secrets/repo_password` does, keeps its permissions. After **replacing** a file
 (copying a new one over it, or saving it from an editor that writes a new file), run:
@@ -72,6 +72,11 @@ write credentials before or after creating the keys. Writing into an existing fi
 ```bash
 make secrets-permissions
 ```
+
+These four targets (`pki-init`, `pki-rotate`, `secrets-placeholders`, `secrets-permissions`) run the
+`setup` service from `compose.yaml`: `docker compose run --rm --no-deps setup`, as root, with no
+network and no Compose secrets, mounting only `./secrets`, `./config` and the script. It reads `.env`
+(or the file `UC_ENV_FILE` names) as the other services do, so quotes in it are handled the same way.
 
 It is idempotent, and it also hands back a `secrets/` that an older version of `make pki-init` gave
 wholesale to uid 10001. Docker Desktop (macOS, Windows) ignores ownership, so none of this matters

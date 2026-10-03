@@ -14,6 +14,10 @@ on a Java runtime, plus the `uc` command in Python) and the **web image** (Apach
 - **web-config** runs once before `web` starts: it works out web's settings from `.env` and
   `config/uc.toml` and writes them to a small volume web reads, then exits. It has no network and no
   secrets. See [Where web gets its settings](request-routing.md#where-web-gets-its-settings).
+- **setup** is run by `make pki-init`, `pki-rotate`, `secrets-placeholders` and `secrets-permissions`
+  (`docker compose run --rm --no-deps setup`), never by `docker compose up`. It runs `uc pki` and
+  `scripts/secrets-permissions.sh` as root against `./secrets`, with `./config` read-only and the
+  same `.env` as the other services. It has no network and no secrets.
 - **scheduler** runs `uc generate` on `GENERATE_SCHEDULE`, and at once when no release is live; with `DOCTOR_SCHEDULE` set it also runs a read-only `uc doctor --record`.
   Each run builds a complete new release, validates it, and swaps it in atomically. See
   [Generation pipeline](generation-pipeline.md).

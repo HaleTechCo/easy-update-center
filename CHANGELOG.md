@@ -25,8 +25,11 @@ once releases are published.
   `config/overlay/` before.
 - `DOWNLOAD_PROXY_AUTH_FILE` defaults to `${SECRETS_DIR}/download_proxy_auth`, as the other secret
   files do.
-- `make pki-init` and `make pki-rotate` pass `.env` (when present) and `config/` to `uc pki`, so
-  `PKI_*` settings apply to them.
+- `make pki-init`, `make pki-rotate`, `make secrets-placeholders` and `make secrets-permissions` run
+  a new `setup` Compose service (root, no network, no secrets; mounts `./secrets`, `./config` and
+  `scripts/secrets-permissions.sh`) instead of `docker run`. It reads `.env`, or the file
+  `UC_ENV_FILE` names, as the other services do, so quotes in values are handled the same way and
+  `PKI_*` settings apply to `uc pki`.
 - `secrets/` stays owned by you on Linux. `make pki-init`, `make secrets-placeholders` and the new
   `make pki-rotate` and `make secrets-permissions` let each container read its own files through its
   group (uc 10001, web 33) instead of handing the whole directory to uid 10001, so no step needs

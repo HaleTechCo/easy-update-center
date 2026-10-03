@@ -9,6 +9,7 @@ import sys
 REPO_SECRETS = {'repo_username', 'repo_password'}
 PUSH_SECRET = 'repo_push_auth'
 STAGING = '/procurement'
+SETUP_MOUNTS = {'/pki', '/config', '/usr/local/bin/secrets-permissions.sh'}
 
 
 def networks(service: dict) -> set[str]:
@@ -50,6 +51,18 @@ def main() -> None:
             problems.append(f'{name} mounts the staging folder {STAGING}')
     if 'uc' in services and (PUSH_SECRET not in secrets(services['uc']) or STAGING not in mounts(services['uc'])):
         problems.append(f'uc must receive {PUSH_SECRET} and mount {STAGING}')
+    setup = services.get('setup')
+    if setup is None:
+        problems.append('setup is missing: make pki-init and the secrets targets run it')
+    else:
+        if setup.get('network_mode') != 'none' or networks(setup) - {'none'}:
+            problems.append('setup must have no network')
+        if setup.get('user') != '0:0':
+            problems.append(f'setup must run as 0:0, not {setup.get("user")!r}')
+        if secrets(setup):
+            problems.append(f'setup receives secrets {sorted(secrets(setup))}')
+        if mounts(setup) != SETUP_MOUNTS:
+            problems.append(f'setup mounts {sorted(mounts(setup), key=str)}, not {sorted(SETUP_MOUNTS)}')
     web_config = services.get('web-config')
     if web_config is None:
         problems.append('web-config is missing: web reads its settings from it')

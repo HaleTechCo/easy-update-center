@@ -57,32 +57,32 @@ test-secrets: uc-image
 # writes to secrets/. Run `make secrets-permissions` yourself after replacing a file in secrets/.
 HOST_UID ?= $(shell id -u)
 HOST_GID ?= $(shell id -g)
-# It also gets .env (when there is one) and config/, so uc pki reads the PKI_* settings the services do.
-IN_SECRETS = docker run --rm --user 0:0 --entrypoint sh $(if $(wildcard .env),--env-file .env) -v "$(CURDIR)/config:/config:ro" -v "$(CURDIR)/secrets:/pki" \
-  -v "$(CURDIR)/scripts/secrets-permissions.sh:/usr/local/bin/secrets-permissions.sh:ro"
+# The setup service (compose.yaml) reads .env, or UC_ENV_FILE, and config/ as the other services do,
+# so uc pki sees the PKI_* settings they see. It mounts ./secrets as /pki and runs as root.
+IN_SECRETS = docker compose run --rm --no-deps
 FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh /pki $(HOST_UID) $(HOST_GID)
 SECRET_FILES = repo_username repo_password github_username github_token download_proxy_auth repo_push_auth
 
 # Creates the root CA and signing certificate in ./secrets. Refuses to overwrite existing files.
 pki-init: uc-image
 	@mkdir -p secrets
-	$(IN_SECRETS) $(UC_IMAGE) -c 'uc pki init --out /pki && $(FIX_SECRETS)'
+	$(IN_SECRETS) setup -c 'uc pki init --out /pki && $(FIX_SECRETS)'
 
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
 # signing certificate and keeps the previous pair as *.old.
 pki-rotate: uc-image
 	@test -n "$(ROOT)" || { echo "usage: make pki-rotate ROOT=<directory holding root-ca.key>"; exit 2; }
-	$(IN_SECRETS) -v "$(abspath $(ROOT)):/pki/root:ro" $(UC_IMAGE) -c 'uc pki rotate --dir /pki && $(FIX_SECRETS)'
+	$(IN_SECRETS) -v "$(abspath $(ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki && $(FIX_SECRETS)'
 	@rmdir secrets/root 2>/dev/null || true
 
 secrets-placeholders: uc-image
 	@mkdir -p secrets
-	@$(IN_SECRETS) $(UC_IMAGE) -c 'for f in $(SECRET_FILES); do [ -e /pki/$$f ] || : > /pki/$$f; done; $(FIX_SECRETS)'
+	@$(IN_SECRETS) setup -c 'for f in $(SECRET_FILES); do [ -e /pki/$$f ] || : > /pki/$$f; done; $(FIX_SECRETS)'
 	@echo "secrets/: created any missing credential files (empty means 'not set')"
 
 secrets-permissions: uc-image
 	@mkdir -p secrets
-	@$(IN_SECRETS) $(UC_IMAGE) -c '$(FIX_SECRETS)'
+	@$(IN_SECRETS) setup -c '$(FIX_SECRETS)'
 	@echo "secrets/: yours; the containers read their files through their group"
 
 # The example settings files are generated from the settings registry (uc/uc/settings.py), using the
@@ -130,10 +130,10 @@ compose-check: build-uc
 	UC_ENV_FILE=.env.online.example docker compose --env-file .env.online.example config --quiet
 	UC_ENV_FILE=.env.airgapped.example docker compose --env-file .env.airgapped.example \
 	  -f compose.yaml -f compose.airgapped.yaml config --quiet
-	UC_ENV_FILE=.env.online.example docker compose --env-file .env.online.example --profile tools \
+	UC_ENV_FILE=.env.online.example docker compose --env-file .env.online.example --profile tools --profile setup \
 	  config --format json | $(ISOLATION) online
 	UC_ENV_FILE=.env.airgapped.example docker compose --env-file .env.airgapped.example \
-	  -f compose.yaml -f compose.airgapped.yaml --profile tools config --format json | $(ISOLATION) airgapped
+	  -f compose.yaml -f compose.airgapped.yaml --profile tools --profile setup config --format json | $(ISOLATION) airgapped
 
 IT_DIR = tests/integration
 IT_AIR = docker compose -f $(IT_DIR)/airgapped.yaml --env-file $(IT_DIR)/.versions.env
