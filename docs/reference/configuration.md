@@ -15,6 +15,8 @@ Every setting can be set in two places, and most have a default:
 A setting's value is the first of: a command-line option (where the command has one), the
 environment, `uc.toml`, the default for the mode, the built-in default.
 
+Run `uc config` to see every value and where it came from ([uc config](cli.md#uc-config)).
+
 - **Names**: the `uc.toml` column gives each setting's key. The rule behind it: a variable whose
   name starts with one of the sections `generate`, `doctor`, `repo`, `download`, `resources`,
   `tls`, `procurement`, `pki`, `signing`, `github` or `uc` and an underscore lives in that section,

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import publish, status
+from . import configview, publish, status
 from .config import apply_process_env, load_settings
 from .doctor import check_since, format_report, inspect_repository
 from .errors import UcError
@@ -58,6 +58,10 @@ def build_parser() -> argparse.ArgumentParser:
     rollback.add_argument('release', nargs='?', help='release id (default: the one before live)')
 
     sub.add_parser('status', help='print status.json')
+    config_cmd = sub.add_parser('config', help='show every setting, its value and where it came from')
+    shows = config_cmd.add_mutually_exclusive_group()
+    shows.add_argument('--json', action='store_true', help='print the settings as JSON')
+    shows.add_argument('--check', action='store_true', help='only check the settings')
     sub.add_parser('schedule', help='run generate on GENERATE_SCHEDULE (the scheduler service)')
 
     adapter = sub.add_parser('repo-adapter', help='serve the repository to the generator (the repo-adapter service)')
@@ -111,6 +115,8 @@ def _check_doctor_args(parser: argparse.ArgumentParser, args: argparse.Namespace
 def _dispatch(args: argparse.Namespace) -> int:
     if args.command == 'pki':
         return _pki(args)
+    if args.command == 'config':
+        return _config(args)
     settings = load_settings()
     apply_process_env(settings)
     if args.command == 'generate':
@@ -158,6 +164,10 @@ def _doctor(args: argparse.Namespace, settings: Settings) -> int:
         return report.exit_code()
     out = sys.stderr if args.json else sys.stdout  # keep stdout valid JSON
     return download(inspection, settings, poms=args.download_poms, dependencies=args.download_dependencies, wars=args.download_war, staging_dir=args.staging, versions=versions, out=out)
+
+
+def _config(args: argparse.Namespace) -> int:
+    return configview.run(as_json=args.json, check=args.check)
 
 
 def _pki(args: argparse.Namespace) -> int:
