@@ -145,8 +145,10 @@ Shows every setting with its value and where it came from: `environment`, `uc.to
 (the default for the mode), `derived` (worked out from other settings, as `REPO_URL` and the secret
 paths are) or `default`. For a secret file it shows the path and whether the file is `present`,
 `empty` or `missing`, never its contents. A setting read only when a service starts shows `restart`
-after its source (`environment; restart`): changing it needs `make reload`; the others apply at the
-next run. When the scheduler started with other values of the `restart` settings than these, it
+after its source (`environment; restart`): changing it needs `make reload` wherever it is set. For
+the others, a change in `config/uc.toml` applies at the next run, but one in `.env` also needs
+`make reload`, because a container's environment is fixed when it is created. When the scheduler
+started with other values of the `restart` settings, or in another environment, than these, it
 ends with the command that applies them.
 Credentials inside a URL setting are shown as `***`.
 It runs in the `uc` container, which by design does not receive `download_proxy_auth` (web's) nor,

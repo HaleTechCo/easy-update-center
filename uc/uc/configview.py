@@ -105,13 +105,17 @@ def format_rows(shown: list[Row], config_file: Path) -> str:
     return '\n'.join(lines) + '\n'
 
 
-def reload_hint(settings: Settings) -> str | None:
-    """Return a note when the scheduler started with other settings than these, else None."""
+def reload_hint(settings: Settings, environ: Mapping[str, str]) -> str | None:
+    """Return a note when the scheduler started with other restart settings, or in an environment other than environ, else None.
+
+    environ is this process's own environment, never exported to: a container's environment is fixed when it is created,
+    so a changed .env needs a recreate, while uc.toml matters only for the settings marked restart.
+    """
     try:
         state = json.loads((settings.data_dir / SCHEDULER_STATE).read_text(encoding='utf-8'))
     except (OSError, ValueError):
         return None
-    if not isinstance(state, dict) or state.get('settings_digest') in {None, settings_digest(settings)}:
+    if not isinstance(state, dict) or state.get('settings_digest') in {None, settings_digest(settings, environ)}:
         return None
     return f'note: the scheduler started at {state.get("started_at", "an unknown time")} with other settings; to apply these, run: {RELOAD}'
 
@@ -147,7 +151,7 @@ def run(
         out.write(json.dumps([asdict(row) for row in rows(r, settings)], indent=2) + '\n')
         return 0
     out.write(format_rows(rows(r, settings), r.config_file))
-    hint = reload_hint(settings)
+    hint = reload_hint(settings, r.env)
     if hint:
         out.write(f'\n{hint}\n')
     return 0

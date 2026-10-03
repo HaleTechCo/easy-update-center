@@ -18,7 +18,7 @@ from .timeutil import iso, utcnow
 
 if TYPE_CHECKING:
     import datetime as dt
-    from collections.abc import Callable, Collection
+    from collections.abc import Callable, Collection, Mapping
 
     from .config import Settings
 
@@ -47,10 +47,10 @@ def crontab_text(settings: Settings) -> str:
     return text
 
 
-def write_state(settings: Settings, now: dt.datetime) -> None:
+def write_state(settings: Settings, now: dt.datetime, environ: Mapping[str, str]) -> None:
     """Record when the scheduler started and with which settings, in data/scheduler.json, for uc config's reload hint; a failed write is reported and the scheduler goes on."""
     path = settings.data_dir / SCHEDULER_STATE
-    text = json.dumps({'started_at': iso(now), 'settings_digest': settings_digest(settings)}, indent=2, sort_keys=True) + '\n'
+    text = json.dumps({'started_at': iso(now), 'settings_digest': settings_digest(settings, environ)}, indent=2, sort_keys=True) + '\n'
     tmp = None
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -74,16 +74,18 @@ def run_schedule(
     exec_: Callable[[str, list[str], dict[str, str]], object] = os.execvpe,
     crontab: Path = CRONTAB,
     now: Callable[[], dt.datetime] = utcnow,
+    environ: Mapping[str, str] | None = None,
 ) -> None:
     """Check the schedules, record the start, generate a first release if none is live, then replace this process with supercronic.
 
     A bad schedule raises ScheduleError before anything else; a failed first run is logged and scheduling goes ahead.
     supercronic gets this process's environment without the names in drop_env, those apply_process_env exported
     from uc.toml: the first run uses them, and each scheduled run reads them from uc.toml afresh.
+    environ is the environment the container received, from before apply_process_env exported anything (default: os.environ), for the digest.
     With the default exec_ (os.execvpe) this never returns.
     """
     text = crontab_text(settings)
-    write_state(settings, now())
+    write_state(settings, now(), os.environ if environ is None else environ)
     if publish.live_release(settings.data_dir) is None:
         print('uc schedule: no release is live yet, generating now', flush=True)
         try:

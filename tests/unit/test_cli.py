@@ -1,5 +1,6 @@
 """Unit tests for uc.cli: exit codes, status output, rollback, the run lock and the pki subcommands."""
 
+import io
 import json
 import os
 import socket
@@ -10,11 +11,13 @@ from pathlib import Path
 import pytest
 
 from sitefixture import uc_document, write_site
+from uc import configview
 from uc.cli import EXIT_LOCKED, build_parser, doctor_options, main
 from uc.pki import cert_info
 from uc.publish import RunLock
 from uc.repo_adapter.server import record_port
 from uc.schedule import run_schedule
+from uc.settings import REGISTRY
 from uc.status import read_status, write_status
 from uc.timeutil import utcnow
 from ucsupport import make_settings
@@ -209,6 +212,21 @@ def test_scheduled_jobs_read_jvm_options_and_proxies_from_the_settings_file_afre
     assert first_run['JAVA_TOOL_OPTIONS'] == '-Xmx6g'  # the scheduler's own first generation
     assert 'JAVA_TOOL_OPTIONS' not in handed  # supercronic's jobs read uc.toml again on each run
     assert handed['HTTPS_PROXY'] == 'http://proxy.corp:3128'
+
+
+def test_the_scheduler_records_the_environment_it_received_not_what_uc_toml_exports(monkeypatch, tmp_path, secrets_dir):
+    data = use_env(monkeypatch, tmp_path, secrets_dir)
+    (tmp_path / 'uc.toml').write_text('java_tool_options = "-Xmx6g"\nhttps_proxy = "http://proxy.corp:3128"\n', encoding='utf-8')
+    monkeypatch.setenv('JAVA_TOOL_OPTIONS', '')  # monkeypatch restores both after apply_process_env exports the file's values
+    monkeypatch.setenv('HTTPS_PROXY', '')
+    environment = {name: value for name, value in os.environ.items() if name in REGISTRY}  # what the container was given
+    monkeypatch.setattr('uc.cli.run_schedule', lambda settings, **options: run_schedule(settings, **options, generate_once=lambda: None, exec_=lambda *_: None, crontab=tmp_path / 'crontab'))
+    assert main(['schedule']) == 0
+    assert os.environ['JAVA_TOOL_OPTIONS'] == '-Xmx6g'  # exported, so a digest of os.environ taken now would differ and the note would fire forever
+    assert (data / 'scheduler.json').is_file()
+    out = io.StringIO()
+    assert configview.run(env=environment, out=out, err=io.StringIO()) == 0
+    assert 'note:' not in out.getvalue()
 
 
 def test_config_check(monkeypatch, tmp_path, secrets_dir, capsys):

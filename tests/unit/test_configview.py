@@ -95,7 +95,7 @@ def test_the_reload_hint(tmp_path, secrets_dir):
     state.write_text(json.dumps({'started_at': '2026-10-03T08:00:00Z', 'settings_digest': 'older'}), encoding='utf-8')
     _, out, _ = show(env, path)
     assert 'note: the scheduler started at 2026-10-03T08:00:00Z with other settings; to apply these, run: docker compose up -d --force-recreate (make reload)' in out
-    state.write_text(json.dumps({'started_at': 'x', 'settings_digest': settings_digest(load_settings(env, config_file=path))}), encoding='utf-8')
+    state.write_text(json.dumps({'started_at': 'x', 'settings_digest': settings_digest(load_settings(env, config_file=path), env)}), encoding='utf-8')
     _, out, _ = show(env, path)
     assert 'note:' not in out
 
@@ -146,13 +146,17 @@ def test_restart_settings_are_marked_in_the_text_and_the_json(tmp_path, secrets_
     assert by_name['COMPOSE_FILE']['restart'] is False
 
 
-def test_the_reload_hint_ignores_a_change_to_an_unmarked_setting(tmp_path, secrets_dir):
+def test_the_reload_hint_follows_the_environment_and_the_restart_settings_not_uc_toml(tmp_path, secrets_dir):
     path = tmp_path / 'none.toml'
     state = tmp_path / 'data' / 'scheduler.json'
     state.parent.mkdir()
-    state.write_text(json.dumps({'started_at': 'x', 'settings_digest': settings_digest(load_settings(env_for(tmp_path, secrets_dir), config_file=path))}), encoding='utf-8')
-    _, out, _ = show(env_for(tmp_path, secrets_dir, RETAIN_RELEASES='9'), path)
+    state.write_text(json.dumps({'started_at': 'x', 'settings_digest': settings_digest(load_settings(env_for(tmp_path, secrets_dir), config_file=path), env_for(tmp_path, secrets_dir))}), encoding='utf-8')
+    path.write_text('retain_releases = 9\n', encoding='utf-8')  # uc.toml is read afresh by every run
+    _, out, _ = show(env_for(tmp_path, secrets_dir), path)
     assert 'note:' not in out
+    path.unlink()
+    _, out, _ = show(env_for(tmp_path, secrets_dir, RETAIN_RELEASES='9'), path)  # but the container's environment is fixed
+    assert 'note: the scheduler started at x with other settings' in out
     _, out, _ = show(env_for(tmp_path, secrets_dir, PUBLIC_URL='https://other.example.com'), path)
     assert 'note: the scheduler started at x with other settings' in out
 

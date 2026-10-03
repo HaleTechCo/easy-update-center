@@ -49,10 +49,13 @@ and which you can run by hand; "doctor" means `uc doctor`.
 ## When changes apply
 
 - Each `uc generate` and `uc doctor` run, scheduled or by hand, reads `config/uc.toml` afresh, so
-  most changes to it apply at the next run with no restart.
-- The schedules (`GENERATE_SCHEDULE`, `DOCTOR_SCHEDULE`) are read when the scheduler starts, the
-  web container's settings when `web-config` runs, and the repo-adapter's when it starts. After
-  changing any of them, or anything in `.env`, recreate the services:
+  a change to it applies at the next run with no restart, except for the settings `uc config` marks
+  `restart` (below).
+- A container's environment is fixed when it is created, so any change in `.env`, to any setting,
+  needs the services recreated. So does a change, wherever it is set, to the settings read when a
+  service starts: the schedules (`GENERATE_SCHEDULE`, `DOCTOR_SCHEDULE`) when the scheduler
+  starts, the web container's settings when `web-config` runs, and the repo-adapter's when it
+  starts. Recreate the services:
 
   ```bash
   docker compose up -d --force-recreate      # or: make reload
@@ -62,9 +65,10 @@ and which you can run by hand; "doctor" means `uc doctor`.
   generation in progress restarts, as it always has when the scheduler is recreated.
 - `uc config` marks `restart` the settings that are read when a service starts (the schedules,
   the web container's settings, the repo-adapter's, the proxy variables and the data and secret
-  paths those use); they need `make reload`, and the rest (`RETAIN_RELEASES`,
-  `JAVA_TOOL_OPTIONS`, ...) apply at the next run. It ends with that command only when the
-  scheduler started with other values of the `restart` settings than the current ones.
+  paths those use). They need `make reload` wherever they are set; the rest (`RETAIN_RELEASES`,
+  `JAVA_TOOL_OPTIONS`, ...) apply at the next run when set in `config/uc.toml`, and need it too
+  when set in `.env`. `uc config` ends with that command when the scheduler started with other
+  values of the `restart` settings, or in another environment (`.env`), than the current ones.
 - `PUBLIC_URL` and the download settings are written into each release: after changing them,
   also publish a new release with `docker compose run --rm uc generate`.
 

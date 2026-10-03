@@ -47,7 +47,7 @@ def test_the_start_is_recorded_for_uc_config(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     run(settings, tmp_path, lambda: None)
     state = json.loads((settings.data_dir / 'scheduler.json').read_text(encoding='utf-8'))
-    assert state['settings_digest'] == settings_digest(settings)
+    assert state['settings_digest'] == settings_digest(settings, os.environ)
     assert state['started_at'].endswith('Z')
 
 
