@@ -19,6 +19,20 @@ It prints the generator's progress and ends with `published release <id>`. If it
 release is unchanged and the last lines say why; see [Troubleshooting](../troubleshooting.md#generation).
 A second run while one is in progress exits with code 75.
 
+## Change the schedule
+
+Set `GENERATE_SCHEDULE` (a cron expression, or an `@macro` such as `@daily`) in `.env` or
+`config/uc.toml`, then recreate the services so the scheduler reads it:
+
+```bash
+docker compose up -d --force-recreate      # or: make reload
+```
+
+The scheduler can also run a read-only `uc doctor` report on its own schedule, `DOCTOR_SCHEDULE`
+(for example `30 5 * * *`): it saves the report and puts its counts in `status.json`, so monitoring
+sees missing cores or dropped plugins between generations ([Monitor](monitor.md#what-to-alert-on)).
+It never stages, pushes or cleans.
+
 ## Accept a smaller catalog
 
 A release offering fewer than `MIN_PLUGIN_RATIO` (90%) of the live release's plugins is refused, so

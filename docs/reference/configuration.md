@@ -10,7 +10,7 @@ Every setting can be set in two places, and most have a default:
   directory unless `UC_ENV_FILE` names another. Every service reads the same file.
 - **`config/uc.toml`**: an optional [TOML](https://toml.io) file, which Compose mounts at
   `/config/uc.toml` (`UC_CONFIG_FILE` names another path). `config/uc.example.toml` lists every
-  setting.
+  setting. How to: [Configure with uc.toml](../how-to/configure-with-uc-toml.md).
 - **The web container** reads neither: the one-shot `web-config` service works out its settings
   and writes them to a volume `web` reads at start, and a variable set in `web`'s own
   environment wins

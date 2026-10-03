@@ -80,6 +80,10 @@ that up now, before step 6: [Repository behind a private CA](#repository-behind-
 
 Every setting: [Configuration reference](../reference/configuration.md).
 
+The same settings can go in `config/uc.toml` instead, or as well:
+[Configure with uc.toml](../how-to/configure-with-uc-toml.md). Once the images are built,
+`docker compose run --rm uc config` shows what each setting ends up as.
+
 ## 4. Add credentials
 
 `make secrets-placeholders` creates the credential files with the permissions the containers need;

@@ -40,6 +40,10 @@ Edit `.env` and set `PUBLIC_URL` to your update center's origin, for example
 
 Every setting: [Configuration reference](../reference/configuration.md).
 
+The same settings can go in `config/uc.toml` instead, or as well:
+[Configure with uc.toml](../how-to/configure-with-uc-toml.md). Once the images are built,
+`docker compose run --rm uc config` shows what each setting ends up as.
+
 ## 3. Add credentials
 
 `make secrets-placeholders` creates the credential files with the permissions the containers need;

@@ -27,6 +27,12 @@ From [status.json](../reference/status-json.md):
 | `resources.stale` is `true` | Security warnings are older than `STALE_AFTER_DAYS`. | Online: check GitHub access. Air-gapped: [procure a fresh copy](keep-upstream-data-fresh.md). |
 | `warnings` not empty | The run published, but dropped or degraded something. | Review each line; `uc doctor` explains repository drops. |
 | `doctor.missing_dependencies` above 0 | Some offered plugins cannot be installed. | Procure the missing plugins. |
+| `doctor.missing_cores` above 0 | Plugins require cores the repository lacks, so those tiers are missing. | [Procure missing files](procure-missing-files.md). |
+| `doctor.checked_at` older than twice your `DOCTOR_SCHEDULE` interval | The scheduled report stopped (only when `DOCTOR_SCHEDULE` is set). | `docker compose logs scheduler`. |
+
+The `doctor` counts come from each generation with `DOWNLOAD_BACKEND=artifactory`, and from the
+scheduled report when `DOCTOR_SCHEDULE` is set
+([Change the schedule](generate-and-roll-back.md#change-the-schedule)).
 
 A small script covering the first four is enough, for example (with your own `PUBLIC_URL`):
 
