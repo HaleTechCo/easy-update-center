@@ -1,6 +1,7 @@
 """Unit tests for uc.cli: exit codes, status output, rollback, the run lock and the pki subcommands."""
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ def use_env(monkeypatch, tmp_path, secrets_dir):
         'SECRETS_DIR': str(secrets_dir),
         'UC_DATA_DIR': str(tmp_path / 'data'),
         'UC_OVERLAY_DIR': str(tmp_path / 'overlay'),
+        'UC_CONFIG_FILE': str(tmp_path / 'uc.toml'),
     }
     for key, value in values.items():
         monkeypatch.setenv(key, value)
@@ -174,3 +176,11 @@ def test_push_with_nothing_staged_exits_1(monkeypatch, tmp_path, secrets_dir, ca
     use_env(monkeypatch, tmp_path, secrets_dir)
     assert main(['doctor', '--push', '--staging', str(tmp_path / 'empty')]) == 1
     assert 'uc: error: nothing to push' in capsys.readouterr().err
+
+
+def test_commands_export_jvm_options_from_the_settings_file(monkeypatch, tmp_path, secrets_dir):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    (tmp_path / 'uc.toml').write_text('java_tool_options = "-Xmx6g"\n', encoding='utf-8')
+    monkeypatch.setenv('JAVA_TOOL_OPTIONS', '')  # monkeypatch restores it after the test
+    assert main(['status']) == 0
+    assert os.environ['JAVA_TOOL_OPTIONS'] == '-Xmx6g'

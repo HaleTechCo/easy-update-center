@@ -13,7 +13,7 @@ x-uc: &uc
     - /tmp
   volumes:
     - uc-data:/data
-    - ./config/overlay:/config/overlay:ro
+    - ./config:/config:ro
   networks: [default, repo]
   depends_on:
     repo-adapter: {condition: service_healthy}
@@ -53,6 +53,7 @@ services:
       - /tmp
     volumes:
       - uc-data:/data
+      - ./config:/config:ro
     networks: [repo, repo-egress]
     secrets:
       - repo_username
@@ -79,7 +80,7 @@ services:
     profiles: ["tools"]
     volumes:
       - uc-data:/data
-      - ./config/overlay:/config/overlay:ro
+      - ./config:/config:ro
       - ./procurement:/procurement
     secrets:
       - update-center.key
