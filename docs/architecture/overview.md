@@ -14,6 +14,11 @@ on a Java runtime, plus the `uc` command in Python) and the **web image** (Apach
 - **web-config** runs once before `web` starts: it works out web's settings from `.env` and
   `config/uc.toml` and writes them to a small volume web reads, then exits. It has no network and no
   secrets. See [Where web gets its settings](request-routing.md#where-web-gets-its-settings).
+- **setup** is run by `make pki-init`, `pki-rotate`, `secrets-placeholders` and `secrets-permissions`
+  (`docker compose run --rm --no-deps setup`), never by `docker compose up`. It runs `uc pki` and
+  `scripts/secrets-permissions.sh` as root against `./secrets`, with `./config` read-only and the
+  same `.env` as the other services. It has no network and no Compose secrets, but as root it can
+  read and write everything in `./secrets`, the signing key and `root/root-ca.key` included.
 - **scheduler** runs `uc generate` on `GENERATE_SCHEDULE`, and at once when no release is live; with `DOCTOR_SCHEDULE` set it also runs a read-only `uc doctor --record`.
   Each run builds a complete new release, validates it, and swaps it in atomically. See
   [Generation pipeline](generation-pipeline.md).
@@ -79,13 +84,15 @@ sees either the old release or the new one, never a half-written one.
 The Compose networks are listed in [Compose networks](../reference/network.md#compose-networks).
 The boundaries they and the images draw:
 
-- The signing key reaches only the `scheduler` and `uc` containers. The internet-facing `web`
+- The signing key reaches only the `scheduler` and `uc` containers, and the on-demand `setup`
+  service, which mounts all of `./secrets` while a make target runs. The internet-facing `web`
   container never has it, and the root CA key is meant to live offline.
 - Only the one-shot `uc` service can write to the repository: it alone receives `repo_push_auth`
-  and mounts the staging folder `./procurement`. The scheduler, the repo-adapter and the web
+  as a Compose secret (`setup` can read the file in `./secrets`, but has no network) and mounts the
+  staging folder `./procurement`. The scheduler, the repo-adapter and the web
   container never do, and `make compose-check` asserts it.
-- Every container runs as a non-root user (uid 10001 for the uc image, 33 for web) with a read-only
-  root filesystem; only `/data` and `/tmp` are writable, and `web` mounts `/data` read-only.
+- Every container but `setup` runs as a non-root user (uid 10001 for the uc image, 33 for web) with
+  a read-only root filesystem; only `/data` and `/tmp` are writable (`setup`: root, writing `/pki`), and `web` mounts `/data` read-only.
 - The repo-adapter's file reads need no credentials, because the generator cannot answer an
   authentication challenge on them. They are reachable only on the internal `repo` network, which
   `web` is not attached to, and they serve only POMs, manifests and descriptions, never archives.

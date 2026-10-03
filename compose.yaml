@@ -58,6 +58,25 @@ services:
       - ./config:/config:ro
       - web-config:/run/uc-web
 
+  # One-shot, run by the make targets that write to ./secrets (pki-init, pki-rotate,
+  # secrets-placeholders, secrets-permissions): `docker compose run --rm --no-deps setup -c '...'`.
+  # Root, so it can set the ownership scripts/secrets-permissions.sh describes. No network, no compose
+  # secrets; it reads .env (or UC_ENV_FILE) as the other services do, so the file must exist.
+  setup:
+    image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    profiles: ["setup"]
+    user: "0:0"
+    network_mode: none
+    env_file: ${UC_ENV_FILE:-.env}
+    entrypoint: ["sh"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - ./secrets:/pki
+      - ./config:/config:ro
+      - ./scripts/secrets-permissions.sh:/usr/local/bin/secrets-permissions.sh:ro
+
   # Answers the generator's Artifactory requests from Artifactory or Artifact Keeper and fills in POMs,
   # descriptions and release dates from the archives. Idle when REPO_ADAPTER is off (the online default).
   repo-adapter:

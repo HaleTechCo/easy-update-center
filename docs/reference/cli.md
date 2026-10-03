@@ -206,10 +206,11 @@ generator on the internal `repo` network, and stays idle when `REPO_ADAPTER` is 
 ## uc pki
 
 Manages the signing PKI. It reads only the `PKI_*` settings (from the environment, and
-`config/uc.toml` when there is one) and needs no others, so it runs with `docker run` against the
-image before anything else is configured. `make pki-init` wraps `init`, and
-`make pki-rotate ROOT=<dir>` wraps `rotate`; both pass `.env` and `config/` to it, so it sees the
-settings the services do, and then set the permissions of `secrets/`
+`config/uc.toml` when there is one) and needs no others, so it runs before anything else is
+configured. `make pki-init` wraps `init`, and `make pki-rotate ROOT=<dir>` wraps `rotate`; both run
+the `setup` Compose service, which reads `.env` (or the file `UC_ENV_FILE` names, which must exist)
+and `config/` as the other services do, so `uc pki` sees the settings they see, and then set the permissions of
+`secrets/`
 ([File ownership on Linux](secrets.md#file-ownership-on-linux)).
 
 ```bash
