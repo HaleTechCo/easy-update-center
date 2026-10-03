@@ -11,6 +11,10 @@ Every setting can be set in two places, and most have a default:
 - **`config/uc.toml`**: an optional [TOML](https://toml.io) file, which Compose mounts at
   `/config/uc.toml` (`UC_CONFIG_FILE` names another path). `config/uc.example.toml` lists every
   setting.
+- **The web container** reads neither: the one-shot `web-config` service works out its settings
+  and writes them to a volume `web` reads at start, and a variable set in `web`'s own
+  environment wins
+  ([Where web gets its settings](../architecture/request-routing.md#where-web-gets-its-settings)).
 
 A setting's value is the first of: a command-line option (where the command has one), the
 environment, `uc.toml`, the default for the mode, the built-in default.
@@ -75,16 +79,16 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
-| `REPO_TYPE` | `[repo] type` | `artifactory` | generate, doctor, repo-adapter, web | `artifactory` or `artifact-keeper`. Artifact Keeper is read only through the repo-adapter. |
-| `REPO_URL` | `[repo] url` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web | Artifactory: the `/artifactory/` base URL. Artifact Keeper: the server's base URL. A trailing slash is optional. Must not contain credentials. |
+| `REPO_TYPE` | `[repo] type` | `artifactory` | generate, doctor, repo-adapter, web-config | `artifactory` or `artifact-keeper`. Artifact Keeper is read only through the repo-adapter. |
+| `REPO_URL` | `[repo] url` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web-config | Artifactory: the `/artifactory/` base URL. Artifact Keeper: the server's base URL. A trailing slash is optional. Must not contain credentials. |
 | `REPO_API_URL` | `[repo] api_url` | `${REPO_URL}api/` | generate, doctor, repo-adapter | Artifactory's API base, for the listing query. Set it only when the API is served elsewhere. |
-| `REPO_KEY` | `[repo] key` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web | The repository key (for Artifact Keeper, the key, not the display name). Letters, digits, `.`, `_` and `-` only. |
+| `REPO_KEY` | `[repo] key` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web-config | The repository key (for Artifact Keeper, the key, not the display name). Letters, digits, `.`, `_` and `-` only. |
 
 ## repo-adapter
 
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
-| `REPO_ADAPTER` | `[repo] adapter` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web | Whether the generator reads the repository through the [repo-adapter](../architecture/repo-adapter.md). `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is refused. The service stays idle when off. |
+| `REPO_ADAPTER` | `[repo] adapter` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web-config | Whether the generator reads the repository through the [repo-adapter](../architecture/repo-adapter.md). `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is refused. The service stays idle when off. |
 | `REPO_ADAPTER_URL` | `[repo] adapter_url` | `http://repo-adapter:8081/artifactory/` | generate, doctor | Where `uc` finds the adapter. Change it only with a non-default Compose layout. |
 | `REPO_ADAPTER_DIR` | `[repo] adapter_dir` | `/data/repo-adapter` | generate, doctor, repo-adapter | The adapter's token, cache and `report.json`. |
 | `REPO_CA_FILE` | `[repo] ca_file` | none | repo-adapter, doctor | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca). `uc doctor --push`, `--clean` and the downloads verify against it too. |
@@ -94,11 +98,11 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
-| `DOWNLOAD_BACKEND` | `[download] backend` | see [Mode defaults](#mode-defaults) | generate, web | `mirror` (get.jenkins.io layout) or `artifactory` (any Maven-layout repository, looked up through the release's download map). |
-| `DOWNLOAD_BACKEND_URL` | `[download] backend_url` | see [Mode defaults](#mode-defaults) | web | Where `/download/...` requests are sent. Controllers must be able to read it without credentials unless `DOWNLOAD_ACCESS=proxy`. |
-| `DOWNLOAD_ACCESS` | `[download] access` | `redirect` | web | `redirect` sends controllers to the backend; `proxy` streams the file through the web container. See [Proxy plugin downloads](../how-to/proxy-downloads.md). |
-| `DOWNLOAD_PROXY_CA_FILE` | `[download] proxy_ca_file` | `/etc/ssl/certs/ca-certificates.crt` | web | Proxy mode only: the CA bundle the backend's certificate must verify against. |
-| `DOWNLOAD_PROXY_AUTH_FILE` | `[download] proxy_auth_file` | `${SECRETS_DIR}/download_proxy_auth` | web | Proxy mode only: the file holding `username:password` for the backend. |
+| `DOWNLOAD_BACKEND` | `[download] backend` | see [Mode defaults](#mode-defaults) | generate, web-config | `mirror` (get.jenkins.io layout) or `artifactory` (any Maven-layout repository, looked up through the release's download map). |
+| `DOWNLOAD_BACKEND_URL` | `[download] backend_url` | see [Mode defaults](#mode-defaults) | web-config | Where `/download/...` requests are sent. Controllers must be able to read it without credentials unless `DOWNLOAD_ACCESS=proxy`. |
+| `DOWNLOAD_ACCESS` | `[download] access` | `redirect` | web-config | `redirect` sends controllers to the backend; `proxy` streams the file through the web container. See [Proxy plugin downloads](../how-to/proxy-downloads.md). |
+| `DOWNLOAD_PROXY_CA_FILE` | `[download] proxy_ca_file` | `/etc/ssl/certs/ca-certificates.crt` | web-config | Proxy mode only: the CA bundle the backend's certificate must verify against. |
+| `DOWNLOAD_PROXY_AUTH_FILE` | `[download] proxy_auth_file` | `${SECRETS_DIR}/download_proxy_auth` | web-config | Proxy mode only: the file holding `username:password` for the backend. |
 
 ## Upstream data
 
@@ -136,8 +140,8 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
-| `TLS_CERT_FILE` | `[tls] cert_file` | none | web | With `TLS_KEY_FILE`, enables HTTPS on port 8443. Both must be readable. See [Enable TLS](../how-to/enable-tls.md). |
-| `TLS_KEY_FILE` | `[tls] key_file` | none | web | The private key for `TLS_CERT_FILE`. |
+| `TLS_CERT_FILE` | `[tls] cert_file` | none | web-config | With `TLS_KEY_FILE`, enables HTTPS on port 8443. Both must be readable. See [Enable TLS](../how-to/enable-tls.md). |
+| `TLS_KEY_FILE` | `[tls] key_file` | none | web-config | The private key for `TLS_CERT_FILE`. |
 
 ## Compose
 

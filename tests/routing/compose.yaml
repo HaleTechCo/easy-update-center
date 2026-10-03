@@ -49,42 +49,39 @@ services:
 
   web-full:
     <<: *web
-    environment: {MODE: online, PUBLIC_URL: "http://web-full:8080"}
+    environment: {PUBLIC_URL: "http://web-full:8080"}
     volumes:
       - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: full}}
 
   # PUBLIC_URL is not the container's own address: a TLS proxy or a remapped port in front of it.
   web-public:
     <<: *web
-    environment: {MODE: online, PUBLIC_URL: "https://updates.example.com"}
+    environment: {PUBLIC_URL: "https://updates.example.com"}
     volumes:
       - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: full}}
 
   web-artifactory:
     <<: *web
     environment:
-      MODE: airgapped
       PUBLIC_URL: "http://web-artifactory:8080"
-      REPO_URL: "http://artifactory.internal/artifactory/"
-      REPO_KEY: jenkins
+      DOWNLOAD_BACKEND: artifactory
+      DOWNLOAD_BACKEND_URL: "http://artifactory.internal/artifactory/jenkins"
     volumes:
       - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: artifactory}}
 
   web-keeper:
     <<: *web
     environment:
-      MODE: airgapped
       PUBLIC_URL: "http://web-keeper:8080"
-      REPO_TYPE: artifact-keeper
-      REPO_URL: "http://keeper.internal/"
-      REPO_KEY: jenkins
+      DOWNLOAD_BACKEND: artifactory
+      DOWNLOAD_BACKEND_URL: "http://keeper.internal/maven/jenkins"
     volumes:
       - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: artifactory}}
 
   web-proxy:
     <<: *web
     environment:
-      MODE: airgapped
+      DOWNLOAD_BACKEND: artifactory
       PUBLIC_URL: "http://web-proxy:8080"
       DOWNLOAD_ACCESS: proxy
       DOWNLOAD_BACKEND_URL: "http://backend:9000/repo"
@@ -96,7 +93,7 @@ services:
   web-proxy-tls:
     <<: *web
     environment:
-      MODE: airgapped
+      DOWNLOAD_BACKEND: artifactory
       PUBLIC_URL: "http://web-proxy-tls:8080"
       DOWNLOAD_ACCESS: proxy
       DOWNLOAD_BACKEND_URL: "https://backend-tls:9443/repo"
@@ -109,19 +106,19 @@ services:
 
   web-weekly:
     <<: *web
-    environment: {MODE: online, PUBLIC_URL: "http://web-weekly:8080"}
+    environment: {PUBLIC_URL: "http://web-weekly:8080"}
     volumes:
       - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: weekly}}
 
   web-stable:
     <<: *web
-    environment: {MODE: online, PUBLIC_URL: "http://web-stable:8080"}
+    environment: {PUBLIC_URL: "http://web-stable:8080"}
     volumes:
       - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: stable}}
 
   web-zero:
     <<: *web
-    environment: {MODE: online, PUBLIC_URL: "http://web-zero:8080"}
+    environment: {PUBLIC_URL: "http://web-zero:8080"}
     volumes:
       - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: zero}}
 

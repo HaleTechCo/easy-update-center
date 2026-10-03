@@ -197,3 +197,18 @@ def test_config_json_and_check_are_exclusive(capsys):
         main(['config', '--json', '--check'])
     assert exit_info.value.code == 2
     assert 'not allowed with argument' in capsys.readouterr().err
+
+
+def test_config_web_env_writes_the_file(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    out = tmp_path / 'uc-web' / 'web.env'
+    assert main(['config', '--web-env', '--out', str(out)]) == 0
+    assert out.read_text(encoding='utf-8').startswith('PUBLIC_URL=https://uc.example.com\nDOWNLOAD_BACKEND=artifactory\n')
+    assert capsys.readouterr().out.startswith(f'wrote {out}:\nPUBLIC_URL=')
+
+
+@pytest.mark.parametrize(('argv', 'message'), [(['config', '--out', 'web.env'], '--out only applies to --web-env'), (['config', '--mode', 'online'], '--mode only applies to --example')])
+def test_config_options_that_need_another(argv, message, capsys):
+    with pytest.raises(SystemExit):
+        main(argv)
+    assert message in capsys.readouterr().err

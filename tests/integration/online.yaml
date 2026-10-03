@@ -30,7 +30,6 @@ services:
   web:
     image: ${WEB_IMAGE:-jenkins-uc/web:local}
     environment:
-      MODE: online
       PUBLIC_URL: "http://web:8080"
     volumes:
       - uc-data:/data:ro

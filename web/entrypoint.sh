@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Resolve mode defaults (they must match uc/uc/config.py), wait for the first release, run httpd.
+# Take the settings uc worked out for this container (the web-config service writes /run/uc-web/web.env:
+# docs/architecture/request-routing.md#where-web-gets-its-settings), wait for the first release, run httpd.
+# A variable already set in this container's environment wins over web.env, so a Compose override can
+# still set one. Without web.env, every setting comes from the environment, with the defaults below.
 set -euo pipefail
 
 die() {
@@ -7,38 +10,22 @@ die() {
     exit 64
 }
 
-[[ -n "${PUBLIC_URL:-}" ]] || die "PUBLIC_URL must be set"
-export PUBLIC_URL="${PUBLIC_URL%/}"
-MODE="${MODE:-}"
-case "${MODE}" in
-    online)
-        default_backend=mirror
-        default_repo_url=https://repo.jenkins-ci.org/
-        default_repo_key=releases
-        ;;
-    airgapped)
-        default_backend=artifactory
-        default_repo_url=
-        default_repo_key=
-        ;;
-    *) die "MODE must be online or airgapped (got '${MODE}')" ;;
-esac
-REPO_TYPE="${REPO_TYPE:-artifactory}"
-case "${REPO_TYPE}" in
-    artifactory) ;;
-    artifact-keeper)
-        default_repo_url=
-        default_repo_key=
-        adapter="${REPO_ADAPTER:-on}"
-        case "${adapter,,}" in
-            0 | false | no | off) die "REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on" ;;
-            *) ;; # any other value leaves the adapter on
+web_env=/run/uc-web/web.env
+if [[ -f "${web_env}" ]]; then
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        name="${line%%=*}"
+        case "${name}" in
+            PUBLIC_URL | DOWNLOAD_BACKEND | DOWNLOAD_BACKEND_URL | DOWNLOAD_ACCESS | DOWNLOAD_PROXY_AUTH_FILE | DOWNLOAD_PROXY_CA_FILE | TLS_CERT_FILE | TLS_KEY_FILE)
+                [[ -n "${!name:-}" ]] || export "${name}=${line#*=}"
+                ;;
+            *) ;; # names web does not read
         esac
-        ;;
-    *) die "REPO_TYPE must be artifactory or artifact-keeper (got '${REPO_TYPE}')" ;;
-esac
+    done < "${web_env}"
+fi
 
-DOWNLOAD_BACKEND="${DOWNLOAD_BACKEND:-${default_backend}}"
+[[ -n "${PUBLIC_URL:-}" ]] || die "PUBLIC_URL must be set (the web-config service writes it to ${web_env})"
+export PUBLIC_URL="${PUBLIC_URL%/}"
+DOWNLOAD_BACKEND="${DOWNLOAD_BACKEND:-mirror}"
 DOWNLOAD_ACCESS="${DOWNLOAD_ACCESS:-redirect}"
 defines=()
 
@@ -48,18 +35,8 @@ case "${DOWNLOAD_BACKEND}" in
         defines+=(-D BACKEND_MIRROR)
         ;;
     artifactory)
-        if [[ -n "${DOWNLOAD_BACKEND_URL:-}" ]]; then
-            backend_url="${DOWNLOAD_BACKEND_URL}"
-        else
-            repo_url="${REPO_URL:-${default_repo_url}}"
-            repo_key="${REPO_KEY:-${default_repo_key}}"
-            [[ -n "${repo_url}" && -n "${repo_key}" ]] || die "set DOWNLOAD_BACKEND_URL, or REPO_URL and REPO_KEY"
-            if [[ "${REPO_TYPE}" == artifact-keeper ]]; then
-                backend_url="${repo_url%/}/maven/${repo_key}"
-            else
-                backend_url="${repo_url%/}/${repo_key}"
-            fi
-        fi
+        backend_url="${DOWNLOAD_BACKEND_URL:-}"
+        [[ -n "${backend_url}" ]] || die "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL"
         defines+=(-D BACKEND_ARTIFACTORY)
         ;;
     *) die "DOWNLOAD_BACKEND must be mirror or artifactory (got '${DOWNLOAD_BACKEND}')" ;;

@@ -210,9 +210,11 @@ services:
       - pki:/pki:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 
-  web:
-    image: ${WEB_IMAGE:-jenkins-uc/web:local}
-    networks: [airgap]
+  # web's settings, worked out by uc as in a deployment (compose.yaml's web-config).
+  web-config:
+    <<: *uc-test
+    network_mode: none
+    entrypoint: ["python3", "-m", "uc", "config", "--web-env", "--out", "/run/uc-web/web.env"]
     environment:
       MODE: airgapped
       PUBLIC_URL: "http://web:8080"
@@ -220,13 +222,23 @@ services:
       REPO_URL: ${IT_REPO_URL:-http://artifactory:8081/artifactory/}
       REPO_KEY: jenkins
     volumes:
+      - web-config:/run/uc-web
+      - ../../uc/uc:/opt/uc/python/uc:ro
+
+  web:
+    image: ${WEB_IMAGE:-jenkins-uc/web:local}
+    networks: [airgap]
+    depends_on:
+      web-config: {condition: service_completed_successfully}
+    volumes:
       - uc-data:/data:ro
+      - web-config:/run/uc-web:ro
 
   web-proxy:
     image: ${WEB_IMAGE:-jenkins-uc/web:local}
     networks: [airgap]
     environment:
-      MODE: airgapped
+      DOWNLOAD_BACKEND: artifactory
       PUBLIC_URL: "http://web-proxy:8080"
       DOWNLOAD_ACCESS: proxy
       DOWNLOAD_BACKEND_URL: ${IT_PROXY_BACKEND_URL:-http://artifactory-private:8081/artifactory/jenkins}
@@ -304,6 +316,7 @@ volumes:
   pki:
   trust:
   uc-data:
+  web-config:
   uc-data-proxy:
   uc-data-age:
   push-repo:

@@ -223,6 +223,48 @@ def load_settings(env: Mapping[str, str] | None = None, *, config_file: Path | N
     return settings_from(make_resolver(env, config_file=config_file))
 
 
+@dataclass(frozen=True)
+class WebSettings:
+    """The settings the web container reads: what web.env lists (uc/uc/webenv.py)."""
+
+    public_url: str
+    download_backend: str
+    download_backend_url: str
+    download_access: str
+    download_proxy_auth_file: Path
+    download_proxy_ca_file: str
+    tls_cert_file: str
+    tls_key_file: str
+
+
+def load_web_settings(env: Mapping[str, str] | None = None, *, config_file: Path | None = None) -> WebSettings:
+    """Resolve and validate only what the web container uses, so a bad generator-only setting cannot stop web; the same values and messages as load_settings."""
+    r = make_resolver(env, config_file=config_file)
+    r.mode = _choice(r, 'MODE')
+    public_url = r.raw('PUBLIC_URL').rstrip('/')
+    if not public_url:
+        msg = 'PUBLIC_URL must be set'
+        raise ConfigError(msg)
+    backend = _choice(r, 'DOWNLOAD_BACKEND')
+    backend_url = r.raw('DOWNLOAD_BACKEND_URL')
+    if not backend_url:
+        if backend == 'mirror':
+            backend_url = UPSTREAM_MIRROR_URL
+        else:
+            repo_type, repo_url, repo_key = _repository(r, online=r.mode == 'online')
+            backend_url = _default_backend_url(backend, repo_type, repo_url, repo_key)
+    return WebSettings(
+        public_url=public_url,
+        download_backend=backend,
+        download_backend_url=backend_url.rstrip('/'),
+        download_access=_choice(r, 'DOWNLOAD_ACCESS'),
+        download_proxy_auth_file=Path(r.raw('DOWNLOAD_PROXY_AUTH_FILE') or str(Path(r.raw('SECRETS_DIR')) / 'download_proxy_auth')),
+        download_proxy_ca_file=r.raw('DOWNLOAD_PROXY_CA_FILE'),
+        tls_cert_file=r.raw('TLS_CERT_FILE'),
+        tls_key_file=r.raw('TLS_KEY_FILE'),
+    )
+
+
 def apply_process_env(settings: Settings, environ: MutableMapping[str, str] | None = None) -> None:
     """Export the JVM options and proxies uc.toml sets to environ (default: os.environ) where it leaves them unset, so the generator and urllib use them."""
     environ = os.environ if environ is None else environ
@@ -230,6 +272,30 @@ def apply_process_env(settings: Settings, environ: MutableMapping[str, str] | No
         value = getattr(settings, name.lower())
         if value and not environ.get(name, '').strip():
             environ[name] = value
+
+
+def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
+    """Return the validated (REPO_TYPE, REPO_URL with a trailing slash, REPO_KEY)."""
+    repo_type = _choice(r, 'REPO_TYPE')
+    public_repo = online and repo_type == 'artifactory'
+    repo_url = r.raw('REPO_URL') or (PUBLIC_ARTIFACTORY_URL if public_repo else '')
+    repo_key = r.raw('REPO_KEY') or ('releases' if public_repo else '')
+    if not repo_url or not repo_key:
+        msg = 'REPO_URL and REPO_KEY must be set (they default to repo.jenkins-ci.org only in online mode with REPO_TYPE=artifactory)'
+        raise ConfigError(msg)
+    if not _REPOSITORY_RE.match(repo_key):
+        msg = f'{r.label("REPO_KEY")} contains unsupported characters: {repo_key!r}'
+        raise ConfigError(msg)
+    return repo_type, with_trailing_slash(repo_url), repo_key
+
+
+def _default_backend_url(backend: str, repo_type: str, repo_url: str, repo_key: str) -> str:
+    """Return where /download/ requests go when DOWNLOAD_BACKEND_URL is not set."""
+    if backend == 'mirror':
+        return UPSTREAM_MIRROR_URL
+    if repo_type == 'artifact-keeper':
+        return f'{repo_url.rstrip("/")}/maven/{repo_key}'
+    return repo_url + repo_key
 
 
 def settings_from(r: Resolver) -> Settings:
@@ -243,17 +309,7 @@ def settings_from(r: Resolver) -> Settings:
         msg = 'PUBLIC_URL must be set'
         raise ConfigError(msg)
 
-    repo_type = _choice(r, 'REPO_TYPE')
-    public_repo = online and repo_type == 'artifactory'
-    repo_url = r.raw('REPO_URL') or (PUBLIC_ARTIFACTORY_URL if public_repo else '')
-    repo_key = r.raw('REPO_KEY') or ('releases' if public_repo else '')
-    if not repo_url or not repo_key:
-        msg = 'REPO_URL and REPO_KEY must be set (they default to repo.jenkins-ci.org only in online mode with REPO_TYPE=artifactory)'
-        raise ConfigError(msg)
-    if not _REPOSITORY_RE.match(repo_key):
-        msg = f'{r.label("REPO_KEY")} contains unsupported characters: {repo_key!r}'
-        raise ConfigError(msg)
-    repo_url = with_trailing_slash(repo_url)
+    repo_type, repo_url, repo_key = _repository(r, online=online)
     repo_url_with_port = with_explicit_port(repo_url)
     api_url = with_trailing_slash(r.raw('REPO_API_URL') or repo_url_with_port + 'api/')
 
@@ -264,12 +320,7 @@ def settings_from(r: Resolver) -> Settings:
     repo_ca = r.raw('REPO_CA_FILE')
 
     backend = _choice(r, 'DOWNLOAD_BACKEND')
-    if backend == 'mirror':
-        default_backend_url = UPSTREAM_MIRROR_URL
-    elif repo_type == 'artifact-keeper':
-        default_backend_url = f'{repo_url.rstrip("/")}/maven/{repo_key}'
-    else:
-        default_backend_url = repo_url + repo_key
+    default_backend_url = _default_backend_url(backend, repo_type, repo_url, repo_key)
     backend_url = (r.raw('DOWNLOAD_BACKEND_URL') or default_backend_url).rstrip('/')
     data_dir = Path(r.raw('UC_DATA_DIR'))
 
