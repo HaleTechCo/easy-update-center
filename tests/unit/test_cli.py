@@ -319,6 +319,29 @@ def test_pki_init_uses_the_pki_settings(monkeypatch, tmp_path):
     assert cert_info(tmp_path / 'pki' / 'update-center.cert').days_left(utcnow()) <= 20
 
 
+def test_pki_init_rejects_an_invalid_setting(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    monkeypatch.setenv('PKI_ROOT_DAYS', '0')
+    assert main(['pki', 'init', '--out', str(tmp_path / 'pki')]) == 1
+    assert 'uc: error: PKI_ROOT_DAYS must be >= 1' in capsys.readouterr().err
+    assert not (tmp_path / 'pki').exists()
+
+
+def test_pki_init_flags_override_the_settings(monkeypatch, tmp_path):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    monkeypatch.setenv('PKI_ORG', 'Env Corp')
+    monkeypatch.setenv('PKI_ROOT_DAYS', '900')
+    monkeypatch.setenv('PKI_SIGNING_DAYS', '400')
+    out = tmp_path / 'pki'
+    assert main(['pki', 'init', '--out', str(out), '--org', 'Flag Corp', '--root-days', '50', '--signing-days', '20']) == 0
+    root, signing = cert_info(out / 'root-ca.crt'), cert_info(out / 'update-center.cert')
+    assert 'Flag Corp' in root.subject
+    assert 'Flag Corp' in signing.subject
+    assert 'Env Corp' not in signing.subject
+    assert 49 <= root.days_left(utcnow()) <= 50
+    assert 19 <= signing.days_left(utcnow()) <= 20
+
+
 def test_repo_adapter_listens_on_the_configured_port(monkeypatch, tmp_path, secrets_dir):
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('REPO_ADAPTER_PORT', '9090')
