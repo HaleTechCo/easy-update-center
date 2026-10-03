@@ -121,4 +121,9 @@ file, nothing else.
 - When `docker compose up -d` recreates `web-config` after a change to `.env`, Compose restarts
   `web` too. A change to `config/uc.toml` changes no service definition, so recreate the services
   yourself: `docker compose up -d --force-recreate`.
+- `web-config` checks only the settings `web` uses. If one of them is invalid, or `config/uc.toml`
+  cannot be read, `web-config` fails and, since `web` waits for it, `web` stays stopped after
+  `docker compose up -d`. Run `docker compose logs web-config`, fix the setting and run
+  `docker compose up -d` again. `docker compose run --rm uc config --check` before applying a
+  change catches it.
 - To see what `web` will get: `docker compose run --rm uc config --web-env`.

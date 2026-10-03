@@ -12,13 +12,13 @@ from .errors import ConfigError
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from .config import Settings
+    from .config import WebSettings
 
 WEB_SETTINGS = ('PUBLIC_URL', 'DOWNLOAD_BACKEND', 'DOWNLOAD_BACKEND_URL', 'DOWNLOAD_ACCESS', 'DOWNLOAD_PROXY_AUTH_FILE', 'DOWNLOAD_PROXY_CA_FILE', 'TLS_CERT_FILE', 'TLS_KEY_FILE')
 """What web/entrypoint.sh reads, in the order web.env lists it."""
 
 
-def web_env(settings: Settings) -> str:
+def web_env(settings: WebSettings) -> str:
     """Return web.env for settings: one NAME=value line per web setting."""
     lines = []
     for name in WEB_SETTINGS:

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import configview, publish, status
-from .config import apply_process_env, load_settings
+from .config import apply_process_env, load_settings, load_web_settings
 from .doctor import check_since, format_report, inspect_repository
 from .errors import UcError
 from .examples import example_env, example_toml
@@ -188,7 +188,7 @@ def _config(args: argparse.Namespace) -> int:
         print(example_toml(mode) if args.example == 'toml' else example_env(mode), end='')
         return 0
     if args.web_env:
-        text = web_env(load_settings())
+        text = web_env(load_web_settings())
         if args.out is not None:
             write_web_env(text, args.out)
             print(f'wrote {args.out}:')

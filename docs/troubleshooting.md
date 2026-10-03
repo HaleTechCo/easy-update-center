@@ -63,6 +63,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 | Symptom | Cause and fix |
 |---|---|
 | It keeps logging `waiting for the first published release in /data/live` | No release is live yet. Watch `docker compose logs -f scheduler`: the first run may still be going (online, it takes hours), or it failed. |
+| It stays stopped (`docker compose up -d` reports `web-config` failed) | `web-config` found a setting web uses invalid, or `config/uc.toml` unreadable. Run `docker compose logs web-config`, fix it, run `docker compose up -d` again ([Where web gets its settings](architecture/request-routing.md#where-web-gets-its-settings)). |
 | It exits with `entrypoint: PUBLIC_URL must be set` or `MODE must be online or airgapped` | `.env` is missing or not the file Compose loads (`UC_ENV_FILE`). |
 | It exits with `DOWNLOAD_ACCESS=proxy needs username:password in /run/secrets/download_proxy_auth` | Write `secrets/download_proxy_auth` as `username:password`; on Linux make it readable by uid 33. |
 | It exits with `TLS_CERT_FILE and TLS_KEY_FILE must both be readable` | Set both, and mount both files readable by uid 33 ([Enable TLS](how-to/enable-tls.md)). |
