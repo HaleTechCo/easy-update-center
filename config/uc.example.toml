@@ -1,5 +1,6 @@
 # Settings for the update center in online mode. Copy this file to config/uc.toml and edit the copy;
-# a line starting with # is at its default, so remove the # to set it.
+# a line starting with # is not set: it shows the default, or an example value where there is none.
+# Remove the # to set it.
 # Online, the generator reads repo.jenkins-ci.org with a free Jenkins community account
 # (secrets/repo_*), and controllers download from get.jenkins.io, unless you set your own
 # repository below.
@@ -58,6 +59,8 @@ public_url = "https://jenkins-updates.example.com"
 
 [repo]
 # artifactory or artifact-keeper. Artifact Keeper is read only through the repo-adapter. (REPO_TYPE)
+# Your own Artifactory or Artifact Keeper instead of repo.jenkins-ci.org? Set REPO_TYPE, REPO_URL and REPO_KEY here.
+# Also set DOWNLOAD_BACKEND=artifactory, and usually CORE_AGE_DAYS=0. See docs/architecture/modes.md#your-own-repository.
 # type = "artifactory"
 # Artifactory: the /artifactory/ base URL; Artifact Keeper: the server's base URL. It defaults to https://repo.jenkins-ci.org/ only online with REPO_TYPE=artifactory. (REPO_URL)
 # url = "https://artifactory.corp.example/artifactory/"
@@ -74,7 +77,7 @@ public_url = "https://jenkins-updates.example.com"
 # The port the repo-adapter listens on; its healthcheck and the default REPO_ADAPTER_URL follow it. (REPO_ADAPTER_PORT)
 # adapter_port = 8081
 # A PEM bundle added to the system bundle, for a repository behind a private CA. (REPO_CA_FILE)
-# Mount the bundle into the repo-adapter (and uc) and point this at it: docs/getting-started/airgapped.md#repository-behind-a-private-ca
+# Mount the bundle into the repo-adapter (and uc) and point this at it. See docs/getting-started/airgapped.md#repository-behind-a-private-ca.
 # ca_file = "/etc/ssl/uc-repo-ca.crt"
 # Archives larger than this are skipped and reported. (REPO_MAX_ARCHIVE_MB)
 # max_archive_mb = 512
@@ -91,10 +94,10 @@ public_url = "https://jenkins-updates.example.com"
 # Where /download/ requests go: https://get.jenkins.io for mirror, the repository (${REPO_URL}${REPO_KEY}; Artifact Keeper ${REPO_URL}maven/${REPO_KEY}) for artifactory. (DOWNLOAD_BACKEND_URL)
 # backend_url = ""
 # redirect sends controllers to the backend; proxy streams each file through the web container. (DOWNLOAD_ACCESS)
-# Controllers cannot read the repository anonymously? Use proxy: docs/how-to/proxy-downloads.md
+# Controllers cannot read the repository anonymously? Use proxy. See docs/how-to/proxy-downloads.md.
 # access = "redirect"
 # Proxy mode only: the CA bundle the backend's certificate must verify against. (DOWNLOAD_PROXY_CA_FILE)
-# Mount the bundle into web and point this at it: docs/how-to/proxy-downloads.md#backend-with-a-private-ca
+# Mount the bundle into web and point this at it. See docs/how-to/proxy-downloads.md#backend-with-a-private-ca.
 # proxy_ca_file = "/etc/ssl/certs/ca-certificates.crt"
 # Proxy mode only: the file holding username:password for the backend, ${SECRETS_DIR}/download_proxy_auth by default. (DOWNLOAD_PROXY_AUTH_FILE)
 # proxy_auth_file = ""
