@@ -9,10 +9,11 @@ in lower case.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 SECTIONS = ('generate', 'doctor', 'repo', 'download', 'resources', 'tls', 'procurement', 'pki', 'signing', 'github', 'uc')
-TYPES = ('str', 'bool', 'int', 'ratio', 'choice', 'cron', 'path', 'url')
+TYPES = ('str', 'bool', 'int', 'ratio', 'choice', 'cron', 'path', 'url', 'version')
 GROUPS = (
     'Required',
     'Source repository',
@@ -38,7 +39,8 @@ ACCESS_MODES = ('redirect', 'proxy')
 RESOURCE_SOURCES = ('github', 'url', 'bundled')
 UPSTREAM_POPULARITY_URL = 'https://raw.githubusercontent.com/jenkins-infra/infra-statistics/gh-pages/plugin-installation-trend/latestNumbers.json'
 UPSTREAM_TOOL_INSTALLERS_URL = 'https://updates.jenkins.io/updates/'
-DEFAULT_ADAPTER_URL = 'http://repo-adapter:8081/artifactory/'
+CORE_VERSION = re.compile(r'^[0-9]+\.[0-9]+(\.[0-9]+)?$')
+"""A Jenkins core version such as 2.462 or 2.462.1: the pattern of the `version` setting type, DOCTOR_SINCE and uc doctor's version arguments."""
 
 
 def toml_key(env: str) -> tuple[str | None, str]:
@@ -122,9 +124,9 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('REPO_KEY', 'str', 'Source repository', 'The repository key (for Artifact Keeper, the key, not the display name). It defaults to releases only online with REPO_TYPE=artifactory.', derived=True, sample='jenkins-plugins-local', active=('airgapped',)),
     # repo-adapter
     Setting('REPO_ADAPTER', 'bool', 'repo-adapter', 'Read the repository through the repo-adapter: on by default air-gapped and always with Artifact Keeper, off otherwise.', derived=True, sample='true'),
-    Setting('REPO_ADAPTER_URL', 'url', 'repo-adapter', 'Where uc finds the repo-adapter. Change it only with a non-default Compose layout.', default=DEFAULT_ADAPTER_URL),
+    Setting('REPO_ADAPTER_URL', 'url', 'repo-adapter', 'Where uc finds the repo-adapter, http://repo-adapter:${REPO_ADAPTER_PORT}/artifactory/ by default. Change it only with a non-default Compose layout.', derived=True, sample='http://repo-adapter:8081/artifactory/'),
     Setting('REPO_ADAPTER_DIR', 'path', 'repo-adapter', "The repo-adapter's token, cache and report.json, ${UC_DATA_DIR}/repo-adapter by default.", derived=True),
-    Setting('REPO_ADAPTER_PORT', 'int', 'repo-adapter', 'The port the repo-adapter listens on. Change REPO_ADAPTER_URL with it.', default='8081', minimum=1),
+    Setting('REPO_ADAPTER_PORT', 'int', 'repo-adapter', 'The port the repo-adapter listens on; its healthcheck and the default REPO_ADAPTER_URL follow it.', default='8081', minimum=1),
     Setting(
         'REPO_CA_FILE',
         'path',
@@ -187,7 +189,7 @@ SETTINGS: tuple[Setting, ...] = (
     # Doctor
     Setting('DOCTOR_SCHEDULE', 'cron', 'Doctor', 'Cron expression for a read-only uc doctor --record run, which saves the report and its counts in status.json; empty means none.', sample='30 5 * * *'),
     Setting('DOCTOR_FETCH', 'bool', 'Doctor', 'uc doctor downloads the POMs and manifests missing from the cache, so it can check every dependency and required core (--fetch).', default='false'),
-    Setting('DOCTOR_SINCE', 'str', 'Doctor', 'The floor for required cores (--since); empty means the oldest core in the repository.'),
+    Setting('DOCTOR_SINCE', 'version', 'Doctor', 'The floor for required cores (--since); empty means the oldest core in the repository.'),
     Setting('DOCTOR_JSON', 'bool', 'Doctor', 'uc doctor prints its report as JSON (--json).', default='false'),
     # Signing
     Setting('CERTIFICATE_MINIMUM_VALID_DAYS', 'int', 'Signing', 'Generation stops when the signing certificate expires within this many days.', default='30'),

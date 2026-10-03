@@ -21,7 +21,7 @@ from .procure.download import check_download_allowed, download
 from .procure.local import stage_local
 from .procure.plan import check_war_args
 from .procure.push import push
-from .repo_adapter.server import serve
+from .repo_adapter.server import healthcheck, serve
 from .schedule import run_schedule
 from .settings import MODES
 from .timeutil import iso, utcnow
@@ -75,6 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     adapter = sub.add_parser('repo-adapter', help='serve the repository to the generator (the repo-adapter service)')
     adapter.add_argument('--port', type=int, help='port to listen on (default: REPO_ADAPTER_PORT, 8081)')
+    adapter.add_argument('--healthcheck', action='store_true', help='do not serve: exit 0 when the adapter answers on the port, 1 otherwise (the compose healthcheck)')
 
     pki = sub.add_parser('pki', help='manage the signing PKI').add_subparsers(dest='pki_command', required=True)
     init = pki.add_parser('init', help='create a root CA and a signing certificate')
@@ -158,7 +159,11 @@ def _dispatch(args: argparse.Namespace) -> int:
         run_schedule(settings, drop_env=exported)
         return 0
     if args.command == 'repo-adapter':
-        serve(settings, port=settings.repo_adapter_port if args.port is None else args.port)
+        port = settings.repo_adapter_port if args.port is None else args.port
+        if args.healthcheck:
+            healthcheck(port)
+        else:
+            serve(settings, port=port)
         return 0
     msg = f'unhandled command {args.command}'
     raise AssertionError(msg)

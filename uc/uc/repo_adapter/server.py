@@ -9,12 +9,15 @@ import os
 import secrets
 import sys
 import threading
+import urllib.error
 import urllib.parse
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import TYPE_CHECKING
 
 from uc.aql import AQL_TEMPLATE, RepoFile, to_gav
 from uc.config import Settings, read_secret
+from uc.errors import UcError
 from uc.preflight import ADAPTER_USERNAME, load_repository_credentials
 from uc.timeutil import utcnow
 
@@ -31,6 +34,14 @@ if TYPE_CHECKING:
 PREFIX = '/artifactory/'
 QUERY_LIMIT = 64 * 1024
 PORT = 8081
+HEALTH_PATH = '/healthz'
+HEALTH_TIMEOUT = 3
+"""Seconds uc repo-adapter --healthcheck waits for the adapter to answer."""
+HTTP_OK = 200
+
+
+class UnhealthyError(UcError):
+    """The repo-adapter did not answer its health check."""
 
 
 def ensure_token(path: Path) -> str:
@@ -219,6 +230,23 @@ def make_server(settings: Settings, port: int = PORT, host: str = '0.0.0.0') -> 
     adapter = create_adapter(settings)
     token = ensure_token(settings.repo_adapter_token_file)
     return ThreadingHTTPServer((host, port), make_handler(adapter, key=settings.repo_key, token=token))
+
+
+def healthcheck(port: int) -> None:
+    """Raise UnhealthyError unless the repo-adapter on this host answers 200 on its port within HEALTH_TIMEOUT seconds; never starts a server, and ignores the proxy settings."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(f'http://127.0.0.1:{port}{HEALTH_PATH}', timeout=HEALTH_TIMEOUT) as response:
+            status = response.status
+    except urllib.error.HTTPError as exc:
+        status = exc.code
+    except (urllib.error.URLError, OSError) as exc:
+        reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+        msg = f'repo-adapter is not healthy on port {port}: {reason}'
+        raise UnhealthyError(msg) from None
+    if status != HTTP_OK:
+        msg = f'repo-adapter is not healthy on port {port}: HTTP {status}'
+        raise UnhealthyError(msg)
 
 
 def serve(settings: Settings, port: int = PORT) -> None:

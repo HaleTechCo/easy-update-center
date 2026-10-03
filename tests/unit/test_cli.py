@@ -2,6 +2,9 @@
 
 import json
 import os
+import socket
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -272,3 +275,66 @@ def test_repo_adapter_listens_on_the_configured_port(monkeypatch, tmp_path, secr
     assert main(['repo-adapter']) == 0
     assert main(['repo-adapter', '--port', '7000']) == 0
     assert ports == [9090, 7000]
+
+
+def test_a_malformed_url_prints_an_error_not_a_traceback(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('REPO_URL', 'http://[bad/')
+    assert main(['status']) == 1
+    assert 'uc: error: REPO_URL is not a valid URL: ' in capsys.readouterr().err
+
+
+class _Health(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200 if self.path == '/healthz' else 404)
+        self.end_headers()
+        self.wfile.write(b'ok\n')
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture
+def healthz_port():
+    server = ThreadingHTTPServer(('127.0.0.1', 0), _Health)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield server.server_address[1]
+    server.shutdown()
+    server.server_close()
+
+
+def _free_port():
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        return sock.getsockname()[1]
+
+
+def test_healthcheck_succeeds_when_the_adapter_answers(monkeypatch, tmp_path, secrets_dir, healthz_port):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setattr('uc.cli.serve', lambda *_args, **_kwargs: pytest.fail('--healthcheck must not start a server'))
+    monkeypatch.setenv('REPO_ADAPTER_PORT', str(healthz_port))
+    assert main(['repo-adapter', '--healthcheck']) == 0
+    monkeypatch.setenv('REPO_ADAPTER_PORT', str(_free_port()))
+    assert main(['repo-adapter', '--healthcheck', '--port', str(healthz_port)]) == 0
+
+
+def test_healthcheck_ignores_the_proxy_settings(monkeypatch, tmp_path, secrets_dir, healthz_port):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('HTTP_PROXY', 'http://127.0.0.1:9')
+    assert main(['repo-adapter', '--healthcheck', '--port', str(healthz_port)]) == 0
+
+
+def test_healthcheck_fails_with_a_message_when_nothing_listens(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    port = _free_port()
+    monkeypatch.setenv('REPO_ADAPTER_PORT', str(port))
+    assert main(['repo-adapter', '--healthcheck']) == 1
+    assert f'uc: error: repo-adapter is not healthy on port {port}: ' in capsys.readouterr().err
+
+
+def test_healthcheck_fails_on_an_unexpected_status(monkeypatch, tmp_path, secrets_dir, capsys, healthz_port):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setattr('uc.repo_adapter.server.HEALTH_PATH', '/other')
+    assert main(['repo-adapter', '--healthcheck', '--port', str(healthz_port)]) == 1
+    assert f'uc: error: repo-adapter is not healthy on port {healthz_port}: HTTP 404' in capsys.readouterr().err

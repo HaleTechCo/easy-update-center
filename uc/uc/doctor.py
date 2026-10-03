@@ -6,7 +6,6 @@ import base64
 import contextlib
 import hashlib
 import json
-import re
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass, field
@@ -18,6 +17,7 @@ from . import aql, http, status
 from .config import PUBLIC_RELEASES_URL
 from .errors import UcError
 from .pom import safe_root
+from .settings import CORE_VERSION
 from .timeutil import iso
 
 if TYPE_CHECKING:
@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from .versions import VersionTool
 
 HTTP_NOT_FOUND = 404
-CORE_VERSION = re.compile(r'^[0-9]+\.[0-9]+(\.[0-9]+)?$')
 REPORT_FILE = Path('doctor') / 'report.json'
 """Where uc doctor --record saves the full report, under the data directory; web does not serve it."""
 

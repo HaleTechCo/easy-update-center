@@ -19,10 +19,11 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
 from .errors import ConfigError
-from .settings import REGISTRY, SECTIONS, SETTINGS, env_name, toml_key, toml_label
+from .settings import CORE_VERSION, REGISTRY, SECTIONS, SETTINGS, env_name, toml_key, toml_label
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, MutableMapping
+    from urllib.parse import SplitResult
 
     from .settings import Setting
 
@@ -311,7 +312,7 @@ def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
     if not _REPOSITORY_RE.match(repo_key):
         msg = f'{r.label("REPO_KEY")} contains unsupported characters: {repo_key!r}'
         raise ConfigError(msg)
-    parts = urlsplit(repo_url)
+    parts = _parse_url(r, 'REPO_URL', repo_url)
     if parts.username or parts.password:
         msg = 'URLs must not contain credentials; use the secret files instead'
         raise ConfigError(msg)
@@ -360,7 +361,7 @@ def settings_from(r: Resolver) -> Settings:
         raise ConfigError(msg)
 
     procurement_source = r.raw('PROCUREMENT_SOURCE_URL')
-    source_parts = urlsplit(procurement_source)
+    source_parts = _parse_url(r, 'PROCUREMENT_SOURCE_URL', procurement_source)
     if source_parts.username or source_parts.password:
         msg = 'PROCUREMENT_SOURCE_URL must not contain credentials'
         raise ConfigError(msg)
@@ -377,7 +378,7 @@ def settings_from(r: Resolver) -> Settings:
         generate_schedule=r.raw('GENERATE_SCHEDULE'),
         doctor_schedule=r.raw('DOCTOR_SCHEDULE'),
         doctor_fetch=_bool(r, 'DOCTOR_FETCH'),
-        doctor_since=r.raw('DOCTOR_SINCE'),
+        doctor_since=_version(r, 'DOCTOR_SINCE'),
         doctor_json=_bool(r, 'DOCTOR_JSON'),
         resources_source=resources_source,
         resources_ref=r.raw('RESOURCES_REF'),
@@ -391,7 +392,7 @@ def settings_from(r: Resolver) -> Settings:
         repo_api_url=api_url,
         repo_key=repo_key,
         repo_adapter=repo_adapter,
-        repo_adapter_url=with_trailing_slash(r.raw('REPO_ADAPTER_URL')),
+        repo_adapter_url=with_trailing_slash(r.raw('REPO_ADAPTER_URL') or f'http://repo-adapter:{_int(r, "REPO_ADAPTER_PORT")}/artifactory/'),
         repo_adapter_dir=Path(r.raw('REPO_ADAPTER_DIR') or str(data_dir / 'repo-adapter')),
         repo_adapter_port=_int(r, 'REPO_ADAPTER_PORT'),
         repo_ca_file=Path(repo_ca) if repo_ca else None,
@@ -515,6 +516,25 @@ def _choice(r: Resolver, name: str) -> str:
         msg = f'{r.label(name)} must be one of {", ".join(choices)} (got {value!r})'
         raise ConfigError(msg)
     return value
+
+
+def _parse_url(r: Resolver, name: str, value: str) -> SplitResult:
+    """Return value split into its parts; a URL urllib cannot parse, or whose port is not a number, is a ConfigError naming the setting."""
+    try:
+        parts = urlsplit(value)
+        _ = parts.port  # raises ValueError for a port that is not a number in range
+    except ValueError as exc:
+        msg = f'{r.label(name)} is not a valid URL: {exc}'
+        raise ConfigError(msg) from None
+    return parts
+
+
+def _version(r: Resolver, name: str) -> str:
+    raw = r.raw(name)
+    if raw and not CORE_VERSION.match(raw):
+        msg = f'{r.label(name)} must be a Jenkins version such as 2.462.1 (got {raw!r})'
+        raise ConfigError(msg)
+    return raw
 
 
 def _int(r: Resolver, name: str) -> int:

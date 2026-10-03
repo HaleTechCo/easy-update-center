@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from uc.config import load_settings, read_secret, with_explicit_port
+from uc.config import load_settings, load_web_settings, read_secret, with_explicit_port
 from uc.errors import ConfigError
 
 AIRGAPPED = {
@@ -237,3 +237,70 @@ def test_maven_url_follows_the_repository_type():
 def test_the_public_repository_is_recognised_by_its_host():
     assert load_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com'}).public_repository is True
     assert load_settings(AIRGAPPED).public_repository is False
+
+
+def test_the_adapter_url_follows_the_adapter_port():
+    s = load_settings({**AIRGAPPED, 'REPO_ADAPTER_PORT': '9091'})
+    assert s.repo_adapter_url == 'http://repo-adapter:9091/artifactory/'
+    assert s.source_api_url == 'http://repo-adapter:9091/artifactory/api/'
+
+
+def test_an_explicit_adapter_url_wins_over_the_port():
+    s = load_settings({**AIRGAPPED, 'REPO_ADAPTER_PORT': '9091', 'REPO_ADAPTER_URL': 'http://adapter.corp:8081/artifactory'})
+    assert s.repo_adapter_url == 'http://adapter.corp:8081/artifactory/'
+
+
+def test_the_adapter_url_from_uc_toml_wins_and_the_port_from_it_is_used(tmp_path):
+    path = tmp_path / 'uc.toml'
+    path.write_text('[repo]\nadapter_port = 9092\n', encoding='utf-8')
+    assert load_settings(AIRGAPPED, config_file=path).repo_adapter_url == 'http://repo-adapter:9092/artifactory/'
+
+
+@pytest.mark.parametrize('value', ['2.462', '2.462.1', '2.440'])
+def test_doctor_since_accepts_jenkins_versions(value):
+    assert load_settings({**AIRGAPPED, 'DOCTOR_SINCE': value}).doctor_since == value
+
+
+def test_doctor_since_empty_means_unset():
+    assert load_settings({**AIRGAPPED, 'DOCTOR_SINCE': ''}).doctor_since == ''
+
+
+@pytest.mark.parametrize('value', ['latest', '2', '2.462.1.4', ' 2.x', '2.462-rc'])
+def test_doctor_since_must_be_a_jenkins_version(value):
+    with pytest.raises(ConfigError, match=rf"DOCTOR_SINCE must be a Jenkins version such as 2\.462\.1 \(got '{value.strip()}'\)"):
+        load_settings({**AIRGAPPED, 'DOCTOR_SINCE': value})
+
+
+def test_doctor_since_from_uc_toml_names_its_key(tmp_path):
+    path = tmp_path / 'uc.toml'
+    path.write_text('[doctor]\nsince = "newest"\n', encoding='utf-8')
+    with pytest.raises(ConfigError, match=r"DOCTOR_SINCE \(\[doctor\] since in .*uc\.toml\) must be a Jenkins version such as 2\.462\.1 \(got 'newest'\)"):
+        load_settings(AIRGAPPED, config_file=path)
+
+
+@pytest.mark.parametrize(
+    ('name', 'extra'),
+    [
+        ('REPO_URL', {}),
+        ('REPO_URL', {'REPO_ADAPTER': 'off'}),
+        ('PROCUREMENT_SOURCE_URL', {}),
+        ('REPO_URL', {'REPO_URL': 'http://host:notaport/'}),
+    ],
+)
+def test_a_malformed_url_is_a_configuration_error(name, extra):
+    env = {**AIRGAPPED, name: 'http://[bad/', **extra}
+    with pytest.raises(ConfigError, match=f'{name} is not a valid URL: '):
+        load_settings(env)
+
+
+def test_a_malformed_url_from_uc_toml_names_its_key(tmp_path):
+    path = tmp_path / 'uc.toml'
+    path.write_text('[repo]\nurl = "http://[bad/"\n', encoding='utf-8')
+    with pytest.raises(ConfigError, match=r'REPO_URL \(\[repo\] url in .*uc\.toml\) is not a valid URL: '):
+        load_settings({'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'REPO_KEY': 'jenkins'}, config_file=path)
+
+
+def test_web_settings_refuse_a_malformed_repository_url():
+    env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'REPO_URL': 'http://[bad/', 'REPO_KEY': 'jenkins'}
+    with pytest.raises(ConfigError, match='REPO_URL is not a valid URL: '):
+        load_web_settings(env, config_file=Path('/nonexistent/uc.toml'))

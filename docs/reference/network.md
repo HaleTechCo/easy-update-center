@@ -8,7 +8,7 @@ Every port, network and outbound host, by mode and service, ready to paste into 
 |---|---|---|---|
 | `web` | 8080 | `HTTP_PORT` (default 8080) | HTTP. Always on; put your reverse proxy in front of it, or use 8443. |
 | `web` | 8443 | `HTTPS_PORT` (default 8443) | HTTPS, only when `TLS_CERT_FILE` and `TLS_KEY_FILE` are set. |
-| `repo-adapter` | 8081 | not published | Reachable only on the internal `repo` network. |
+| `repo-adapter` | 8081 (`REPO_ADAPTER_PORT`) | not published | Reachable only on the internal `repo` network. Its healthcheck and the default `REPO_ADAPTER_URL` follow the port. |
 
 Jenkins controllers need to reach only the web container, at `PUBLIC_URL`.
 
