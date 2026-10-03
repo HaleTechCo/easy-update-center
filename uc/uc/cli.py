@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import configview, publish, status
-from .config import apply_process_env, load_settings, load_web_settings
+from .config import apply_process_env, load_pki_settings, load_settings, load_web_settings
 from .doctor import check_since, format_report, inspect_repository, record
 from .errors import UcError
 from .examples import example_env, example_toml
 from .generate import generate
-from .pki import DEFAULT_ORG, ROOT_CERT, ROOT_KEY, SIGNING_CERT, SIGNING_KEY, cert_info, init_pki, rotate_signing
+from .pki import ROOT_CERT, ROOT_KEY, SIGNING_CERT, SIGNING_KEY, cert_info, init_pki, rotate_signing
 from .preflight import load_credentials
 from .procure.clean import clean
 from .procure.download import check_download_allowed, download
@@ -74,18 +74,18 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser('schedule', help='run generate on GENERATE_SCHEDULE (the scheduler service)')
 
     adapter = sub.add_parser('repo-adapter', help='serve the repository to the generator (the repo-adapter service)')
-    adapter.add_argument('--port', type=int, default=8081)
+    adapter.add_argument('--port', type=int, help='port to listen on (default: REPO_ADAPTER_PORT, 8081)')
 
     pki = sub.add_parser('pki', help='manage the signing PKI').add_subparsers(dest='pki_command', required=True)
     init = pki.add_parser('init', help='create a root CA and a signing certificate')
     init.add_argument('--out', type=Path, required=True)
-    init.add_argument('--root-days', type=int, default=3650)
-    init.add_argument('--signing-days', type=int, default=365)
-    init.add_argument('--org', default=DEFAULT_ORG)
+    init.add_argument('--root-days', type=int, help='lifetime of the root CA in days (default: PKI_ROOT_DAYS, 3650)')
+    init.add_argument('--signing-days', type=int, help='lifetime of the signing certificate in days (default: PKI_SIGNING_DAYS, 365)')
+    init.add_argument('--org', help='organization in the subjects (default: PKI_ORG)')
     rotate = pki.add_parser('rotate', help='issue a new signing certificate from the root in --dir/root/')
     rotate.add_argument('--dir', type=Path, required=True)
-    rotate.add_argument('--days', type=int, default=365)
-    rotate.add_argument('--org', default=DEFAULT_ORG)
+    rotate.add_argument('--days', type=int, help='lifetime of the new signing certificate in days (default: PKI_SIGNING_DAYS, 365)')
+    rotate.add_argument('--org', help='organization in the subject (default: PKI_ORG)')
     show = pki.add_parser('show', help='print subjects, expiry and fingerprints')
     show.add_argument('--dir', type=Path, required=True)
     return parser
@@ -158,7 +158,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         run_schedule(settings)
         return 0
     if args.command == 'repo-adapter':
-        serve(settings, port=args.port)
+        serve(settings, port=settings.repo_adapter_port if args.port is None else args.port)
         return 0
     msg = f'unhandled command {args.command}'
     raise AssertionError(msg)
@@ -213,13 +213,19 @@ def _config(args: argparse.Namespace) -> int:
 
 
 def _pki(args: argparse.Namespace) -> int:
+    if args.pki_command in {'init', 'rotate'}:
+        defaults = load_pki_settings()
+        org = args.org or defaults.org
     if args.pki_command == 'init':
-        init_pki(args.out, root_days=args.root_days, signing_days=args.signing_days, org=args.org)
+        root_days = defaults.root_days if args.root_days is None else args.root_days
+        signing_days = defaults.signing_days if args.signing_days is None else args.signing_days
+        init_pki(args.out, root_days=root_days, signing_days=signing_days, org=org)
         print(f'created {args.out / ROOT_CERT}: install it in $JENKINS_HOME/update-center-rootCAs/ on every controller')
         print(f'created {args.out / SIGNING_KEY} and {args.out / SIGNING_CERT}: provide them as secrets')
         print(f"move {args.out / 'root' / ROOT_KEY} to offline storage; only 'uc pki rotate' needs it")
     elif args.pki_command == 'rotate':
-        rotate_signing(args.dir / 'root' / ROOT_KEY, args.dir / ROOT_CERT, args.dir, days=args.days, org=args.org)
+        days = defaults.signing_days if args.days is None else args.days
+        rotate_signing(args.dir / 'root' / ROOT_KEY, args.dir / ROOT_CERT, args.dir, days=days, org=org)
         print(f'issued a new {args.dir / SIGNING_CERT}; the previous pair is kept as *.old')
     else:
         now = utcnow()

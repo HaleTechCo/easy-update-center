@@ -68,6 +68,8 @@ public_url = "https://jenkins-updates.example.com"
 # adapter_url = "http://repo-adapter:8081/artifactory/"
 # The repo-adapter's token, cache and report.json, ${UC_DATA_DIR}/repo-adapter by default. (REPO_ADAPTER_DIR)
 # adapter_dir = ""
+# The port the repo-adapter listens on. Change REPO_ADAPTER_URL with it. (REPO_ADAPTER_PORT)
+# adapter_port = 8081
 # A PEM bundle added to the system bundle, for a repository behind a private CA. (REPO_CA_FILE)
 # ca_file = "/etc/ssl/uc-repo-ca.crt"
 # Archives larger than this are skipped and reported. (REPO_MAX_ARCHIVE_MB)
@@ -112,9 +114,15 @@ public_url = "https://jenkins-updates.example.com"
 # Where uc doctor --download-* fetches files from, by Maven path; https://repo.jenkins-ci.org/releases/ by default. Air-gapped, downloads are refused unless it is set. (PROCUREMENT_SOURCE_URL)
 # source_url = ""
 
+[pki]
+# The organization in the subjects of the certificates uc pki init and uc pki rotate create. (PKI_ORG)
+# org = "Jenkins Update Center"
+# Lifetime of the root CA uc pki init creates, in days. (PKI_ROOT_DAYS)
+# root_days = 3650
+# Lifetime of the signing certificate uc pki init and uc pki rotate issue, in days. (PKI_SIGNING_DAYS)
+# signing_days = 365
+
 [signing]
-# Read and validated, but it has no effect today: uc pki sets the lifetime. (SIGNING_CERT_DAYS)
-# cert_days = 365
 # The signing key, ${SECRETS_DIR}/update-center.key by default. (SIGNING_KEY_FILE)
 # key_file = ""
 # The signing certificate, ${SECRETS_DIR}/update-center.cert by default. (SIGNING_CERT_FILE)

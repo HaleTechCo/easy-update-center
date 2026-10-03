@@ -193,13 +193,16 @@ generator on the internal `repo` network, and stays idle when `REPO_ADAPTER` is 
 
 | Option | Meaning |
 |---|---|
-| `--port` | Port to listen on (default 8081). |
+| `--port` | Port to listen on (default `REPO_ADAPTER_PORT`, 8081). |
 
 ## uc pki
 
-Manages the signing PKI. It does not read the configuration, so it runs with `docker run` against
-the image. `make pki-init` wraps `init`, and `make pki-rotate ROOT=<dir>` wraps `rotate`; both then
-set the permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)).
+Manages the signing PKI. It reads only the `PKI_*` settings (from the environment, and
+`config/uc.toml` when there is one) and needs no others, so it runs with `docker run` against the
+image before anything else is configured. `make pki-init` wraps `init`, and
+`make pki-rotate ROOT=<dir>` wraps `rotate`; both pass `.env` and `config/` to it, so it sees the
+settings the services do, and then set the permissions of `secrets/`
+([File ownership on Linux](secrets.md#file-ownership-on-linux)).
 
 ```bash
 uc pki init --out <dir> [--root-days 3650] [--signing-days 365] [--org <name>]
@@ -216,8 +219,8 @@ uc pki show --dir <dir>
 | Option | Meaning |
 |---|---|
 | `--out`, `--dir` | The directory holding the PKI files (required). |
-| `--root-days` | Lifetime of the root CA (default 3650). |
-| `--signing-days`, `--days` | Lifetime of the signing certificate (default 365). |
-| `--org` | Organization name in the certificates' subjects. |
+| `--root-days` | Lifetime of the root CA (default `PKI_ROOT_DAYS`, 3650). |
+| `--signing-days`, `--days` | Lifetime of the signing certificate (default `PKI_SIGNING_DAYS`, 365). |
+| `--org` | Organization name in the certificates' subjects (default `PKI_ORG`). |
 
 How to run `rotate` safely: [Rotate the signing certificate](../how-to/rotate-signing-certificate.md).

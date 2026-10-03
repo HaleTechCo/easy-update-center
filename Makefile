@@ -53,7 +53,8 @@ test-secrets: uc-image
 # writes to secrets/. Run `make secrets-permissions` yourself after replacing a file in secrets/.
 HOST_UID ?= $(shell id -u)
 HOST_GID ?= $(shell id -g)
-IN_SECRETS = docker run --rm --user 0:0 --entrypoint sh -v "$(CURDIR)/secrets:/pki" \
+# It also gets .env (when there is one) and config/, so uc pki reads the PKI_* settings the services do.
+IN_SECRETS = docker run --rm --user 0:0 --entrypoint sh $(if $(wildcard .env),--env-file .env) -v "$(CURDIR)/config:/config:ro" -v "$(CURDIR)/secrets:/pki" \
   -v "$(CURDIR)/scripts/secrets-permissions.sh:/usr/local/bin/secrets-permissions.sh:ro"
 FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh /pki $(HOST_UID) $(HOST_GID)
 SECRET_FILES = repo_username repo_password github_username github_token download_proxy_auth repo_push_auth

@@ -38,7 +38,7 @@ def test_online_defaults():
     assert s.popularity_json_url.startswith('https://raw.githubusercontent.com/')
     assert s.tool_installers_url == 'https://updates.jenkins.io/updates/'
     assert (s.retain_releases, s.min_plugins, s.min_plugin_ratio) == (5, 1, 0.9)
-    assert (s.certificate_minimum_valid_days, s.signing_cert_days, s.stale_after_days) == (30, 365, 30)
+    assert (s.certificate_minimum_valid_days, s.pki_signing_days, s.stale_after_days) == (30, 365, 30)
     assert s.generate_schedule == '0 */6 * * *'
     assert s.uc_id == 'default'
     assert s.extra_args == ()
