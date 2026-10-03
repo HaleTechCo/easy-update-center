@@ -2,6 +2,9 @@
 
 import json
 import os
+import socket
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -10,6 +13,7 @@ from sitefixture import uc_document, write_site
 from uc.cli import EXIT_LOCKED, build_parser, doctor_options, main
 from uc.pki import cert_info
 from uc.publish import RunLock
+from uc.repo_adapter.server import record_port
 from uc.schedule import run_schedule
 from uc.status import read_status, write_status
 from uc.timeutil import utcnow
@@ -272,3 +276,100 @@ def test_repo_adapter_listens_on_the_configured_port(monkeypatch, tmp_path, secr
     assert main(['repo-adapter']) == 0
     assert main(['repo-adapter', '--port', '7000']) == 0
     assert ports == [9090, 7000]
+
+
+def test_a_malformed_url_prints_an_error_not_a_traceback(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('REPO_URL', 'http://[bad/')
+    assert main(['status']) == 1
+    assert 'uc: error: REPO_URL is not a valid URL: ' in capsys.readouterr().err
+
+
+class _Health(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200 if self.path == '/healthz' else 404)
+        self.end_headers()
+        self.wfile.write(b'ok\n')
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture
+def healthz_port():
+    server = ThreadingHTTPServer(('127.0.0.1', 0), _Health)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield server.server_address[1]
+    server.shutdown()
+    server.server_close()
+
+
+def _free_port():
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        return sock.getsockname()[1]
+
+
+@pytest.fixture
+def port_file(monkeypatch, tmp_path):
+    path = tmp_path / 'adapter.port'
+    monkeypatch.setattr('uc.repo_adapter.server.PORT_FILE', path)
+    return path
+
+
+def test_healthcheck_probes_the_recorded_port_and_reads_no_settings(monkeypatch, tmp_path, port_file, healthz_port):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    (tmp_path / 'uc.toml').write_text('no_such_setting = 1\n[repo]\nadapter_port = 1\n', encoding='utf-8')
+    monkeypatch.setenv('MODE', 'bogus')
+    monkeypatch.setattr('uc.cli.serve', lambda *_args, **_kwargs: pytest.fail('--healthcheck must not start a server'))
+    record_port(healthz_port)
+    assert main(['repo-adapter', '--healthcheck']) == 0
+    port_file.write_text(f'{_free_port()}\n', encoding='utf-8')
+    assert main(['repo-adapter', '--healthcheck', '--port', str(healthz_port)]) == 0
+
+
+def test_healthcheck_without_a_recorded_port_is_unhealthy(port_file, capsys):
+    assert not port_file.exists()
+    assert main(['repo-adapter', '--healthcheck']) == 1
+    assert 'uc: error: repo-adapter is not healthy: it has not recorded a port yet' in capsys.readouterr().err
+    port_file.write_text('not a port\n', encoding='utf-8')
+    assert main(['repo-adapter', '--healthcheck']) == 1
+
+
+def test_serving_records_the_port_it_bound(monkeypatch, tmp_path, secrets_dir, port_file):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    started = []
+
+    class Stub:
+        server_address = ('0.0.0.0', 4321)
+
+        def serve_forever(self):
+            started.append(True)
+
+    monkeypatch.setattr('uc.repo_adapter.server.make_server', lambda *_args, **_kwargs: Stub())
+    assert main(['repo-adapter', '--port', '0']) == 0
+    assert started
+    assert port_file.read_text(encoding='utf-8') == '4321\n'
+    assert not port_file.with_name('adapter.port.tmp').exists()
+
+
+def test_healthcheck_ignores_the_proxy_settings(monkeypatch, tmp_path, secrets_dir, healthz_port):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('HTTP_PROXY', 'http://127.0.0.1:9')
+    assert main(['repo-adapter', '--healthcheck', '--port', str(healthz_port)]) == 0
+
+
+@pytest.mark.usefixtures('port_file')
+def test_healthcheck_fails_with_a_message_when_nothing_listens(capsys):
+    port = _free_port()
+    record_port(port)
+    assert main(['repo-adapter', '--healthcheck']) == 1
+    assert f'uc: error: repo-adapter is not healthy on port {port}: ' in capsys.readouterr().err
+
+
+def test_healthcheck_fails_on_an_unexpected_status(monkeypatch, tmp_path, secrets_dir, capsys, healthz_port):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setattr('uc.repo_adapter.server.HEALTH_PATH', '/other')
+    assert main(['repo-adapter', '--healthcheck', '--port', str(healthz_port)]) == 1
+    assert f'uc: error: repo-adapter is not healthy on port {healthz_port}: HTTP 404' in capsys.readouterr().err

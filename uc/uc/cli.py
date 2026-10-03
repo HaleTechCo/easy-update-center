@@ -21,7 +21,7 @@ from .procure.download import check_download_allowed, download
 from .procure.local import stage_local
 from .procure.plan import check_war_args
 from .procure.push import push
-from .repo_adapter.server import serve
+from .repo_adapter.server import healthcheck, serve
 from .schedule import run_schedule
 from .settings import MODES
 from .timeutil import iso, utcnow
@@ -75,6 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     adapter = sub.add_parser('repo-adapter', help='serve the repository to the generator (the repo-adapter service)')
     adapter.add_argument('--port', type=int, help='port to listen on (default: REPO_ADAPTER_PORT, 8081)')
+    adapter.add_argument('--healthcheck', action='store_true', help='do not serve: exit 0 when the running adapter answers (on --port, else the port it bound), 1 otherwise; reads no settings (the compose healthcheck)')
 
     pki = sub.add_parser('pki', help='manage the signing PKI').add_subparsers(dest='pki_command', required=True)
     init = pki.add_parser('init', help='create a root CA and a signing certificate')
@@ -137,6 +138,9 @@ def _dispatch(args: argparse.Namespace) -> int:
         return _pki(args)
     if args.command == 'config':
         return _config(args)
+    if args.command == 'repo-adapter' and args.healthcheck:
+        healthcheck(args.port)  # reads no settings: health is the running server's, not the files'
+        return 0
     settings = load_settings()
     exported = apply_process_env(settings)
     if args.command == 'generate':

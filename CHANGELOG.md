@@ -50,6 +50,13 @@ once releases are published.
 - Settings for what were command-line options only: `DOCTOR_FETCH`, `DOCTOR_SINCE`, `DOCTOR_JSON`,
   `PKI_ORG`, `PKI_ROOT_DAYS`, `PKI_SIGNING_DAYS` and `REPO_ADAPTER_PORT`. `--no-fetch` and
   `--no-json` switch a configured default off for one run.
+  `REPO_ADAPTER_PORT` also sets the default `REPO_ADAPTER_URL`, and the repo-adapter's healthcheck
+  (the new `uc repo-adapter --healthcheck`, which reads no settings) probes the port the running
+  adapter bound, so changing the port needs no other edit than `make reload`. `DOCTOR_SINCE` is
+  checked when the settings load: it must be a Jenkins version such as
+  `2.462.1`.
+- A URL setting `uc` cannot parse (for example `REPO_URL=http://[bad/`) is reported as
+  `uc: error: <setting> is not a valid URL: ...` instead of a traceback.
 - `uc generate --wait` waits for a running generation or rollback instead of exiting 75; scheduled
   generations use it.
 - `make reload` checks the settings, then recreates the services so they read them; with invalid

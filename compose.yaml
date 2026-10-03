@@ -75,7 +75,7 @@ services:
       - repo_username
       - repo_password
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=3)"]
+      test: ["CMD", "uc", "repo-adapter", "--healthcheck"]
       interval: 10s
       timeout: 5s
       retries: 6

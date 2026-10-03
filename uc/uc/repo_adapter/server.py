@@ -9,12 +9,16 @@ import os
 import secrets
 import sys
 import threading
+import urllib.error
 import urllib.parse
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from uc.aql import AQL_TEMPLATE, RepoFile, to_gav
 from uc.config import Settings, read_secret
+from uc.errors import UcError
 from uc.preflight import ADAPTER_USERNAME, load_repository_credentials
 from uc.timeutil import utcnow
 
@@ -26,11 +30,20 @@ from .listing import Index, build_index, write_report
 if TYPE_CHECKING:
     import datetime as dt
     from collections.abc import Callable
-    from pathlib import Path
 
 PREFIX = '/artifactory/'
 QUERY_LIMIT = 64 * 1024
 PORT = 8081
+HEALTH_PATH = '/healthz'
+PORT_FILE = Path('/tmp/uc-repo-adapter.port')  # noqa: S108 - the container's root is read-only; /tmp is its private tmpfs (compose.yaml)
+"""Where the running adapter records the port it bound, for --healthcheck: health follows the server, not the settings files."""
+HEALTH_TIMEOUT = 3
+"""Seconds uc repo-adapter --healthcheck waits for the adapter to answer."""
+HTTP_OK = 200
+
+
+class UnhealthyError(UcError):
+    """The repo-adapter did not answer its health check."""
 
 
 def ensure_token(path: Path) -> str:
@@ -221,9 +234,50 @@ def make_server(settings: Settings, port: int = PORT, host: str = '0.0.0.0') -> 
     return ThreadingHTTPServer((host, port), make_handler(adapter, key=settings.repo_key, token=token))
 
 
+def record_port(port: int, path: Path | None = None) -> None:
+    """Record the port the server is listening on, atomically, where --healthcheck finds it."""
+    path = PORT_FILE if path is None else path
+    temporary = path.with_name(path.name + '.tmp')
+    temporary.write_text(f'{port}\n', encoding='utf-8')
+    temporary.replace(path)
+
+
+def recorded_port(path: Path | None = None) -> int:
+    """Return the port record_port saved; raise UnhealthyError when the adapter has not recorded one."""
+    path = PORT_FILE if path is None else path
+    try:
+        return int(path.read_text(encoding='utf-8').strip())
+    except (OSError, ValueError):
+        msg = 'repo-adapter is not healthy: it has not recorded a port yet'
+        raise UnhealthyError(msg) from None
+
+
+def healthcheck(port: int | None = None) -> None:
+    """Raise UnhealthyError unless the repo-adapter on this host answers 200 within HEALTH_TIMEOUT seconds.
+
+    It probes port, else the port the running adapter recorded; it reads no settings, never starts a server and
+    ignores the proxy settings.
+    """
+    port = recorded_port() if port is None else port
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(f'http://127.0.0.1:{port}{HEALTH_PATH}', timeout=HEALTH_TIMEOUT) as response:
+            status = response.status
+    except urllib.error.HTTPError as exc:
+        status = exc.code
+    except (urllib.error.URLError, OSError) as exc:
+        reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+        msg = f'repo-adapter is not healthy on port {port}: {reason}'
+        raise UnhealthyError(msg) from None
+    if status != HTTP_OK:
+        msg = f'repo-adapter is not healthy on port {port}: HTTP {status}'
+        raise UnhealthyError(msg)
+
+
 def serve(settings: Settings, port: int = PORT) -> None:
     """Run the repo-adapter on port until the process stops."""
     server = make_server(settings, port)
+    record_port(server.server_address[1])
     state = f'{settings.repo_type} repository {settings.repo_key} at {settings.repo_url}' if settings.repo_adapter else 'idle (REPO_ADAPTER is off)'
     print(f'repo-adapter: listening on :{port}, {state}', flush=True)
     server.serve_forever()

@@ -122,3 +122,9 @@ def test_credentials_in_a_proxy_without_a_scheme_are_not_shown(tmp_path, secrets
         assert 'proxyuser' not in out
         assert 's3cret' not in out
         assert '***@proxy:3128' in out
+
+
+def test_check_fails_on_a_bad_doctor_since(tmp_path, secrets_dir):
+    code, _, err = show(env_for(tmp_path, secrets_dir, DOCTOR_SINCE='latest'), tmp_path / 'none.toml', check=True)
+    assert code == 1
+    assert 'DOCTOR_SINCE must be a Jenkins version' in err

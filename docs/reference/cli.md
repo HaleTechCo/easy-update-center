@@ -187,7 +187,7 @@ generation or a rollback running waits for it.
 ## uc repo-adapter
 
 ```bash
-uc repo-adapter [--port 8081]
+uc repo-adapter [--port 8081] [--healthcheck]
 ```
 
 The `repo-adapter` service's command; you do not run it by hand. Serves the source repository to the
@@ -197,6 +197,7 @@ generator on the internal `repo` network, and stays idle when `REPO_ADAPTER` is 
 | Option | Meaning |
 |---|---|
 | `--port` | Port to listen on (default `REPO_ADAPTER_PORT`, 8081). |
+| `--healthcheck` | Do not serve: ask the running adapter on `127.0.0.1` for `/healthz` (3 seconds, proxy settings ignored), on `--port` or else the port the adapter recorded in `/tmp/uc-repo-adapter.port` when it started listening. It reads no settings, so editing `uc.toml` cannot make a running adapter unhealthy. Exit 0 when it answers 200; otherwise print `uc: error: repo-adapter is not healthy ...` (also when no port is recorded yet) and exit 1. The `repo-adapter` service's Compose healthcheck runs it. |
 
 ## uc pki
 

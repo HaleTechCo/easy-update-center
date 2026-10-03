@@ -168,7 +168,7 @@ services:
       REPO_URL: ${IT_PUSH_URL:-http://artifactory-push:8081/artifactory/}
       REPO_KEY: procure  # wins over uc.toml's jenkins
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=3)"]
+      test: ["CMD", "python3", "-m", "uc", "repo-adapter", "--healthcheck"]
       interval: 2s
       timeout: 5s
       retries: 30
@@ -190,7 +190,7 @@ services:
       REPO_TYPE: ${IT_REPO_TYPE:-artifactory}
       REPO_URL: ${IT_ADAPTER_BACKEND_URL:-http://artifactory-private:8081/artifactory/}
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/healthz', timeout=3)"]
+      test: ["CMD", "python3", "-m", "uc", "repo-adapter", "--healthcheck"]
       interval: 2s
       timeout: 5s
       retries: 30
