@@ -159,7 +159,7 @@ def _build_and_publish(
         versions = tools.versions or VersionTool.from_settings(settings)
         report = doctor.analyze(listing, versions, doctor.ArtifactSource.from_settings(settings, creds, allow_network=False))
         doctor.attach_adapter_report(report, settings)
-        doctor_summary = {**report.summary(), 'checked_at': iso(utcnow())}
+        doctor_summary = {**report.summary(), 'checked_at': iso(now)}
         if report.dropped:
             warnings.append(f"{report.dropped} artifact(s) in the source are dropped by the generator; run 'uc doctor'")
 
@@ -199,6 +199,6 @@ def _build_and_publish(
             'doctor': doctor_summary,
         },
         # Without counts of its own (DOWNLOAD_BACKEND=mirror) it keeps the recorded block; with them, the core check
-        # only uc doctor --record makes, and when it made it.
-        keep=('doctor', 'doctor.missing_cores', 'doctor.recorded_at'),
+        # only uc doctor --record makes (missing_cores, cores_unchecked), and when it made it.
+        keep=('doctor', 'doctor.missing_cores', 'doctor.cores_unchecked', 'doctor.recorded_at'),
     )

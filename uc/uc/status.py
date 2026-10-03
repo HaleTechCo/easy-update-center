@@ -41,11 +41,11 @@ def locked(data_dir: Path) -> Iterator[None]:
 
 
 def write_status(data_dir: Path, status: dict[str, Any], *, keep: Iterable[str] = ()) -> None:
-    """Replace status.json atomically; a field named in keep that status leaves None keeps its current value.
+    """Replace status.json atomically, carrying over from the current document each field named in keep that status leaves None.
 
     A name in keep can also be block.field, a field inside a block: when both documents have the block and status's
-    leaves the field None (or out), the field keeps its current value. uc generate keeps doctor.missing_cores and
-    doctor.recorded_at so, which only uc doctor --record works out.
+    block leaves the field None (or out), the field keeps its current value. uc generate keeps doctor.missing_cores,
+    doctor.cores_unchecked and doctor.recorded_at this way, because only uc doctor --record works them out.
     """
     with locked(data_dir):
         current = read_status(data_dir) if keep else {}

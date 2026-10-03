@@ -114,7 +114,8 @@ def test_generation_succeeds_offline_with_only_warnings(release):
 @pytest.mark.usefixtures('release')
 def test_doctor_record_saves_the_report_and_its_counts():
     result = uc('doctor', '--record')
-    assert 'saved the report as /data/doctor/report.json' in result.stdout
+    assert result.returncode in {0, 1}, result.stderr  # 1 when the seeded repository drops something, as it does
+    assert 'saved the report as /data/doctor/report.json' in result.stdout, result.stderr
     status = json.loads(Path('/data/status.json').read_text(encoding='utf-8'))
     assert status['doctor']['checked_at'].endswith('Z')
     assert status['doctor']['missing_cores'] is not None
