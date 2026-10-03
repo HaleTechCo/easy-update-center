@@ -17,8 +17,11 @@ Jenkins controllers need to reach only the web container, at `PUBLIC_URL`.
 | Service | `default` | `repo` (internal) | `repo-egress` |
 |---|---|---|---|
 | `web` | yes | no | no |
+| `web-config` | no | no | no |
 | `scheduler`, `uc` | yes | yes | no |
 | `repo-adapter` | no | yes | yes |
+
+`web-config` has no network at all (`network_mode: none`): it only reads settings and writes a file.
 
 `repo` is an internal network: nothing on it can reach outside the host, and the web container is
 not on it. The repo-adapter reaches the repository through `repo-egress`. `make compose-check`

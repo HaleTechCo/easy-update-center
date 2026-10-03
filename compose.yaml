@@ -29,7 +29,6 @@ x-uc: &uc
 services:
   web:
     image: ${WEB_IMAGE:-jenkins-uc/web:local}
-    env_file: ${UC_ENV_FILE:-.env}
     read_only: true
     tmpfs:
       - /tmp
@@ -38,9 +37,26 @@ services:
       - "${HTTPS_PORT:-8443}:8443"
     volumes:
       - uc-data:/data:ro
+      - web-config:/run/uc-web:ro
     secrets:
       - download_proxy_auth
+    # Its settings come from web-config (docs/architecture/request-routing.md#where-web-gets-its-settings).
+    # restart: when `docker compose up -d` recreates web-config after a settings change, web restarts too.
+    depends_on:
+      web-config: {condition: service_completed_successfully, restart: true}
     restart: unless-stopped
+
+  # One-shot, before web: works out web's settings from .env and config/uc.toml (uc config --web-env)
+  # and writes them to the web-config volume. No network, no secrets.
+  web-config:
+    image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    env_file: ${UC_ENV_FILE:-.env}
+    command: ["config", "--web-env", "--out", "/run/uc-web/web.env"]
+    read_only: true
+    network_mode: none
+    volumes:
+      - ./config:/config:ro
+      - web-config:/run/uc-web
 
   # Answers the generator's Artifactory requests from Artifactory or Artifact Keeper and fills in POMs,
   # descriptions and release dates from the archives. Idle when REPO_ADAPTER is off (the online default).
@@ -102,6 +118,7 @@ networks:
 
 volumes:
   uc-data:
+  web-config:
 
 secrets:
   update-center.key:

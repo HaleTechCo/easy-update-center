@@ -77,8 +77,8 @@ COPY bin/uc /usr/local/bin/uc
 RUN chmod 0755 /usr/local/bin/uc /opt/uc/site/generate-htaccess.sh \
  && groupadd --system --gid 10001 uc \
  && useradd --system --uid 10001 --gid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin uc \
- && mkdir -p /data /config/overlay \
- && chown 10001:10001 /data
+ && mkdir -p /data /config/overlay /run/uc-web \
+ && chown 10001:10001 /data /run/uc-web
 ENV PYTHONPATH=/opt/uc/python \
     PYTHONDONTWRITEBYTECODE=1 \
     UC_APP_DIR=/opt/uc \

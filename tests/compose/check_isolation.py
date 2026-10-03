@@ -50,6 +50,20 @@ def main() -> None:
             problems.append(f'{name} mounts the staging folder {STAGING}')
     if 'uc' in services and (PUSH_SECRET not in secrets(services['uc']) or STAGING not in mounts(services['uc'])):
         problems.append(f'uc must receive {PUSH_SECRET} and mount {STAGING}')
+    web_config = services.get('web-config')
+    if web_config is None:
+        problems.append('web-config is missing: web reads its settings from it')
+    else:
+        if secrets(web_config):
+            problems.append(f'web-config receives secrets {sorted(secrets(web_config))}')
+        if web_config.get('network_mode') != 'none':
+            problems.append('web-config must have no network')
+    if web.get('environment'):
+        problems.append(f'web reads settings from its own environment ({sorted(web["environment"])}); web-config writes them')
+    if (web.get('depends_on') or {}).get('web-config', {}).get('condition') != 'service_completed_successfully':
+        problems.append('web must start after web-config has written its settings')
+    if not any(volume.get('target') == '/run/uc-web' and volume.get('read_only') for volume in web.get('volumes') or []):
+        problems.append('web must mount the web-config volume read-only at /run/uc-web')
     for problem in problems:
         print(f'compose-check ({mode}): {problem}')
     if problems:

@@ -103,3 +103,22 @@ routing and downloads switch together, with no restart. The routing tests prove 
 Apache will not start without its document root and the download map file, so on first start the
 web container's entrypoint waits for the first published release, logging "waiting for the first
 published release" once a minute until then.
+
+## Where web gets its settings
+
+The web container has no Python, so it cannot read `config/uc.toml` or work out the mode defaults.
+The one-shot `web-config` service, from the uc image, does it: it runs
+`uc config --web-env --out /run/uc-web/web.env` with the same `.env` and `config/` as the other
+services, writes the result to the small `web-config` volume and exits. `web` starts after it and
+reads `PUBLIC_URL`, `DOWNLOAD_BACKEND`, `DOWNLOAD_BACKEND_URL`, `DOWNLOAD_ACCESS`,
+`DOWNLOAD_PROXY_AUTH_FILE`, `DOWNLOAD_PROXY_CA_FILE`, `TLS_CERT_FILE` and `TLS_KEY_FILE` from that
+file, nothing else.
+
+- A variable set in `web`'s own environment wins over the file, so a Compose override such as
+  `compose.tls.yaml` ([Enable TLS](../how-to/enable-tls.md)) still works.
+- Without the file (the web image run on its own), every value comes from `web`'s environment,
+  with plain defaults: `DOWNLOAD_BACKEND=mirror` (get.jenkins.io) and `DOWNLOAD_ACCESS=redirect`.
+- When `docker compose up -d` recreates `web-config` after a change to `.env`, Compose restarts
+  `web` too. A change to `config/uc.toml` changes no service definition, so recreate the services
+  yourself: `docker compose up -d --force-recreate`.
+- To see what `web` will get: `docker compose run --rm uc config --web-env`.
