@@ -44,6 +44,8 @@ public_url = "https://jenkins-updates.example.com"
 # schedule = "0 */6 * * *"
 
 [doctor]
+# Cron expression for a read-only uc doctor --record run, which saves the report and its counts in status.json; empty means none. (DOCTOR_SCHEDULE)
+# schedule = "30 5 * * *"
 # uc doctor downloads the POMs and manifests missing from the cache, so it can check every dependency and required core (--fetch). (DOCTOR_FETCH)
 # fetch = false
 # The floor for required cores (--since); empty means the oldest core in the repository. (DOCTOR_SINCE)

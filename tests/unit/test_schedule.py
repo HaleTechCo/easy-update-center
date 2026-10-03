@@ -1,19 +1,32 @@
-"""Unit tests for uc.schedule: the crontab line and the first run before handing over to supercronic."""
+"""Unit tests for uc.schedule: the crontab, the recorded start, and the first run before handing over to supercronic."""
+
+import json
 
 import pytest
 
-from uc.schedule import ScheduleError, crontab_line, run_schedule
+from uc.config import settings_digest
+from uc.schedule import ScheduleError, crontab_text, job_line, run_schedule
 from ucsupport import make_settings
 
 
-def test_crontab_line():
-    assert crontab_line('0 */6 * * *') == '0 */6 * * * uc generate\n'
-    assert crontab_line('@hourly') == '@hourly uc generate\n'
+def test_job_line():
+    assert job_line('0 */6 * * *', 'GENERATE_SCHEDULE', 'uc generate --wait') == '0 */6 * * * uc generate --wait\n'
+    assert job_line('@hourly', 'GENERATE_SCHEDULE', 'uc generate --wait') == '@hourly uc generate --wait\n'
 
 
-def test_crontab_line_rejects_nonsense():
-    with pytest.raises(ScheduleError, match='5-field cron expression'):
-        crontab_line('every six hours')
+def test_crontab_runs_generate_and_waits_for_the_lock(tmp_path, secrets_dir):
+    assert crontab_text(make_settings(tmp_path, secrets_dir)) == '0 */6 * * * uc generate --wait\n'
+
+
+def test_crontab_adds_the_doctor_report_when_scheduled(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, DOCTOR_SCHEDULE='30 5 * * *')
+    assert crontab_text(settings) == '0 */6 * * * uc generate --wait\n30 5 * * * uc doctor --record\n'
+
+
+@pytest.mark.parametrize(('name', 'value'), [('GENERATE_SCHEDULE', 'every six hours'), ('DOCTOR_SCHEDULE', 'nightly')])
+def test_crontab_rejects_nonsense(tmp_path, secrets_dir, name, value):
+    with pytest.raises(ScheduleError, match=f'{name} must be a 5-field cron expression or an @macro'):
+        crontab_text(make_settings(tmp_path, secrets_dir, **{name: value}))
 
 
 def run(settings, tmp_path, generate_once):
@@ -26,7 +39,22 @@ def test_first_run_generates_then_hands_over_to_supercronic(tmp_path, secrets_di
     settings = make_settings(tmp_path, secrets_dir)
     calls = run(settings, tmp_path, lambda: None)
     assert calls == ['generate', ['supercronic', '-passthrough-logs', str(tmp_path / 'crontab')]]
-    assert (tmp_path / 'crontab').read_text() == '0 */6 * * * uc generate\n'
+    assert (tmp_path / 'crontab').read_text() == '0 */6 * * * uc generate --wait\n'
+
+
+def test_the_start_is_recorded_for_uc_config(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir)
+    run(settings, tmp_path, lambda: None)
+    state = json.loads((settings.data_dir / 'scheduler.json').read_text(encoding='utf-8'))
+    assert state['settings_digest'] == settings_digest(settings)
+    assert state['started_at'].endswith('Z')
+
+
+def test_a_bad_schedule_stops_before_the_first_run(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, DOCTOR_SCHEDULE='nightly')
+    with pytest.raises(ScheduleError):
+        run(settings, tmp_path, lambda: None)
+    assert not (settings.data_dir / 'scheduler.json').exists()
 
 
 def test_existing_release_skips_the_first_run(tmp_path, secrets_dir):

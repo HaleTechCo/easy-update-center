@@ -38,7 +38,7 @@ Exit codes shared by every command:
 ## uc generate
 
 ```bash
-docker compose run --rm uc generate [--force]
+docker compose run --rm uc generate [--force] [--wait]
 ```
 
 Builds, validates and publishes one release: the whole [generation pipeline](../architecture/generation-pipeline.md).
@@ -48,6 +48,7 @@ live release is unchanged, `status.json` records the failed run, and the full er
 | Option | Meaning |
 |---|---|
 | `--force` | Skip the plugin-count ratio check (`MIN_PLUGIN_RATIO`) for this run, to accept a deliberate shrink of the catalog. |
+| `--wait` | Wait for a running generation or rollback to finish instead of exiting 75. The scheduler's runs use it. |
 
 The scheduler runs the same command on `GENERATE_SCHEDULE`.
 
@@ -165,11 +166,20 @@ How settings combine: [How settings are read](configuration.md#how-settings-are-
 uc schedule
 ```
 
-The `scheduler` service's command; you do not run it by hand. When no release is live it generates
-one at once, in its own process: that first run prints no `published release` line, and a failure
-is logged as a traceback while scheduling continues. It then hands over to supercronic, which runs
-`uc generate` on `GENERATE_SCHEDULE` (default every six hours); those runs print
-`published release <id>`.
+The `scheduler` service's command; you do not run it by hand. It records when it started, and
+with which settings, in `/data/scheduler.json` (so `uc config` can tell when the running services
+use older settings). When no release is live it generates one at once, in its own process: that
+first run prints no `published release` line, and a failure is logged as a traceback while
+scheduling continues. It then hands over to supercronic, which runs:
+
+- `uc generate --wait` on `GENERATE_SCHEDULE` (default every six hours); those runs print
+  `published release <id>`;
+- `uc doctor --record` on `DOCTOR_SCHEDULE`, when it is set: a read-only report whose counts go
+  into `status.json`.
+
+A bad schedule stops the scheduler at start, with a message naming the setting. supercronic never
+starts a job while its previous run is still going, and a scheduled generation that finds another
+generation or a rollback running waits for it.
 
 ## uc repo-adapter
 

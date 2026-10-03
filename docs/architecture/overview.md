@@ -14,7 +14,7 @@ on a Java runtime, plus the `uc` command in Python) and the **web image** (Apach
 - **web-config** runs once before `web` starts: it works out web's settings from `.env` and
   `config/uc.toml` and writes them to a small volume web reads, then exits. It has no network and no
   secrets. See [Where web gets its settings](request-routing.md#where-web-gets-its-settings).
-- **scheduler** runs `uc generate` on `GENERATE_SCHEDULE`, and at once when no release is live.
+- **scheduler** runs `uc generate` on `GENERATE_SCHEDULE`, and at once when no release is live; with `DOCTOR_SCHEDULE` set it also runs a read-only `uc doctor --record`.
   Each run builds a complete new release, validates it, and swaps it in atomically. See
   [Generation pipeline](generation-pipeline.md).
 - **uc** is the same image for one-shot commands: `generate`, `doctor`, `rollback`, `status`.
@@ -68,6 +68,7 @@ All state lives on one Compose volume, `uc-data`, mounted at `/data`:
 | `doctor/report.json` | The last report `uc doctor --record` saved. Not served. |
 | `.status.lock` | Held briefly by every write to `status.json`. |
 | `status.json` | The public [status](../reference/status-json.md), served at `/status.json`. |
+| `scheduler.json` | When the scheduler started and a digest of its settings, for `uc config`. |
 | `.lock` | The run lock: one `uc generate` or `uc rollback` at a time. |
 
 Everything is on one filesystem so that publishing is a rename, never a copy: the web container
