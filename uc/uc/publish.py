@@ -26,19 +26,20 @@ class LockBusyError(UcError):
 
 
 class RunLock:
-    """Exclusive, non-blocking lock on DATA/.lock held for a whole generation."""
+    """Exclusive lock on DATA/.lock held for a whole generation or rollback."""
 
-    def __init__(self, data_dir: Path) -> None:
-        """Prepare the lock on data_dir/.lock; it is taken on entering the context."""
+    def __init__(self, data_dir: Path, *, wait: bool = False) -> None:
+        """Prepare the lock on data_dir/.lock; it is taken on entering the context, waiting for another holder when wait is true."""
         self.path = data_dir / '.lock'
+        self.wait = wait
         self._fd: int | None = None
 
     def __enter__(self) -> Self:
-        """Take the lock, or raise LockBusyError at once if another process holds it."""
+        """Take the lock: wait for it, or raise LockBusyError at once if another process holds it."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd, fcntl.LOCK_EX if self.wait else fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             os.close(fd)
             msg = f'another generation holds {self.path}'

@@ -227,3 +227,7 @@ def test_record_only_applies_to_a_report_run(capsys):
     with pytest.raises(SystemExit):
         main(['doctor', '--push', '--record'])
     assert '--record only applies to a report run' in capsys.readouterr().err
+
+
+def test_generate_accepts_wait():
+    assert build_parser().parse_args(['generate', '--wait']).wait is True

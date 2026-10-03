@@ -1,17 +1,22 @@
-"""The scheduler service: a first release straight away, then supercronic on GENERATE_SCHEDULE (docs/reference/cli.md#uc-schedule)."""
+"""The scheduler service: a first release straight away, then supercronic runs uc generate on GENERATE_SCHEDULE and a recorded uc doctor report on DOCTOR_SCHEDULE (docs/reference/cli.md#uc-schedule)."""
 
 from __future__ import annotations
 
+import json
 import os
 import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import publish
+from .config import settings_digest
+from .configview import SCHEDULER_STATE
 from .errors import UcError
 from .generate import generate
+from .timeutil import iso, utcnow
 
 if TYPE_CHECKING:
+    import datetime as dt
     from collections.abc import Callable
 
     from .config import Settings
@@ -21,16 +26,34 @@ CRON_FIELDS = 5
 
 
 class ScheduleError(UcError):
-    """GENERATE_SCHEDULE is neither a 5-field cron expression nor an @macro."""
+    """A schedule is neither a 5-field cron expression nor an @macro."""
 
 
-def crontab_line(schedule: str) -> str:
-    """Return the crontab line that runs `uc generate` on schedule."""
+def job_line(schedule: str, setting: str, command: str) -> str:
+    """Return the crontab line that runs command on schedule; setting names the schedule in the error."""
     fields = schedule.split()
     if not (len(fields) == CRON_FIELDS or (len(fields) == 1 and fields[0].startswith('@'))):
-        msg = f'GENERATE_SCHEDULE must be a 5-field cron expression or an @macro (got {schedule!r})'
+        msg = f'{setting} must be a 5-field cron expression or an @macro (got {schedule!r})'
         raise ScheduleError(msg)
-    return f'{" ".join(fields)} uc generate\n'
+    return f'{" ".join(fields)} {command}\n'
+
+
+def crontab_text(settings: Settings) -> str:
+    """Return the scheduler's crontab: uc generate, and a recorded uc doctor report when DOCTOR_SCHEDULE is set."""
+    text = job_line(settings.generate_schedule, 'GENERATE_SCHEDULE', 'uc generate --wait')
+    if settings.doctor_schedule:
+        text += job_line(settings.doctor_schedule, 'DOCTOR_SCHEDULE', 'uc doctor --record')
+    return text
+
+
+def write_state(settings: Settings, now: dt.datetime) -> None:
+    """Record when the scheduler started and with which settings, in data/scheduler.json, for uc config's reload hint."""
+    path = settings.data_dir / SCHEDULER_STATE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f'.{SCHEDULER_STATE}.tmp')
+    tmp.write_text(json.dumps({'started_at': iso(now), 'settings_digest': settings_digest(settings)}, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+    tmp.chmod(0o644)
+    tmp.replace(path)
 
 
 def run_schedule(
@@ -39,12 +62,15 @@ def run_schedule(
     generate_once: Callable[[], object] | None = None,
     exec_: Callable[[str, list[str]], object] = os.execvp,
     crontab: Path = CRONTAB,
+    now: Callable[[], dt.datetime] = utcnow,
 ) -> None:
-    """Generate a first release if none is live, then replace this process with supercronic.
+    """Check the schedules, record the start, generate a first release if none is live, then replace this process with supercronic.
 
-    A failed first run is logged and scheduling goes ahead; with the default exec_ (os.execvp) this never returns.
+    A bad schedule raises ScheduleError before anything else; a failed first run is logged and scheduling goes ahead.
+    With the default exec_ (os.execvp) this never returns.
     """
-    line = crontab_line(settings.generate_schedule)
+    text = crontab_text(settings)
+    write_state(settings, now())
     if publish.live_release(settings.data_dir) is None:
         print('uc schedule: no release is live yet, generating now', flush=True)
         try:
@@ -54,5 +80,5 @@ def run_schedule(
                 generate_once()
         except Exception:  # noqa: BLE001 - whatever fails, keep scheduling; status.json records the failure
             traceback.print_exc()
-    crontab.write_text(line, encoding='utf-8')
+    crontab.write_text(text, encoding='utf-8')
     exec_('supercronic', ['supercronic', '-passthrough-logs', str(crontab)])

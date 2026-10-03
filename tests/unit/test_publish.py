@@ -1,6 +1,7 @@
 """Unit tests for uc.publish: staging, the atomic live swap, pruning, rollback and the run lock."""
 
 import datetime as dt
+import threading
 from pathlib import Path
 
 import pytest
@@ -130,3 +131,18 @@ def test_run_lock_is_exclusive(tmp_path):
         pass
     with RunLock(tmp_path):
         pass
+
+
+def test_run_lock_can_wait_for_the_holder(tmp_path):
+    entered = threading.Event()
+
+    def waiter():
+        with RunLock(tmp_path, wait=True):
+            entered.set()
+
+    with RunLock(tmp_path):
+        thread = threading.Thread(target=waiter)
+        thread.start()
+        assert not entered.wait(0.3)
+    thread.join(5)
+    assert entered.is_set()

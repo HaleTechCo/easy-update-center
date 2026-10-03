@@ -40,13 +40,28 @@ Run `uc config` to see every value and where it came from ([uc config](cli.md#uc
 - The settings in the [Compose](#compose) table, `COMPOSE_FILE` and `UC_CONFIG_FILE` can only be
   set in the environment: Compose and uc read them before `uc.toml`.
 
-After editing `.env`, run `docker compose up -d` to recreate the services with the new values.
-Each `uc generate` and `uc doctor` run reads `uc.toml` afresh, so most changes to it apply at the
-next run. `PUBLIC_URL` and the download settings are written into each release: after changing
-them, publish a new release with `docker compose run --rm uc generate`.
+When each change takes effect: [When changes apply](#when-changes-apply).
 
 In the tables, "generate" means `uc generate`, which the `scheduler` service runs on its schedule
 and which you can run by hand; "doctor" means `uc doctor`.
+
+## When changes apply
+
+- Each `uc generate` and `uc doctor` run, scheduled or by hand, reads `config/uc.toml` afresh, so
+  most changes to it apply at the next run with no restart.
+- The schedules (`GENERATE_SCHEDULE`, `DOCTOR_SCHEDULE`) are read when the scheduler starts, the
+  web container's settings when `web-config` runs, and the repo-adapter's when it starts. After
+  changing any of them, or anything in `.env`, recreate the services:
+
+  ```bash
+  docker compose up -d --force-recreate      # or: make reload
+  ```
+
+  A generation in progress restarts, as it always has when the scheduler is recreated.
+- `uc config` ends with that command when the scheduler started with other settings than the
+  current ones.
+- `PUBLIC_URL` and the download settings are written into each release: after changing them,
+  also publish a new release with `docker compose run --rm uc generate`.
 
 ## Required
 
@@ -133,6 +148,7 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
+| `DOCTOR_SCHEDULE` | `[doctor] schedule` | empty: none | scheduler | Cron expression (or an `@macro`) for a read-only `uc doctor --record` run, which saves the report and puts its counts in `status.json`. It never stages, pushes or cleans. |
 | `DOCTOR_FETCH` | `[doctor] fetch` | `false` | doctor | Download the POMs and manifests missing from the generator's cache, as `--fetch` does; `--no-fetch` turns it off for one run. |
 | `DOCTOR_SINCE` | `[doctor] since` | empty: the oldest core in the repository | doctor | The floor for required cores, as `--since`. |
 | `DOCTOR_JSON` | `[doctor] json` | `false` | doctor | Print the report as JSON, as `--json`; `--no-json` turns it off for one run. |

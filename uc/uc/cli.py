@@ -42,6 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     generate_cmd = sub.add_parser('generate', help='build, validate and publish a new release')
     generate_cmd.add_argument('--force', action='store_true', help='skip the plugin-count ratio check once')
+    generate_cmd.add_argument('--wait', action='store_true', help='wait for a running generation or rollback instead of exiting 75 (the scheduler uses it)')
 
     doctor = sub.add_parser('doctor', help='report what the generator will see in the source repository')
     doctor.add_argument('--fetch', action=argparse.BooleanOptionalAction, help='download POMs and manifests missing from the cache (default: DOCTOR_FETCH, off)')
@@ -139,7 +140,7 @@ def _dispatch(args: argparse.Namespace) -> int:
     settings = load_settings()
     apply_process_env(settings)
     if args.command == 'generate':
-        print(f'published release {generate(settings, force=args.force)}')
+        print(f'published release {generate(settings, force=args.force, wait=args.wait)}')
         return 0
     if args.command == 'doctor':
         return _doctor(args, settings)

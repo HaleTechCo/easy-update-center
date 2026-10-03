@@ -35,11 +35,14 @@ def generate(
     settings: Settings,
     *,
     force: bool = False,
+    wait: bool = False,
     tools: Toolchain | None = None,
     now: dt.datetime | None = None,
     base_env: Mapping[str, str] | None = None,
 ) -> str:
     """Build, validate and publish one release under the run lock; return its release id.
+
+    With wait, a run that finds the run lock taken waits for it instead of raising LockBusyError.
 
     On failure the staging directory is kept for debugging, status.json records the failed run, and the
     error is re-raised.
@@ -50,7 +53,7 @@ def generate(
     data = settings.data_dir
     release_id = publish.new_release_id(now)
     data.mkdir(parents=True, exist_ok=True)
-    with publish.RunLock(data):
+    with publish.RunLock(data, wait=wait):
         warnings: list[str] = []
         orphans = publish.reclaim_orphans(data, release_id)
         if orphans:

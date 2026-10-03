@@ -170,6 +170,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('MIN_PLUGINS', 'int', 'Generation', 'A release with fewer plugins is refused.', default='1'),
     Setting('MIN_PLUGIN_RATIO', 'ratio', 'Generation', "A release with fewer than this share of the live release's plugins is refused, unless run with uc generate --force.", default='0.9'),
     # Doctor
+    Setting('DOCTOR_SCHEDULE', 'cron', 'Doctor', 'Cron expression for a read-only uc doctor --record run, which saves the report and its counts in status.json; empty means none.', sample='30 5 * * *'),
     Setting('DOCTOR_FETCH', 'bool', 'Doctor', 'uc doctor downloads the POMs and manifests missing from the cache, so it can check every dependency and required core (--fetch).', default='false'),
     Setting('DOCTOR_SINCE', 'str', 'Doctor', 'The floor for required cores (--since); empty means the oldest core in the repository.'),
     Setting('DOCTOR_JSON', 'bool', 'Doctor', 'uc doctor prints its report as JSON (--json).', default='false'),

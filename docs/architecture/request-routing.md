@@ -120,7 +120,7 @@ file, nothing else.
   with plain defaults: `DOWNLOAD_BACKEND=mirror` (get.jenkins.io) and `DOWNLOAD_ACCESS=redirect`.
 - When `docker compose up -d` recreates `web-config` after a change to `.env`, Compose restarts
   `web` too. A change to `config/uc.toml` changes no service definition, so recreate the services
-  yourself: `docker compose up -d --force-recreate`.
+  yourself: `docker compose up -d --force-recreate` (`make reload`).
 - `web-config` checks only the settings `web` uses. If one of them is invalid, or `config/uc.toml`
   cannot be read, `web-config` fails and, since `web` waits for it, `web` stays stopped after
   `docker compose up -d`. Run `docker compose logs web-config`, fix the setting and run
