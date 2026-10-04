@@ -8,6 +8,10 @@ once releases are published.
 
 ### Changed
 
+- The scheduler logs a warning and carries on when it cannot write `/data/scheduler.json`, which
+  only feeds the `make reload` note in `uc config`; without it, `uc config` cannot tell when a
+  restart is needed. That note now says when it appears: the running services were started with
+  different settings, from any change in `.env` or a `uc.toml` change to a setting marked `restart`.
 - A `DOWNLOAD_BACKEND_URL` with credentials in it is refused, as `REPO_URL` is, by `uc` and by
   the web container.
 - The web container logs what it serves (`entrypoint: serving <PUBLIC_URL>; downloads: ...`) before

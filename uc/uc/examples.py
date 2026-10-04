@@ -12,8 +12,8 @@ if TYPE_CHECKING:
 
 ENV_HEADER = """\
 # Settings for the update center in {mode} mode, one variable per setting. Copy this file to .env and
-# edit the copy; a line starting with # is not set: it shows the default, or an example value where
-# there is none. Remove the # to set it.
+# edit the copy; a line starting with # is not set: it shows the default or an example value, and the
+# comment above it says what applies when it is unset. Remove the # to set it.
 {note}# Generated from the settings registry: `uc config --example env --mode {mode}` (make examples).
 # Any of these can go in config/uc.toml instead (config/uc.example.toml); a variable here wins over it.
 # Every setting: docs/reference/configuration.md
@@ -21,8 +21,8 @@ ENV_HEADER = """\
 
 TOML_HEADER = """\
 # Settings for the update center in {mode} mode. Copy this file to config/uc.toml and edit the copy;
-# a line starting with # is not set: it shows the default, or an example value where there is none.
-# Remove the # to set it.
+# a line starting with # is not set: it shows the default or an example value, and the comment above
+# it says what applies when it is unset. Remove the # to set it.
 {note}# Generated from the settings registry: `uc config --example toml --mode {mode}` (make examples).
 # A variable in .env wins over this file: [section] key is SECTION_KEY, and a top-level key is KEY.
 # Every setting: docs/reference/configuration.md

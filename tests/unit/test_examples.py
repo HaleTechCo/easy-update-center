@@ -112,11 +112,11 @@ def test_the_airgapped_example_shows_procured_upstream_data():
 
 def test_the_compose_file_example_differs_by_mode():
     airgapped, online = example_env('airgapped'), example_env('online')
-    assert '# Its default is compose.yaml alone: uncomment this so plain docker compose uses the air-gapped override.\n# On Windows, separate the files with ;.\n# COMPOSE_FILE=compose.yaml:compose.airgapped.yaml\n' in airgapped
+    assert '# Its default is compose.yaml alone: uncomment this so plain docker compose uses the air-gapped override.\n# COMPOSE_FILE=compose.yaml:compose.airgapped.yaml\n' in airgapped
     assert '# COMPOSE_FILE=\n' in online
     assert 'air-gapped override' not in online
 
 
 @pytest.mark.parametrize('make', [example_env, example_toml])
 def test_the_header_says_what_a_commented_line_shows(make):
-    assert 'a line starting with # is not set: it shows the default, or an example value where there is none' in make('online').replace('\n# ', ' ')
+    assert 'a line starting with # is not set: it shows the default or an example value, and the comment above it says what applies when it is unset' in make('online').replace('\n# ', ' ')

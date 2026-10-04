@@ -106,10 +106,10 @@ def format_rows(shown: list[Row], config_file: Path) -> str:
 
 
 def reload_hint(settings: Settings, environ: Mapping[str, str]) -> str | None:
-    """Return a note when the scheduler started with other restart settings, or in an environment other than environ, else None.
+    """Return a note when the running services were started with different settings, else None.
 
-    environ is this process's own environment, never exported to: a container's environment is fixed when it is created,
-    so a changed .env needs a recreate, while uc.toml matters only for the settings marked restart.
+    That is any change in .env (a container's environment is fixed when it is created, and environ is this process's own, never
+    exported to), or a uc.toml change to a setting marked restart; the note says that make reload applies them.
     """
     try:
         state = json.loads((settings.data_dir / SCHEDULER_STATE).read_text(encoding='utf-8'))
@@ -117,7 +117,7 @@ def reload_hint(settings: Settings, environ: Mapping[str, str]) -> str | None:
         return None
     if not isinstance(state, dict) or state.get('settings_digest') in {None, settings_digest(settings, environ)}:
         return None
-    return f'note: the scheduler started at {state.get("started_at", "an unknown time")} with other settings; to apply these, run: {RELOAD}'
+    return f'note: the scheduler started at {state.get("started_at", "an unknown time")} with different settings (a change in .env, or in uc.toml to a setting marked restart); to apply them, run: {RELOAD}'
 
 
 def run(

@@ -8,7 +8,7 @@ Every setting can be set in two places, and most have a default:
 
 - **The environment**: the file Compose loads as each service's `env_file`, `.env` in the project
   directory unless `UC_ENV_FILE` names another. Every service that runs the uc image (`uc`,
-  `scheduler`, `repo-adapter` and `web-config`) reads the same file.
+  `scheduler`, `repo-adapter`, `web-config` and the on-demand `setup`) reads the same file.
 - **`config/uc.toml`**: an optional [TOML](https://toml.io) file, which Compose mounts at
   `/config/uc.toml` (`UC_CONFIG_FILE` names another path). `config/uc.example.toml` lists every
   setting. How to: [Configure with uc.toml](../how-to/configure-with-uc-toml.md).
@@ -195,7 +195,7 @@ images it builds with these defaults unless you pass `UC_IMAGE=...` or `WEB_IMAG
 | Setting | Default | Notes |
 |---|---|---|
 | `UC_ENV_FILE` | `.env` | The file every service except `web` loads as `env_file`. Lets several configurations sit side by side. |
-| `UC_IMAGE` | `jenkins-uc/uc:local` | The image for `uc`, `scheduler`, `repo-adapter` and `web-config`. |
+| `UC_IMAGE` | `jenkins-uc/uc:local` | The image for `uc`, `scheduler`, `repo-adapter`, `web-config` and `setup`. |
 | `WEB_IMAGE` | `jenkins-uc/web:local` | The image for `web`. |
 | `HTTP_PORT` | `8080` | Host port published for the web container's HTTP listener. |
 | `HTTPS_PORT` | `8443` | Host port published for the web container's TLS listener. |
