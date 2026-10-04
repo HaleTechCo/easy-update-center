@@ -6,6 +6,15 @@ UC_TEST_IMAGE ?= jenkins-uc/uc-test:local
 WEB_IMAGE ?= jenkins-uc/web:local
 export UC_IMAGE UC_TEST_IMAGE WEB_IMAGE
 
+# The targets that run your own Compose project (pki-*, secrets-*, reload, procure-*) leave the images
+# to .env and compose.yaml: they unset UC_IMAGE and WEB_IMAGE, unless you gave them on make's command
+# line or in the environment. Their one-shot runs print only the command's output, without Compose's
+# container lines (older Compose releases ignore COMPOSE_PROGRESS).
+STACK_ENV = env $(foreach v,UC_IMAGE WEB_IMAGE,$(if $(filter file,$(origin $(v))),-u $(v)))
+STACK_RUN = $(STACK_ENV) COMPOSE_PROGRESS=quiet docker compose run --rm
+# A command that prints the uc image those targets run, as Compose resolves it for the stack.
+STACK_UC_IMAGE = $(STACK_ENV) docker compose config --images setup
+
 # Unit tests read the Python, templates and lint tools straight from the working tree
 # (VersionTool.java is compiled into the image, so changing it needs `make build-uc`).
 SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
@@ -17,7 +26,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
 
-.PHONY: build build-uc build-web uc-image test test-unit test-web test-routing test-secrets pki-init pki-rotate secrets-placeholders secrets-permissions examples reload procure-download procure-clean procure-push compose-check it-airgapped it-clean it-online it-full upstream-diff
+.PHONY: build build-uc build-web uc-image stack-uc-image test test-unit test-web test-routing test-secrets pki-init pki-rotate secrets-placeholders secrets-permissions examples reload procure-download procure-clean procure-push compose-check it-airgapped it-clean it-online it-full upstream-diff
 
 build: build-uc build-web
 
@@ -32,6 +41,15 @@ build-web:
 # host that loaded pre-built images and has no internet access.
 uc-image:
 	@docker image inspect $(UC_IMAGE) >/dev/null 2>&1 || docker build --target runtime -t $(UC_IMAGE) uc
+
+# The same for the targets that run your stack, with the image Compose resolves (STACK_UC_IMAGE).
+# When it is missing, it is built if it is compose.yaml's default and pulled otherwise, here where
+# the pull shows, not inside the quiet `compose run`.
+stack-uc-image:
+	@image="$$($(STACK_UC_IMAGE))" || exit; \
+	  if docker image inspect "$$image" >/dev/null 2>&1; then :; \
+	  elif [ "$$image" = jenkins-uc/uc:local ]; then echo "docker build --target runtime -t $$image uc"; docker build --target runtime -t "$$image" uc; \
+	  else echo "docker pull $$image"; docker pull "$$image"; fi
 
 test: test-unit test-web test-routing test-secrets
 
@@ -59,28 +77,34 @@ HOST_UID ?= $(shell id -u)
 HOST_GID ?= $(shell id -g)
 # The setup service (compose.yaml) reads .env, or UC_ENV_FILE, and config/ as the other services do,
 # so uc pki sees the PKI_* settings they see. It mounts ./secrets as /pki and runs as root.
-IN_SECRETS = docker compose run --rm --no-deps
-FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh /pki $(HOST_UID) $(HOST_GID)
+IN_SECRETS = $(STACK_RUN) --no-deps
+SETUP_DIR = /pki
+FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh $(SETUP_DIR) $(HOST_UID) $(HOST_GID)
 SECRET_FILES = repo_username repo_password github_username github_token download_proxy_auth repo_push_auth
 
-# Creates the root CA and signing certificate in ./secrets. Refuses to overwrite existing files.
-pki-init: uc-image
-	@mkdir -p secrets
-	$(IN_SECRETS) setup -c 'uc pki init --out /pki && $(FIX_SECRETS)'
+# Creates the root CA and signing certificate in ./secrets, or with OUT=<directory> on make's command
+# line in that directory (relative to this one, created if missing, mounted as /out), as when
+# replacing the root CA (docs/how-to/rotate-signing-certificate.md). Refuses to overwrite existing
+# files. OUT is taken from the command line only, so one exported by another tool cannot redirect it.
+PKI_OUT = $(if $(filter command line,$(origin OUT)),$(OUT))
+pki-init: SETUP_DIR = $(if $(PKI_OUT),/out,/pki)
+pki-init: stack-uc-image
+	@mkdir -p secrets $(PKI_OUT)
+	$(IN_SECRETS) $(if $(PKI_OUT),-v "$(abspath $(PKI_OUT)):/out") setup -c 'uc pki init --out $(SETUP_DIR) && $(FIX_SECRETS)'
 
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
 # signing certificate and keeps the previous pair as *.old.
-pki-rotate: uc-image
+pki-rotate: stack-uc-image
 	@test -n "$(ROOT)" || { echo "usage: make pki-rotate ROOT=<directory holding root-ca.key>"; exit 2; }
 	$(IN_SECRETS) -v "$(abspath $(ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki && $(FIX_SECRETS)'
 	@rmdir secrets/root 2>/dev/null || true
 
-secrets-placeholders: uc-image
+secrets-placeholders: stack-uc-image
 	@mkdir -p secrets
 	@$(IN_SECRETS) setup -c 'for f in $(SECRET_FILES); do [ -e /pki/$$f ] || : > /pki/$$f; done; $(FIX_SECRETS)'
 	@echo "secrets/: created any missing credential files (empty means 'not set')"
 
-secrets-permissions: uc-image
+secrets-permissions: stack-uc-image
 	@mkdir -p secrets
 	@$(IN_SECRETS) setup -c '$(FIX_SECRETS)'
 	@echo "secrets/: yours; the containers read their files through their group"
@@ -98,9 +122,9 @@ examples: uc-image
 # (docs/reference/configuration.md#when-changes-apply). A failed check stops here, leaving every
 # service running as it was; web-config runs the check, needing no network and no secrets.
 # A generation in progress restarts.
-reload:
-	docker compose run --rm web-config config --check
-	docker compose up -d --force-recreate
+reload: stack-uc-image
+	$(STACK_RUN) web-config config --check
+	$(STACK_ENV) docker compose up -d --force-recreate
 
 # uc doctor --download-* stages files into ./procurement for review, and uc doctor --clean deletes the
 # ones the repository already holds (docs/how-to/procure-missing-files.md). The uc container runs as
@@ -108,18 +132,18 @@ reload:
 # fails. Usage: make procure-download ARGS="--fetch --download-poms --download-dependencies"
 #               make procure-clean [ARGS=--dry-run]
 PROCUREMENT = $(CURDIR)/procurement
-IN_PROCUREMENT = docker run --rm --user 0:0 --entrypoint sh -v "$(PROCUREMENT):/procurement" $(UC_IMAGE) -c
+IN_PROCUREMENT = docker run --rm --user 0:0 --entrypoint sh -v "$(PROCUREMENT):/procurement" "$$($(STACK_UC_IMAGE))" -c
 
 procure-clean: DOCTOR_MODE = --clean
-procure-download procure-clean: uc-image
+procure-download procure-clean: stack-uc-image
 	@mkdir -p procurement
 	@$(IN_PROCUREMENT) 'chown -R 10001:10001 /procurement'
-	docker compose run --rm uc doctor $(DOCTOR_MODE) $(ARGS); rc=$$?; \
+	$(STACK_RUN) uc doctor $(DOCTOR_MODE) $(ARGS); rc=$$?; \
 	  $(IN_PROCUREMENT) 'chown -R $(HOST_UID):$(HOST_GID) /procurement'; exit $$rc
 
 # Usage: make procure-push [ARGS=--dry-run]
-procure-push:
-	docker compose run --rm uc doctor --push $(ARGS)
+procure-push: stack-uc-image
+	$(STACK_RUN) uc doctor --push $(ARGS)
 
 # UC_ENV_FILE selects the services' env_file; --env-file only feeds compose's own interpolation.
 # check_isolation.py asserts the network and secret boundaries the repo-adapter relies on.

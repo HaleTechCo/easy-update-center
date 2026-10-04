@@ -79,9 +79,10 @@ above do not matter there.
 
 These four targets (`pki-init`, `pki-rotate`, `secrets-placeholders`, `secrets-permissions`) run the
 `setup` service from `compose.yaml`: `docker compose run --rm --no-deps setup`, as root, with no
-network and no Compose secrets, mounting only `./secrets`, `./config` and the script. It reads `.env`
-(or the file `UC_ENV_FILE` names) as the other services do, so quotes in it are handled the same way,
-and the file must exist: create it first (`cp .env.online.example .env`), or Compose stops with
+network and no Compose secrets, mounting only `./secrets`, `./config` and the script, and the
+directory `make pki-rotate ROOT=<dir>` or `make pki-init OUT=<dir>` names. It reads `.env` (or the
+file `UC_ENV_FILE` names) as the other services do, so quotes in it are handled the same way, and
+the file must exist: create it first (`cp .env.online.example .env`), or Compose stops with
 `env file ... not found`.
 
 ## GitHub token

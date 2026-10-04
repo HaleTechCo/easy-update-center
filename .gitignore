@@ -9,6 +9,9 @@ config/uc.toml
 data/
 secrets/*
 !secrets/README.md
+# A new PKI from `make pki-init OUT=newpki` (docs/how-to/rotate-signing-certificate.md): it holds a
+# root CA's private key.
+newpki/
 
 # Downloads staged for review by uc doctor --download-* (docs/how-to/procure-missing-files.md)
 procurement/

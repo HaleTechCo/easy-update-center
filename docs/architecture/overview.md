@@ -16,9 +16,10 @@ on a Java runtime, plus the `uc` command in Python) and the **web image** (Apach
   secrets. See [Where web gets its settings](request-routing.md#where-web-gets-its-settings).
 - **setup** is run by `make pki-init`, `pki-rotate`, `secrets-placeholders` and `secrets-permissions`
   (`docker compose run --rm --no-deps setup`), never by `docker compose up`. It runs `uc pki` and
-  `scripts/secrets-permissions.sh` as root against `./secrets`, with `./config` read-only and the
-  same `.env` as the other services. It has no network and no Compose secrets, but as root it can
-  read and write everything in `./secrets`, the signing key and `root/root-ca.key` included.
+  `scripts/secrets-permissions.sh` as root against `./secrets` (or the directory
+  `make pki-init OUT=<dir>` names), with `./config` read-only and the same `.env` as the other
+  services. It has no network and no Compose secrets, but as root it can read and write everything
+  in `./secrets`, the signing key and `root/root-ca.key` included.
 - **scheduler** runs `uc generate` on `GENERATE_SCHEDULE`, and at once when no release is live; with `DOCTOR_SCHEDULE` set it also runs a read-only `uc doctor --record`.
   Each run builds a complete new release, validates it, and swaps it in atomically. See
   [Generation pipeline](generation-pipeline.md).

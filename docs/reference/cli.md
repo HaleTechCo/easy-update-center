@@ -214,7 +214,9 @@ configured. `make pki-init` wraps `init`, and `make pki-rotate ROOT=<dir>` wraps
 the `setup` Compose service, which reads `.env` (or the file `UC_ENV_FILE` names, which must exist)
 and `config/` as the other services do, so `uc pki` sees the settings they see, and then set the permissions of
 `secrets/`
-([File ownership on Linux](secrets.md#file-ownership-on-linux)).
+([File ownership on Linux](secrets.md#file-ownership-on-linux)). `make pki-init OUT=<dir>` creates
+the PKI in `<dir>` instead, for
+[replacing the root CA](../how-to/rotate-signing-certificate.md#replace-the-root-ca).
 
 ```bash
 uc pki init --out <dir> [--root-days 3650] [--signing-days 365] [--org <name>]

@@ -41,7 +41,8 @@ case "${DOWNLOAD_BACKEND}" in
         ;;
     *) die "DOWNLOAD_BACKEND must be mirror or artifactory (got '${DOWNLOAD_BACKEND}')" ;;
 esac
-# Credentials can only be in the authority, which ends at the first /, ? or #, as uc reads it.
+# Credentials can only be in the authority: after :// up to the first /, ? or #, the cut uc makes
+# for a URL with a scheme.
 authority="${backend_url#*://}"
 [[ "${authority%%[/?#]*}" != *@* ]] || die "DOWNLOAD_BACKEND_URL must not contain credentials; for proxied downloads put them in the download_proxy_auth secret"
 export DOWNLOAD_BACKEND_URL="${backend_url%/}"
