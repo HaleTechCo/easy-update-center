@@ -293,7 +293,7 @@ SETTINGS: tuple[Setting, ...] = (
         'The Compose files every plain docker compose command uses (on Windows, separate them with ;).',
         env_only=True,
         airgapped_sample='compose.yaml:compose.airgapped.yaml',
-        airgapped_hint=('Its default is compose.yaml alone: uncomment this so plain docker compose uses the air-gapped override.', 'On Windows, separate the files with ;.'),
+        airgapped_hint=('Its default is compose.yaml alone: uncomment this so plain docker compose uses the air-gapped override.',),
     ),
     # Internal
     Setting('UC_DATA_DIR', 'path', 'Internal', 'The data volume.', default='/data', attr='data_dir', restart=True),
@@ -311,7 +311,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('UC_CONFIG_FILE', 'path', 'Internal', 'The settings file; a missing file is fine.', default='/config/uc.toml', env_only=True),
     # Compose
     Setting('UC_ENV_FILE', 'path', 'Compose', 'The file every service except web loads as env_file.', default='.env', env_only=True),
-    Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler, repo-adapter and web-config.', default='jenkins-uc/uc:local', env_only=True),
+    Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler, repo-adapter, web-config and setup.', default='jenkins-uc/uc:local', env_only=True),
     Setting('WEB_IMAGE', 'str', 'Compose', 'The image for web.', default='jenkins-uc/web:local', env_only=True),
     Setting('HTTP_PORT', 'int', 'Compose', "Host port published for the web container's HTTP listener.", default='8080', env_only=True),
     Setting('HTTPS_PORT', 'int', 'Compose', "Host port published for the web container's TLS listener.", default='8443', env_only=True),

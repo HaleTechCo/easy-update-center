@@ -11,10 +11,11 @@ Every field of status.json, the public report of the last run and the live relea
 - On the data volume it is `/data/status.json`.
 
 A successful `uc generate` rewrites the whole document, except that it keeps what only
-`uc doctor --record` works out: `doctor.missing_cores`, `doctor.cores_unchecked` and `doctor.recorded_at`, and the whole
-`doctor` block when the generation computes none. A failed one changes only `mode`, `last_run` and
-`warnings`, so the other fields keep describing the live release. `uc rollback` updates
-`live_release` and `plugin_count`. Before the first run the document is empty (`{}`).
+`uc doctor --record` works out: `doctor.missing_cores`, `doctor.cores_unchecked` and
+`doctor.recorded_at`, and the whole `doctor` block when the generation computes none. A failed one
+changes only `mode`, `last_run` and `warnings`, so the other fields keep describing the live
+release. `uc rollback` updates `live_release` and `plugin_count`. Before the first run the document
+is empty (`{}`).
 
 ## Fields
 

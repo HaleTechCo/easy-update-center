@@ -187,9 +187,11 @@ scheduling continues. It then hands over to supercronic, which runs:
 - `uc doctor --record` on `DOCTOR_SCHEDULE`, when it is set: a read-only report whose counts go
   into `status.json`.
 
-A bad schedule stops the scheduler at start, with a message naming the setting. A start it cannot record (an unwritable data directory) is reported on one line, and the scheduler runs anyway; `uc config` then cannot tell when a restart is needed. supercronic never
-starts a job while its previous run is still going, and a scheduled generation that finds another
-generation or a rollback running waits for it.
+A bad schedule stops the scheduler at start, with a message naming the setting. A start it cannot
+record (an unwritable data directory) is reported on one line, and the scheduler runs anyway; `uc
+config` then cannot tell when a restart is needed. supercronic never starts a job while its
+previous run is still going, and a scheduled generation that finds another generation or a
+rollback running waits for it.
 
 ## uc repo-adapter
 

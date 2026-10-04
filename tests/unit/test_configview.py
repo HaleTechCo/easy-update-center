@@ -94,7 +94,7 @@ def test_the_reload_hint(tmp_path, secrets_dir):
     state.parent.mkdir()
     state.write_text(json.dumps({'started_at': '2026-10-03T08:00:00Z', 'settings_digest': 'older'}), encoding='utf-8')
     _, out, _ = show(env, path)
-    assert 'note: the scheduler started at 2026-10-03T08:00:00Z with other settings; to apply these, run: docker compose up -d --force-recreate (make reload)' in out
+    assert 'note: the scheduler started at 2026-10-03T08:00:00Z with different settings (a change in .env, or in uc.toml to a setting marked restart); to apply them, run: docker compose up -d --force-recreate (make reload)' in out
     state.write_text(json.dumps({'started_at': 'x', 'settings_digest': settings_digest(load_settings(env, config_file=path), env)}), encoding='utf-8')
     _, out, _ = show(env, path)
     assert 'note:' not in out
@@ -156,9 +156,9 @@ def test_the_reload_hint_follows_the_environment_and_the_restart_settings_not_uc
     assert 'note:' not in out
     path.unlink()
     _, out, _ = show(env_for(tmp_path, secrets_dir, RETAIN_RELEASES='9'), path)  # but the container's environment is fixed
-    assert 'note: the scheduler started at x with other settings' in out
+    assert 'note: the scheduler started at x with different settings' in out
     _, out, _ = show(env_for(tmp_path, secrets_dir, PUBLIC_URL='https://other.example.com'), path)
-    assert 'note: the scheduler started at x with other settings' in out
+    assert 'note: the scheduler started at x with different settings' in out
 
 
 @pytest.mark.parametrize(
@@ -177,7 +177,7 @@ def test_the_reload_hint_follows_a_restart_setting_changed_only_in_uc_toml(tmp_p
     assert 'note:' not in out
     path.write_text(after, encoding='utf-8')
     _, out, _ = show(env, path)
-    assert 'note: the scheduler started at x with other settings' in out
+    assert 'note: the scheduler started at x with different settings' in out
 
 
 @pytest.mark.parametrize('options', [{'as_json': True}, {'check': True}])
