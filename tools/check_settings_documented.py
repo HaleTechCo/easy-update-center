@@ -9,7 +9,8 @@ Where the code reads settings:
 * `uc/uc/settings.py`: every call to `Setting` whose first positional argument is a string constant,
   found by parsing the file with `ast` (so a comment or docstring cannot create a setting). These are
   the entries of the settings registry, which config.py reads every setting through. A file that does
-  not parse stops the check with exit status 2.
+  not parse, or has no such call, stops the check with exit status 2: the readers below would still
+  find names, and hide a registry this pattern no longer matches behind a flood of findings.
 * `web/entrypoint.sh`: every `${NAME:-...}` expansion, with or without the colon and with any of
   `-`, `=`, `?`, `+`. The script runs under `set -u`, so an optional environment variable can only
   be read through one of those forms. A name the script sets itself and then reads bare
@@ -68,8 +69,10 @@ def compose_reads(text: str) -> set[str]:
     return names_read(text, COMPOSE_READ)
 
 
+REGISTRY = Path('uc/uc/settings.py')
+
 SOURCES: tuple[tuple[Path, Callable[[str], set[str]]], ...] = (
-    (Path('uc/uc/settings.py'), registry_names),
+    (REGISTRY, registry_names),
     (Path('web/entrypoint.sh'), shell_reads),
     (Path('compose.yaml'), compose_reads),
     (Path('compose.airgapped.yaml'), compose_reads),
@@ -128,11 +131,11 @@ def problems(readers: dict[str, str], names: set[str], bundled: set[str]) -> lis
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Compare the two sets. Return 1 if they differ, 2 on a usage error, an unreadable file, a settings.py that does not parse or when either side is empty, 0 otherwise.
+    """Compare the two sets. Return 1 if they differ, 2 on a usage error, an unreadable file, a settings.py that does not parse or when the registry or the page yields no names, 0 otherwise.
 
     An empty side is refused rather than passed: a pattern that stopped matching after a refactor
     would otherwise report "nothing out of step" forever - a false green that looks exactly like a
-    clean run.
+    clean run. The registry is checked on its own: the other readers would still find names.
     """
     args = list(sys.argv[1:] if argv is None else argv)
     if args:
@@ -140,16 +143,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     root = Path.cwd()
     try:
+        registry = registry_names((root / REGISTRY).read_text(encoding='utf-8'))
         readers = code_settings(root)
         names, bundled = documented((root / PAGE).read_text(encoding='utf-8'))
     except OSError as error:
         sys.stderr.write(f'check_settings_documented.py: {error}\n')
         return 2
     except SyntaxError as error:
-        sys.stderr.write(f'check_settings_documented.py: uc/uc/settings.py does not parse: {error.msg} (line {error.lineno})\n')
+        sys.stderr.write(f'check_settings_documented.py: {REGISTRY.as_posix()} does not parse: {error.msg} (line {error.lineno})\n')
         return 2
-    if not readers or not names:
-        sys.stderr.write('check_settings_documented.py: found no settings in the code, or none documented; a pattern no longer matches\n')
+    if not registry:
+        sys.stderr.write(f'check_settings_documented.py: found no settings in {REGISTRY.as_posix()} (no call to Setting with a string first argument); a pattern no longer matches\n')
+        return 2
+    if not names:
+        sys.stderr.write(f'check_settings_documented.py: found no settings documented in {PAGE.as_posix()}; a pattern no longer matches\n')
         return 2
     lines = problems(readers, names, bundled)
     for line in lines:

@@ -9,7 +9,12 @@ import sys
 REPO_SECRETS = {'repo_username', 'repo_password'}
 PUSH_SECRET = 'repo_push_auth'
 STAGING = '/procurement'
-SETUP_MOUNTS = {'/pki', '/config', '/usr/local/bin/secrets-permissions.sh'}
+# What compose.yaml mounts into setup: target -> (source, relative to the project directory; read-only).
+SETUP_MOUNTS = {
+    '/pki': ('secrets', False),
+    '/config': ('config', True),
+    '/usr/local/bin/secrets-permissions.sh': ('scripts/secrets-permissions.sh', True),
+}
 
 
 def networks(service: dict) -> set[str]:
@@ -22,6 +27,26 @@ def secrets(service: dict) -> set[str]:
 
 def mounts(service: dict) -> set[str]:
     return {volume.get('target') for volume in service.get('volumes') or []}
+
+
+def setup_mount_problems(setup: dict) -> list[str]:
+    volumes = {volume.get('target'): volume for volume in setup.get('volumes') or []}
+    if set(volumes) != set(SETUP_MOUNTS):
+        return [f'setup mounts {sorted(volumes, key=str)}, not {sorted(SETUP_MOUNTS)}']
+    problems, projects = [], set()
+    for target, (source, read_only) in SETUP_MOUNTS.items():
+        volume = volumes[target]
+        # Compose gives the absolute host path, with backslashes on Windows.
+        path = str(volume.get('source', '')).replace('\\', '/')
+        if volume.get('type') != 'bind' or not path.endswith(f'/{source}'):
+            problems.append(f'setup mounts {volume.get("source")!r} at {target}, not ./{source}')
+        else:
+            projects.add(path.removesuffix(f'/{source}'))
+        if bool(volume.get('read_only')) != read_only:
+            problems.append(f'setup must mount {target} {"read-only" if read_only else "read-write"}')
+    if len(projects) > 1:
+        problems.append(f'setup mounts its files from more than one directory: {sorted(projects)}')
+    return problems
 
 
 def main() -> None:
@@ -61,8 +86,7 @@ def main() -> None:
             problems.append(f'setup must run as 0:0, not {setup.get("user")!r}')
         if secrets(setup):
             problems.append(f'setup receives secrets {sorted(secrets(setup))}')
-        if mounts(setup) != SETUP_MOUNTS:
-            problems.append(f'setup mounts {sorted(mounts(setup), key=str)}, not {sorted(SETUP_MOUNTS)}')
+        problems += setup_mount_problems(setup)
     web_config = services.get('web-config')
     if web_config is None:
         problems.append('web-config is missing: web reads its settings from it')

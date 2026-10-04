@@ -36,6 +36,16 @@ expect_exit_with_web_env() {
     report "${code}" "${message}" "${rc}" "${output}"
 }
 
+# expect_serving DOWNLOAD_BACKEND_URL: the entrypoint accepts the URL and goes on to wait for the
+# first release, where timeout stops it (exit 124).
+expect_serving() {
+    local url="$1" output rc
+    output="$(docker run --rm -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e "DOWNLOAD_BACKEND_URL=${url}" \
+        --entrypoint timeout "${image}" 2 /usr/local/bin/entrypoint.sh 2>&1)"
+    rc=$?
+    report 124 "entrypoint: serving http://uc; downloads: artifactory ${url} (redirect)" "${rc}" "${output}"
+}
+
 expect_exit 64 "PUBLIC_URL must be set"
 expect_exit 64 "DOWNLOAD_BACKEND must be mirror or artifactory" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=s3
 expect_exit 64 "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory
@@ -43,6 +53,11 @@ expect_exit 64 "needs username:password" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACC
 expect_exit 64 "TLS_CERT_FILE and TLS_KEY_FILE must both be readable" -e PUBLIC_URL=http://uc -e TLS_CERT_FILE=/nope
 
 expect_exit 64 "DOWNLOAD_BACKEND_URL must not contain credentials" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e DOWNLOAD_BACKEND_URL=https://u:pw@art/repo # pragma: allowlist secret
+expect_exit 64 "DOWNLOAD_BACKEND_URL must not contain credentials" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e DOWNLOAD_BACKEND_URL=http://u@backend.example
+expect_exit 64 "DOWNLOAD_BACKEND_URL must not contain credentials" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e "DOWNLOAD_BACKEND_URL=http://u:p@backend.example?x=1" # pragma: allowlist secret
+# Only the authority holds credentials: an @ in the query or fragment of a URL with no path is not one.
+expect_serving "http://backend.example?x=a@b"
+expect_serving "http://backend.example#a@b"
 
 # web.env is read; empty values are ignored; the environment wins.
 s3_env=$'PUBLIC_URL=http://uc\nTLS_CERT_FILE=\nDOWNLOAD_BACKEND=s3\n'

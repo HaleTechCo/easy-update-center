@@ -149,6 +149,18 @@ def test_main_refuses_when_the_page_is_missing(tmp_path, monkeypatch):
     assert hook.main([]) == 2
 
 
+def test_main_refuses_a_registry_with_no_settings(tmp_path, monkeypatch, capsys):
+    # The other readers still find names, so a renamed Setting class would otherwise read as a
+    # flood of "documented but nothing reads it" findings rather than a pattern that stopped matching.
+    _tree(tmp_path, '| Setting |\n|---|\n| `MODE` |\n| `TLS_KEY_FILE` |\n| `UC_IMAGE` |\n')
+    (tmp_path / 'uc' / 'uc' / 'settings.py').write_text("SETTINGS = (Option('MODE', 'choice', 'Required', 'x.'),)\n", encoding='utf-8')
+    monkeypatch.chdir(tmp_path)
+    assert hook.main([]) == 2
+    captured = capsys.readouterr()
+    assert 'found no settings in uc/uc/settings.py' in captured.err
+    assert not captured.out
+
+
 def test_main_refuses_when_nothing_is_documented(tmp_path, monkeypatch):
     _tree(tmp_path, '# Configuration reference\n')
     monkeypatch.chdir(tmp_path)
