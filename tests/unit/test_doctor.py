@@ -392,19 +392,19 @@ def test_record_saves_cores_unchecked_in_the_doctor_block(tmp_path):
     assert read_status(tmp_path)['doctor']['cores_unchecked'] == 2
 
 
-def lock_at_once(path):
-    """Take and drop the lock on path through a separate open, as another process would; BlockingIOError while it is held."""
+def share_at_once(path):
+    """Take and drop a shared lock on path through a separate open, as another process would; BlockingIOError while an exclusive lock is held."""
     fd = os.open(path, os.O_RDWR)
     try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
     finally:
         os.close(fd)
 
 
 def test_the_record_lock_is_exclusive_until_released(tmp_path):
     with record_locked(tmp_path), pytest.raises(BlockingIOError):
-        lock_at_once(tmp_path / RECORD_LOCK_FILE)
-    lock_at_once(tmp_path / RECORD_LOCK_FILE)
+        share_at_once(tmp_path / RECORD_LOCK_FILE)  # only an exclusive lock refuses a shared one
+    share_at_once(tmp_path / RECORD_LOCK_FILE)
 
 
 def test_overlapping_records_wait_for_each_other_and_leave_the_last_report_with_its_counts(tmp_path, monkeypatch):

@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from uc import config
+from uc import cli, config
 from uc.config import Settings
 from uc.repo_adapter import server as adapter_server
 from uc.settings import CORE_VERSION, GROUPS, MODES, REGISTRY, SETTINGS, TYPES, env_name, toml_key, toml_label
@@ -155,20 +155,24 @@ def test_a_mode_sample_comes_before_the_common_one():
     assert REGISTRY['REPO_TYPE'].hint_for('airgapped') == ()
 
 
-# The repo-adapter's own requests go through urllib, which takes these from the environment, where
-# apply_process_env exports them from uc.toml: read at start, but not as Settings fields.
 PROXY_VARIABLES = {'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY'}
+"""The settings apply_process_env exports that the repo-adapter uses: urllib takes the proxies from the environment. The rest of PROCESS_ENV (JAVA_TOOL_OPTIONS) is for the generator's JVM."""
 
 
 def test_restart_marks_what_the_services_read_at_start(monkeypatch, tmp_path):
     marked = {setting.env for setting in SETTINGS if setting.restart}
+    schedules = {'GENERATE_SCHEDULE', 'DOCTOR_SCHEDULE'}
     web_inputs = recorded_web_inputs(monkeypatch)
     adapter_reads = recorded_repo_adapter_reads(monkeypatch, tmp_path)
-    assert {'REPO_URL', 'REPO_KEY'} <= adapter_reads  # so a recorder that records nothing cannot pass
-    assert {'GENERATE_SCHEDULE', 'DOCTOR_SCHEDULE'} <= marked
+    assert {'REPO_URL', 'REPO_KEY'} | PROXY_VARIABLES <= adapter_reads  # so a recorder that records nothing cannot pass
+    assert schedules <= marked
     assert web_inputs <= marked
-    assert adapter_reads | PROXY_VARIABLES <= marked
-    assert marked == web_inputs | adapter_reads | defaults_built_from(adapter_reads) | PROXY_VARIABLES | {'GENERATE_SCHEDULE', 'DOCTOR_SCHEDULE'}
+    assert adapter_reads <= marked
+    # A setting the repo-adapter never reads still needs the mark when a value it reads follows it:
+    # REPO_ADAPTER_DIR's default follows UC_DATA_DIR, the secret files' SECRETS_DIR, REPO_ADAPTER's MODE.
+    adapter_inputs = adapter_reads | {name for name in marked - adapter_reads - schedules if read_values_follow(name, adapter_reads)}
+    unexplained = marked - web_inputs - adapter_inputs - schedules
+    assert not unexplained, f'restart-marked, but no service reads them at start and no value the repo-adapter reads changes with them: {sorted(unexplained)}'
 
 
 def test_restart_leaves_out_what_every_run_rereads():
@@ -218,7 +222,12 @@ class RecordingSettings:
 
 
 def recorded_repo_adapter_reads(monkeypatch, tmp_path):
-    """Return every setting `uc repo-adapter` reads from Settings as it starts, for an air-gapped Artifactory and Artifact Keeper repository."""
+    """Return every setting `uc repo-adapter` reads from Settings as it starts, for an air-gapped Artifactory and Artifact Keeper repository.
+
+    It runs the real command, so what the CLI reads before serving counts too. Left out: the PROCESS_ENV settings
+    other than PROXY_VARIABLES (JAVA_TOOL_OPTIONS), which apply_process_env reads for every command and the
+    repo-adapter does not use.
+    """
     seen: set[str] = set()
     started = []
 
@@ -230,8 +239,6 @@ def recorded_repo_adapter_reads(monkeypatch, tmp_path):
         def serve_forever(self, poll_interval=0.5):
             """Return at once, as if the process had stopped."""
 
-    monkeypatch.setattr(adapter_server, 'ThreadingHTTPServer', Started)
-    monkeypatch.setattr(adapter_server, 'PORT_FILE', tmp_path / 'adapter.port')
     secrets = tmp_path / 'secrets'
     secrets.mkdir()
     (secrets / 'repo_username').write_text('uc\n', encoding='utf-8')
@@ -241,19 +248,42 @@ def recorded_repo_adapter_reads(monkeypatch, tmp_path):
         {'REPO_TYPE': 'artifactory', 'REPO_URL': 'https://repo.corp/artifactory/'},
         {'REPO_TYPE': 'artifact-keeper', 'REPO_URL': 'https://keeper.corp/'},
     ]
-    for repository in repositories:
-        settings = RecordingSettings(config.load_settings({**base, **repository}, config_file=tmp_path / 'none.toml'), seen)
-        try:
-            adapter_server.serve(settings, port=settings.repo_adapter_port)  # as `uc repo-adapter` starts without --port
-        finally:
-            while started:
-                started.pop().server_close()
+    with monkeypatch.context() as patch:
+        patch.setattr(adapter_server, 'ThreadingHTTPServer', Started)
+        patch.setattr(adapter_server, 'PORT_FILE', tmp_path / 'adapter.port')
+
+        def start(env):
+            settings = RecordingSettings(config.load_settings(env, config_file=tmp_path / 'none.toml'), seen)
+            patch.setattr(cli, 'load_settings', lambda: settings)
+            try:
+                assert cli.main(['repo-adapter']) == 0
+            finally:
+                while started:
+                    started.pop().server_close()
+
+        for repository in repositories:
+            start({**base, **repository})
     fields = {setting.attribute: setting.env for setting in SETTINGS if setting.attribute}
     properties = {name for name, member in vars(Settings).items() if isinstance(member, property)}
     assert seen - set(fields) <= properties  # a field without a setting would go unchecked
-    return {fields[name] for name in seen if name in fields}
+    return {fields[name] for name in seen if name in fields} - (set(config.PROCESS_ENV) - PROXY_VARIABLES)
 
 
-def defaults_built_from(names):
-    """Return the settings the defaults of the derived settings among names are built from, as their docs name them (`${UC_DATA_DIR}/repo-adapter by default`)."""
-    return {used for name in names if REGISTRY[name].derived for used in re.findall(r'\$\{([A-Z][A-Z0-9_]*)\}', REGISTRY[name].doc)}
+def read_values_follow(name, reads):
+    """Return whether the value of a setting in reads changes when name does, with every derived setting left at its default."""
+    env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc.example.com', 'REPO_URL': 'https://repo.corp/artifactory/', 'REPO_KEY': 'jenkins'}
+    before = config.load_settings(env, config_file=Path('none.toml'))
+    setting = REGISTRY[name]
+    after = config.load_settings({**env, name: other_value(setting, str(getattr(before, setting.attribute)))}, config_file=Path('none.toml'))
+    return any(getattr(before, REGISTRY[read].attribute) != getattr(after, REGISTRY[read].attribute) for read in reads)
+
+
+def other_value(setting, current):
+    """Return a valid value for setting other than current."""
+    if setting.type == 'choice':
+        return next(choice for choice in setting.choices if choice != current)
+    if setting.type == 'path':
+        return current.rstrip('/') + '/elsewhere'
+    if setting.type == 'url':
+        return 'https://elsewhere.example'
+    pytest.fail(f'no other value to try for {setting.env}, of type {setting.type}')
