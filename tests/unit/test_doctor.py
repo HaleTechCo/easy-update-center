@@ -2,8 +2,12 @@
 
 import base64
 import datetime as dt
+import fcntl
 import hashlib
 import json
+import os
+import queue
+import stat
 import threading
 from pathlib import Path
 
@@ -12,6 +16,7 @@ import pytest
 from httpstub import StubServer
 from uc.aql import Gav, RepoFile, classify
 from uc.doctor import (
+    RECORD_LOCK_FILE,
     ArtifactSource,
     DoctorError,
     DoctorReport,
@@ -387,29 +392,70 @@ def test_record_saves_cores_unchecked_in_the_doctor_block(tmp_path):
     assert read_status(tmp_path)['doctor']['cores_unchecked'] == 2
 
 
-def test_overlapping_records_wait_for_each_other_and_leave_the_last_report_with_its_counts(tmp_path):
-    first = DoctorReport(plugins=1)
-    second = DoctorReport(plugins=2)
-    now = dt.datetime(2026, 10, 3, 5, 30, tzinfo=dt.UTC)
-    done = [threading.Event(), threading.Event()]
+def share_at_once(path):
+    """Take and drop a shared lock on path through a separate open, as another process would; BlockingIOError while an exclusive lock is held."""
+    fd = os.open(path, os.O_RDWR)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+    finally:
+        os.close(fd)
 
-    def run(report, finished):
+
+def test_the_record_lock_is_exclusive_until_released(tmp_path):
+    with record_locked(tmp_path), pytest.raises(BlockingIOError):
+        share_at_once(tmp_path / RECORD_LOCK_FILE)  # only an exclusive lock refuses a shared one
+    share_at_once(tmp_path / RECORD_LOCK_FILE)
+
+
+def test_overlapping_records_wait_for_each_other_and_leave_the_last_report_with_its_counts(tmp_path, monkeypatch):
+    now = dt.datetime(2026, 10, 3, 5, 30, tzinfo=dt.UTC)
+    lock = tmp_path / RECORD_LOCK_FILE
+    flock = fcntl.flock
+    asked = queue.Queue()
+    finished = []
+
+    def watched_flock(fd, operation):
+        asked.put((os.path.samestat(os.fstat(fd), lock.stat()), operation))
+        flock(fd, operation)
+
+    def run(report):
         record(report, tmp_path, now)
-        finished.set()
+        finished.append(report.plugins)
 
     with record_locked(tmp_path):
-        threads = [threading.Thread(target=run, args=(report, event)) for report, event in zip((first, second), done, strict=True)]
+        monkeypatch.setattr(fcntl, 'flock', watched_flock)
+        threads = [threading.Thread(target=run, args=(DoctorReport(plugins=plugins),)) for plugins in (1, 2)]
         for thread in threads:
             thread.start()
-        assert not done[0].wait(0.3)
-        assert not done[1].is_set()
+        # Each recorder has asked for the lock this test holds, blocking and exclusive, so it waits: no timing involved.
+        assert [asked.get(timeout=30) for _ in threads] == [(True, fcntl.LOCK_EX)] * 2
+        assert all(thread.is_alive() for thread in threads)
         assert not (tmp_path / 'doctor' / 'report.json').exists()
     for thread in threads:
-        thread.join(5)
-    assert all(event.is_set() for event in done)
+        thread.join(30)
+    assert sorted(finished) == [1, 2]
     saved = json.loads((tmp_path / 'doctor' / 'report.json').read_text(encoding='utf-8'))
     assert read_status(tmp_path)['doctor']['plugins'] == saved['plugins']
     assert sorted(path.name for path in (tmp_path / 'doctor').iterdir()) == ['.record.lock', 'report.json']
+
+
+def test_record_renames_a_temporary_file_from_beside_report_json(tmp_path, monkeypatch):
+    replace = Path.replace
+    renames = []
+
+    def watched_replace(self, target):
+        renames.append((self, Path(target), stat.S_IMODE(self.stat().st_mode)))
+        return replace(self, target)
+
+    monkeypatch.setattr(Path, 'replace', watched_replace)
+    path = record(DoctorReport(plugins=3), tmp_path, dt.datetime(2026, 10, 3, 5, 30, tzinfo=dt.UTC))
+    [(temporary, mode)] = [(source, mode) for source, target, mode in renames if target == path]
+    assert temporary.parent == path.parent  # the same directory, so the rename is atomic
+    assert temporary.name.startswith('.report.')
+    assert temporary.name.endswith('.tmp')
+    assert not temporary.exists()
+    assert mode == 0o644  # readable before it is report.json
+    assert stat.S_IMODE(path.stat().st_mode) == 0o644
 
 
 def test_a_failed_record_removes_its_temporary_file(tmp_path, monkeypatch):

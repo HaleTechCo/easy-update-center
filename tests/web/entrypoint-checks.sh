@@ -46,6 +46,24 @@ expect_serving() {
     report 124 "entrypoint: serving http://uc; downloads: artifactory ${url} (redirect)" "${rc}" "${output}"
 }
 
+# expect_log CONTAINER TEXT MESSAGE: polls the container's logs for TEXT for up to 30 seconds; on
+# timeout the check fails, showing the logs.
+expect_log() {
+    local container="$1" text="$2" message="$3" logs deadline=$((SECONDS + 30))
+    while
+        logs="$(docker logs "${container}" 2>&1)"
+        [[ "${logs}" != *"${text}"* ]]
+    do
+        if ((SECONDS >= deadline)); then
+            echo "FAIL: ${message}: no '${text}' in the logs of ${container} after 30 s: ${logs}"
+            failures=$((failures + 1))
+            return
+        fi
+        sleep 0.5
+    done
+    echo "ok: ${message}"
+}
+
 expect_exit 64 "PUBLIC_URL must be set"
 expect_exit 64 "DOWNLOAD_BACKEND must be mirror or artifactory" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=s3
 expect_exit 64 "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory
@@ -67,23 +85,12 @@ expect_exit_with_web_env 64 "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND
 expect_exit_with_web_env 64 "needs username:password" $'PUBLIC_URL=http://uc\nDOWNLOAD_ACCESS=proxy\nDOWNLOAD_PROXY_AUTH_FILE=/nope\n'
 
 name="uc-web-wait-$$"
+# Removed on every way out of this script, a failed check or an interrupt included.
+trap 'docker rm -f "${name}" "${name}-env" > /dev/null 2>&1' EXIT
 docker run -d --name "${name}" -e PUBLIC_URL=http://uc "${image}" > /dev/null
 # shellcheck disable=SC2016 # expanded by the bash inside the container
 docker run -d --name "${name}-env" --tmpfs /run/uc-web:uid=33,gid=33 --entrypoint bash "${image}" \
     -c 'printf "%s\n" PUBLIC_URL=http://uc DOWNLOAD_BACKEND=artifactory "DOWNLOAD_BACKEND_URL=http://backend/repo?a=b=c" > /run/uc-web/web.env && exec /usr/local/bin/entrypoint.sh' > /dev/null
-sleep 3
-if docker logs "${name}" 2>&1 | grep -q "waiting for the first published release"; then
-    echo "ok: waits for the first release"
-else
-    echo "FAIL: web did not report that it is waiting for the first release"
-    failures=$((failures + 1))
-fi
-env_logs="$(docker logs "${name}-env" 2>&1)"
-if [[ "${env_logs}" == *"entrypoint: serving http://uc; downloads: artifactory http://backend/repo?a=b=c (redirect)"* ]]; then
-    echo "ok: logs what it serves, with the backend URL intact"
-else
-    echo "FAIL: web did not log what it serves: ${env_logs}"
-    failures=$((failures + 1))
-fi
-docker rm -f "${name}" "${name}-env" > /dev/null
+expect_log "${name}" "waiting for the first published release" "waits for the first release"
+expect_log "${name}-env" "entrypoint: serving http://uc; downloads: artifactory http://backend/repo?a=b=c (redirect)" "logs what it serves, with the backend URL intact"
 exit "${failures}"

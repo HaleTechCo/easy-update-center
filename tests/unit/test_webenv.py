@@ -2,6 +2,7 @@
 
 import os
 import re
+import stat
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,7 @@ import pytest
 from uc.cli import main
 from uc.config import load_settings, load_web_settings
 from uc.errors import ConfigError
-from uc.webenv import WEB_SETTINGS, web_env, write_web_env
+from uc.webenv import WEB_SETTINGS, WebEnvWriteError, web_env, write_web_env
 
 NO_FILE = Path('/nonexistent/uc.toml')
 WEB_FIELDS = ('public_url', 'download_backend', 'download_backend_url', 'download_access', 'download_proxy_auth_file', 'download_proxy_ca_file', 'tls_cert_file', 'tls_key_file')
@@ -38,6 +39,37 @@ def test_write_web_env_is_atomic_and_readable_by_web(tmp_path):
     assert out.read_text(encoding='utf-8') == 'PUBLIC_URL=https://uc\n'
     assert out.stat().st_mode & 0o777 == 0o644
     assert sorted(path.name for path in out.parent.iterdir()) == ['web.env']
+
+
+def test_web_env_is_world_readable_whatever_the_umask_and_the_file_it_replaces(tmp_path):
+    out = tmp_path / 'web.env'
+    out.write_text('PUBLIC_URL=https://old\n', encoding='utf-8')
+    out.chmod(0o600)
+    umask = os.umask(0o077)
+    try:
+        write_web_env('PUBLIC_URL=https://uc\n', out)
+    finally:
+        os.umask(umask)
+    assert out.read_text(encoding='utf-8') == 'PUBLIC_URL=https://uc\n'
+    assert stat.S_IMODE(out.stat().st_mode) == 0o644
+
+
+def test_a_failed_replace_is_reported_and_removes_the_temporary_file(tmp_path, monkeypatch):
+    out = tmp_path / 'web.env'
+    out.mkdir()  # the temporary file is written beside it, then cannot replace a directory
+    replace = Path.replace
+    written = []
+
+    def watched_replace(self, target):
+        written.append((self.parent, self.read_text(encoding='utf-8')))
+        return replace(self, target)
+
+    monkeypatch.setattr(Path, 'replace', watched_replace)
+    with pytest.raises(WebEnvWriteError, match=rf'^cannot write {re.escape(str(out))}: Is a directory$'):
+        write_web_env('PUBLIC_URL=https://uc\n', out)
+    assert written == [(tmp_path, 'PUBLIC_URL=https://uc\n')]
+    assert [path.name for path in tmp_path.iterdir()] == ['web.env']
+    assert out.is_dir()
 
 
 def test_invalid_generator_only_settings_do_not_stop_web():

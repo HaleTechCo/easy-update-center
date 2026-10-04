@@ -1,12 +1,15 @@
 """The settings registry: names, the uc.toml naming rule, types, groups and defaults (docs/reference/configuration.md#how-settings-are-read)."""
 
 import re
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
 
-from uc import config
+from uc import cli, config
+from uc.config import Settings
+from uc.repo_adapter import server as adapter_server
 from uc.settings import CORE_VERSION, GROUPS, MODES, REGISTRY, SETTINGS, TYPES, env_name, toml_key, toml_label
 
 
@@ -104,23 +107,27 @@ def test_active_modes_are_modes():
         assert set(setting.active) <= set(MODES), setting.env
 
 
+SAMPLE_CHECKS = {
+    'bool': lambda sample: sample in {'true', 'false'},
+    'version': lambda sample: CORE_VERSION.match(sample) is not None,
+    'url': lambda sample: urlsplit(sample).scheme in {'http', 'https'} and bool(urlsplit(sample).netloc),
+}
+"""How a sample of each type must parse; only types some setting has a sample of, so no check is dead (test_every_checked_type_has_a_sample)."""
+UNCHECKED_SAMPLE_TYPES = ('str', 'path', 'cron')
+"""Sample types with nothing to parse here: free text, and cron, which uc schedule checks when it starts. A sample of any other type needs a check."""
+
+
 @pytest.mark.parametrize('setting_and_sample', list(_samples()), ids=lambda pair: pair[0].env)
 def test_every_sample_parses_for_its_type(setting_and_sample):
     setting, sample = setting_and_sample
-    if setting.type == 'int':
-        assert int(sample) >= (setting.minimum or 0)
-    elif setting.type == 'bool':
-        assert sample in {'true', 'false'}
-    elif setting.type == 'ratio':
-        assert 0 <= float(sample) <= 1
-    elif setting.type == 'version':
-        assert CORE_VERSION.match(sample)
-    elif setting.type == 'url':
-        parts = urlsplit(sample)
-        assert parts.scheme in {'http', 'https'}, setting.env
-        assert parts.netloc, setting.env
-    elif setting.type == 'choice':
-        assert sample in setting.choices
+    if setting.type in UNCHECKED_SAMPLE_TYPES:
+        return
+    assert setting.type in SAMPLE_CHECKS, f'{setting.env}: no check for a sample of type {setting.type}'
+    assert SAMPLE_CHECKS[setting.type](sample), setting.env
+
+
+def test_every_checked_type_has_a_sample():
+    assert set(SAMPLE_CHECKS) <= {setting.type for setting, _ in _samples()}
 
 
 def test_every_hint_line_and_doc_is_a_sentence():
@@ -148,20 +155,24 @@ def test_a_mode_sample_comes_before_the_common_one():
     assert REGISTRY['REPO_TYPE'].hint_for('airgapped') == ()
 
 
-REPO_ADAPTER_READS = {
-    'REPO_ADAPTER', 'REPO_ADAPTER_PORT', 'REPO_ADAPTER_DIR', 'REPO_TYPE', 'REPO_URL', 'REPO_API_URL', 'REPO_KEY', 'REPO_CA_FILE',
-    'REPO_MAX_ARCHIVE_MB', 'REPO_USERNAME_FILE', 'REPO_PASSWORD_FILE', 'UC_DATA_DIR', 'SECRETS_DIR', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY',
-}  # fmt: skip
-"""What `uc repo-adapter` reads at start (the Settings fields serve, make_server and create_adapter use, the secret files, and the proxy variables apply_process_env exports), by variable name."""
+PROXY_VARIABLES = {'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY'}
+"""The settings apply_process_env exports that the repo-adapter uses: urllib takes the proxies from the environment. The rest of PROCESS_ENV (JAVA_TOOL_OPTIONS) is for the generator's JVM."""
 
 
-def test_restart_marks_what_the_services_read_at_start(monkeypatch):
+def test_restart_marks_what_the_services_read_at_start(monkeypatch, tmp_path):
     marked = {setting.env for setting in SETTINGS if setting.restart}
+    schedules = {'GENERATE_SCHEDULE', 'DOCTOR_SCHEDULE'}
     web_inputs = recorded_web_inputs(monkeypatch)
-    assert {'GENERATE_SCHEDULE', 'DOCTOR_SCHEDULE'} <= marked
+    adapter_reads = recorded_repo_adapter_reads(monkeypatch, tmp_path)
+    assert {'REPO_URL', 'REPO_KEY'} | PROXY_VARIABLES <= adapter_reads  # so a recorder that records nothing cannot pass
+    assert schedules <= marked
     assert web_inputs <= marked
-    assert marked >= REPO_ADAPTER_READS
-    assert marked == web_inputs | REPO_ADAPTER_READS | {'GENERATE_SCHEDULE', 'DOCTOR_SCHEDULE'}
+    assert adapter_reads <= marked
+    # A setting the repo-adapter never reads still needs the mark when a value it reads follows it:
+    # REPO_ADAPTER_DIR's default follows UC_DATA_DIR, the secret files' SECRETS_DIR, REPO_ADAPTER's MODE.
+    adapter_inputs = adapter_reads | {name for name in marked - adapter_reads - schedules if read_values_follow(name, adapter_reads)}
+    unexplained = marked - web_inputs - adapter_inputs - schedules
+    assert not unexplained, f'restart-marked, but no service reads them at start and no value the repo-adapter reads changes with them: {sorted(unexplained)}'
 
 
 def test_restart_leaves_out_what_every_run_rereads():
@@ -179,7 +190,6 @@ def recorded_web_inputs(monkeypatch):
             seen.add(name)
             return super().raw(name)
 
-    monkeypatch.setattr(config, 'Resolver', Recording)
     base = {'PUBLIC_URL': 'https://uc.example.com', 'REPO_URL': 'https://repo.corp/artifactory/', 'REPO_KEY': 'jenkins'}
     cases = [
         {'MODE': 'online'},
@@ -187,6 +197,93 @@ def recorded_web_inputs(monkeypatch):
         {'MODE': 'airgapped', 'DOWNLOAD_BACKEND': 'artifactory'},
         {'MODE': 'airgapped', 'DOWNLOAD_BACKEND': 'artifactory', 'REPO_TYPE': 'artifact-keeper'},
     ]
-    for case in cases:
-        config.load_web_settings({**base, **case}, config_file=Path('none.toml'))
+    with monkeypatch.context() as patch:  # undone on return, so later loads in the same test are not recorded
+        patch.setattr(config, 'Resolver', Recording)
+        for case in cases:
+            config.load_web_settings({**base, **case}, config_file=Path('none.toml'))
     return seen
+
+
+class RecordingSettings:
+    """Settings that record the name of every field and property read through them.
+
+    A property runs with the recorder as self, so the fields it reads are recorded too.
+    """
+
+    def __init__(self, settings: Settings, seen: set[str]) -> None:
+        """Read from settings, adding each name read to seen."""
+        self.settings, self.seen = settings, seen
+
+    def __getattr__(self, name):
+        """Record name, then read it from the settings, or run the property with this recorder as self."""
+        self.seen.add(name)
+        member = getattr(Settings, name, None)
+        return member.fget(self) if isinstance(member, property) else getattr(self.settings, name)
+
+
+def recorded_repo_adapter_reads(monkeypatch, tmp_path):
+    """Return every setting `uc repo-adapter` reads from Settings as it starts, for an air-gapped Artifactory and Artifact Keeper repository.
+
+    It runs the real command, so what the CLI reads before serving counts too. Left out: the PROCESS_ENV settings
+    other than PROXY_VARIABLES (JAVA_TOOL_OPTIONS), which apply_process_env reads for every command and the
+    repo-adapter does not use.
+    """
+    seen: set[str] = set()
+    started = []
+
+    class Started(ThreadingHTTPServer):
+        def __init__(self, _address, handler):  # any free loopback port: what it reads matters here, not where it listens
+            super().__init__(('127.0.0.1', 0), handler)
+            started.append(self)
+
+        def serve_forever(self, poll_interval=0.5):
+            """Return at once, as if the process had stopped."""
+
+    secrets = tmp_path / 'secrets'
+    secrets.mkdir()
+    (secrets / 'repo_username').write_text('uc\n', encoding='utf-8')
+    (secrets / 'repo_password').write_text('secret\n', encoding='utf-8')
+    base = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc.example.com', 'REPO_KEY': 'jenkins', 'UC_DATA_DIR': str(tmp_path / 'data'), 'REPO_ADAPTER_DIR': str(tmp_path / 'adapter'), 'SECRETS_DIR': str(secrets)}
+    repositories = [
+        {'REPO_TYPE': 'artifactory', 'REPO_URL': 'https://repo.corp/artifactory/'},
+        {'REPO_TYPE': 'artifact-keeper', 'REPO_URL': 'https://keeper.corp/'},
+    ]
+    with monkeypatch.context() as patch:
+        patch.setattr(adapter_server, 'ThreadingHTTPServer', Started)
+        patch.setattr(adapter_server, 'PORT_FILE', tmp_path / 'adapter.port')
+
+        def start(env):
+            settings = RecordingSettings(config.load_settings(env, config_file=tmp_path / 'none.toml'), seen)
+            patch.setattr(cli, 'load_settings', lambda: settings)
+            try:
+                assert cli.main(['repo-adapter']) == 0
+            finally:
+                while started:
+                    started.pop().server_close()
+
+        for repository in repositories:
+            start({**base, **repository})
+    fields = {setting.attribute: setting.env for setting in SETTINGS if setting.attribute}
+    properties = {name for name, member in vars(Settings).items() if isinstance(member, property)}
+    assert seen - set(fields) <= properties  # a field without a setting would go unchecked
+    return {fields[name] for name in seen if name in fields} - (set(config.PROCESS_ENV) - PROXY_VARIABLES)
+
+
+def read_values_follow(name, reads):
+    """Return whether the value of a setting in reads changes when name does, with every derived setting left at its default."""
+    env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc.example.com', 'REPO_URL': 'https://repo.corp/artifactory/', 'REPO_KEY': 'jenkins'}
+    before = config.load_settings(env, config_file=Path('none.toml'))
+    setting = REGISTRY[name]
+    after = config.load_settings({**env, name: other_value(setting, str(getattr(before, setting.attribute)))}, config_file=Path('none.toml'))
+    return any(getattr(before, REGISTRY[read].attribute) != getattr(after, REGISTRY[read].attribute) for read in reads)
+
+
+def other_value(setting, current):
+    """Return a valid value for setting other than current."""
+    if setting.type == 'choice':
+        return next(choice for choice in setting.choices if choice != current)
+    if setting.type == 'path':
+        return current.rstrip('/') + '/elsewhere'
+    if setting.type == 'url':
+        return 'https://elsewhere.example'
+    pytest.fail(f'no other value to try for {setting.env}, of type {setting.type}')

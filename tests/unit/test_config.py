@@ -250,10 +250,23 @@ def test_an_explicit_adapter_url_wins_over_the_port():
     assert s.repo_adapter_url == 'http://adapter.corp:8081/artifactory/'
 
 
-def test_the_adapter_url_from_uc_toml_wins_and_the_port_from_it_is_used(tmp_path):
+def test_the_adapter_url_follows_the_adapter_port_from_uc_toml(tmp_path):
     path = tmp_path / 'uc.toml'
     path.write_text('[repo]\nadapter_port = 9092\n', encoding='utf-8')
     assert load_settings(AIRGAPPED, config_file=path).repo_adapter_url == 'http://repo-adapter:9092/artifactory/'
+
+
+def test_the_adapter_url_from_uc_toml_wins_over_the_one_its_port_gives(tmp_path):
+    path = tmp_path / 'uc.toml'
+    path.write_text('[repo]\nadapter_port = 9092\nadapter_url = "http://adapter.corp:9093/artifactory"\n', encoding='utf-8')
+    assert load_settings(AIRGAPPED, config_file=path).repo_adapter_url == 'http://adapter.corp:9093/artifactory/'
+
+
+def test_the_adapter_url_from_the_environment_wins_over_uc_toml(tmp_path):
+    path = tmp_path / 'uc.toml'
+    path.write_text('[repo]\nadapter_url = "http://adapter.corp:9093/artifactory"\n', encoding='utf-8')
+    s = load_settings({**AIRGAPPED, 'REPO_ADAPTER_URL': 'http://adapter.env:9094/artifactory'}, config_file=path)
+    assert s.repo_adapter_url == 'http://adapter.env:9094/artifactory/'
 
 
 @pytest.mark.parametrize('value', ['2.462', '2.462.1', '2.440'])
