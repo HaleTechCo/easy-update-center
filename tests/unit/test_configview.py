@@ -127,6 +127,32 @@ def test_credentials_in_a_proxy_without_a_scheme_are_not_shown(tmp_path, secrets
         assert '***@proxy:3128' in out
 
 
+@pytest.mark.parametrize('delimiter', ['#', '?', '/', '[', ']'])
+@pytest.mark.parametrize(('form', 'shown'), [('http://proxyuser:{}@proxy.corp:3128', 'http://***@proxy.corp:3128'), ('proxyuser:{}@proxy.corp:3128', '***@proxy.corp:3128')], ids=['scheme', 'no-scheme'])  # pragma: allowlist secret
+def test_a_proxy_password_that_holds_a_url_delimiter_loads_and_is_not_shown(tmp_path, secrets_dir, delimiter, form, shown):
+    value = form.format(f'S3cret{delimiter}Tail9z')
+    from_env = (env_for(tmp_path, secrets_dir, HTTPS_PROXY=value), tmp_path / 'none.toml')
+    from_file = (env_for(tmp_path, secrets_dir), settings_file(tmp_path, f'https_proxy = "{value}"\n'))
+    for env, path in (from_env, from_file):
+        assert show(env, path, check=True) == (0, 'configuration ok\n', '')
+        _, text, _ = show(env, path)
+        _, as_json, _ = show(env, path, as_json=True)
+        assert f'  HTTPS_PROXY = {shown}  (' in text
+        assert {row['env']: row['value'] for row in json.loads(as_json)}['HTTPS_PROXY'] == shown
+        for part in ('proxyuser', 'S3cret', 'Tail9z'):
+            assert part not in text + as_json
+
+
+@pytest.mark.parametrize('delimiter', ['#', '?', '/'])
+def test_credentials_that_end_the_host_early_in_an_invalid_url_are_not_shown(tmp_path, secrets_dir, delimiter):
+    env = env_for(tmp_path, secrets_dir, REPO_URL=f'https://admin:S3cret{delimiter}Tail9z@artifactory:8081/artifactory/')  # pragma: allowlist secret
+    code, out, err = show(env, tmp_path / 'none.toml')
+    assert code == 1
+    assert 'REPO_URL = https://***@artifactory:8081/artifactory/' in out
+    for part in ('S3cret', 'Tail9z'):
+        assert part not in out + err
+
+
 def test_check_fails_on_a_bad_doctor_since(tmp_path, secrets_dir):
     code, _, err = show(env_for(tmp_path, secrets_dir, DOCTOR_SINCE='latest'), tmp_path / 'none.toml', check=True)
     assert code == 1

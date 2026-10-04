@@ -6,6 +6,7 @@ import pytest
 
 from uc.config import load_settings, load_web_settings, read_secret, settings_digest, with_explicit_port
 from uc.errors import ConfigError
+from uc.settings import SETTINGS
 
 AIRGAPPED = {
     'MODE': 'airgapped',
@@ -343,6 +344,54 @@ def test_a_malformed_url_setting_from_uc_toml_names_its_key(tmp_path, name, toml
 )
 def test_valid_url_settings_still_load(name, value):
     assert load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+
+
+@pytest.mark.parametrize('delimiter', ['#', '?', '/', '[', ']'])
+@pytest.mark.parametrize('form', ['http://proxyuser:{}@proxy.corp:3128', 'proxyuser:{}@proxy.corp:3128'], ids=['scheme', 'no-scheme'])  # pragma: allowlist secret
+def test_a_proxy_password_may_hold_what_ends_a_url_host(tmp_path, delimiter, form):
+    # urllib's proxy handler takes the user info up to the last @, so these work there and must not stop uc.
+    value = form.format(f'S3cret{delimiter}Tail9z')
+    assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml')).https_proxy == value
+    path = tmp_path / 'uc.toml'
+    path.write_text(f'http_proxy = "{value}"\n', encoding='utf-8')
+    assert load_settings(AIRGAPPED, config_file=path).http_proxy == value
+
+
+@pytest.mark.parametrize(
+    'value',
+    [
+        'http://proxy.corp:abc',
+        'http://proxyuser:S3cretPW@proxy.corp:abc',  # pragma: allowlist secret
+        'proxyuser:S3cretPW@proxy.corp:abc',
+        'http://proxyuser:S3cretPW@proxy.corp:99999',  # pragma: allowlist secret
+        'http://proxyuser:S3cretPW@[proxy.corp:3128',  # pragma: allowlist secret
+    ],
+)
+def test_a_proxy_whose_host_or_port_cannot_be_read_is_refused_without_quoting_it(value):
+    with pytest.raises(ConfigError, match=r'^HTTPS_PROXY is not a valid URL: ') as error:
+        load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml'))
+    for part in ('abc', '99999', 'proxyuser', 'S3cretPW'):
+        assert part not in str(error.value)
+
+
+ALL_URL_SETTINGS = [setting.env for setting in SETTINGS if setting.type == 'url']
+WEB_URL_SETTINGS = ['PUBLIC_URL', 'REPO_URL', 'DOWNLOAD_BACKEND_URL']
+
+
+@pytest.mark.parametrize(('load', 'name'), [*((load_settings, name) for name in ALL_URL_SETTINGS), *((load_web_settings, name) for name in WEB_URL_SETTINGS)])
+def test_a_malformed_url_message_does_not_quote_the_value(load, name):
+    with pytest.raises(ConfigError, match=f'^{name} is not a valid URL: ') as error:
+        load({**AIRGAPPED, name: 'https://admin:S3cretPW@host.corp:wxyz/'}, config_file=Path('/nonexistent/uc.toml'))  # pragma: allowlist secret
+    for part in ('admin', 'S3cretPW', 'wxyz'):
+        assert part not in str(error.value)
+
+
+@pytest.mark.parametrize('name', [name for name in ALL_URL_SETTINGS if not name.endswith('_PROXY')])
+def test_a_password_that_ends_the_host_early_is_not_quoted(name):
+    # Only the proxies take the user info up to the last @; elsewhere urlsplit reads S3cretPW as the port.
+    with pytest.raises(ConfigError, match=f'^{name} is not a valid URL: ') as error:
+        load_settings({**AIRGAPPED, name: 'https://admin:S3cretPW#x@host.corp/'}, config_file=Path('/nonexistent/uc.toml'))  # pragma: allowlist secret
+    assert 'S3cretPW' not in str(error.value)
 
 
 def test_a_malformed_url_from_uc_toml_names_its_key(tmp_path):

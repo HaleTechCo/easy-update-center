@@ -377,6 +377,18 @@ def test_config_check_reports_a_malformed_url_setting(monkeypatch, tmp_path, sec
     assert capsys.readouterr().err.startswith('uc: error: HTTPS_PROXY is not a valid URL: ')
 
 
+def test_config_check_takes_a_proxy_password_with_a_hash_and_never_prints_one(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('HTTPS_PROXY', 'http://svc:S3cret#x@proxy.corp:3128')  # pragma: allowlist secret
+    assert main(['config', '--check']) == 0
+    monkeypatch.setenv('HTTPS_PROXY', 'http://svc:S3cretPW@proxy.corp:abc')  # pragma: allowlist secret
+    assert main(['config', '--check']) == 1
+    err = capsys.readouterr().err
+    assert err.startswith('uc: error: HTTPS_PROXY is not a valid URL: ')
+    assert 'S3cretPW' not in err
+    assert 'abc' not in err
+
+
 class _Health(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200 if self.path == '/healthz' else 404)

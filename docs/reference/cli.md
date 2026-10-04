@@ -153,7 +153,8 @@ ends with the command that applies them. Set settings in `.env` or `config/uc.to
 service's `environment:` in a Compose override: `uc config` compares its own container's settings
 with the scheduler's, so a value only one of them receives makes that note permanent (the TLS and
 proxy-CA overrides set variables on `web` alone, which neither compares).
-Credentials inside a URL setting are shown as `***`.
+Credentials inside a URL setting, everything before its last `@` (after any `scheme://`), are shown
+as `***`.
 It runs in the `uc` container, which by design does not receive `download_proxy_auth` (web's) nor,
 air-gapped, `repo_username` and `repo_password` (the repo-adapter's), so those show as `missing`
 there even when they are set up.

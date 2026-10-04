@@ -7,9 +7,8 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
-from urllib.parse import urlsplit, urlunsplit
 
-from .config import make_resolver, read_secret, settings_digest, settings_from
+from .config import make_resolver, read_secret, settings_digest, settings_from, split_userinfo
 from .errors import ConfigError
 from .settings import GROUPS, REGISTRY, SETTINGS, toml_label
 
@@ -57,19 +56,11 @@ def _row(setting: Setting, r: Resolver, settings: Settings | None) -> Row:
 
 
 def _redact(setting: Setting, value: str) -> str:
-    """Return a URL setting's value with any username and password replaced by ***, so credentials never reach a terminal or a log."""
+    """Return a URL setting's value with its user info, everything before the last '@' (split_userinfo), shown as ***, so credentials never reach a terminal or a log."""
     if setting.type != 'url':
         return value
-    if '@' in value and '://' not in value:  # user:password@proxy:3128, which urllib accepts and urlsplit misreads
-        return '***@' + value.rpartition('@')[2]
-    try:
-        parts = urlsplit(value)
-        if parts.username is None and parts.password is None:
-            return value
-        host = parts.netloc.rpartition('@')[2]
-        return urlunsplit(parts._replace(netloc=f'***@{host}'))
-    except ValueError:
-        return value
+    scheme, userinfo, rest = split_userinfo(value)
+    return value if userinfo is None else f'{scheme}***@{rest}'
 
 
 def _show(value: object) -> str:
@@ -108,8 +99,9 @@ def format_rows(shown: list[Row], config_file: Path) -> str:
 def reload_hint(settings: Settings, environ: Mapping[str, str]) -> str | None:
     """Return a note when the running services were started with different settings, else None.
 
-    That is any change in .env (a container's environment is fixed when it is created, and environ is this process's own, never
-    exported to), or a uc.toml change to a setting marked restart; the note says that make reload applies them.
+    That is a change to a setting in .env (a container's environment is fixed when it is created, and environ is this process's own,
+    never exported to; an empty value counts as unset, except where empty means off), or a uc.toml change to a setting marked
+    restart; the note says that make reload applies them.
     """
     try:
         state = json.loads((settings.data_dir / SCHEDULER_STATE).read_text(encoding='utf-8'))
