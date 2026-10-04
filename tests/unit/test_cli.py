@@ -370,6 +370,13 @@ def test_a_malformed_url_prints_an_error_not_a_traceback(monkeypatch, tmp_path, 
     assert 'uc: error: REPO_URL is not a valid URL: ' in capsys.readouterr().err
 
 
+def test_config_check_reports_a_malformed_url_setting(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('HTTPS_PROXY', 'http://[bad')
+    assert main(['config', '--check']) == 1
+    assert capsys.readouterr().err.startswith('uc: error: HTTPS_PROXY is not a valid URL: ')
+
+
 class _Health(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200 if self.path == '/healthz' else 404)
@@ -437,6 +444,28 @@ def test_serving_records_the_port_it_bound(monkeypatch, tmp_path, secrets_dir, p
     assert started
     assert port_file.read_text(encoding='utf-8') == '4321\n'
     assert not port_file.with_name('adapter.port.tmp').exists()
+
+
+def test_serving_stops_with_an_error_when_it_cannot_record_its_port(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setattr('uc.repo_adapter.server.PORT_FILE', tmp_path / 'missing' / 'adapter.port')
+    closed = []
+
+    class Stub:
+        server_address = ('0.0.0.0', 4321)
+
+        def serve_forever(self):
+            pytest.fail('serving must not start when the port cannot be recorded')
+
+        def server_close(self):
+            closed.append(True)
+
+    monkeypatch.setattr('uc.repo_adapter.server.make_server', lambda *_args, **_kwargs: Stub())
+    assert main(['repo-adapter', '--port', '0']) == 1
+    err = capsys.readouterr().err
+    assert err.startswith('uc: error: repo-adapter cannot record its port in ')
+    assert 'Traceback' not in err
+    assert closed
 
 
 def test_healthcheck_ignores_the_proxy_settings(monkeypatch, tmp_path, secrets_dir, healthz_port):

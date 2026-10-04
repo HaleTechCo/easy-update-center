@@ -77,10 +77,12 @@ once releases are published.
   (online), what `CORE_AGE_DAYS=400` means, procured copies of the popularity and tool-installer
   data, and `COMPOSE_FILE` for air-gapped. A commented line there is not set: it shows the default,
   or an example value where there is none.
-- A `PUBLIC_URL`, `REPO_URL`, `DOWNLOAD_BACKEND_URL` or `PROCUREMENT_SOURCE_URL` that `uc` cannot
-  parse (for example `PUBLIC_URL=https://[uc.example.com`, or a port that is not a number) is
-  reported as `uc: error: <setting> is not a valid URL: ...` when the settings load, so
-  `uc config --check` catches it, instead of a traceback.
+- A URL setting that `uc` cannot parse (for example `PUBLIC_URL=https://[uc.example.com`, or a port
+  that is not a number) is reported as `uc: error: <setting> is not a valid URL: ...` when the
+  settings load, so `uc config --check` catches it, instead of a traceback. Every URL setting is
+  parsed: `PUBLIC_URL`, `REPO_URL`, `REPO_API_URL`, `REPO_ADAPTER_URL`, `DOWNLOAD_BACKEND_URL`,
+  `PROCUREMENT_SOURCE_URL`, `RESOURCES_URL`, `POPULARITY_JSON_URL`, `TOOL_INSTALLERS_URL`,
+  `HTTPS_PROXY` and `HTTP_PROXY`.
 - `uc generate --wait` waits for a running generation or rollback instead of exiting 75; scheduled
   generations use it.
 - `make reload` checks the settings, then recreates the services so they read them; with invalid
