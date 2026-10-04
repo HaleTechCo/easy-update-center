@@ -61,15 +61,13 @@ services:
   # One-shot, run by the make targets that write to ./secrets (pki-init, pki-rotate,
   # secrets-placeholders, secrets-permissions): `docker compose run --rm --no-deps setup -c '...'`.
   # Root, so it can set the ownership scripts/secrets-permissions.sh describes. No network, no compose
-  # secrets; it reads .env as the other services do (missing is fine).
+  # secrets; it reads .env (or UC_ENV_FILE) as the other services do, so the file must exist.
   setup:
     image: ${UC_IMAGE:-jenkins-uc/uc:local}
     profiles: ["setup"]
     user: "0:0"
     network_mode: none
-    env_file:
-      - path: ${UC_ENV_FILE:-.env}
-        required: false
+    env_file: ${UC_ENV_FILE:-.env}
     entrypoint: ["sh"]
     read_only: true
     tmpfs:
