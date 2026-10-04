@@ -67,6 +67,18 @@ def test_the_active_lines_of_each_example_are_a_working_configuration(mode, tmp_
     assert load_settings({}, config_file=path).mode == mode
 
 
+@pytest.mark.parametrize('mode', MODES)
+def test_uncommenting_the_adapter_url_keeps_it_following_the_port(mode, tmp_path):
+    lines = example_env(mode).splitlines()
+    active = dict(line.split('=', 1) for line in lines if line and not line.startswith('#'))
+    name, value = next(line[2:] for line in lines if line.startswith('# REPO_ADAPTER_URL=')).split('=', 1)
+    s = load_settings({**active, name: value, 'REPO_ADAPTER_PORT': '9091'}, config_file=tmp_path / 'none.toml')
+    assert s.repo_adapter_url == 'http://repo-adapter:9091/artifactory/'
+    path = tmp_path / 'uc.toml'
+    path.write_text(re.sub(r'^# (adapter_(url|port) = )', r'\1', example_toml(mode), flags=re.MULTILINE).replace('adapter_port = 8081', 'adapter_port = 9091'), encoding='utf-8')
+    assert load_settings({}, config_file=path).repo_adapter_url == 'http://repo-adapter:9091/artifactory/'
+
+
 def test_the_online_toml_example_sets_only_the_required_settings(tmp_path):
     path = tmp_path / 'uc.toml'
     path.write_text(example_toml('online'), encoding='utf-8')

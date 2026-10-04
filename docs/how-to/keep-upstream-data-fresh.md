@@ -34,7 +34,7 @@ https://github.com/jenkins-infra/update-center2/archive/refs/heads/master.tar.gz
 Store it where the update center can reach it, note its SHA-256, and set the three variables below.
 The `scheduler` and `uc` containers fetch `RESOURCES_URL`, `POPULARITY_JSON_URL` and
 `TOOL_INSTALLERS_URL` themselves, **without credentials**, and verify HTTPS only against the image's
-system CA bundle (`REPO_CA_FILE` applies to the repo-adapter alone). So serve these files from a
+system CA bundle (`REPO_CA_FILE` does not apply to these fetches). So serve these files from a
 location that allows anonymous reads: for example an Artifactory generic repository with anonymous
 read access, over HTTPS with a publicly trusted certificate, or over plain HTTP inside your network.
 `RESOURCES_SHA256` still verifies the tarball whatever the transport.

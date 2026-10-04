@@ -176,8 +176,8 @@ the update site to `$PUBLIC_URL/update-center.json`:
 
 ## Repository behind a private CA
 
-If the repository's certificate comes from a private CA, give the repo-adapter that CA's bundle, in
-an override file next to `compose.yaml`:
+If the repository's certificate comes from a private CA, give the repo-adapter that CA's bundle.
+Mount it with an override file next to `compose.yaml`:
 
 ```yaml
 # compose.repo-ca.yaml
@@ -185,20 +185,24 @@ services:
   repo-adapter:
     volumes:
       - ./secrets/repo-ca.crt:/etc/ssl/uc-repo-ca.crt:ro
-    environment:
-      REPO_CA_FILE: /etc/ssl/uc-repo-ca.crt
   uc:  # uc doctor --push and --clean talk to the repository directly, not through the repo-adapter
     volumes:
       - ./secrets/repo-ca.crt:/etc/ssl/uc-repo-ca.crt:ro
-    environment:
-      REPO_CA_FILE: /etc/ssl/uc-repo-ca.crt
 ```
 
-Copy the CA's PEM file to `secrets/repo-ca.crt` and add the override to `COMPOSE_FILE` in `.env`:
+Copy the CA's PEM file to `secrets/repo-ca.crt`, then point `REPO_CA_FILE` at it and add the override
+to `COMPOSE_FILE`, both in `.env`:
 
 ```bash
+REPO_CA_FILE=/etc/ssl/uc-repo-ca.crt
 COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.repo-ca.yaml
 ```
+
+`[repo] ca_file = "/etc/ssl/uc-repo-ca.crt"` in `config/uc.toml` works as well as the `.env` line.
+Set it in one of those two files, not under `environment:` in the override: every service then has
+the same value, which `uc config` needs to tell whether the running services use the current
+settings ([When changes apply](../reference/configuration.md#when-changes-apply)). The other
+services never open the file, so they need no mount.
 
 This bundle is **added to** the system bundle. The download proxy's CA setting works the other way
 round: `DOWNLOAD_PROXY_CA_FILE` **replaces** the system bundle for downloads

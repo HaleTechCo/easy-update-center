@@ -71,7 +71,7 @@ public_url = "https://jenkins-updates.example.com"
 # Read the repository through the repo-adapter: on by default air-gapped and always with Artifact Keeper, off otherwise. (REPO_ADAPTER)
 # adapter = true
 # Where uc finds the repo-adapter, http://repo-adapter:${REPO_ADAPTER_PORT}/artifactory/ by default. Change it only with a non-default Compose layout. (REPO_ADAPTER_URL)
-# adapter_url = "http://repo-adapter:8081/artifactory/"
+# adapter_url = ""
 # The repo-adapter's token, cache and report.json, ${UC_DATA_DIR}/repo-adapter by default. (REPO_ADAPTER_DIR)
 # adapter_dir = ""
 # The port the repo-adapter listens on; its healthcheck and the default REPO_ADAPTER_URL follow it. (REPO_ADAPTER_PORT)

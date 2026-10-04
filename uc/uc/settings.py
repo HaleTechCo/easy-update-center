@@ -150,7 +150,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('REPO_KEY', 'str', 'Source repository', 'The repository key (for Artifact Keeper, the key, not the display name). It defaults to releases only online with REPO_TYPE=artifactory.', derived=True, sample='jenkins-plugins-local', active=('airgapped',), restart=True),
     # repo-adapter
     Setting('REPO_ADAPTER', 'bool', 'repo-adapter', 'Read the repository through the repo-adapter: on by default air-gapped and always with Artifact Keeper, off otherwise.', derived=True, sample='true', restart=True),
-    Setting('REPO_ADAPTER_URL', 'url', 'repo-adapter', 'Where uc finds the repo-adapter, http://repo-adapter:${REPO_ADAPTER_PORT}/artifactory/ by default. Change it only with a non-default Compose layout.', derived=True, sample='http://repo-adapter:8081/artifactory/'),
+    Setting('REPO_ADAPTER_URL', 'url', 'repo-adapter', 'Where uc finds the repo-adapter, http://repo-adapter:${REPO_ADAPTER_PORT}/artifactory/ by default. Change it only with a non-default Compose layout.', derived=True),
     Setting('REPO_ADAPTER_DIR', 'path', 'repo-adapter', "The repo-adapter's token, cache and report.json, ${UC_DATA_DIR}/repo-adapter by default.", derived=True, restart=True),
     Setting('REPO_ADAPTER_PORT', 'int', 'repo-adapter', 'The port the repo-adapter listens on; its healthcheck and the default REPO_ADAPTER_URL follow it.', default='8081', minimum=1, restart=True),
     Setting(

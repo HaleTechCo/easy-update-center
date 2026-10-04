@@ -268,6 +268,7 @@ def load_web_settings(env: Mapping[str, str] | None = None, *, config_file: Path
     if not public_url:
         msg = 'PUBLIC_URL must be set'
         raise ConfigError(msg)
+    _parse_url(r, 'PUBLIC_URL', public_url)
     backend = _choice(r, 'DOWNLOAD_BACKEND')
     backend_url = _explicit_backend_url(r) or _default_backend_url(r, backend)
     return WebSettings(
@@ -342,6 +343,7 @@ def settings_from(r: Resolver) -> Settings:
     if not public_url:
         msg = 'PUBLIC_URL must be set'
         raise ConfigError(msg)
+    _parse_url(r, 'PUBLIC_URL', public_url)
 
     repo_type, repo_url, repo_key = _repository(r, online=online)
     repo_url_with_port = with_explicit_port(repo_url)
