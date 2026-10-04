@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hmac
+import http.client
 import json
 import os
 import secrets
@@ -40,6 +41,10 @@ PORT_FILE = Path('/tmp/uc-repo-adapter.port')  # noqa: S108 - the container's ro
 HEALTH_TIMEOUT = 3
 """Seconds uc repo-adapter --healthcheck waits for the adapter to answer."""
 HTTP_OK = 200
+
+
+class RecordPortError(UcError):
+    """The adapter could not record its port, so --healthcheck could never pass."""
 
 
 class UnhealthyError(UcError):
@@ -160,7 +165,7 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
 
         def do_GET(self) -> None:
             path = self.path.split('?', 1)[0]
-            if path == '/healthz':
+            if path == HEALTH_PATH:
                 return self._send(200, b'ok\n', 'text/plain')
             if self._refuse(authenticate=False):
                 return None
@@ -238,8 +243,13 @@ def record_port(port: int, path: Path | None = None) -> None:
     """Record the port the server is listening on, atomically, where --healthcheck finds it."""
     path = PORT_FILE if path is None else path
     temporary = path.with_name(path.name + '.tmp')
-    temporary.write_text(f'{port}\n', encoding='utf-8')
-    temporary.replace(path)
+    try:
+        temporary.write_text(f'{port}\n', encoding='utf-8')
+        temporary.replace(path)
+    except OSError as exc:
+        temporary.unlink(missing_ok=True)
+        msg = f'repo-adapter cannot record its port in {path}: {exc.strerror or exc}'
+        raise RecordPortError(msg) from None
 
 
 def recorded_port(path: Path | None = None) -> int:
@@ -265,8 +275,8 @@ def healthcheck(port: int | None = None) -> None:
             status = response.status
     except urllib.error.HTTPError as exc:
         status = exc.code
-    except (urllib.error.URLError, OSError) as exc:
-        reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+    except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:  # HTTPException: something on the port answers with bytes that are not HTTP
+        reason = (exc.reason if isinstance(exc, urllib.error.URLError) else exc) or type(exc).__name__
         msg = f'repo-adapter is not healthy on port {port}: {reason}'
         raise UnhealthyError(msg) from None
     if status != HTTP_OK:
@@ -277,7 +287,11 @@ def healthcheck(port: int | None = None) -> None:
 def serve(settings: Settings, port: int = PORT) -> None:
     """Run the repo-adapter on port until the process stops."""
     server = make_server(settings, port)
-    record_port(server.server_address[1])
+    try:
+        record_port(server.server_address[1])
+    except RecordPortError:
+        server.server_close()
+        raise
     state = f'{settings.repo_type} repository {settings.repo_key} at {settings.repo_url}' if settings.repo_adapter else 'idle (REPO_ADAPTER is off)'
     print(f'repo-adapter: listening on :{port}, {state}', flush=True)
     server.serve_forever()

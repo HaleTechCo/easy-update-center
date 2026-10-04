@@ -2,6 +2,7 @@
 
 import base64
 import datetime as dt
+import socket
 import stat
 import threading
 import urllib.error
@@ -14,9 +15,10 @@ from archivefixture import make_hpi, make_jar, pom_xml
 from fakebackend import FakeBackend
 from uc.aql import AQL_TEMPLATE, Gav, classify, query_repository
 from uc.doctor import ArtifactSource
+from uc.errors import UcError
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import read_report
-from uc.repo_adapter.server import Adapter, ensure_token, make_handler, make_server
+from uc.repo_adapter.server import Adapter, UnhealthyError, ensure_token, healthcheck, make_handler, make_server, record_port
 from ucsupport import make_settings
 
 NOW = dt.datetime(2026, 9, 23, tzinfo=dt.UTC)
@@ -174,3 +176,30 @@ def test_make_server_needs_repository_credentials_only_when_on(tmp_path, secrets
     server = make_server(settings, port=0, host='127.0.0.1')
     server.server_close()
     assert settings.repo_adapter_token_file.is_file()
+
+
+def test_healthcheck_reports_a_listener_that_does_not_speak_http():
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+
+        def answer():
+            connection, _ = listener.accept()
+            with connection:
+                connection.recv(4096)
+                connection.sendall(b'hello\r\n')
+
+        thread = threading.Thread(target=answer, daemon=True)
+        thread.start()
+        with pytest.raises(UnhealthyError, match=f'^repo-adapter is not healthy on port {port}: '):
+            healthcheck(port)
+        thread.join(timeout=10)
+
+
+def test_record_port_into_a_missing_directory_is_a_uc_error(tmp_path):
+    path = tmp_path / 'missing' / 'adapter.port'
+    with pytest.raises(UcError) as caught:
+        record_port(4321, path)
+    assert str(caught.value).startswith(f'repo-adapter cannot record its port in {path}: ')
+    assert not path.with_name('adapter.port.tmp').exists()

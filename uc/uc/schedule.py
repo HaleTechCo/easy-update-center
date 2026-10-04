@@ -74,18 +74,18 @@ def run_schedule(
     exec_: Callable[[str, list[str], dict[str, str]], object] = os.execvpe,
     crontab: Path = CRONTAB,
     now: Callable[[], dt.datetime] = utcnow,
-    environ: Mapping[str, str] | None = None,
+    environ: Mapping[str, str],
 ) -> None:
     """Check the schedules, record the start, generate a first release if none is live, then replace this process with supercronic.
 
     A bad schedule raises ScheduleError before anything else; a failed first run is logged and scheduling goes ahead.
     supercronic gets this process's environment without the names in drop_env, those apply_process_env exported
     from uc.toml: the first run uses them, and each scheduled run reads them from uc.toml afresh.
-    environ is the environment the container received, from before apply_process_env exported anything (default: os.environ), for the digest.
+    environ is the environment the container received, from before apply_process_env exported anything, for the digest; it is required, since os.environ already holds what apply_process_env exported.
     With the default exec_ (os.execvpe) this never returns.
     """
     text = crontab_text(settings)
-    write_state(settings, now(), os.environ if environ is None else environ)
+    write_state(settings, now(), environ)
     if publish.live_release(settings.data_dir) is None:
         print('uc schedule: no release is live yet, generating now', flush=True)
         try:

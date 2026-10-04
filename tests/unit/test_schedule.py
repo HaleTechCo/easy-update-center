@@ -32,7 +32,7 @@ def test_crontab_rejects_nonsense(tmp_path, secrets_dir, name, value):
 
 def run(settings, tmp_path, generate_once):
     calls = []
-    run_schedule(settings, generate_once=lambda: (calls.append('generate'), generate_once()), exec_=lambda _file, argv, _env: calls.append(argv), crontab=tmp_path / 'crontab')
+    run_schedule(settings, generate_once=lambda: (calls.append('generate'), generate_once()), exec_=lambda _file, argv, _env: calls.append(argv), crontab=tmp_path / 'crontab', environ=os.environ)
     return calls
 
 
@@ -91,3 +91,8 @@ def test_an_unwritable_data_directory_does_not_stop_the_scheduler(tmp_path, secr
     assert f'uc schedule: could not record the start in {settings.data_dir / "scheduler.json"}: ' in out
     assert '; uc config cannot tell when a restart is needed' in out
     assert not [path for path in settings.data_dir.iterdir() if path.name.startswith('.scheduler')]
+
+
+def test_run_schedule_requires_the_environment_the_container_received(tmp_path, secrets_dir):
+    with pytest.raises(TypeError, match='environ'):
+        run_schedule(make_settings(tmp_path, secrets_dir), generate_once=lambda: None, exec_=lambda *_: None, crontab=tmp_path / 'crontab')  # type: ignore[call-arg]

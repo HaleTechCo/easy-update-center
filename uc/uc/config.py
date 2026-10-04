@@ -347,7 +347,7 @@ def settings_from(r: Resolver) -> Settings:
 
     repo_type, repo_url, repo_key = _repository(r, online=online)
     repo_url_with_port = with_explicit_port(repo_url)
-    api_url = with_trailing_slash(r.raw('REPO_API_URL') or repo_url_with_port + 'api/')
+    api_url = with_trailing_slash(_checked_url(r, 'REPO_API_URL') or repo_url_with_port + 'api/')
 
     repo_adapter = _bool(r, 'REPO_ADAPTER', default=not online or repo_type == 'artifact-keeper')
     if repo_type == 'artifact-keeper' and not repo_adapter:
@@ -364,6 +364,7 @@ def settings_from(r: Resolver) -> Settings:
     if resources_source == 'url' and not resources_url:
         msg = 'RESOURCES_URL must be set when RESOURCES_SOURCE=url'
         raise ConfigError(msg)
+    resources_url = _checked_url(r, 'RESOURCES_URL')
 
     procurement_source = r.raw('PROCUREMENT_SOURCE_URL')
     source_parts = _parse_url(r, 'PROCUREMENT_SOURCE_URL', procurement_source)
@@ -386,15 +387,15 @@ def settings_from(r: Resolver) -> Settings:
         resources_ref=r.raw('RESOURCES_REF'),
         resources_url=resources_url,
         resources_sha256=r.raw('RESOURCES_SHA256').lower(),
-        popularity_json_url=r.raw('POPULARITY_JSON_URL'),
-        tool_installers_url=r.raw('TOOL_INSTALLERS_URL'),
+        popularity_json_url=_checked_url(r, 'POPULARITY_JSON_URL'),
+        tool_installers_url=_checked_url(r, 'TOOL_INSTALLERS_URL'),
         repo_type=repo_type,
         repo_url=repo_url,
         repo_url_with_port=repo_url_with_port,
         repo_api_url=api_url,
         repo_key=repo_key,
         repo_adapter=repo_adapter,
-        repo_adapter_url=with_trailing_slash(r.raw('REPO_ADAPTER_URL') or f'http://repo-adapter:{_int(r, "REPO_ADAPTER_PORT")}/artifactory/'),
+        repo_adapter_url=with_trailing_slash(_checked_url(r, 'REPO_ADAPTER_URL') or f'http://repo-adapter:{_int(r, "REPO_ADAPTER_PORT")}/artifactory/'),
         repo_adapter_dir=Path(r.raw('REPO_ADAPTER_DIR') or str(data_dir / 'repo-adapter')),
         repo_adapter_port=_int(r, 'REPO_ADAPTER_PORT'),
         repo_ca_file=Path(repo_ca) if repo_ca else None,
@@ -420,8 +421,8 @@ def settings_from(r: Resolver) -> Settings:
         tls_key_file=r.raw('TLS_KEY_FILE'),
         extra_args=tuple(r.raw('UC_EXTRA_ARGS').split()),
         java_tool_options=r.raw('JAVA_TOOL_OPTIONS'),
-        https_proxy=r.raw('HTTPS_PROXY'),
-        http_proxy=r.raw('HTTP_PROXY'),
+        https_proxy=_checked_url(r, 'HTTPS_PROXY'),
+        http_proxy=_checked_url(r, 'HTTP_PROXY'),
         no_proxy=r.raw('NO_PROXY'),
         data_dir=data_dir,
         overlay_dir=Path(r.raw('UC_OVERLAY_DIR')),
@@ -531,6 +532,14 @@ def _explicit_backend_url(r: Resolver) -> str:
     return value
 
 
+def _checked_url(r: Resolver, name: str) -> str:
+    """Return name's value, '' if unset; a non-empty value must parse as a URL (credentials are allowed: a proxy URL may carry them)."""
+    value = r.raw(name)
+    if value:
+        _parse_url(r, name, value)
+    return value
+
+
 def _parse_url(r: Resolver, name: str, value: str) -> SplitResult:
     """Return value split into its parts; a URL urllib cannot parse, or whose port is not a number, is a ConfigError naming the setting."""
     try:
@@ -616,12 +625,14 @@ def read_secret(path: Path) -> str | None:
 def settings_digest(settings: Settings, environ: Mapping[str, str]) -> str:
     """Return a fingerprint of what a running service keeps from when it started: the effective values of the restart settings, and every registry setting in environ.
 
+    Each environment value is taken as Resolver.raw takes it: stripped, and absent when blank, so an empty `RETAIN_RELEASES=` in .env
+    changes nothing; a blank POPULARITY_JSON_URL or TOOL_INSTALLERS_URL is a real value (off) and stays.
     environ is the environment the container received (its env_file), which is fixed when the container is created, so
     a change in .env needs a recreate whatever the setting; a change in uc.toml matters only for the restart settings.
     Pass a snapshot taken before apply_process_env exports anything from uc.toml. The scheduler records the digest, and
     uc config compares it to tell whether the running services use the current settings.
     """
     marked = {setting.env: getattr(settings, setting.attribute) for setting in SETTINGS if setting.restart and setting.attribute}
-    given = {name: environ[name] for name in REGISTRY if name in environ}
+    given = {name: value for name, setting in REGISTRY.items() if name in environ and ((value := environ[name].strip()) or setting.empty_means_off)}
     text = json.dumps({'effective': marked, 'environment': given}, default=str, sort_keys=True)
     return hashlib.sha256(text.encode('utf-8')).hexdigest()

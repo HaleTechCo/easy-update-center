@@ -293,6 +293,45 @@ def test_a_malformed_url_is_a_configuration_error(name, extra):
         load_settings(env)
 
 
+URL_SETTINGS = [
+    ('REPO_API_URL', '[repo]\napi_url'),
+    ('REPO_ADAPTER_URL', '[repo]\nadapter_url'),
+    ('RESOURCES_URL', '[resources]\nurl'),
+    ('POPULARITY_JSON_URL', 'popularity_json_url'),
+    ('TOOL_INSTALLERS_URL', 'tool_installers_url'),
+    ('HTTPS_PROXY', 'https_proxy'),
+    ('HTTP_PROXY', 'http_proxy'),
+]
+
+
+@pytest.mark.parametrize('bad', ['https://[bad', 'http://host:abc'])
+@pytest.mark.parametrize('name', [name for name, _ in URL_SETTINGS])
+def test_every_url_setting_is_parsed_when_the_settings_load(name, bad):
+    with pytest.raises(ConfigError, match=f'^{name} is not a valid URL: '):
+        load_settings({**AIRGAPPED, name: bad}, config_file=Path('/nonexistent/uc.toml'))
+
+
+@pytest.mark.parametrize(('name', 'toml'), URL_SETTINGS)
+def test_a_malformed_url_setting_from_uc_toml_names_its_key(tmp_path, name, toml):
+    path = tmp_path / 'uc.toml'
+    path.write_text(f'{toml} = "http://[bad"\n', encoding='utf-8')
+    with pytest.raises(ConfigError, match=rf'^{name} \(.* in .*uc\.toml\) is not a valid URL: '):
+        load_settings(AIRGAPPED, config_file=path)
+
+
+@pytest.mark.parametrize(
+    ('name', 'value'),
+    [
+        ('HTTPS_PROXY', 'proxy.corp:3128'),
+        ('HTTP_PROXY', 'http://user:pw@proxy.corp:3128'),  # pragma: allowlist secret
+        ('REPO_API_URL', 'https://artifactory.corp/artifactory/api/'),
+        ('RESOURCES_URL', 'https://mirror.corp/resources.zip'),
+    ],
+)
+def test_valid_url_settings_still_load(name, value):
+    assert load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+
+
 def test_a_malformed_url_from_uc_toml_names_its_key(tmp_path):
     path = tmp_path / 'uc.toml'
     path.write_text('[repo]\nurl = "http://[bad/"\n', encoding='utf-8')
@@ -347,6 +386,19 @@ def test_a_restart_setting_changed_only_in_uc_toml_changes_the_digest(tmp_path, 
     before_file.write_text('public_url = "https://uc.example.com"\n', encoding='utf-8')
     after_file.write_text(after, encoding='utf-8')
     assert digest(env, before_file) != digest(env, after_file)
+
+
+@pytest.mark.parametrize('blank', ['', '   '])
+def test_a_blank_environment_value_leaves_the_digest_as_if_absent(blank):
+    assert digest({**AIRGAPPED, 'RETAIN_RELEASES': blank}) == digest(AIRGAPPED)
+
+
+def test_an_environment_value_is_taken_stripped_in_the_digest():
+    assert digest({**AIRGAPPED, 'RETAIN_RELEASES': ' 5'}) == digest({**AIRGAPPED, 'RETAIN_RELEASES': '5'})
+
+
+def test_an_empty_value_that_turns_a_setting_off_stays_in_the_digest():
+    assert digest({**AIRGAPPED, 'POPULARITY_JSON_URL': ''}) != digest(AIRGAPPED)
 
 
 @pytest.mark.parametrize(('name', 'value', 'toml'), [('RETAIN_RELEASES', '9', 'retain_releases = 9\n'), ('JAVA_TOOL_OPTIONS', '-Xmx1g', 'java_tool_options = "-Xmx1g"\n')])
