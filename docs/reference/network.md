@@ -23,7 +23,8 @@ Jenkins controllers need to reach only the web container, at `PUBLIC_URL`.
 | `repo-adapter` | no | yes | yes |
 
 `web-config` has no network at all (`network_mode: none`): it only reads settings and writes a file.
-`setup`, which the `make pki-init`, `make pki-rotate` and `make secrets-*` targets run, has none either.
+`setup`, which the `make pki-init`, `make pki-rotate` and `make secrets-*` targets run, has none
+either.
 
 `repo` is an internal network: nothing on it can reach outside the host, and the web container is
 not on it. The repo-adapter reaches the repository through `repo-egress`. `make compose-check`
@@ -45,8 +46,8 @@ asserts this layout.
 `uc doctor --fetch` reads from `repo.jenkins-ci.org` too. The air-gapped override also blocks
 `github.com` as a precaution. Behind an outbound HTTP proxy, set it for
 both halves: `JAVA_TOOL_OPTIONS` (`-Dhttps.proxyHost`, `-Dhttps.proxyPort`) for the generator, and
-`HTTPS_PROXY` with `NO_PROXY=repo-adapter` for the `uc` code, which fetches the upstream resources and
-tool installers itself.
+`HTTPS_PROXY` with `NO_PROXY=repo-adapter` for the `uc` code, which fetches the upstream resources
+and tool installers itself.
 
 ## Outbound: air-gapped
 

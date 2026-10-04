@@ -13,7 +13,8 @@ cp config/uc.example.toml config/uc.toml
 ```
 
 The example lists every setting the file can hold, commented out, each showing its default or,
-where there is none, an example value. Set `mode` and `public_url`, then uncomment what you need. For an air-gapped starting point, generate one instead:
+where there is none, an example value. Set `mode` and `public_url`, then uncomment what you need.
+For an air-gapped starting point, generate one instead:
 
 ```bash
 docker compose run --rm uc config --example toml --mode airgapped > config/uc.toml
@@ -25,7 +26,8 @@ docker compose run --rm uc config --example toml --mode airgapped > config/uc.to
 ## Move settings out of .env
 
 Each variable has a key in the file: a variable whose name starts with a section's name and an
-underscore goes under that section, the rest of its name in lower case; any other is a top-level key.
+underscore goes under that section, the rest of its name in lower case; any other is a top-level
+key.
 This `.env`:
 
 ```bash
