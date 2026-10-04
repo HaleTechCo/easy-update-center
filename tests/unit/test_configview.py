@@ -161,6 +161,25 @@ def test_the_reload_hint_follows_the_environment_and_the_restart_settings_not_uc
     assert 'note: the scheduler started at x with other settings' in out
 
 
+@pytest.mark.parametrize(
+    'after',
+    ['public_url = "https://uc.example.com"\n[generate]\nschedule = "0 1 * * *"\n', 'public_url = "https://other.example.com"\n'],
+    ids=['generate_schedule', 'public_url'],
+)
+def test_the_reload_hint_follows_a_restart_setting_changed_only_in_uc_toml(tmp_path, secrets_dir, after):
+    env = env_for(tmp_path, secrets_dir)
+    del env['PUBLIC_URL']  # set in uc.toml, so the environment stays the same throughout
+    path = settings_file(tmp_path, 'public_url = "https://uc.example.com"\n')
+    state = tmp_path / 'data' / 'scheduler.json'
+    state.parent.mkdir()
+    state.write_text(json.dumps({'started_at': 'x', 'settings_digest': settings_digest(load_settings(env, config_file=path), env)}), encoding='utf-8')
+    _, out, _ = show(env, path)
+    assert 'note:' not in out
+    path.write_text(after, encoding='utf-8')
+    _, out, _ = show(env, path)
+    assert 'note: the scheduler started at x with other settings' in out
+
+
 @pytest.mark.parametrize('options', [{'as_json': True}, {'check': True}])
 def test_an_invalid_configuration_prints_nothing_on_stdout_with_json_or_check(tmp_path, secrets_dir, options):
     code, out, err = show(env_for(tmp_path, secrets_dir, RETAIN_RELEASES='0'), tmp_path / 'none.toml', **options)

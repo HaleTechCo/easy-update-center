@@ -20,6 +20,10 @@ once releases are published.
   longer works them out from `MODE` and `REPO_*`. `web-config` checks only the settings the web
   container uses, so an invalid setting web does not use no longer stops it; a uc.toml that is not
   UTF-8, or cannot be read, is reported as such.
+- The private-CA recipe (docs/getting-started/airgapped.md) sets `REPO_CA_FILE` in `.env` (or
+  `[repo] ca_file` in `config/uc.toml`), and `compose.repo-ca.yaml` only mounts the bundle. Set under
+  `environment:` on two services, as the recipe had it, it made `uc config` end with the
+  `make reload` note every time: if you followed it, move the variable to `.env`.
 - `SIGNING_CERT_DAYS`, which nothing read, is replaced by `PKI_SIGNING_DAYS`, which `uc pki` reads.
 - Compose mounts all of `./config` at `/config`, in the repo-adapter too; it mounted only
   `config/overlay/` before.
@@ -73,8 +77,10 @@ once releases are published.
   (online), what `CORE_AGE_DAYS=400` means, procured copies of the popularity and tool-installer
   data, and `COMPOSE_FILE` for air-gapped. A commented line there is not set: it shows the default,
   or an example value where there is none.
-- A URL setting `uc` cannot parse (for example `REPO_URL=http://[bad/`) is reported as
-  `uc: error: <setting> is not a valid URL: ...` instead of a traceback.
+- A `PUBLIC_URL`, `REPO_URL`, `DOWNLOAD_BACKEND_URL` or `PROCUREMENT_SOURCE_URL` that `uc` cannot
+  parse (for example `PUBLIC_URL=https://[uc.example.com`, or a port that is not a number) is
+  reported as `uc: error: <setting> is not a valid URL: ...` when the settings load, so
+  `uc config --check` catches it, instead of a traceback.
 - `uc generate --wait` waits for a running generation or rollback instead of exiting 75; scheduled
   generations use it.
 - `make reload` checks the settings, then recreates the services so they read them; with invalid

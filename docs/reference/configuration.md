@@ -69,6 +69,10 @@ and which you can run by hand; "doctor" means `uc doctor`.
   `JAVA_TOOL_OPTIONS`, ...) apply at the next run when set in `config/uc.toml`, and need it too
   when set in `.env`. `uc config` ends with that command when the scheduler started with other
   values of the `restart` settings, or in another environment (`.env`), than the current ones.
+- Set settings in `.env` or `config/uc.toml`, not under one service's `environment:` in a Compose
+  override: `uc config` compares its own container's settings with the scheduler's, so a value only
+  one of them receives makes it end with that command every time. The TLS and proxy-CA overrides
+  set variables on `web` alone, which neither of them reads, so they do not count.
 - `PUBLIC_URL` and the download settings are written into each release: after changing them,
   also publish a new release with `docker compose run --rm uc generate`.
 
@@ -115,8 +119,8 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 | `REPO_ADAPTER` | `[repo] adapter` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter | Whether the generator reads the repository through the [repo-adapter](../architecture/repo-adapter.md). `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is refused. The service stays idle when off. |
 | `REPO_ADAPTER_URL` | `[repo] adapter_url` | `http://repo-adapter:${REPO_ADAPTER_PORT}/artifactory/` | generate, doctor | Where `uc` finds the adapter; it follows `REPO_ADAPTER_PORT`. Change it only with a non-default Compose layout. |
 | `REPO_ADAPTER_DIR` | `[repo] adapter_dir` | `/data/repo-adapter` | generate, doctor, repo-adapter | The adapter's token, cache and `report.json`. |
-| `REPO_ADAPTER_PORT` | `[repo] adapter_port` | `8081` | repo-adapter | The port the repo-adapter listens on; `--port` overrides it. The default `REPO_ADAPTER_URL` follows it, and the `repo-adapter` healthcheck (`uc repo-adapter --healthcheck`) probes the port the running adapter bound; a change applies after `make reload`. Nothing else needs to change with it. Minimum 1. |
-| `REPO_CA_FILE` | `[repo] ca_file` | none | repo-adapter, doctor | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca). `uc doctor --push`, `--clean` and the downloads verify against it too. |
+| `REPO_ADAPTER_PORT` | `[repo] adapter_port` | `8081` | generate, doctor, repo-adapter | The port the repo-adapter listens on; `--port` overrides it. The default `REPO_ADAPTER_URL`, which generate and doctor use, follows it, and the `repo-adapter` healthcheck (`uc repo-adapter --healthcheck`) probes the port the running adapter bound; a change applies after `make reload`. Nothing else needs to change with it. Minimum 1. |
+| `REPO_CA_FILE` | `[repo] ca_file` | none | repo-adapter, doctor | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca): set it in `.env` or `config/uc.toml`, and mount the file with `compose.repo-ca.yaml`. `uc doctor --push`, `--clean` and the downloads verify against it too. |
 | `REPO_MAX_ARCHIVE_MB` | `[repo] max_archive_mb` | `512` | repo-adapter, doctor | Archives larger than this are skipped and reported. `uc doctor --download-dependencies` and `--download-war` download none larger either. Minimum 1. |
 
 ## Downloads

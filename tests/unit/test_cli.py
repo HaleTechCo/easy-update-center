@@ -268,6 +268,17 @@ def test_config_check(monkeypatch, tmp_path, secrets_dir, capsys):
     assert capsys.readouterr().out == 'configuration ok\n'
 
 
+@pytest.mark.parametrize('value', ['https://[uc.example.com', 'https://uc:abc'], ids=['bracket', 'port'])
+def test_config_reports_a_malformed_public_url(monkeypatch, tmp_path, secrets_dir, capsys, value):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PUBLIC_URL', value)
+    for argv in (['config', '--check'], ['config', '--web-env']):  # every setting, and only the web container's
+        assert main(argv) == 1, argv
+        captured = capsys.readouterr()
+        assert captured.out == '', argv
+        assert captured.err.startswith('uc: error: PUBLIC_URL is not a valid URL: '), argv
+
+
 def test_config_json_and_check_are_exclusive(capsys):
     with pytest.raises(SystemExit) as exit_info:
         main(['config', '--json', '--check'])

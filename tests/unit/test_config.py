@@ -306,6 +306,23 @@ def test_web_settings_refuse_a_malformed_repository_url():
         load_web_settings(env, config_file=Path('/nonexistent/uc.toml'))
 
 
+@pytest.mark.parametrize('load', [load_settings, load_web_settings])
+@pytest.mark.parametrize('value', ['https://[uc.example.com', 'https://uc:abc'], ids=['bracket', 'port'])
+def test_a_malformed_public_url_is_a_configuration_error(load, value, tmp_path):
+    with pytest.raises(ConfigError, match=r'^PUBLIC_URL is not a valid URL: '):
+        load({**AIRGAPPED, 'PUBLIC_URL': value}, config_file=Path('/nonexistent/uc.toml'))
+    path = tmp_path / 'uc.toml'
+    path.write_text(f'public_url = "{value}"\n', encoding='utf-8')
+    with pytest.raises(ConfigError, match=r'^PUBLIC_URL \(public_url in .*uc\.toml\) is not a valid URL: '):
+        load({name: given for name, given in AIRGAPPED.items() if name != 'PUBLIC_URL'}, config_file=path)
+
+
+@pytest.mark.parametrize('load', [load_settings, load_web_settings])
+def test_an_unset_public_url_is_still_reported_as_unset(load):
+    with pytest.raises(ConfigError, match=r'^PUBLIC_URL must be set$'):
+        load({'MODE': 'online', 'PUBLIC_URL': ' '}, config_file=Path('/nonexistent/uc.toml'))
+
+
 def digest(env, config_file=None):
     return settings_digest(load_settings(env, config_file=config_file or Path('/nonexistent/uc.toml')), env)
 
@@ -317,6 +334,19 @@ def test_equal_settings_have_equal_digests():
 @pytest.mark.parametrize(('name', 'value'), [('GENERATE_SCHEDULE', '0 1 * * *'), ('DOWNLOAD_ACCESS', 'proxy'), ('REPO_MAX_ARCHIVE_MB', '64'), ('HTTPS_PROXY', 'http://proxy:3128')])
 def test_changing_a_restart_setting_changes_the_digest(name, value):
     assert digest({**AIRGAPPED, name: value}) != digest(AIRGAPPED)
+
+
+@pytest.mark.parametrize(
+    'after',
+    ['public_url = "https://uc.example.com"\n[generate]\nschedule = "0 1 * * *"\n', 'public_url = "https://other.example.com"\n'],
+    ids=['generate_schedule', 'public_url'],
+)
+def test_a_restart_setting_changed_only_in_uc_toml_changes_the_digest(tmp_path, after):
+    env = {name: value for name, value in AIRGAPPED.items() if name != 'PUBLIC_URL'}  # the same environment both times
+    before_file, after_file = tmp_path / 'before.toml', tmp_path / 'after.toml'
+    before_file.write_text('public_url = "https://uc.example.com"\n', encoding='utf-8')
+    after_file.write_text(after, encoding='utf-8')
+    assert digest(env, before_file) != digest(env, after_file)
 
 
 @pytest.mark.parametrize(('name', 'value', 'toml'), [('RETAIN_RELEASES', '9', 'retain_releases = 9\n'), ('JAVA_TOOL_OPTIONS', '-Xmx1g', 'java_tool_options = "-Xmx1g"\n')])
