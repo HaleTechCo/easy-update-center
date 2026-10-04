@@ -94,8 +94,9 @@ The boundaries they and the images draw:
   staging folder `./procurement`. The scheduler, the repo-adapter and the web
   container never do, and `make compose-check` asserts it.
 - Every container but `setup` runs as a non-root user (uid 10001 for the uc image, 33 for web) with
-  a read-only root filesystem; only `/data` and `/tmp` are writable (`setup`: root, writing `/pki`),
-  and `web` mounts `/data` read-only.
+  a read-only root filesystem; only `/data` and `/tmp` are writable (`setup`: root, writing `/pki`,
+  and with `make pki-init OUT=<dir>` that directory, mounted at `/out`), and `web` mounts `/data`
+  read-only.
 - The repo-adapter's file reads need no credentials, because the generator cannot answer an
   authentication challenge on them. They are reachable only on the internal `repo` network, which
   `web` is not attached to, and they serve only POMs, manifests and descriptions, never archives.

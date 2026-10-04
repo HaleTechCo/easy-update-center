@@ -8,10 +8,6 @@ once releases are published.
 
 ### Changed
 
-- The scheduler logs a warning and carries on when it cannot write `/data/scheduler.json`, which
-  only feeds the `make reload` note in `uc config`; without it, `uc config` cannot tell when a
-  restart is needed. That note now says when it appears: the running services were started with
-  different settings, from any change in `.env` or a `uc.toml` change to a setting marked `restart`.
 - A `DOWNLOAD_BACKEND_URL` with credentials in it is refused, as `REPO_URL` is, by `uc` and by
   the web container.
 - The web container logs what it serves (`entrypoint: serving <PUBLIC_URL>; downloads: ...`) before
@@ -43,14 +39,13 @@ once releases are published.
   group (uc 10001, web 33) instead of handing the whole directory to uid 10001, so no step needs
   `sudo` and credentials can be written before or after the keys. `make secrets-permissions` also
   repairs a `secrets/` set up the old way.
-- `make pki-init` builds the uc image only when it is missing, so it works on an offline host that
-  loaded pre-built images.
 - `make reload`, `make pki-init`, `make pki-rotate`, `make secrets-placeholders`,
   `make secrets-permissions` and the `make procure-*` targets run the images `.env` names in
   `UC_IMAGE` and `WEB_IMAGE`: they no longer hand Compose make's own `jenkins-uc/*:local` defaults,
-  which beat `.env`. A value given on make's command line or in the shell still wins. When that uc
-  image is missing, they build it only if it is `jenkins-uc/uc:local`, and pull any other first, in
-  a step of its own, so an air-gapped host that loaded a registry image builds nothing.
+  which beat `.env`. A value given on make's command line or in the shell still wins. They build or
+  pull that uc image only when it is missing, in a step of its own: they build it if it is
+  `jenkins-uc/uc:local` and pull any other, so an offline or air-gapped host that loaded pre-built
+  images builds and pulls nothing.
 - The `docker compose run`s of those targets no longer print Compose's `Container ... Creating` and
   `Created` lines around the command's output (`COMPOSE_PROGRESS=quiet`; older Compose releases
   ignore it).
@@ -66,11 +61,14 @@ once releases are published.
   settings registry (`make examples`).
 - `uc config` shows each setting's value and where it came from; `--check` validates, `--example`
   prints an example file, `--web-env` the web container's settings. Credentials inside a URL setting
-  (for example a proxy URL with user:password) show as `***`, in text and JSON, including when the
-  configuration is invalid. Settings read only when a service starts are marked `restart` (a
-  `"restart"` field in `--json`), and the note to run `make reload` appears when one of them
-  changed or `.env` did, not for a `config/uc.toml` change to a setting every run re-reads, such as
-  `RETAIN_RELEASES`.
+  (everything before its last `@`, such as a proxy URL's user:password) show as `***`, in text and
+  JSON, including when the configuration is invalid. Settings read only when a service starts are
+  marked `restart` (a `"restart"` field in `--json`), and the note to run `make reload` appears
+  when one of them changed or a setting in `.env` did (a blank value counts as unset), not for a
+  `config/uc.toml` change to a setting every run re-reads, such as `RETAIN_RELEASES`. The
+  scheduler records the settings it started with in `/data/scheduler.json` for that note; when it
+  cannot write the file, it logs a warning and carries on, and `uc config` cannot tell when a
+  restart is needed.
 - The scheduler can run a read-only `uc doctor --record` on `DOCTOR_SCHEDULE`. `uc doctor --record`
   saves the report as `/data/doctor/report.json` and its counts in `status.json`, with the new
   `doctor.checked_at`, `doctor.missing_cores`, `doctor.cores_unchecked` (plugin releases whose
@@ -88,14 +86,17 @@ once releases are published.
   `2.462.1`.
 - The generated example files give the remaining guidance per mode: how to use your own repository
   (online), what `CORE_AGE_DAYS=400` means, procured copies of the popularity and tool-installer
-  data, and `COMPOSE_FILE` for air-gapped. A commented line there is not set: it shows the default,
-  or an example value where there is none.
+  data, and `COMPOSE_FILE` for air-gapped. A commented line there is not set: it shows the default
+  or an example value, and the comment above it says what applies when it is unset.
 - A URL setting that `uc` cannot parse (for example `PUBLIC_URL=https://[uc.example.com`, or a port
-  that is not a number) is reported as `uc: error: <setting> is not a valid URL: ...` when the
-  settings load, so `uc config --check` catches it, instead of a traceback. Every URL setting is
-  parsed: `PUBLIC_URL`, `REPO_URL`, `REPO_API_URL`, `REPO_ADAPTER_URL`, `DOWNLOAD_BACKEND_URL`,
-  `PROCUREMENT_SOURCE_URL`, `RESOURCES_URL`, `POPULARITY_JSON_URL`, `TOOL_INSTALLERS_URL`,
-  `HTTPS_PROXY` and `HTTP_PROXY`.
+  that is not a number) is reported as
+  `uc: error: <setting> is not a valid URL: its host or port cannot be read` when the settings
+  load, so `uc config --check` catches it, instead of a traceback; the message never quotes the
+  value. Every URL setting is parsed: `PUBLIC_URL`, `REPO_URL`, `REPO_API_URL`, `REPO_ADAPTER_URL`,
+  `DOWNLOAD_BACKEND_URL`, `PROCUREMENT_SOURCE_URL`, `RESOURCES_URL`, `POPULARITY_JSON_URL` and
+  `TOOL_INSTALLERS_URL`. `HTTPS_PROXY` and `HTTP_PROXY` are checked as Python's urllib reads them:
+  they may carry a user name and password, which may hold `#`, `?` or `/`, and only the host and
+  port after the last `@` must be readable.
 - `uc generate --wait` waits for a running generation or rollback instead of exiting 75; scheduled
   generations use it.
 - `make reload` checks the settings, then recreates the services so they read them; with invalid

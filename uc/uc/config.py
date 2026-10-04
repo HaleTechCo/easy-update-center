@@ -33,6 +33,7 @@ PUBLIC_RELEASES_URL = PUBLIC_ARTIFACTORY_URL + 'releases/'
 UPSTREAM_MIRROR_URL = 'https://get.jenkins.io'
 DEFAULT_CONFIG_FILE = Path('/config/uc.toml')
 _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
+_SCHEME = re.compile(r'[^/:]+://')  # what urllib's proxy handler takes as a scheme
 _FILE_KEYS = tuple(sorted(toml_label(setting.env) for setting in SETTINGS if not setting.env_only))
 _FILE_SECTIONS = tuple(f'[{section}]' for section in SECTIONS)
 
@@ -421,8 +422,8 @@ def settings_from(r: Resolver) -> Settings:
         tls_key_file=r.raw('TLS_KEY_FILE'),
         extra_args=tuple(r.raw('UC_EXTRA_ARGS').split()),
         java_tool_options=r.raw('JAVA_TOOL_OPTIONS'),
-        https_proxy=_checked_url(r, 'HTTPS_PROXY'),
-        http_proxy=_checked_url(r, 'HTTP_PROXY'),
+        https_proxy=_checked_proxy(r, 'HTTPS_PROXY'),
+        http_proxy=_checked_proxy(r, 'HTTP_PROXY'),
         no_proxy=r.raw('NO_PROXY'),
         data_dir=data_dir,
         overlay_dir=Path(r.raw('UC_OVERLAY_DIR')),
@@ -533,20 +534,46 @@ def _explicit_backend_url(r: Resolver) -> str:
 
 
 def _checked_url(r: Resolver, name: str) -> str:
-    """Return name's value, '' if unset; a non-empty value must parse as a URL (credentials are allowed: a proxy URL may carry them)."""
+    """Return name's value, '' if unset; a non-empty value must parse as a URL."""
     value = r.raw(name)
     if value:
         _parse_url(r, name, value)
     return value
 
 
-def _parse_url(r: Resolver, name: str, value: str) -> SplitResult:
-    """Return value split into its parts; a URL urllib cannot parse, or whose port is not a number, is a ConfigError naming the setting."""
+def _checked_proxy(r: Resolver, name: str) -> str:
+    """Return the proxy URL name sets, '' if unset; only its scheme, host and port are parsed, after the user info, which may hold anything (split_userinfo)."""
+    value = r.raw(name)
+    if value:
+        scheme, _, rest = split_userinfo(value)
+        _parse_url(r, name, (scheme or '//') + rest, hint='; percent-encode # ? / [ ] @ in a user name or password')
+    return value
+
+
+def split_userinfo(value: str) -> tuple[str, str | None, str]:
+    """Split a URL as urllib's proxy handler reads it: (its scheme and '://', '' without one; the user info before the last '@', None without an '@'; the rest, from the host on).
+
+    The user info may hold an unencoded # ? / that urlsplit takes as the end of the host, and without a scheme the whole
+    value is user info and host (user:password@proxy:3128). urllib ends the user info at the authority's last '@'; taking
+    it to the value's last '@' reads the same wherever the '@'s are all in the user info, and never leaves part of a
+    password in the rest.
+    """
+    match = _SCHEME.match(value)
+    scheme = match.group() if match else ''
+    userinfo, at, rest = value[len(scheme) :].rpartition('@')
+    return scheme, userinfo if at else None, rest
+
+
+def _parse_url(r: Resolver, name: str, value: str, *, hint: str = '') -> SplitResult:
+    """Return value split into its parts; a URL urllib cannot parse, or whose port is not a number, is a ConfigError naming the setting.
+
+    The message never includes urllib's reason, which can quote part of the value: a password, say.
+    """
     try:
         parts = urlsplit(value)
         _ = parts.port  # raises ValueError for a port that is not a number in range
-    except ValueError as exc:
-        msg = f'{r.label(name)} is not a valid URL: {exc}'
+    except ValueError:
+        msg = f'{r.label(name)} is not a valid URL: its host or port cannot be read{hint}'
         raise ConfigError(msg) from None
     return parts
 

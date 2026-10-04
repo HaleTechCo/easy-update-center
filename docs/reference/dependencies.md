@@ -7,8 +7,8 @@ on 2026-09-24 produced. Pins are enforced at build time.
 
 ## uc image
 
-The image behind the `uc`, `scheduler` and `repo-adapter` services. Built by `make build` from
-[`uc/Dockerfile`](../../uc/Dockerfile).
+The image behind the `uc`, `scheduler`, `repo-adapter`, `web-config` and `setup` services. Built by
+`make build` from [`uc/Dockerfile`](../../uc/Dockerfile).
 
 | Component | Version or pin | Pinned in | License | Why |
 |---|---|---|---|---|
