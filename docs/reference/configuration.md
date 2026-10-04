@@ -186,7 +186,10 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 ## Compose
 
 These are read by `docker compose` itself, from the shell environment or from `.env` in the project
-directory, not by the containers.
+directory, not by the containers. The `make` targets that run your stack (`reload`, `pki-*`,
+`secrets-*`, `procure-*`) leave `UC_IMAGE` and `WEB_IMAGE` to `.env` too, unless you set them on
+make's command line or in the shell; `make build` does not read `.env`, and tags the images it builds
+with these defaults unless you pass `UC_IMAGE=...` or `WEB_IMAGE=...` to it.
 
 | Setting | Default | Notes |
 |---|---|---|

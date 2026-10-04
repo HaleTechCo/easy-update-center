@@ -6,6 +6,13 @@ UC_TEST_IMAGE ?= jenkins-uc/uc-test:local
 WEB_IMAGE ?= jenkins-uc/web:local
 export UC_IMAGE UC_TEST_IMAGE WEB_IMAGE
 
+# The targets that run your own Compose project (pki-*, secrets-*, reload, procure-*) leave the images
+# to .env and compose.yaml: they unset UC_IMAGE and WEB_IMAGE, unless you gave them on make's command
+# line or in the environment. Their one-shot runs print only the command's output, without Compose's
+# container lines (older Compose releases ignore COMPOSE_PROGRESS).
+STACK_ENV = env $(foreach v,UC_IMAGE WEB_IMAGE,$(if $(filter file,$(origin $(v))),-u $(v)))
+STACK_RUN = $(STACK_ENV) COMPOSE_PROGRESS=quiet docker compose run --rm
+
 # Unit tests read the Python, templates and lint tools straight from the working tree
 # (VersionTool.java is compiled into the image, so changing it needs `make build-uc`).
 SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
@@ -59,14 +66,18 @@ HOST_UID ?= $(shell id -u)
 HOST_GID ?= $(shell id -g)
 # The setup service (compose.yaml) reads .env, or UC_ENV_FILE, and config/ as the other services do,
 # so uc pki sees the PKI_* settings they see. It mounts ./secrets as /pki and runs as root.
-IN_SECRETS = docker compose run --rm --no-deps
-FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh /pki $(HOST_UID) $(HOST_GID)
+IN_SECRETS = $(STACK_RUN) --no-deps
+SETUP_DIR = /pki
+FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh $(SETUP_DIR) $(HOST_UID) $(HOST_GID)
 SECRET_FILES = repo_username repo_password github_username github_token download_proxy_auth repo_push_auth
 
-# Creates the root CA and signing certificate in ./secrets. Refuses to overwrite existing files.
+# Creates the root CA and signing certificate in ./secrets, or with OUT=<directory> in that directory
+# (relative to this one, created if missing, mounted as /out), as when replacing the root CA
+# (docs/how-to/rotate-signing-certificate.md). Refuses to overwrite existing files.
+pki-init: SETUP_DIR = $(if $(OUT),/out,/pki)
 pki-init: uc-image
-	@mkdir -p secrets
-	$(IN_SECRETS) setup -c 'uc pki init --out /pki && $(FIX_SECRETS)'
+	@mkdir -p secrets $(OUT)
+	$(IN_SECRETS) $(if $(OUT),-v "$(abspath $(OUT)):/out") setup -c 'uc pki init --out $(SETUP_DIR) && $(FIX_SECRETS)'
 
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
 # signing certificate and keeps the previous pair as *.old.
@@ -99,8 +110,8 @@ examples: uc-image
 # service running as it was; web-config runs the check, needing no network and no secrets.
 # A generation in progress restarts.
 reload:
-	docker compose run --rm web-config config --check
-	docker compose up -d --force-recreate
+	$(STACK_RUN) web-config config --check
+	$(STACK_ENV) docker compose up -d --force-recreate
 
 # uc doctor --download-* stages files into ./procurement for review, and uc doctor --clean deletes the
 # ones the repository already holds (docs/how-to/procure-missing-files.md). The uc container runs as
@@ -114,12 +125,12 @@ procure-clean: DOCTOR_MODE = --clean
 procure-download procure-clean: uc-image
 	@mkdir -p procurement
 	@$(IN_PROCUREMENT) 'chown -R 10001:10001 /procurement'
-	docker compose run --rm uc doctor $(DOCTOR_MODE) $(ARGS); rc=$$?; \
+	$(STACK_RUN) uc doctor $(DOCTOR_MODE) $(ARGS); rc=$$?; \
 	  $(IN_PROCUREMENT) 'chown -R $(HOST_UID):$(HOST_GID) /procurement'; exit $$rc
 
 # Usage: make procure-push [ARGS=--dry-run]
 procure-push:
-	docker compose run --rm uc doctor --push $(ARGS)
+	$(STACK_RUN) uc doctor --push $(ARGS)
 
 # UC_ENV_FILE selects the services' env_file; --env-file only feeds compose's own interpolation.
 # check_isolation.py asserts the network and secret boundaries the repo-adapter relies on.

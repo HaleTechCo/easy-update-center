@@ -41,6 +41,13 @@ once releases are published.
   repairs a `secrets/` set up the old way.
 - `make pki-init` builds the uc image only when it is missing, so it works on an offline host that
   loaded pre-built images.
+- `make reload`, `make pki-init`, `make pki-rotate`, `make secrets-placeholders`,
+  `make secrets-permissions` and the `make procure-*` targets run the images `.env` names in
+  `UC_IMAGE` and `WEB_IMAGE`: they no longer hand Compose make's own `jenkins-uc/*:local` defaults,
+  which beat `.env`. A value given on make's command line or in the shell still wins.
+- The `docker compose run`s of those targets no longer print Compose's `Container ... Creating` and
+  `Created` lines around the command's output (`COMPOSE_PROGRESS=quiet`; older Compose releases
+  ignore it).
 - `uc doctor` gives the repo.jenkins-ci.org URL of the real `.pom` for every POM the repo-adapter
   derived from an archive or ignored as unusable, not only for plugins with no POM at all. In the
   adapter's `report.json` and `uc doctor --json`, `derived_poms` entries are objects (`gav`, `url`)
@@ -87,6 +94,9 @@ once releases are published.
   generations use it.
 - `make reload` checks the settings, then recreates the services so they read them; with invalid
   settings it recreates nothing.
+- `make pki-init OUT=<dir>` creates a new PKI in `<dir>` instead of `secrets/`, through the `setup`
+  service as `make pki-init` does. Replacing the root CA (docs/how-to/rotate-signing-certificate.md)
+  uses it instead of `docker run`.
 - Procurement with `uc doctor`, through a staging folder, `./procurement/`, whose `procurement.json`
   records each file's source, sha1 and reason for review:
   - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the real
