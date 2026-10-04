@@ -42,14 +42,16 @@ key to offline storage. Once the new release is live, delete `secrets/*.old`.
 The root CA lasts ten years. Replacing it (at expiry, or if its key may have leaked) needs an
 overlap, because controllers reject metadata signed under a root they do not trust yet:
 
-1. Create a new PKI in a separate directory, `newpki/` in this repository (created if missing):
+1. Create a new PKI in a separate directory, `newpki/` in this repository (created if missing, and
+   ignored by git, as `secrets/` is, since it holds the new root key):
 
    ```bash
    make pki-init OUT=newpki
    ```
 
    It works as `make pki-init` does: the `PKI_*` settings come from `.env`, existing files are not
-   overwritten, and the files get the permissions they have in `secrets/`.
+   overwritten, and the files get the permissions they have in `secrets/`. Another directory name
+   works too, but git does not ignore it.
 
 2. Add `newpki/root-ca.crt` to `update-center-rootCAs/` on every controller, **keeping the old
    root** there. Jenkins trusts every certificate in that directory.

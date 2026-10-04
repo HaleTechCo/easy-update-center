@@ -44,7 +44,9 @@ once releases are published.
 - `make reload`, `make pki-init`, `make pki-rotate`, `make secrets-placeholders`,
   `make secrets-permissions` and the `make procure-*` targets run the images `.env` names in
   `UC_IMAGE` and `WEB_IMAGE`: they no longer hand Compose make's own `jenkins-uc/*:local` defaults,
-  which beat `.env`. A value given on make's command line or in the shell still wins.
+  which beat `.env`. A value given on make's command line or in the shell still wins. When that uc
+  image is missing, they build it only if it is `jenkins-uc/uc:local`, and pull any other first, in
+  a step of its own, so an air-gapped host that loaded a registry image builds nothing.
 - The `docker compose run`s of those targets no longer print Compose's `Container ... Creating` and
   `Created` lines around the command's output (`COMPOSE_PROGRESS=quiet`; older Compose releases
   ignore it).
@@ -95,8 +97,9 @@ once releases are published.
 - `make reload` checks the settings, then recreates the services so they read them; with invalid
   settings it recreates nothing.
 - `make pki-init OUT=<dir>` creates a new PKI in `<dir>` instead of `secrets/`, through the `setup`
-  service as `make pki-init` does. Replacing the root CA (docs/how-to/rotate-signing-certificate.md)
-  uses it instead of `docker run`.
+  service as `make pki-init` does; `OUT` counts only on make's command line. Replacing the root CA
+  (docs/how-to/rotate-signing-certificate.md) uses it, with `newpki/`, which git ignores, instead
+  of `docker run`.
 - Procurement with `uc doctor`, through a staging folder, `./procurement/`, whose `procurement.json`
   records each file's source, sha1 and reason for review:
   - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the real
