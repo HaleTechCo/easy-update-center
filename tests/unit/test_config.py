@@ -346,7 +346,7 @@ def test_valid_url_settings_still_load(name, value):
     assert load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
 
 
-@pytest.mark.parametrize('delimiter', ['#', '?', '/'])
+@pytest.mark.parametrize('delimiter', ['#', '?', '/', '[', ']'])
 @pytest.mark.parametrize('form', ['http://proxyuser:{}@proxy.corp:3128', 'proxyuser:{}@proxy.corp:3128'], ids=['scheme', 'no-scheme'])  # pragma: allowlist secret
 def test_a_proxy_password_may_hold_what_ends_a_url_host(tmp_path, delimiter, form):
     # urllib's proxy handler takes the user info up to the last @, so these work there and must not stop uc.

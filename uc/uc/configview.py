@@ -99,8 +99,9 @@ def format_rows(shown: list[Row], config_file: Path) -> str:
 def reload_hint(settings: Settings, environ: Mapping[str, str]) -> str | None:
     """Return a note when the running services were started with different settings, else None.
 
-    That is any change in .env (a container's environment is fixed when it is created, and environ is this process's own, never
-    exported to), or a uc.toml change to a setting marked restart; the note says that make reload applies them.
+    That is a change to a setting in .env (a container's environment is fixed when it is created, and environ is this process's own,
+    never exported to; an empty value counts as unset, except where empty means off), or a uc.toml change to a setting marked
+    restart; the note says that make reload applies them.
     """
     try:
         state = json.loads((settings.data_dir / SCHEDULER_STATE).read_text(encoding='utf-8'))

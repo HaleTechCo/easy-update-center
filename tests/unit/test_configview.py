@@ -127,7 +127,7 @@ def test_credentials_in_a_proxy_without_a_scheme_are_not_shown(tmp_path, secrets
         assert '***@proxy:3128' in out
 
 
-@pytest.mark.parametrize('delimiter', ['#', '?', '/'])
+@pytest.mark.parametrize('delimiter', ['#', '?', '/', '[', ']'])
 @pytest.mark.parametrize(('form', 'shown'), [('http://proxyuser:{}@proxy.corp:3128', 'http://***@proxy.corp:3128'), ('proxyuser:{}@proxy.corp:3128', '***@proxy.corp:3128')], ids=['scheme', 'no-scheme'])  # pragma: allowlist secret
 def test_a_proxy_password_that_holds_a_url_delimiter_loads_and_is_not_shown(tmp_path, secrets_dir, delimiter, form, shown):
     value = form.format(f'S3cret{delimiter}Tail9z')
