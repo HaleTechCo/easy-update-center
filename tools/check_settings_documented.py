@@ -143,8 +143,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     root = Path.cwd()
     try:
-        registry = registry_names((root / REGISTRY).read_text(encoding='utf-8'))
-        readers = code_settings(root)
+        readers = code_settings(root)  # parses REGISTRY, the first of SOURCES, so every name in it is credited to it
         names, bundled = documented((root / PAGE).read_text(encoding='utf-8'))
     except OSError as error:
         sys.stderr.write(f'check_settings_documented.py: {error}\n')
@@ -152,7 +151,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except SyntaxError as error:
         sys.stderr.write(f'check_settings_documented.py: {REGISTRY.as_posix()} does not parse: {error.msg} (line {error.lineno})\n')
         return 2
-    if not registry:
+    if REGISTRY.as_posix() not in readers.values():
         sys.stderr.write(f'check_settings_documented.py: found no settings in {REGISTRY.as_posix()} (no call to Setting with a string first argument); a pattern no longer matches\n')
         return 2
     if not names:

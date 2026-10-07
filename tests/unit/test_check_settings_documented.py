@@ -135,6 +135,21 @@ def test_main_passes_when_both_sides_agree(tmp_path, monkeypatch):
     assert hook.main([]) == 0
 
 
+def test_main_parses_the_registry_once(tmp_path, monkeypatch):
+    _tree(tmp_path, '| Setting |\n|---|\n| `MODE` |\n| `TLS_KEY_FILE` |\n| `UC_IMAGE` |\n')
+    monkeypatch.chdir(tmp_path)
+    parsed = []
+    parse = hook.ast.parse
+
+    def recording_parse(source, *args, **kwargs):
+        parsed.append(source)
+        return parse(source, *args, **kwargs)
+
+    monkeypatch.setattr(hook.ast, 'parse', recording_parse)
+    assert hook.main([]) == 0
+    assert len(parsed) == 1
+
+
 def test_main_fails_and_names_the_gap(tmp_path, monkeypatch, capsys):
     _tree(tmp_path, '| Setting |\n|---|\n| `MODE` |\n| `UC_IMAGE` |\n')
     monkeypatch.chdir(tmp_path)
