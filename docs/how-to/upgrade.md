@@ -10,12 +10,12 @@ the revision you move to first.
 
 ```bash
 git fetch
-git log --oneline HEAD..origin/master     # what changes
+git log --oneline HEAD..origin/master                # what changes
 git pull
 make build
-docker compose run --rm uc config --check # your settings, as the new revision reads them
-docker compose up -d                      # air-gapped: COMPOSE_FILE in .env selects the override
-docker compose run --rm uc generate       # publish with the new generator now, instead of at the next schedule
+docker compose run --rm --no-deps uc config --check  # your settings, as the new revision reads them
+docker compose up -d                                 # air-gapped: COMPOSE_FILE in .env selects the override
+docker compose run --rm uc generate                  # publish with the new generator now, instead of at the next schedule
 docker compose run --rm uc status
 ```
 
@@ -39,7 +39,7 @@ Then, on the air-gapped host:
 ```bash
 git pull ../jenkins-uc.bundle master            # the Compose files and docs change too
 gunzip -c ../jenkins-uc-images.tar.gz | docker load
-docker compose run --rm uc config --check
+docker compose run --rm --no-deps uc config --check
 docker compose up -d
 docker compose run --rm uc generate
 ```

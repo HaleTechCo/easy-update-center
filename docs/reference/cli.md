@@ -136,10 +136,16 @@ Prints `status.json`, the same document served at `$PUBLIC_URL/status.json`. Fie
 ## uc config
 
 ```bash
-docker compose run --rm uc config [--json | --check]
-docker compose run --rm uc config --example toml|env [--mode online|airgapped]
-docker compose run --rm uc config --web-env [--out FILE]
+docker compose run --rm --no-deps uc config [--json | --check]
+docker compose run --rm --no-deps uc config --example toml|env [--mode online|airgapped]
+docker compose run --rm --no-deps uc config --web-env [--out FILE]
 ```
+
+`uc config` needs no other service, so run it with `--no-deps`. Without it, Compose first starts the
+repo-adapter the `uc` service depends on, recreating it when its image or settings changed: after an
+upgrade or a settings change, the adapter would then run with settings not yet checked, and a
+setting the new revision refuses would show as Compose's `dependency failed to start` instead of
+`uc: error: ...`.
 
 Shows every setting with its value and where it came from: `environment`, `uc.toml: <key>`, `mode`
 (the default for the mode), `derived` (worked out from other settings, as `REPO_URL` and the secret
@@ -230,7 +236,12 @@ uc pki show --dir <dir>
 
 A directory `init` or `rotate` cannot write in is reported as
 `uc: error: cannot write in <dir>: <reason>` (one `init` cannot create, as
-`uc: error: cannot create <dir>: <reason>`), and nothing changes.
+`uc: error: cannot create <dir>: <reason>`), and nothing changes. While they rename files into
+place, both hold SIGINT and SIGTERM back (Ctrl-C, `docker stop`) until every rename is done or
+undone, and neither renames onto a file that exists: one that appears meanwhile is reported as
+`refusing to overwrite existing files: ...` and kept. If moving back fails too, the error names
+what is not back and the `.rotate-*` or `.init-*` directory inside `<dir>` that keeps what was set
+aside.
 
 | Command | What it does |
 |---|---|

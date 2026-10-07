@@ -41,13 +41,16 @@ once releases are published.
   and belong together, and that `update-center.key` and `update-center.cert` are both there or both
   missing, then issues the new pair in a temporary directory inside the directory it rotates, and
   only then keeps the previous pair as `*.old` and moves the new one in. When a check, a step or a
-  rename fails, it moves back what it moved, so the directory is left as it was. Before, a missing or
-  wrong root key left a new key and an empty `update-center.cert`, and running it again moved those
-  over the `*.old` pair. The error names the file it cannot use, the root key under the new
-  `--root-display-dir`: `make pki-rotate` passes `ROOT`, so it names `<ROOT>/root-ca.key`. An
+  rename fails, it moves back what it moved, so the directory is left as it was; SIGINT and SIGTERM
+  wait until the renames are done or undone, no rename overwrites a file that appeared meanwhile,
+  and if moving back fails too, the error names the directory that keeps what was set aside. Before,
+  a missing or wrong root key left a new key and an empty `update-center.cert`, and running it again
+  moved those over the `*.old` pair. The error names the file it cannot use, the root key under the
+  new `--root-display-dir`: `make pki-rotate` passes `ROOT`, so it names `<ROOT>/root-ca.key`. An
   encrypted root key is refused without a passphrase prompt, with a message to decrypt it to a
   temporary file for the rotation (docs/how-to/rotate-signing-certificate.md); before, openssl asked
-  for the passphrase twice, or without a terminal called the key unreadable. `uc pki init`
+  for the passphrase twice, or without a terminal called the key unreadable. Checking an encrypted
+  `update-center.key` (`uc generate`) fails instead of asking for its passphrase too. `uc pki init`
   (`make pki-init`) likewise creates the PKI in a temporary directory and moves it in once complete,
   so a failed run leaves nothing for the next one to refuse. A directory either cannot write in is
   reported as `uc: error: cannot write in <dir>: <reason>` instead of a traceback.

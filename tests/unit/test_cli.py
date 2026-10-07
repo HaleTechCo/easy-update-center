@@ -4,7 +4,9 @@ import errno
 import io
 import json
 import os
+import re
 import shutil
+import signal
 import socket
 import stat
 import subprocess
@@ -386,13 +388,14 @@ def tree_state(directory):
 
 
 def fail_at_call(monkeypatch, owner, name, failing, error):
-    """Make the failing-th call of owner.name raise error; the calls before and after it run as usual. Return the calls' arguments."""
+    """Make the failing-th call of owner.name (or each one, given several) raise error; the others run as usual. Return the calls' arguments."""
     original = getattr(owner, name)
+    failing = {failing} if isinstance(failing, int) else set(failing)
     calls = []
 
     def counting(*args):
         calls.append(args)
-        if len(calls) == failing:
+        if len(calls) in failing:
             raise error
         return original(*args)
 
@@ -473,18 +476,12 @@ ENCRYPTED_ROOT_KEYS = {
 }
 
 
-@pytest.mark.parametrize('form', list(ENCRYPTED_ROOT_KEYS))
-def test_pki_rotate_never_asks_for_a_passphrase(tmp_path, pki_material, form):
-    work = tmp_path / 'pki'
-    shutil.copytree(pki_material, work)
-    options, refusal = ENCRYPTED_ROOT_KEYS[form]
-    encrypt_key(work / 'root' / 'root-ca.key', *options)
-    before = tree_state(work)
-    # stdin stays open and silent, and the new session has no terminal: an openssl that asked for the passphrase would wait for it
+def run_without_a_terminal(args, tmp_path):
+    """Run python3 args with stdin open and silent, in a new session with no terminal: anything that asked for a passphrase would wait for it."""
     reader, writer = os.pipe()
     try:
-        proc = subprocess.run(
-            [sys.executable, '-m', 'uc', 'pki', 'rotate', '--dir', str(work)],
+        return subprocess.run(
+            [sys.executable, *args],
             stdin=reader,
             capture_output=True,
             text=True,
@@ -496,8 +493,39 @@ def test_pki_rotate_never_asks_for_a_passphrase(tmp_path, pki_material, form):
     finally:
         os.close(reader)
         os.close(writer)
+
+
+@pytest.mark.parametrize('form', list(ENCRYPTED_ROOT_KEYS))
+def test_pki_rotate_never_asks_for_a_passphrase(tmp_path, pki_material, form):
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    options, refusal = ENCRYPTED_ROOT_KEYS[form]
+    encrypt_key(work / 'root' / 'root-ca.key', *options)
+    before = tree_state(work)
+    proc = run_without_a_terminal(['-m', 'uc', 'pki', 'rotate', '--dir', str(work)], tmp_path)
     assert (proc.returncode, proc.stdout, proc.stderr) == (1, '', f'uc: error: {refusal.format(work=work)}\n')
     assert tree_state(work) == before
+
+
+CHECK_SIGNING_KEY = """
+import sys
+from pathlib import Path
+from uc.pki import PkiError, key_matches_cert
+try:
+    key_matches_cert(Path(sys.argv[1]), Path(sys.argv[2]))
+except PkiError as exc:
+    sys.exit(f'refused: {exc}')
+"""
+
+
+def test_checking_an_encrypted_signing_key_never_asks_for_a_passphrase(tmp_path, pki_material):
+    key = tmp_path / 'update-center.key'
+    shutil.copy(pki_material / 'update-center.key', key)
+    encrypt_key(key, 'pkey', '-aes256')
+    proc = run_without_a_terminal(['-c', CHECK_SIGNING_KEY, str(key), str(pki_material / 'update-center.cert')], tmp_path)
+    assert proc.returncode == 1
+    assert proc.stderr.startswith('refused: openssl pkey failed: ')
+    assert 'pass phrase' not in proc.stderr
 
 
 @pytest.mark.parametrize('missing', ['update-center.key', 'update-center.cert'])
@@ -564,6 +592,129 @@ def test_pki_rotate_puts_back_what_it_moved_when_a_rename_fails(monkeypatch, tmp
     assert main(['pki', 'rotate', '--dir', str(work)]) == 0  # a rerun keeps the pair from before as *.old
     assert len(calls) - done == ROTATE_RENAMES[previous]
     assert {name: (work / f'{name}.old').read_bytes() for name in pair} == pair
+
+
+class Terminated(Exception):  # noqa: N818 - named for the signal, as KeyboardInterrupt is
+    """What the test's SIGTERM handler raises."""
+
+
+def on_sigterm(_signum, _frame):
+    raise Terminated
+
+
+SIGNALS = {'SIGINT': (signal.SIGINT, KeyboardInterrupt), 'SIGTERM': (signal.SIGTERM, Terminated)}
+
+
+def signal_after_rename(monkeypatch, failing, signum):
+    """Deliver signum to this thread right after the failing-th Path.rename has renamed, before its caller can record it."""
+    rename = Path.rename
+    calls = []
+
+    def renaming(*args):
+        calls.append(args)
+        renamed = rename(*args)
+        if len(calls) == failing:
+            signal.raise_signal(signum)
+        return renamed
+
+    monkeypatch.setattr(Path, 'rename', renaming)
+
+
+SIGNALLED_ROTATIONS = {
+    **{f'{previous}, SIGINT after rename {failing}': (previous, failing, 'SIGINT') for previous, renames in ROTATE_RENAMES.items() for failing in range(1, renames + 1)},
+    'with a previous *.old pair, SIGTERM after rename 3': ('with a previous *.old pair', 3, 'SIGTERM'),
+}
+
+
+@pytest.mark.usefixtures('small_keys')
+@pytest.mark.parametrize('case', list(SIGNALLED_ROTATIONS))
+def test_pki_rotate_finishes_its_renames_before_a_signal_stops_it(monkeypatch, tmp_path, pki_material, case):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    previous, failing, signame = SIGNALLED_ROTATIONS[case]
+    signum, raised = SIGNALS[signame]
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    if previous == 'with a previous *.old pair':
+        assert main(['pki', 'rotate', '--dir', str(work)]) == 0
+    pair = {name: (work / name).read_bytes() for name in ('update-center.key', 'update-center.cert')}
+    signal_after_rename(monkeypatch, failing, signum)
+    handler = signal.signal(signal.SIGTERM, on_sigterm)
+    try:
+        with pytest.raises(raised):
+            main(['pki', 'rotate', '--dir', str(work)])
+    finally:
+        signal.signal(signal.SIGTERM, handler)
+    assert sorted(path.name for path in work.iterdir()) == ['root', 'root-ca.crt', 'update-center.cert', 'update-center.cert.old', 'update-center.key', 'update-center.key.old']
+    assert {name: (work / f'{name}.old').read_bytes() for name in pair} == pair
+    assert pki.key_matches_cert(work / 'update-center.key', work / 'update-center.cert')
+    assert pki.verify_chain(work / 'root-ca.crt', work / 'update-center.cert')
+
+
+@pytest.mark.usefixtures('small_keys')
+@pytest.mark.parametrize('failing', [1, 2, 3, 4])
+def test_pki_init_finishes_its_renames_before_a_signal_stops_it(monkeypatch, tmp_path, failing):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    out = tmp_path / 'pki'
+    signal_after_rename(monkeypatch, failing, signal.SIGINT)
+    with pytest.raises(KeyboardInterrupt):
+        main(['pki', 'init', '--out', str(out), '--root-days', '30', '--signing-days', '10'])
+    assert sorted(path.relative_to(out).as_posix() for path in out.rglob('*')) == ['root', 'root-ca.crt', 'root/root-ca.key', 'update-center.cert', 'update-center.key']
+    assert pki.key_matches_cert(out / 'update-center.key', out / 'update-center.cert')
+
+
+@pytest.mark.usefixtures('small_keys')
+def test_pki_rotate_keeps_what_it_set_aside_when_it_cannot_move_everything_back(monkeypatch, tmp_path, capsys, pki_material):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    assert main(['pki', 'rotate', '--dir', str(work)]) == 0  # an older *.old pair, which the next rotation sets aside
+    names = ('update-center.key', 'update-center.cert', 'update-center.key.old', 'update-center.cert.old')
+    contents = {(work / name).read_bytes() for name in names}
+    # rename 4 (the current certificate to *.old) fails, and so does moving the current key back from *.old (call 5)
+    fail_at_call(monkeypatch, Path, 'rename', {4, 5}, denied())
+    assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets']) == 1
+    err = capsys.readouterr().err
+    kept = re.fullmatch(
+        r'uc: error: cannot write in secrets: Permission denied; moving back failed too for '
+        r'secrets/update-center\.key\.old to secrets/update-center\.key \(Permission denied\), '
+        r'secrets/(\.rotate-\w+)/update-center\.key\.old to secrets/update-center\.key\.old \(File exists\), '
+        r'so secrets is not as it was: what was set aside is kept in secrets/\1\n',
+        err,
+    )
+    assert kept, err
+    assert (work / kept[1] / 'update-center.key.old').is_file()
+    assert contents <= {path.read_bytes() for path in work.rglob('*') if path.is_file()}  # nothing is lost
+
+
+@pytest.mark.usefixtures('small_keys')
+@pytest.mark.parametrize('command', ['rotate', 'init'])
+def test_a_target_that_appears_meanwhile_is_not_overwritten(monkeypatch, tmp_path, capsys, pki_material, command):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    work = tmp_path / 'pki'
+    if command == 'rotate':
+        shutil.copytree(pki_material, work)
+        intruder = 'update-center.cert.old'  # the target of rename 2
+    else:
+        work.mkdir()
+        intruder = 'update-center.key'  # the target of rename 3
+    before = tree_state(work)
+    rename = Path.rename
+    calls = []
+
+    def another_process_writes(*args):
+        calls.append(args)
+        renamed = rename(*args)
+        if len(calls) == 1:
+            (work / intruder).write_text('written meanwhile\n', encoding='utf-8')
+        return renamed
+
+    monkeypatch.setattr(Path, 'rename', another_process_writes)
+    argv = ['pki', 'rotate', '--dir', str(work)] if command == 'rotate' else ['pki', 'init', '--out', str(work)]
+    assert main([*argv, '--display-dir', 'secrets']) == 1
+    assert capsys.readouterr().err == f'uc: error: refusing to overwrite existing files: secrets/{intruder}\n'
+    after = tree_state(work)
+    assert after.pop(intruder)[1] == b'written meanwhile\n'
+    assert after == before
 
 
 def test_pki_rotate_reports_a_directory_it_cannot_write_in(monkeypatch, tmp_path, capsys, pki_material):
