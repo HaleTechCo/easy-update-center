@@ -76,7 +76,8 @@ test-secrets: uc-image
 HOST_UID ?= $(shell id -u)
 HOST_GID ?= $(shell id -g)
 # The setup service (compose.yaml) reads .env, or UC_ENV_FILE, and config/ as the other services do,
-# so uc pki sees the PKI_* settings they see. It mounts ./secrets as /pki and runs as root.
+# so uc pki sees the PKI_* settings they see. It mounts ./secrets as /pki and runs as root; uc pki's
+# --display-dir makes its messages name the files where they are on the host.
 IN_SECRETS = $(STACK_RUN) --no-deps
 SETUP_DIR = /pki
 FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh $(SETUP_DIR) $(HOST_UID) $(HOST_GID)
@@ -94,7 +95,7 @@ PKI_OUT = $(if $(filter command line,$(origin OUT)),$(OUT))
 pki-init: SETUP_DIR = $(if $(PKI_OUT),/out,/pki)
 pki-init: stack-uc-image
 	@mkdir -p secrets$(if $(PKI_OUT), "$(PKI_OUT)")
-	$(IN_SECRETS)$(if $(PKI_OUT), -v "$(call HOST_PATH,$(PKI_OUT)):/out") setup -c 'uc pki init --out $(SETUP_DIR) && $(FIX_SECRETS)'
+	$(IN_SECRETS)$(if $(PKI_OUT), -v "$(call HOST_PATH,$(PKI_OUT)):/out") setup -c 'uc pki init --out $(SETUP_DIR) --display-dir "$(or $(PKI_OUT),secrets)" && $(FIX_SECRETS)'
 
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
 # signing certificate and keeps the previous pair as *.old. ROOT, like OUT, is taken from the command
@@ -102,7 +103,7 @@ pki-init: stack-uc-image
 PKI_ROOT = $(if $(filter command line,$(origin ROOT)),$(ROOT))
 pki-rotate: stack-uc-image
 	@test -n "$(PKI_ROOT)" || { echo "usage: make pki-rotate ROOT=<directory holding root-ca.key>"; exit 2; }
-	$(IN_SECRETS) -v "$(call HOST_PATH,$(PKI_ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki && $(FIX_SECRETS)'
+	$(IN_SECRETS) -v "$(call HOST_PATH,$(PKI_ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki --display-dir secrets && $(FIX_SECRETS)'
 	@rmdir secrets/root 2>/dev/null || true
 
 secrets-placeholders: stack-uc-image

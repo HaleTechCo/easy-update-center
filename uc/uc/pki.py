@@ -113,8 +113,8 @@ def _check_org(org: str) -> None:
         raise PkiError(msg)
 
 
-def _refuse_existing(*paths: Path) -> None:
-    existing = [str(p) for p in paths if p.exists()]
+def _refuse_existing(out_dir: Path, display_dir: Path, *names: Path | str) -> None:
+    existing = [str(display_dir / name) for name in names if (out_dir / name).exists()]
     if existing:
         msg = f'refusing to overwrite existing files: {", ".join(existing)}'
         raise PkiError(msg)
@@ -163,12 +163,15 @@ def _issue_signing(root_key: Path, root_cert: Path, out_dir: Path, *, days: int,
     )
 
 
-def init_pki(out_dir: Path, *, root_days: int = 3650, signing_days: int = 365, org: str = DEFAULT_ORG) -> None:
-    """Create root/root-ca.key, root-ca.crt, update-center.key and update-center.cert in out_dir."""
+def init_pki(out_dir: Path, *, root_days: int = 3650, signing_days: int = 365, org: str = DEFAULT_ORG, display_dir: Path | None = None) -> None:
+    """Create root/root-ca.key, root-ca.crt, update-center.key and update-center.cert in out_dir.
+
+    display_dir, when given, is where out_dir is on the host: the files the refusal to overwrite names are named under it.
+    """
     _check_org(org)
     root_dir = out_dir / 'root'
     root_key, root_cert = root_dir / ROOT_KEY, out_dir / ROOT_CERT
-    _refuse_existing(root_key, root_cert, out_dir / SIGNING_KEY, out_dir / SIGNING_CERT)
+    _refuse_existing(out_dir, display_dir or out_dir, Path('root', ROOT_KEY), ROOT_CERT, SIGNING_KEY, SIGNING_CERT)
     root_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         cnf = Path(tmp) / 'ext.cnf'

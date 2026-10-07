@@ -3,6 +3,7 @@
 import io
 import json
 import os
+import shutil
 import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -93,7 +94,7 @@ def test_repo_adapter_refuses_to_start_without_repository_credentials(monkeypatc
 def test_pki_init_and_show(tmp_path, capsys):
     out = tmp_path / 'pki'
     assert main(['pki', 'init', '--out', str(out), '--root-days', '30', '--signing-days', '10']) == 0
-    assert 'root-ca.crt' in capsys.readouterr().out
+    assert f'move {out / "root" / "root-ca.key"} to offline storage' in capsys.readouterr().out
     assert main(['pki', 'show', '--dir', str(out)]) == 0
     shown = capsys.readouterr().out
     assert 'update-center.cert: CN=Jenkins Update Center Signing' in shown
@@ -336,6 +337,40 @@ def test_pki_init_rejects_an_invalid_setting(monkeypatch, tmp_path, capsys):
     assert main(['pki', 'init', '--out', str(tmp_path / 'pki')]) == 1
     assert 'uc: error: PKI_ROOT_DAYS must be >= 1' in capsys.readouterr().err
     assert not (tmp_path / 'pki').exists()
+
+
+def test_pki_init_names_the_files_under_the_display_dir(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    assert main(['pki', 'init', '--out', str(tmp_path / 'pki'), '--display-dir', 'new pki', '--root-days', '30', '--signing-days', '10']) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        'created new pki/root-ca.crt: install it in $JENKINS_HOME/update-center-rootCAs/ on every controller',
+        'created new pki/update-center.key and new pki/update-center.cert: provide them as secrets',
+        "move new pki/root/root-ca.key to offline storage; only 'uc pki rotate' needs it",
+    ]
+
+
+@pytest.mark.parametrize('display_dir', [None, 'secrets'])
+def test_pki_init_names_the_existing_files_it_refuses_under_the_display_dir(monkeypatch, tmp_path, capsys, display_dir):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    out = tmp_path / 'pki'
+    (out / 'root').mkdir(parents=True)
+    for name in ('root/root-ca.key', 'root-ca.crt', 'update-center.key', 'update-center.cert'):
+        (out / name).write_text('kept\n', encoding='utf-8')
+    display = ['--display-dir', display_dir] if display_dir else []
+    assert main(['pki', 'init', '--out', str(out), *display]) == 1
+    shown = Path(display_dir) if display_dir else out
+    files = ', '.join(str(shown / name) for name in ('root/root-ca.key', 'root-ca.crt', 'update-center.key', 'update-center.cert'))
+    assert capsys.readouterr().err == f'uc: error: refusing to overwrite existing files: {files}\n'
+
+
+def test_pki_rotate_names_the_certificate_under_the_display_dir(monkeypatch, tmp_path, capsys, pki_material):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets']) == 0
+    assert capsys.readouterr().out == 'issued a new secrets/update-center.cert; the previous pair is kept as *.old\n'
+    assert main(['pki', 'rotate', '--dir', str(work)]) == 0
+    assert capsys.readouterr().out == f'issued a new {work / "update-center.cert"}; the previous pair is kept as *.old\n'
 
 
 def test_pki_init_flags_override_the_settings(monkeypatch, tmp_path):

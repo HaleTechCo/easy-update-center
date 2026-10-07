@@ -223,8 +223,8 @@ the PKI in `<dir>` instead, for
 [replacing the root CA](../how-to/rotate-signing-certificate.md#replace-the-root-ca).
 
 ```bash
-uc pki init --out <dir> [--root-days 3650] [--signing-days 365] [--org <name>]
-uc pki rotate --dir <dir> [--days 365] [--org <name>]
+uc pki init --out <dir> [--display-dir <dir>] [--root-days 3650] [--signing-days 365] [--org <name>]
+uc pki rotate --dir <dir> [--display-dir <dir>] [--days 365] [--org <name>]
 uc pki show --dir <dir>
 ```
 
@@ -237,6 +237,7 @@ uc pki show --dir <dir>
 | Option | Meaning |
 |---|---|
 | `--out`, `--dir` | The directory holding the PKI files (required). |
+| `--display-dir` | `init` and `rotate`: the directory `--out` or `--dir` is on the host. Messages name the files under it (`secrets/root/root-ca.key`, not `/pki/root/root-ca.key`). `make pki-init` and `make pki-rotate` pass `secrets`, or the `OUT` directory. |
 | `--root-days` | Lifetime of the root CA (default `PKI_ROOT_DAYS`, 3650). |
 | `--signing-days`, `--days` | Lifetime of the signing certificate (default `PKI_SIGNING_DAYS`, 365). |
 | `--org` | Organization name in the certificates' subjects (default `PKI_ORG`). |

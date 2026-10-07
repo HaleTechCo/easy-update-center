@@ -81,11 +81,13 @@ def build_parser() -> argparse.ArgumentParser:
     pki = sub.add_parser('pki', help='manage the signing PKI').add_subparsers(dest='pki_command', required=True)
     init = pki.add_parser('init', help='create a root CA and a signing certificate')
     init.add_argument('--out', type=Path, required=True)
+    init.add_argument('--display-dir', type=Path, metavar='DIR', help='the directory --out is on the host, used in messages')
     init.add_argument('--root-days', type=int, help='lifetime of the root CA in days (default: PKI_ROOT_DAYS, 3650)')
     init.add_argument('--signing-days', type=int, help='lifetime of the signing certificate in days (default: PKI_SIGNING_DAYS, 365)')
     init.add_argument('--org', help='organization in the subjects (default: PKI_ORG)')
     rotate = pki.add_parser('rotate', help='issue a new signing certificate from the root in --dir/root/')
     rotate.add_argument('--dir', type=Path, required=True)
+    rotate.add_argument('--display-dir', type=Path, metavar='DIR', help='the directory --dir is on the host, used in messages')
     rotate.add_argument('--days', type=int, help='lifetime of the new signing certificate in days (default: PKI_SIGNING_DAYS, 365)')
     rotate.add_argument('--org', help='organization in the subject (default: PKI_ORG)')
     show = pki.add_parser('show', help='print subjects, expiry and fingerprints')
@@ -225,14 +227,15 @@ def _pki(args: argparse.Namespace) -> int:
     if args.pki_command == 'init':
         root_days = defaults.root_days if args.root_days is None else args.root_days
         signing_days = defaults.signing_days if args.signing_days is None else args.signing_days
-        init_pki(args.out, root_days=root_days, signing_days=signing_days, org=org)
-        print(f'created {args.out / ROOT_CERT}: install it in $JENKINS_HOME/update-center-rootCAs/ on every controller')
-        print(f'created {args.out / SIGNING_KEY} and {args.out / SIGNING_CERT}: provide them as secrets')
-        print(f"move {args.out / 'root' / ROOT_KEY} to offline storage; only 'uc pki rotate' needs it")
+        init_pki(args.out, root_days=root_days, signing_days=signing_days, org=org, display_dir=args.display_dir)
+        shown = args.display_dir or args.out
+        print(f'created {shown / ROOT_CERT}: install it in $JENKINS_HOME/update-center-rootCAs/ on every controller')
+        print(f'created {shown / SIGNING_KEY} and {shown / SIGNING_CERT}: provide them as secrets')
+        print(f"move {shown / 'root' / ROOT_KEY} to offline storage; only 'uc pki rotate' needs it")
     elif args.pki_command == 'rotate':
         days = defaults.signing_days if args.days is None else args.days
         rotate_signing(args.dir / 'root' / ROOT_KEY, args.dir / ROOT_CERT, args.dir, days=days, org=org)
-        print(f'issued a new {args.dir / SIGNING_CERT}; the previous pair is kept as *.old')
+        print(f'issued a new {(args.display_dir or args.dir) / SIGNING_CERT}; the previous pair is kept as *.old')
     else:
         now = utcnow()
         for name in (ROOT_CERT, SIGNING_CERT):
