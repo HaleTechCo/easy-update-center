@@ -64,10 +64,11 @@ with group 33. `secrets/` stays yours, and each container reads its own files th
 | `root/`, `root/root-ca.key` | you | yours | 0700, 0600 |
 
 `make pki-init`, `make pki-rotate` and `make secrets-placeholders` set this up (through
-`scripts/secrets-permissions.sh`, run as root by the `setup` service), so no step needs `sudo`, and you can
-write credentials before or after creating the keys. Writing into an existing file, as
-`printf '%s' '...' > secrets/repo_password` does, keeps its permissions. After **replacing** a file
-(copying a new one over it, or saving it from an editor that writes a new file), run:
+`uc/bin/secrets-permissions.sh`, which the `setup` service's entrypoint, `uc-setup`, runs as root;
+"you" is the owner of `./config`), so no step needs `sudo`, and you can write credentials before or
+after creating the keys. Writing into an existing file, as `printf '%s' '...' > secrets/repo_password`
+does, keeps its permissions. After **replacing** a file (copying a new one over it, or saving it from
+an editor that writes a new file), run:
 
 ```bash
 make secrets-permissions
@@ -78,11 +79,12 @@ wholesale to uid 10001. Docker Desktop (macOS, Windows) ignores ownership, so th
 above do not matter there.
 
 These four targets (`pki-init`, `pki-rotate`, `secrets-placeholders`, `secrets-permissions`) run the
-`setup` service from `compose.yaml`: `docker compose run --rm --no-deps setup`, as root, with no
-network and no Compose secrets, mounting only `./secrets`, `./config` and the script, and the
-directory `make pki-rotate ROOT=<dir>` or `make pki-init OUT=<dir>` names. It reads `.env` (or the
-file `UC_ENV_FILE` names) as the other services do, so quotes in it are handled the same way, and
-the file must exist: create it first (`cp .env.online.example .env`), or Compose stops with
+`setup` service from `compose.yaml`: `docker compose run --rm --no-deps setup pki-init`, `pki-rotate`
+or `secrets`, as root, with no network and no Compose secrets, mounting only `./secrets`,
+`./procurement` and `./config` (at `/setup/secrets`, `/setup/procurement` and `/setup/config`), and
+the directory `make pki-rotate ROOT=<dir>` or `make pki-init OUT=<dir>` names. It reads `.env` (or
+the file `UC_ENV_FILE` names) as the other services do, so quotes in it are handled the same way,
+and the file must exist: create it first (`cp .env.online.example .env`), or Compose stops with
 `env file ... not found`.
 
 ## GitHub token

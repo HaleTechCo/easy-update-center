@@ -1,0 +1,126 @@
+#!/bin/sh
+# The setup service's entrypoint (compose.yaml; docs/reference/cli.md#the-setup-service): first-time
+# setup and the jobs that write to ./secrets and ./procurement, as root, with no network.
+#   (no argument)   secrets, procurement, then pki-init unless a signing key exists
+#   secrets         create the missing credential files empty; set the permissions
+#   procurement     share ./procurement between you and the uc containers (ACLs)
+#   pki-init [--out DIR] [--display-dir NAME]   a new root CA and signing certificate
+#   pki-rotate [--root-display-dir NAME]        a new signing certificate; the root key mounted
+#                                               read-only at /setup/secrets/root
+set -eu
+
+here=$(dirname "$0")
+secrets=/setup/secrets
+procurement=/setup/procurement
+config=/setup/config
+uc_uid=10001
+credential_files="repo_username repo_password github_username github_token download_proxy_auth repo_push_auth"
+
+usage() {
+    echo "usage: uc-setup [secrets | procurement | pki-init [--out DIR] [--display-dir NAME] | pki-rotate [--root-display-dir NAME]]" >&2
+    exit 2
+}
+die() {
+    echo "uc-setup: error: $*" >&2
+    exit 1
+}
+
+# The host user owns ./config in every checkout. ./secrets and ./procurement cannot tell: Docker
+# creates a missing bind-mount directory as root.
+owner() { stat -c %u:%g "${config}"; }
+
+claim() { # claim DIR - give DIR to the host user when Docker just created it (owned by root, empty)
+    uid=$(stat -c %u "$1")
+    entries=$(ls -A "$1")
+    if [ "${uid}" = 0 ] && [ -z "${entries}" ]; then
+        ids=$(owner)
+        chown "${ids}" "$1"
+    fi
+}
+
+fix_secrets() { # fix_secrets DIR
+    ids=$(owner)
+    sh "${here}/secrets-permissions.sh" "$1" "${ids%%:*}" "${ids##*:}"
+}
+
+do_secrets() {
+    for file in ${credential_files}; do
+        [ -e "${secrets}/${file}" ] || : > "${secrets}/${file}"
+    done
+    fix_secrets "${secrets}"
+    echo "secrets/: created any missing credential files (empty means 'not set'); the containers read their files through their group"
+}
+
+do_procurement() {
+    ids=$(owner)
+    chown "${ids}" "${procurement}"
+    acl="u:${ids%%:*}:rwX,u:${uc_uid}:rwX,m::rwX"
+    # shellcheck disable=SC2016 # $1 is expanded by the sh that setpriv runs
+    if setfacl -R -m "${acl}" "${procurement}" 2> /dev/null \
+        && find "${procurement}" -type d -exec setfacl -d -m "${acl}" {} + 2> /dev/null; then
+        echo "procurement/: shared with the uc containers; you can review, edit, move and delete every file in it"
+    elif setpriv --reuid="${uc_uid}" --regid="${uc_uid}" --clear-groups \
+        sh -c 'touch "$1/.uc-setup-check" && rm "$1/.uc-setup-check"' sh "${procurement}" 2> /dev/null; then
+        echo "procurement/: the uc containers can already write it (this filesystem ignores ownership); nothing to do"
+    else
+        die "this filesystem does not support ACLs, so procurement/ cannot be shared with the uc containers: use make procure-stage, procure-record and procure-clean, which hand it over for each run"
+    fi
+}
+
+do_pki_init() {
+    out=${secrets}
+    shown=secrets
+    while [ $# -gt 0 ]; do
+        [ $# -ge 2 ] || usage
+        case $1 in
+            --out) out=$2 ;;
+            --display-dir) shown=$2 ;;
+            *) usage ;;
+        esac
+        shift 2
+    done
+    uc pki init --out "${out}" --display-dir "${shown}"
+    fix_secrets "${out}"
+}
+
+do_pki_rotate() {
+    root_shown=secrets/root
+    while [ $# -gt 0 ]; do
+        [ $# -ge 2 ] || usage
+        case $1 in
+            --root-display-dir) root_shown=$2 ;;
+            *) usage ;;
+        esac
+        shift 2
+    done
+    [ -d "${secrets}/root" ] || die "mount the directory holding root-ca.key read-only at /setup/secrets/root: docker compose run --rm -v /path/to/root:/setup/secrets/root:ro setup pki-rotate"
+    uc pki rotate --dir "${secrets}" --display-dir secrets --root-display-dir "${root_shown}"
+    fix_secrets "${secrets}"
+}
+
+claim "${secrets}"
+claim "${procurement}"
+command=${1:-}
+[ $# -eq 0 ] || shift
+case ${command} in
+    '')
+        do_secrets
+        do_procurement
+        if [ -e "${secrets}/update-center.key" ]; then
+            echo "secrets/: the signing keys exist; left as they are (pki-rotate issues a new certificate)"
+        else
+            do_pki_init
+        fi
+        ;;
+    secrets)
+        [ $# -eq 0 ] || usage
+        do_secrets
+        ;;
+    procurement)
+        [ $# -eq 0 ] || usage
+        do_procurement
+        ;;
+    pki-init) do_pki_init "$@" ;;
+    pki-rotate) do_pki_rotate "$@" ;;
+    *) usage ;;
+esac

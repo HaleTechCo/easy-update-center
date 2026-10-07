@@ -5,8 +5,8 @@
 # `make pki-init` and writing credentials no longer matters. Idempotent; it also repairs a
 # secrets/ that an older `make pki-init` gave wholesale to uid 10001.
 #
-# Runs as root in the setup service (make pki-init, pki-rotate, secrets-placeholders,
-# secrets-permissions). Usage: secrets-permissions.sh DIR HOST_UID HOST_GID
+# Runs as root in the setup service: uc-setup runs it after secrets, pki-init and pki-rotate, for
+# the owner of ./config. Usage: secrets-permissions.sh DIR HOST_UID HOST_GID
 set -eu
 
 dir="$1"

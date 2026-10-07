@@ -221,7 +221,7 @@ generator on the internal `repo` network, and stays idle when `REPO_ADAPTER` is 
 Manages the signing PKI. It reads only the `PKI_*` settings (from the environment, and
 `config/uc.toml` when there is one) and needs no others, so it runs before anything else is
 configured. `make pki-init` wraps `init`, and `make pki-rotate ROOT=<dir>` wraps `rotate`; both run
-the `setup` Compose service, which reads `.env` (or the file `UC_ENV_FILE` names, which must exist)
+the [`setup` Compose service](#the-setup-service), which reads `.env` (or the file `UC_ENV_FILE` names, which must exist)
 and `config/` as the other services do, so `uc pki` sees the settings they see, and then set the permissions of
 `secrets/`
 ([File ownership on Linux](secrets.md#file-ownership-on-linux)). `make pki-init OUT=<dir>` creates
@@ -252,10 +252,33 @@ aside.
 | Option | Meaning |
 |---|---|
 | `--out`, `--dir` | The directory holding the PKI files (required). |
-| `--display-dir` | `init` and `rotate`: the directory `--out` or `--dir` is on the host. Messages name the files under it (`secrets/root/root-ca.key`, not `/pki/root/root-ca.key`). `make pki-init` and `make pki-rotate` pass `secrets`, or the `OUT` directory. |
+| `--display-dir` | `init` and `rotate`: the directory `--out` or `--dir` is on the host. Messages name the files under it (`secrets/root/root-ca.key`, not `/setup/secrets/root/root-ca.key`). `make pki-init` and `make pki-rotate` pass `secrets`, or the `OUT` directory. |
 | `--root-display-dir` | `rotate`: the directory `<dir>/root/` is on the host (default: `root/` under `--display-dir`, or under `--dir` without it). Messages name the root key under it. `make pki-rotate` passes `ROOT`, which it mounts there. |
 | `--root-days` | Lifetime of the root CA (default `PKI_ROOT_DAYS`, 3650). |
 | `--signing-days`, `--days` | Lifetime of the signing certificate (default `PKI_SIGNING_DAYS`, 365). |
 | `--org` | Organization name in the certificates' subjects (default `PKI_ORG`). |
 
 How to run `rotate` safely: [Rotate the signing certificate](../how-to/rotate-signing-certificate.md).
+
+## The setup service
+
+The `setup` Compose service runs `uc-setup`, not `uc`: the jobs that write to `./secrets` and
+`./procurement`, as root, with no network and no Compose secrets, and only when you call it. It
+mounts `./secrets` at `/setup/secrets`, `./procurement` at `/setup/procurement` and `./config`
+read-only at `/setup/config`, and reads `.env` (or the file `UC_ENV_FILE` names) as the other
+services do, so the file must exist. "You" below is the owner of `./config`: `uc-setup` gives
+`./secrets` and `./procurement` to it when Docker has just created them as root.
+
+```bash
+docker compose run --rm setup [secrets | procurement | pki-init [--out DIR] [--display-dir NAME] | pki-rotate [--root-display-dir NAME]]
+```
+
+| Command | What it does |
+|---|---|
+| (none) | First-time setup, safe to repeat: `secrets`, `procurement`, then `pki-init` unless `secrets/update-center.key` exists. |
+| `secrets` | Creates the missing credential files empty and sets the permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)). `make secrets-placeholders` and `make secrets-permissions` run it. |
+| `procurement` | Shares `./procurement` with the uc containers (uid 10001) through ACLs, so you and they can both review, edit, move and delete every file in it. On a filesystem without ACLs it succeeds when uid 10001 can already write the folder (Docker Desktop), and otherwise exits 1, naming the make targets that hand the folder over for each run. |
+| `pki-init` | Runs `uc pki init` in `secrets/`, or in `--out DIR` (a directory you mount), naming the files under `--display-dir NAME` in its messages, then sets the permissions there. `make pki-init [OUT=<dir>]` runs it. |
+| `pki-rotate` | Runs `uc pki rotate` on `secrets/`, with the directory holding the root key mounted read-only at `/setup/secrets/root` (named `--root-display-dir NAME` in messages), then sets the permissions. Without that directory it exits 1. `make pki-rotate ROOT=<dir>` runs it. |
+
+Any other argument exits 2 with the usage line.

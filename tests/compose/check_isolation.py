@@ -11,10 +11,11 @@ PUSH_SECRET = 'repo_push_auth'
 STAGING = '/procurement'
 # What compose.yaml mounts into setup: target -> (source, relative to the project directory; read-only).
 SETUP_MOUNTS = {
-    '/pki': ('secrets', False),
-    '/config': ('config', True),
-    '/usr/local/bin/secrets-permissions.sh': ('scripts/secrets-permissions.sh', True),
+    '/setup/secrets': ('secrets', False),
+    '/setup/procurement': ('procurement', False),
+    '/setup/config': ('config', True),
 }
+SETUP_ENTRYPOINT = ['uc-setup']
 
 
 def networks(service: dict) -> set[str]:
@@ -86,6 +87,8 @@ def main() -> None:
             problems.append(f'setup must run as 0:0, not {setup.get("user")!r}')
         if secrets(setup):
             problems.append(f'setup receives secrets {sorted(secrets(setup))}')
+        if setup.get('entrypoint') != SETUP_ENTRYPOINT:
+            problems.append(f'setup must run uc-setup as its entrypoint, not {setup.get("entrypoint")!r}')
         problems += setup_mount_problems(setup)
     web_config = services.get('web-config')
     if web_config is None:

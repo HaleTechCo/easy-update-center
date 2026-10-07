@@ -26,7 +26,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
 
-.PHONY: build build-uc build-web uc-image stack-uc-image test test-unit test-web test-routing test-secrets pki-init pki-rotate secrets-placeholders secrets-permissions examples reload procure-download procure-clean procure-push compose-check it-airgapped it-clean it-online it-full upstream-diff
+.PHONY: build build-uc build-web uc-image stack-uc-image test test-unit test-web test-routing test-secrets test-setup pki-init pki-rotate secrets-placeholders secrets-permissions examples reload procure-download procure-clean procure-push compose-check it-airgapped it-clean it-online it-full upstream-diff
 
 build: build-uc build-web
 
@@ -51,7 +51,7 @@ stack-uc-image:
 	  elif [ "$$image" = jenkins-uc/uc:local ]; then echo "docker build --target runtime -t $$image uc"; docker build --target runtime -t "$$image" uc; \
 	  else echo "docker pull $$image"; docker pull "$$image"; fi
 
-test: test-unit test-web test-routing test-secrets
+test: test-unit test-web test-routing test-secrets test-setup
 
 test-unit: build-uc
 	docker run --rm $(SRC_MOUNTS) $(UC_TEST_IMAGE) -q /tests/unit $(ARGS)
@@ -67,21 +67,22 @@ test-routing: build-uc build-web
 
 # Ownership is real only on a Linux filesystem, so the checks run inside the uc image as root.
 test-secrets: uc-image
-	docker run --rm --user 0:0 --entrypoint bash -v "$(CURDIR)/scripts:/scripts:ro" \
+	docker run --rm --user 0:0 --entrypoint bash -v "$(CURDIR)/uc/bin:/scripts:ro" \
 	  -v "$(CURDIR)/tests/secrets:/tests:ro" $(UC_IMAGE) /tests/permissions-checks.sh
 
+# uc-setup's checks, as root in the uc image (which needs the acl package: hence build-uc).
+test-setup: build-uc
+	docker run --rm --user 0:0 --entrypoint bash -v "$(CURDIR)/uc/bin:/scripts:ro" \
+	  -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" -v "$(CURDIR)/tests/setup:/tests:ro" $(UC_IMAGE) /tests/setup-checks.sh
+
 # secrets/ stays yours; the containers read their files through their group (uc 10001, web 33).
-# scripts/secrets-permissions.sh sets that up, as root in the uc image, after every target that
-# writes to secrets/. Run `make secrets-permissions` yourself after replacing a file in secrets/.
-HOST_UID ?= $(shell id -u)
-HOST_GID ?= $(shell id -g)
-# The setup service (compose.yaml) reads .env, or UC_ENV_FILE, and config/ as the other services do,
-# so uc pki sees the PKI_* settings they see. It mounts ./secrets as /pki and runs as root; uc pki's
-# --display-dir makes its messages name the files where they are on the host.
+# The setup service (compose.yaml) sets that up, as root, in every target that writes to secrets/:
+# its entrypoint, uc-setup (uc/bin/), runs uc/bin/secrets-permissions.sh for the owner of ./config.
+# Run `make secrets-permissions` yourself after replacing a file in secrets/. The setup service reads
+# .env, or UC_ENV_FILE, and config/ as the other services do, so uc pki sees the PKI_* settings they
+# see. It mounts ./secrets at /setup/secrets; uc pki's --display-dir makes its messages name the
+# files where they are on the host.
 IN_SECRETS = $(STACK_RUN) --no-deps
-SETUP_DIR = /pki
-FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh $(SETUP_DIR) $(HOST_UID) $(HOST_GID)
-SECRET_FILES = repo_username repo_password github_username github_token download_proxy_auth repo_push_auth
 # The host path of a directory to mount: absolute, as Docker wants it (C:/... with make on Windows),
 # and whole when it holds spaces, which $(abspath) splits on, so each goes through it as <space>.
 space := $(subst ,, )
@@ -107,12 +108,11 @@ $(if $(shell test -e "$(PKI_ROOT)" && test ! -d "$(PKI_ROOT)" && echo file),$(er
 endif
 
 # Creates the root CA and signing certificate in ./secrets, or with OUT=<directory> in that directory
-# (relative to this one, created if missing, mounted as /out), as when replacing the root CA
+# (relative to this one, created if missing, mounted at /setup/out), as when replacing the root CA
 # (docs/how-to/rotate-signing-certificate.md). Refuses to overwrite existing files.
-pki-init: SETUP_DIR = $(if $(PKI_OUT),/out,/pki)
 pki-init: stack-uc-image
 	@mkdir -p secrets$(if $(PKI_OUT), "$(PKI_OUT)")
-	$(IN_SECRETS)$(if $(PKI_OUT), -v "$(call HOST_PATH,$(PKI_OUT)):/out") setup -c 'uc pki init --out $(SETUP_DIR) --display-dir "$(or $(PKI_OUT),secrets)" && $(FIX_SECRETS)'
+	$(IN_SECRETS)$(if $(PKI_OUT), -v "$(call HOST_PATH,$(PKI_OUT)):/setup/out") setup pki-init$(if $(PKI_OUT), --out /setup/out --display-dir "$(PKI_OUT)")
 
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
 # signing certificate and keeps the previous pair as *.old; when a check, a step or a rename of
@@ -120,18 +120,13 @@ pki-init: stack-uc-image
 # removed again when it is empty, also when the rotation fails: a directory, or a file that an older
 # run given the key file as ROOT left behind (Docker refuses to mount a directory on it).
 pki-rotate: stack-uc-image
-	$(IN_SECRETS) -v "$(call HOST_PATH,$(PKI_ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki --display-dir secrets --root-display-dir "$(PKI_ROOT)" && $(FIX_SECRETS)'; rc=$$?; \
+	$(IN_SECRETS) -v "$(call HOST_PATH,$(PKI_ROOT)):/setup/secrets/root:ro" setup pki-rotate --root-display-dir "$(PKI_ROOT)"; rc=$$?; \
 	  rmdir secrets/root 2>/dev/null; if [ -f secrets/root ] && [ ! -s secrets/root ]; then rm -f secrets/root; fi; exit $$rc
 
-secrets-placeholders: stack-uc-image
+# Both create any missing credential file, empty, and set the permissions (setup secrets).
+secrets-placeholders secrets-permissions: stack-uc-image
 	@mkdir -p secrets
-	@$(IN_SECRETS) setup -c 'for f in $(SECRET_FILES); do [ -e /pki/$$f ] || : > /pki/$$f; done; $(FIX_SECRETS)'
-	@echo "secrets/: created any missing credential files (empty means 'not set')"
-
-secrets-permissions: stack-uc-image
-	@mkdir -p secrets
-	@$(IN_SECRETS) setup -c '$(FIX_SECRETS)'
-	@echo "secrets/: yours; the containers read their files through their group"
+	@$(IN_SECRETS) setup secrets
 
 # The example settings files are generated from the settings registry (uc/uc/settings.py), using the
 # working tree's code; test-unit fails while a committed copy is out of date.
@@ -156,6 +151,8 @@ reload: stack-uc-image
 # fails. Usage: make procure-download ARGS="--fetch --download-poms --download-dependencies"
 #               make procure-clean [ARGS=--dry-run]
 PROCUREMENT = $(CURDIR)/procurement
+HOST_UID ?= $(shell id -u)
+HOST_GID ?= $(shell id -g)
 IN_PROCUREMENT = docker run --rm --user 0:0 --entrypoint sh -v "$(PROCUREMENT):/procurement" "$$($(STACK_UC_IMAGE))" -c
 
 procure-clean: DOCTOR_MODE = --clean

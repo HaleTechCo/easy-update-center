@@ -33,10 +33,17 @@ once releases are published.
 - `DOWNLOAD_PROXY_AUTH_FILE` defaults to `${SECRETS_DIR}/download_proxy_auth`, as the other secret
   files do.
 - `make pki-init`, `make pki-rotate`, `make secrets-placeholders` and `make secrets-permissions` run
-  a new `setup` Compose service (root, no network, no Compose secrets; mounts `./secrets`
-  read-write, `./config` and `scripts/secrets-permissions.sh`) instead of `docker run`. It reads
-  `.env`, or the file `UC_ENV_FILE` names, as the other services do, so quotes in values are handled
-  the same way and `PKI_*` settings apply to `uc pki`. The file must exist, or Compose stops.
+  a new `setup` Compose service instead of `docker run`: root, no network, no Compose secrets, and
+  only when called. Its entrypoint, `uc-setup`, takes `secrets`, `procurement`, `pki-init` or
+  `pki-rotate`; with no argument (`docker compose run --rm setup`) it does first-time setup: the
+  missing credential files, `./procurement`, and the signing keys unless they exist. It mounts
+  `./secrets`, `./procurement` and `./config` (read-only) under `/setup/`, and gives `./secrets` and
+  `./procurement` to the owner of `./config` when Docker has just created them as root.
+  `setup procurement` shares `./procurement` with the uc containers through ACLs (the uc image gains
+  the `acl` package); on a filesystem without them it succeeds when uid 10001 can already write the
+  folder, and otherwise fails naming the make targets that hand the folder over for each run. It
+  reads `.env`, or the file `UC_ENV_FILE` names, as the other services do, so quotes in values are
+  handled the same way and `PKI_*` settings apply to `uc pki`. The file must exist, or Compose stops.
 - `uc pki rotate` (`make pki-rotate`) first checks that the root key and `root-ca.crt` can be read
   and belong together, and that `update-center.key` and `update-center.cert` are both there or both
   missing, then issues the new pair in a temporary directory inside the directory it rotates, and
@@ -143,8 +150,8 @@ once releases are published.
   `make pki-rotate` removes the mount point Docker leaves at `secrets/root` when it is empty, a
   directory or a file, also when the rotation fails. `make pki-init` and `make pki-rotate` pass the
   new `--display-dir` of `uc pki init` and `uc pki rotate`, the directory `--out` or `--dir` is on
-  the host, so their messages name `secrets/...` or `<dir>/...`, not the container's `/pki/...` or
-  `/out/...`.
+  the host, so their messages name `secrets/...` or `<dir>/...`, not the container's
+  `/setup/secrets/...` or `/setup/out/...`.
 - Procurement with `uc doctor`, through a staging folder, `./procurement/`, whose `procurement.json`
   records each file's source, sha1 and reason for review:
   - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the

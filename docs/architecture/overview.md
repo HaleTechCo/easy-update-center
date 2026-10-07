@@ -14,12 +14,15 @@ on a Java runtime, plus the `uc` command in Python) and the **web image** (Apach
 - **web-config** runs once before `web` starts: it works out web's settings from `.env` and
   `config/uc.toml` and writes them to a small volume web reads, then exits. It has no network and no
   secrets. See [Where web gets its settings](request-routing.md#where-web-gets-its-settings).
-- **setup** is run by `make pki-init`, `pki-rotate`, `secrets-placeholders` and
-  `secrets-permissions` (`docker compose run --rm --no-deps setup`), never by `docker compose up`.
-  It runs `uc pki` and `scripts/secrets-permissions.sh` as root against `./secrets` (or the
-  directory `make pki-init OUT=<dir>` names), with `./config` read-only and the same `.env` as the
-  other services. It has no network and no Compose secrets, but as root it can read and write
-  everything in `./secrets`, the signing key and `root/root-ca.key` included.
+- **setup** runs only when called, never by `docker compose up`: `docker compose run --rm setup`
+  for first-time setup, or `setup secrets`, `procurement`, `pki-init` or `pki-rotate`, which
+  `make pki-init`, `pki-rotate`, `secrets-placeholders` and `secrets-permissions` run. Its
+  entrypoint, `uc-setup`, runs `uc pki` and `secrets-permissions.sh` as root against `./secrets`
+  (mounted at `/setup/secrets`; or the directory `make pki-init OUT=<dir>` names), and gives
+  `./procurement` (`/setup/procurement`) ACLs that let you and the uc containers both write it. It
+  reads `./config` read-only and the same `.env` as the other services. It has no network and no
+  Compose secrets, but as root it can read and write everything in `./secrets`, the signing key and
+  `root/root-ca.key` included.
 - **scheduler** runs `uc generate` on `GENERATE_SCHEDULE`, and at once when no release is live;
   with `DOCTOR_SCHEDULE` set it also runs a read-only `uc doctor --record`.
   Each run builds a complete new release, validates it, and swaps it in atomically. See
@@ -87,22 +90,23 @@ The Compose networks are listed in [Compose networks](../reference/network.md#co
 The boundaries they and the images draw:
 
 - The signing key reaches only the `scheduler` and `uc` containers, and the on-demand `setup`
-  service, which mounts all of `./secrets` while a make target runs. The internet-facing `web`
+  service, which mounts all of `./secrets` while it runs. The internet-facing `web`
   container never has it, and the root CA key is meant to live offline.
 - Only the one-shot `uc` service can write to the repository: it alone receives `repo_push_auth`
-  as a Compose secret (`setup` can read the file in `./secrets`, but has no network) and mounts the
-  staging folder `./procurement`. The scheduler, the repo-adapter and the web
-  container never do, and `make compose-check` asserts it.
+  as a Compose secret, and it is the only service with a network that mounts the staging folder
+  `./procurement` (`setup` can read the file in `./secrets` and mounts `./procurement` to set its
+  ACLs, but has no network). The scheduler, the repo-adapter and the web container never do, and
+  `make compose-check` asserts it.
 - Every container but `setup` runs as a non-root user (uid 10001 for the uc image, 33 for web) with
-  a read-only root filesystem; only `/data` and `/tmp` are writable (`setup`: root, writing `/pki`,
-  and with `make pki-init OUT=<dir>` that directory, mounted at `/out`), and `web` mounts `/data`
-  read-only.
+  a read-only root filesystem; only `/data` and `/tmp` are writable (`setup`: root, writing
+  `/setup/secrets` and `/setup/procurement`, and with `make pki-init OUT=<dir>` that directory,
+  mounted at `/setup/out`), and `web` mounts `/data` read-only.
 - The repo-adapter's file reads need no credentials, because the generator cannot answer an
   authentication challenge on them. They are reachable only on the internal `repo` network, which
   `web` is not attached to, and they serve only POMs, manifests and descriptions, never archives.
   The listing needs a token from `/data/repo-adapter/token`, which only uid 10001 can read.
 - Air-gapped, of the services that run, only the repo-adapter receives the repository credentials;
-  `setup` is the exception described above, and only while a make target runs it.
+  `setup` is the exception described above, and only while it runs.
 - Archives and POMs from the repository are treated as untrusted input: reads are size-capped,
   only named entries are read, and XML with DOCTYPE or entity declarations is refused.
 - `status.json` is public. It never holds credentials, and a failed run shows only the error's

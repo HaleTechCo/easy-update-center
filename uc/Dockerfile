@@ -55,7 +55,7 @@ ARG SUPERCRONIC_VERSION
 ARG TARGETARCH
 # hadolint ignore=DL3008
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 openssl tini ca-certificates curl \
+ && apt-get install -y --no-install-recommends python3 openssl tini ca-certificates curl acl \
  && rm -rf /var/lib/apt/lists/*
 # pipefail, so a failed download cannot hide behind the checksum pipe below.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -74,7 +74,9 @@ COPY --from=jar-build /out/ /opt/uc/
 COPY templates/ /opt/uc/templates/
 COPY uc/ /opt/uc/python/uc/
 COPY bin/uc /usr/local/bin/uc
-RUN chmod 0755 /usr/local/bin/uc /opt/uc/site/generate-htaccess.sh \
+# The setup service's entrypoint and the secrets/ permissions it sets (compose.yaml).
+COPY bin/uc-setup bin/secrets-permissions.sh /usr/local/bin/
+RUN chmod 0755 /usr/local/bin/uc /usr/local/bin/uc-setup /usr/local/bin/secrets-permissions.sh /opt/uc/site/generate-htaccess.sh \
  && groupadd --system --gid 10001 uc \
  && useradd --system --uid 10001 --gid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin uc \
  && mkdir -p /data /config/overlay /run/uc-web \
