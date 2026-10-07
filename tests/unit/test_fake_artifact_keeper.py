@@ -56,9 +56,11 @@ def test_the_fake_serves_side_files_and_refuses_anonymous_reads(keeper, tmp_path
     assert len(backend(keeper, tmp_path).sha1(entries[f'{BASE}.hpi'])) == 40
     with pytest.raises(urllib.error.HTTPError) as err:
         urllib.request.urlopen(f'{keeper}maven/jenkins-prod-local/{BASE}.hpi')
+    err.value.close()  # it holds the response
     assert err.value.code == 401
     with pytest.raises(urllib.error.HTTPError) as err:
         urllib.request.urlopen(f'{keeper}api/v1/repositories/jenkins-prod-local/artifacts')
+    err.value.close()
     assert err.value.code == 401
 
 
@@ -89,6 +91,7 @@ def test_the_fake_answers_head_without_a_body(keeper):
             with urllib.request.urlopen(request) as response:
                 return response.status, response.read()
         except urllib.error.HTTPError as exc:
+            exc.close()  # it holds the response
             return exc.code, b''
 
     assert head(f'{BASE}.hpi') == (200, b'')

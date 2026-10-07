@@ -88,6 +88,7 @@ def test_private_reads_challenge_for_basic_auth(server):
     url = start(anonymous_read=False) + 'jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom'
     with pytest.raises(urllib.error.HTTPError) as err:
         urllib.request.urlopen(url)
+    err.value.close()  # it holds the response
     assert err.value.code == 401
     assert err.value.headers['WWW-Authenticate'] == 'Basic realm="Artifactory Realm"'
 
@@ -125,6 +126,7 @@ def test_client_checksums_are_served_only_when_the_upload_sent_one(tmp_path):
             with urllib.request.urlopen(request) as response:
                 return response.status
         except urllib.error.HTTPError as exc:
+            exc.close()  # it holds the response
             return exc.code
 
     def status(url, method='GET'):
@@ -132,6 +134,7 @@ def test_client_checksums_are_served_only_when_the_upload_sent_one(tmp_path):
             with urllib.request.urlopen(urllib.request.Request(url, method=method)) as response:
                 return response.status, response.read()
         except urllib.error.HTTPError as exc:
+            exc.close()
             return exc.code, b''
 
     try:

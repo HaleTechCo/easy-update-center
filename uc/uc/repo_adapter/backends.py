@@ -137,6 +137,8 @@ class Http:
                 body = exc.read(4096)
             except (OSError, http.client.HTTPException):
                 body = b''
+            finally:
+                exc.close()  # it holds the response
         except (OSError, ValueError, http.client.HTTPException) as exc:
             msg = f'{method or "GET"} {url} failed: {exc!r}'
             raise BackendError(msg) from exc
@@ -158,6 +160,7 @@ class Http:
                         raise BackendError(msg)
                     out.write(chunk)
         except urllib.error.HTTPError as exc:
+            exc.close()  # it holds the response
             msg = f'GET {url} failed with HTTP {exc.code}'
             raise BackendError(msg) from exc
         except (OSError, ValueError, http.client.HTTPException) as exc:
