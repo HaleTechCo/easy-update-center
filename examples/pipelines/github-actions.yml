@@ -10,7 +10,9 @@ on:  # yamllint disable-line rule:truthy
   # schedule:
   #   - cron: "0 6 * * 1"  # weekly, on Monday at 06:00 UTC
 
-# One run at a time: the staging folder is shared.
+# One run at a time: the staging folder is shared. GitHub keeps one pending run and cancels older pending
+# ones, so a run waiting behind another may be dropped. The push job also checks procurement.sha256 and
+# stops if the staged list changed since the review.
 concurrency:
   group: jenkins-update-center-procurement
   cancel-in-progress: false
@@ -40,15 +42,23 @@ jobs:
     steps:
       - name: Stage the missing files for review
         working-directory: ${{ env.UC_DIR }}
+        # A failed stage still copies what it staged, so the reviewers can read why; the job then fails.
         run: |
-          docker compose run --rm uc procure stage 2>&1 | tee "$RUNNER_TEMP/stage-report.txt"
-          if [ -e procurement/procurement.json ]; then cp procurement/procurement.json "$RUNNER_TEMP/"; fi
+          rc=0
+          docker compose run --rm uc procure stage 2>&1 | tee "$RUNNER_TEMP/stage-report.txt" || rc=$?
+          if [ -e procurement/procurement.json ]; then
+            cp procurement/procurement.json "$RUNNER_TEMP/"
+            sha256sum procurement/procurement.json > "$RUNNER_TEMP/procurement.sha256"
+          fi
+          exit "$rc"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: procurement
           path: |
             ${{ runner.temp }}/stage-report.txt
             ${{ runner.temp }}/procurement.json
+            ${{ runner.temp }}/procurement.sha256
 
   push:
     needs: stage
@@ -56,6 +66,13 @@ jobs:
     # The review: required reviewers approve this job after reading the artifacts.
     environment: procurement
     steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: procurement
+          path: ${{ runner.temp }}
+      - name: Check that the staged list is the one that was reviewed
+        working-directory: ${{ env.UC_DIR }}
+        run: sha256sum -c "$RUNNER_TEMP/procurement.sha256"
       - name: Push the approved files
         working-directory: ${{ env.UC_DIR }}
         run: docker compose run --rm uc procure push

@@ -31,26 +31,46 @@ pipeline {
             agent { label 'uc-host' }
             steps {
                 dir(params.UC_DIR) {
+                    // The checksum of the staged list is what the reviewers approve: the push stage refuses a changed list.
+                    // A failed stage still copies what it staged, so the reviewers can read why.
                     sh """#!/bin/bash
                         set -eo pipefail
-                        docker compose run --rm uc procure stage 2>&1 | tee '${env.WORKSPACE}/stage-report.txt'
-                        if [ -e procurement/procurement.json ]; then cp procurement/procurement.json '${env.WORKSPACE}/'; fi
+                        rm -f '${env.WORKSPACE}/stage-report.txt' '${env.WORKSPACE}/procurement.json' '${env.WORKSPACE}/procurement.sha256'
+                        rc=0
+                        docker compose run --rm uc procure stage 2>&1 | tee '${env.WORKSPACE}/stage-report.txt' || rc=\$?
+                        if [ -e procurement/procurement.json ]; then
+                            cp procurement/procurement.json '${env.WORKSPACE}/'
+                            sha256sum procurement/procurement.json > '${env.WORKSPACE}/procurement.sha256'
+                        fi
+                        exit "\$rc"
                     """
                 }
-                archiveArtifacts artifacts: 'stage-report.txt, procurement.json', allowEmptyArchive: true
+                stash name: 'reviewed', includes: 'procurement.sha256'
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'stage-report.txt, procurement.json, procurement.sha256', allowEmptyArchive: true
+                }
             }
         }
         stage('review') {
             steps {
-                // Reviewers read the archived stage-report.txt and procurement.json first.
+                // Reviewers read the archived stage-report.txt and procurement.json first;
+                // the push stage checks procurement.sha256 against the staged list.
                 input message: 'Push the staged files to the repository?', ok: 'Push', submitter: 'uc-approvers'
             }
         }
         stage('push') {
             agent { label 'uc-host' }
             steps {
+                unstash 'reviewed'
                 dir(params.UC_DIR) {
-                    sh 'docker compose run --rm uc procure push'
+                    // Stop if procurement.json changed since the review.
+                    sh """#!/bin/bash
+                        set -eo pipefail
+                        sha256sum -c '${env.WORKSPACE}/procurement.sha256'
+                        docker compose run --rm uc procure push
+                    """
                 }
             }
         }

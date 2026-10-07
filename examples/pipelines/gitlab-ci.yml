@@ -14,16 +14,18 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "web"
     # - if: $CI_PIPELINE_SOURCE == "schedule"  # a weekly schedule, set in Build > Pipeline schedules
 
+# A resource_group serializes jobs, not whole pipelines: a second pipeline could stage into the shared
+# folder while the first waits at the review. The push job therefore checks procurement.sha256 and
+# stops if the staged list changed since the review.
 default:
   tags: [uc-host]
-  # One run at a time: the staging folder is shared.
-  resource_group: jenkins-update-center
   before_script:
     - set -o pipefail
     - cd "$UC_DIR"
 
 check:
   stage: check
+  resource_group: jenkins-update-center
   script:
     - docker compose run --rm --no-deps uc config --check
     # Exit 1 means there is something to procure, which is what this pipeline is for.
@@ -31,38 +33,53 @@ check:
 
 stage:
   stage: stage
+  resource_group: jenkins-update-center
   script:
-    - docker compose run --rm uc procure stage 2>&1 | tee "$CI_PROJECT_DIR/stage-report.txt"
-    - if [ -e procurement/procurement.json ]; then cp procurement/procurement.json "$CI_PROJECT_DIR/"; fi
+    # A failed stage still copies what it staged (artifacts are kept below), so the reviewers can read why.
+    - rc=0; docker compose run --rm uc procure stage 2>&1 | tee "$CI_PROJECT_DIR/stage-report.txt" || rc=$?
+    - |
+      if [ -e procurement/procurement.json ]; then
+        cp procurement/procurement.json "$CI_PROJECT_DIR/"
+        sha256sum procurement/procurement.json > "$CI_PROJECT_DIR/procurement.sha256"
+      fi
+    - exit "$rc"
   artifacts:
-    paths: [stage-report.txt, procurement.json]
+    paths: [stage-report.txt, procurement.json, procurement.sha256]
     when: always
 
 review:
   stage: review
+  resource_group: jenkins-update-center
   environment: procurement
   when: manual
   allow_failure: false
+  # Like every job, this one runs on the uc-host runner (the default tags); it only echoes the approver.
   script:
     - echo "approved by $GITLAB_USER_LOGIN"
 
 push:
   stage: push
+  resource_group: jenkins-update-center
   script:
+    # The artifacts of the earlier stages are downloaded by default. Stop if procurement.json changed since the review.
+    - sha256sum -c "$CI_PROJECT_DIR/procurement.sha256"
     - docker compose run --rm uc procure push
 
 generate:
   stage: generate
+  resource_group: jenkins-update-center
   script:
     - docker compose run --rm uc generate
 
 verify:
   stage: verify
+  resource_group: jenkins-update-center
   script:
     - docker compose run --rm uc status
     - docker compose run --rm uc doctor || [ $? -eq 1 ]
 
 clean:
   stage: clean
+  resource_group: jenkins-update-center
   script:
     - docker compose run --rm uc procure clean

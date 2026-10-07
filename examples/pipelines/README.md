@@ -11,6 +11,11 @@ deployment directory `UC_DIR` (a pipeline variable, default `/opt/jenkins-update
 `.env`, `config/uc.toml` and `secrets/` and is not a checkout of the pipeline's repository. They are
 triggered by hand (a weekly trigger is included, commented out) and run one at a time.
 
+The stage step records the checksum of the staged list (`procurement.sha256`) beside the artifacts
+the reviewers read. The push step runs `sha256sum -c` on it in `UC_DIR` and stops if
+`procurement/procurement.json` changed since the review. GitLab's `resource_group` only serializes
+jobs, not whole pipelines, so this check is what guarantees that only reviewed files are pushed.
+
 | Stage | Runs | Notes |
 |---|---|---|
 | check | `uc config --check`, `uc doctor` | `uc doctor` exit 1 (something to procure) does not fail the stage; above 1 does. |
