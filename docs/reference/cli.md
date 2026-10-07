@@ -221,9 +221,9 @@ generator on the internal `repo` network, and stays idle when `REPO_ADAPTER` is 
 Manages the signing PKI. It reads only the `PKI_*` settings (from the environment, and
 `config/uc.toml` when there is one) and needs no others, so it runs before anything else is
 configured. `make pki-init` wraps `init`, and `make pki-rotate ROOT=<dir>` wraps `rotate`; both run
-the [`setup` Compose service](#the-setup-service), which reads `.env` (or the file `UC_ENV_FILE` names, which must exist)
-and `config/` as the other services do, so `uc pki` sees the settings they see, and then set the permissions of
-`secrets/`
+the [`setup` Compose service](#the-setup-service), which reads `.env` (or the file `UC_ENV_FILE`
+names, which must exist) and `config/` as the other services do, so `uc pki` sees the settings they
+see, and then set the permissions of `secrets/`
 ([File ownership on Linux](secrets.md#file-ownership-on-linux)). `make pki-init OUT=<dir>` creates
 the PKI in `<dir>` instead, for
 [replacing the root CA](../how-to/rotate-signing-certificate.md#replace-the-root-ca).
@@ -267,7 +267,9 @@ The `setup` Compose service runs `uc-setup`, not `uc`: the jobs that write to `.
 mounts `./secrets` at `/setup/secrets`, `./procurement` at `/setup/procurement` and `./config`
 read-only at `/setup/config`, and reads `.env` (or the file `UC_ENV_FILE` names) as the other
 services do, so the file must exist. "You" below is the owner of `./config`: `uc-setup` gives
-`./secrets` and `./procurement` to it when Docker has just created them as root.
+`./secrets` and `./procurement` to it when Docker has just created them as root. When `./config` is
+empty and owned by root, Docker created it too, so this is not a checkout: `uc-setup` then exits 1
+and changes nothing.
 
 ```bash
 docker compose run --rm setup [secrets | procurement | pki-init [--out DIR] [--display-dir NAME] | pki-rotate [--root-display-dir NAME]]
@@ -275,10 +277,10 @@ docker compose run --rm setup [secrets | procurement | pki-init [--out DIR] [--d
 
 | Command | What it does |
 |---|---|
-| (none) | First-time setup, safe to repeat: `secrets`, `procurement`, then `pki-init` unless `secrets/update-center.key` exists. |
+| (none) | First-time setup, safe to repeat: `secrets`, then `pki-init` unless `secrets/update-center.key` exists, then `procurement`, last because it is the one step that can fail on some filesystems. |
 | `secrets` | Creates the missing credential files empty and sets the permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)). `make secrets-placeholders` and `make secrets-permissions` run it. |
-| `procurement` | Shares `./procurement` with the uc containers (uid 10001) through ACLs, so you and they can both review, edit, move and delete every file in it. On a filesystem without ACLs it succeeds when uid 10001 can already write the folder (Docker Desktop), and otherwise exits 1, naming the make targets that hand the folder over for each run. |
-| `pki-init` | Runs `uc pki init` in `secrets/`, or in `--out DIR` (a directory you mount), naming the files under `--display-dir NAME` in its messages, then sets the permissions there. `make pki-init [OUT=<dir>]` runs it. |
-| `pki-rotate` | Runs `uc pki rotate` on `secrets/`, with the directory holding the root key mounted read-only at `/setup/secrets/root` (named `--root-display-dir NAME` in messages), then sets the permissions. Without that directory it exits 1. `make pki-rotate ROOT=<dir>` runs it. |
+| `procurement` | Shares `./procurement` with the uc containers (uid 10001) through ACLs, so you and they can both review, edit, move and delete every file in it. On a filesystem without ACLs it succeeds when uid 10001 can already write the folder (Docker Desktop), and otherwise exits 1, naming the make targets that hand the folder over for each run. When the ACLs take on the folder but not on everything in it, it exits 1 with setfacl's message. |
+| `pki-init` | Runs `uc pki init` in `secrets/`, then the `secrets` step; or in `--out DIR` (a directory you mount for a new PKI), naming the files under `--display-dir NAME` in its messages, then only sets the permissions there. `make pki-init [OUT=<dir>]` runs it. |
+| `pki-rotate` | Runs `uc pki rotate` on `secrets/`, with the directory holding the root key mounted read-only at `/setup/secrets/root` (named `--root-display-dir NAME` in messages), then the `secrets` step. Without that directory it exits 1, naming `make pki-rotate ROOT=<dir>`, which mounts it. `make pki-rotate ROOT=<dir>` runs it. |
 
 Any other argument exits 2 with the usage line.

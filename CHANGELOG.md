@@ -36,14 +36,16 @@ once releases are published.
   a new `setup` Compose service instead of `docker run`: root, no network, no Compose secrets, and
   only when called. Its entrypoint, `uc-setup`, takes `secrets`, `procurement`, `pki-init` or
   `pki-rotate`; with no argument (`docker compose run --rm setup`) it does first-time setup: the
-  missing credential files, `./procurement`, and the signing keys unless they exist. It mounts
-  `./secrets`, `./procurement` and `./config` (read-only) under `/setup/`, and gives `./secrets` and
-  `./procurement` to the owner of `./config` when Docker has just created them as root.
-  `setup procurement` shares `./procurement` with the uc containers through ACLs (the uc image gains
-  the `acl` package); on a filesystem without them it succeeds when uid 10001 can already write the
-  folder, and otherwise fails naming the make targets that hand the folder over for each run. It
-  reads `.env`, or the file `UC_ENV_FILE` names, as the other services do, so quotes in values are
-  handled the same way and `PKI_*` settings apply to `uc pki`. The file must exist, or Compose stops.
+  missing credential files, the signing keys unless they exist, then `./procurement`. `pki-init` in
+  `secrets/` and `pki-rotate` end with the `secrets` step. It mounts `./secrets`, `./procurement` and
+  `./config` (read-only) under `/setup/`, and gives `./secrets` and `./procurement` to the owner of
+  `./config` when Docker has just created them as root; when `./config` is empty and root's too, it
+  refuses to run. `setup procurement` shares `./procurement` with the uc containers through ACLs
+  (the uc image gains the `acl` package); on a filesystem without them it succeeds when uid 10001
+  can already write the folder, and otherwise fails naming the make targets that hand the folder
+  over for each run. It reads `.env`, or the file `UC_ENV_FILE` names, as the other services do, so
+  quotes in values are handled the same way and `PKI_*` settings apply to `uc pki`. The file must
+  exist, or Compose stops.
 - `uc pki rotate` (`make pki-rotate`) first checks that the root key and `root-ca.crt` can be read
   and belong together, and that `update-center.key` and `update-center.cert` are both there or both
   missing, then issues the new pair in a temporary directory inside the directory it rotates, and

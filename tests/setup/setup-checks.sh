@@ -51,8 +51,27 @@ run() { # run [ARG...] - uc-setup as the setup service runs it, as root; sets rc
     rc=$?
 }
 
+run_with() { # run_with DIR [ARG...] - run, with DIR first on PATH (a setfacl stand-in)
+    local dir="$1"
+    shift
+    output="$(PATH="${dir}:${PATH}" UC_CONFIG_FILE="${config}/uc.toml" sh "${setup}" "$@" 2>&1)"
+    rc=$?
+}
+
+sum() { # sum FILE LABEL - FILE's sha256, or a line naming LABEL when FILE is missing, so two missing files never compare equal
+    if [[ -f "$1" ]]; then sha256sum < "$1"; else echo "no $1 ($2)"; fi
+}
+
 says() { # says DESCRIPTION TEXT - the last run's output holds TEXT
     if [[ "${output}" == *"$2"* ]]; then pass "$1"; else fail "$1 (no '$2' in: ${output})"; fi
+}
+
+never_says() { # never_says DESCRIPTION TEXT - the last run's output does not hold TEXT
+    if [[ "${output}" == *"$2"* ]]; then fail "$1 ('$2' in: ${output})"; else pass "$1"; fi
+}
+
+is_file() { # is_file DESCRIPTION PATH - PATH is a regular file
+    if [[ -f "$2" ]]; then pass "$1"; else fail "$1 ($2 is missing)"; fi
 }
 
 names_host_paths() { # names_host_paths LABEL - the last run's output names no file by its /setup/ path
@@ -102,6 +121,7 @@ stat_is "fresh: procurement/ is the host user's" %u:%g "${host}" "${procurement}
 for file in repo_username repo_password github_username github_token download_proxy_auth repo_push_auth; do
     stat_is "fresh: ${file} exists, empty" %s 0 "${secrets}/${file}"
 done
+is_file "fresh: update-center.key exists" "${secrets}/update-center.key"
 secrets_permissions "fresh" "${secrets}"
 stat_is "fresh: download_proxy_auth is yours, group 33, 0640" %u:%g:%a 1000:33:640 "${secrets}/download_proxy_auth"
 allow "fresh: you write a credential file setup created" "${host}" "printf pw > ${secrets}/repo_password"
@@ -139,10 +159,11 @@ deny "acl: another user cannot write in procurement/" "${other}" "touch ${procur
 deny "acl: another user cannot write in a directory in it" "${other}" "touch ${procurement}/io/x"
 
 # 3. Running it again keeps the signing keys.
-before="$(sha256sum "${secrets}/update-center.key" 2>&1)"
+before="$(sum "${secrets}/update-center.key" before)"
 run
-after="$(sha256sum "${secrets}/update-center.key" 2>&1)"
+after="$(sum "${secrets}/update-center.key" after)"
 same "again: setup exits 0" 0 "${rc}"
+is_file "again: update-center.key exists" "${secrets}/update-center.key"
 says "again: says the signing keys are left as they are" "the signing keys exist; left as they are"
 same "again: update-center.key is unchanged" "${before}" "${after}"
 
@@ -156,20 +177,69 @@ exit 1
 EOF
 chmod 0755 /tmp/noacl/setfacl
 rm -rf "${procurement}" && mkdir -m 0777 "${procurement}"
-output="$(PATH="/tmp/noacl:${PATH}" UC_CONFIG_FILE="${config}/uc.toml" sh "${setup}" procurement 2>&1)"
-rc=$?
+run_with /tmp/noacl procurement
 same "no ACLs, 0777: setup procurement exits 0" 0 "${rc}"
-says "no ACLs, 0777: says nothing is needed" "nothing to do"
+says "no ACLs, 0777: says nothing is needed" "procurement/: uid 10001 (the uc containers) can already write it; nothing to do"
 left="$(ls -A "${procurement}" 2>&1)"
 same "no ACLs, 0777: leaves nothing in procurement/" "" "${left}"
 chmod 0755 "${procurement}" && chown "${host}" "${procurement}"
-output="$(PATH="/tmp/noacl:${PATH}" UC_CONFIG_FILE="${config}/uc.toml" sh "${setup}" procurement 2>&1)"
-rc=$?
+run_with /tmp/noacl procurement
 same "no ACLs, 0755: setup procurement exits 1" 1 "${rc}"
 says "no ACLs, 0755: names make procure-stage" "make procure-stage"
 
-# 5. pki-init elsewhere, as make pki-init OUT=newpki runs it: the PKI in that directory, named as it is
-#    on the host, with secrets-permissions.sh's owners and modes; a second run refuses to overwrite it.
+# First-time setup on such a filesystem: procurement comes last, so the keys exist when it fails.
+fresh
+run_with /tmp/noacl
+same "no ACLs, first-time setup: exits 1 at procurement" 1 "${rc}"
+says "no ACLs, first-time setup: names make procure-stage" "make procure-stage"
+is_file "no ACLs, first-time setup: update-center.key exists all the same" "${secrets}/update-center.key"
+is_file "no ACLs, first-time setup: the credential files exist all the same" "${secrets}/repo_push_auth"
+
+# setfacl works on procurement/ itself but fails part-way through the tree (it applies what it can,
+# then reports the failure): an error with setfacl's message, never success.
+mkdir -p /tmp/partial
+real_setfacl="$(command -v setfacl)"
+cat > /tmp/partial/setfacl << EOF
+#!/bin/sh
+${real_setfacl} "\$@"
+case " \$* " in
+    *" -R "* | *" -d "*)
+        echo "setfacl: /setup/procurement/x: Operation not permitted" >&2
+        exit 1
+        ;;
+esac
+EOF
+chmod 0755 /tmp/partial/setfacl
+rm -rf "${procurement}" && mkdir -m 0755 "${procurement}" && chown "${host}" "${procurement}"
+run_with /tmp/partial procurement
+same "partial ACLs: setup procurement exits 1" 1 "${rc}"
+says "partial ACLs: shows setfacl's message" "Operation not permitted"
+never_says "partial ACLs: does not say nothing is needed" "nothing to do"
+never_says "partial ACLs: does not say it is shared" "procurement/: shared with the uc containers"
+
+# 5. procurement/ as an older checkout left it: a directory you made (0755, a 0644 file in it) and a
+#    tree the old make hand-over gave to uid 10001. Afterwards both of you can use all of it.
+rm -rf "${procurement}" && mkdir -m 0755 "${procurement}" && chown "${host}" "${procurement}"
+as "${host}" "umask 022 && mkdir -p ${procurement}/mine/1.0 && printf mine > ${procurement}/mine/1.0/mine-1.0.hpi"
+as "${host}" "umask 022 && mkdir -p ${procurement}/theirs/1.0 && printf theirs > ${procurement}/theirs/1.0/theirs-1.0.hpi"
+chown -R "${uc}" "${procurement}/theirs"
+run procurement
+same "existing: setup procurement exits 0" 0 "${rc}"
+allow "existing: uc reads your file" "${uc}" "cat ${procurement}/mine/1.0/mine-1.0.hpi > /dev/null"
+allow "existing: uc edits your file" "${uc}" "echo edited >> ${procurement}/mine/1.0/mine-1.0.hpi"
+allow "existing: uc creates a file in your directory" "${uc}" "umask 022 && printf new > ${procurement}/mine/1.0/new"
+allow "existing: you edit the file uc created there" "${host}" "echo edited >> ${procurement}/mine/1.0/new"
+allow "existing: uc deletes your file" "${uc}" "rm ${procurement}/mine/1.0/mine-1.0.hpi"
+allow "existing: you read uc's old file" "${host}" "cat ${procurement}/theirs/1.0/theirs-1.0.hpi > /dev/null"
+allow "existing: you edit uc's old file" "${host}" "echo edited >> ${procurement}/theirs/1.0/theirs-1.0.hpi"
+allow "existing: you create a file in uc's old directory" "${host}" "umask 022 && printf new > ${procurement}/theirs/1.0/new"
+allow "existing: uc edits the file you created there" "${uc}" "echo edited >> ${procurement}/theirs/1.0/new"
+allow "existing: you delete uc's old tree" "${host}" "rm -r ${procurement}/theirs"
+allow "existing: uc deletes what is left of yours" "${uc}" "rm -r ${procurement}/mine"
+
+# 6. pki-init elsewhere, as make pki-init OUT=newpki runs it: the PKI in that directory, named as it is
+#    on the host, with secrets-permissions.sh's owners and modes, and no credential files; a second
+#    run refuses to overwrite it.
 mkdir /setup/out && chown "${host}" /setup/out
 run pki-init --out /setup/out --display-dir newpki
 same "pki-init --out: exits 0" 0 "${rc}"
@@ -177,29 +247,68 @@ says "pki-init --out: names newpki/root-ca.crt" "created newpki/root-ca.crt"
 says "pki-init --out: says to move newpki/root/root-ca.key offline" "move newpki/root/root-ca.key to offline storage"
 names_host_paths "pki-init --out"
 secrets_permissions "pki-init --out" /setup/out
+left="$(ls /setup/out 2>&1)"
+same "pki-init --out: only the PKI, no credential files" "root root-ca.crt update-center.cert update-center.key" "${left//$'\n'/ }"
 run pki-init --out /setup/out --display-dir newpki
 same "pki-init --out again: exits 1" 1 "${rc}"
 says "pki-init --out again: refuses to overwrite" "refusing to overwrite existing files: newpki/"
 
-# 6. pki-rotate: the root key must be mounted at /setup/secrets/root; with it there, a new signing
-#    pair, the previous one kept as *.old.
+# 7. pki-init in secrets/ ends with the secrets step: the credential files exist, and the permissions.
+fresh
+run pki-init
+same "pki-init: exits 0" 0 "${rc}"
+is_file "pki-init: update-center.key exists" "${secrets}/update-center.key"
+for file in repo_username repo_password github_username github_token download_proxy_auth repo_push_auth; do
+    stat_is "pki-init: ${file} exists, empty" %s 0 "${secrets}/${file}"
+done
+says "pki-init: ends with the secrets step" "secrets/: created any missing credential files"
+secrets_permissions "pki-init" "${secrets}"
+
+# 8. pki-rotate: the root key must be mounted at /setup/secrets/root (make pki-rotate ROOT= does it);
+#    with it there, a new signing pair, the previous one kept as *.old, then the secrets step.
 mv "${secrets}/root" /setup/offline-root
 run pki-rotate
 same "pki-rotate without root/: exits 1" 1 "${rc}"
-says "pki-rotate without root/: says where to mount it" "mount the directory holding root-ca.key read-only at /setup/secrets/root"
+says "pki-rotate without root/: says where to mount it" "read-only at /setup/secrets/root"
+if [[ "${output}" == *"make pki-rotate ROOT=<directory holding root-ca.key>"*"docker compose run --rm -v "* ]]; then
+    pass "pki-rotate without root/: names make pki-rotate ROOT=, then the compose form"
+else
+    fail "pki-rotate without root/: names make pki-rotate ROOT=, then the compose form (${output})"
+fi
 mv /setup/offline-root "${secrets}/root"
-before="$(sha256sum < "${secrets}/update-center.key" 2>&1)"
+rm "${secrets}/github_token"
+before="$(sum "${secrets}/update-center.key" before)"
 run pki-rotate
-old="$(sha256sum < "${secrets}/update-center.key.old" 2>&1)"
+old="$(sum "${secrets}/update-center.key.old" old)"
 same "pki-rotate: exits 0" 0 "${rc}"
 says "pki-rotate: names secrets/update-center.cert" "issued a new secrets/update-center.cert"
 same "pki-rotate: keeps the previous key as update-center.key.old" "${before}" "${old}"
+stat_is "pki-rotate: ends with the secrets step (a missing credential file is back, empty)" %s 0 "${secrets}/github_token"
 stat_is "pki-rotate: update-center.key.old is yours, group 10001, 0640" %u:%g:%a 1000:10001:640 "${secrets}/update-center.key.old"
 stat_is "pki-rotate: update-center.cert.old is yours, group 10001, 0644" %u:%g:%a 1000:10001:644 "${secrets}/update-center.cert.old"
 secrets_permissions "pki-rotate" "${secrets}"
 
-# 7. Usage.
+# 9. Every command gives a procurement/ that Docker just created (root's, empty) to the owner of config/.
+rm -rf "${procurement}" && mkdir "${procurement}"
+run secrets
+same "claim: setup secrets exits 0" 0 "${rc}"
+stat_is "claim: setup secrets gives a new procurement/ to the owner of config/" %u:%g "${host}" "${procurement}"
+
+# 10. config/ empty and root's: Docker created it, so this is not a checkout and nobody owns secrets/.
+fresh
+chown 0:0 "${config}"
+run
+same "no checkout: setup exits 1" 1 "${rc}"
+says "no checkout: says why" "config/ is empty and owned by root"
+stat_is "no checkout: secrets/ stays root's" %u:%g 0:0 "${secrets}"
+stat_is "no checkout: procurement/ stays root's" %u:%g 0:0 "${procurement}"
+left="$(ls -A "${secrets}" 2>&1)"
+same "no checkout: nothing created in secrets/" "" "${left}"
+fresh
+
+# 11. Usage.
 expect_usage bogus
+expect_usage '' extra
 expect_usage secrets extra
 expect_usage procurement extra
 expect_usage pki-init --out
