@@ -1,0 +1,105 @@
+---
+# Procurement with an approval before anything is pushed (docs/how-to/run-procurement-from-a-pipeline.md).
+# Runs on a self-hosted runner on the update center's Docker host (label uc-host), in the deployment
+# directory UC_DIR, which holds .env, config/uc.toml and secrets/; GitHub-hosted runners cannot reach
+# it. Give the "procurement" environment required reviewers (Settings > Environments).
+name: Procure missing files
+
+on:  # yamllint disable-line rule:truthy
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 6 * * 1"  # weekly, on Monday at 06:00 UTC
+
+# One run at a time: the staging folder is shared. GitHub keeps one pending run and cancels older pending
+# ones, so a run waiting behind another may be dropped. The push job also checks procurement.sha256 and
+# stops if the staged list changed since the review.
+concurrency:
+  group: jenkins-update-center-procurement
+  cancel-in-progress: false
+
+env:
+  UC_DIR: /opt/jenkins-update-center
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    runs-on: [self-hosted, uc-host]
+    steps:
+      - name: Check the settings
+        working-directory: ${{ env.UC_DIR }}
+        run: docker compose run --rm --no-deps uc config --check
+      - name: Check the repository
+        working-directory: ${{ env.UC_DIR }}
+        # Exit 1 means there is something to procure, which is what this workflow is for.
+        run: docker compose run --rm uc doctor || [ $? -eq 1 ]
+
+  stage:
+    needs: check
+    runs-on: [self-hosted, uc-host]
+    steps:
+      - name: Stage the missing files for review
+        working-directory: ${{ env.UC_DIR }}
+        # A failed stage still copies what it staged, so the reviewers can read why; the job then fails.
+        run: |
+          rc=0
+          docker compose run --rm uc procure stage 2>&1 | tee "$RUNNER_TEMP/stage-report.txt" || rc=$?
+          if [ -e procurement/procurement.json ]; then
+            cp procurement/procurement.json "$RUNNER_TEMP/"
+            sha256sum procurement/procurement.json > "$RUNNER_TEMP/procurement.sha256"
+          fi
+          exit "$rc"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procurement
+          path: |
+            ${{ runner.temp }}/stage-report.txt
+            ${{ runner.temp }}/procurement.json
+            ${{ runner.temp }}/procurement.sha256
+
+  push:
+    needs: stage
+    runs-on: [self-hosted, uc-host]
+    # The review: required reviewers approve this job after reading the artifacts.
+    environment: procurement
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: procurement
+          path: ${{ runner.temp }}
+      - name: Check that the staged list is the one that was reviewed
+        working-directory: ${{ env.UC_DIR }}
+        run: sha256sum -c "$RUNNER_TEMP/procurement.sha256"
+      - name: Push the approved files
+        working-directory: ${{ env.UC_DIR }}
+        run: docker compose run --rm uc procure push
+
+  generate:
+    needs: push
+    runs-on: [self-hosted, uc-host]
+    steps:
+      - name: Publish a release now
+        working-directory: ${{ env.UC_DIR }}
+        run: docker compose run --rm uc generate
+
+  verify:
+    needs: generate
+    runs-on: [self-hosted, uc-host]
+    steps:
+      - name: Status
+        working-directory: ${{ env.UC_DIR }}
+        run: docker compose run --rm uc status
+      - name: Check the repository again
+        working-directory: ${{ env.UC_DIR }}
+        run: docker compose run --rm uc doctor || [ $? -eq 1 ]
+
+  clean:
+    needs: verify
+    runs-on: [self-hosted, uc-host]
+    steps:
+      - name: Delete the staged files the repository now holds
+        working-directory: ${{ env.UC_DIR }}
+        run: docker compose run --rm uc procure clean

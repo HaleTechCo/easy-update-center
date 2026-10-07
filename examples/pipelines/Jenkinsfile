@@ -1,0 +1,108 @@
+// Procurement with an approval before anything is pushed (docs/how-to/run-procurement-from-a-pipeline.md).
+// Runs on an agent on the update center's Docker host (label uc-host), in the deployment directory
+// UC_DIR, which holds .env, config/uc.toml and secrets/. Triggered by hand; one run at a time, as the
+// staging folder is shared.
+pipeline {
+    agent none
+    options {
+        disableConcurrentBuilds()
+    }
+    parameters {
+        string(name: 'UC_DIR', defaultValue: '/opt/jenkins-update-center', description: 'The update center deployment directory on the uc-host agent')
+    }
+    // triggers { cron('H 6 * * 1') } // weekly, on Monday morning
+    stages {
+        stage('check') {
+            agent { label 'uc-host' }
+            steps {
+                dir(params.UC_DIR) {
+                    sh 'docker compose run --rm --no-deps uc config --check'
+                    script {
+                        // Exit 1 means there is something to procure, which is what this pipeline is for.
+                        int rc = sh(script: 'docker compose run --rm uc doctor', returnStatus: true)
+                        if (rc > 1) {
+                            error("the repository check failed (exit ${rc})")
+                        }
+                    }
+                }
+            }
+        }
+        stage('stage') {
+            agent { label 'uc-host' }
+            steps {
+                dir(params.UC_DIR) {
+                    // The checksum of the staged list is what the reviewers approve: the push stage refuses a changed list.
+                    // A failed stage still copies what it staged, so the reviewers can read why.
+                    sh """#!/bin/bash
+                        set -eo pipefail
+                        rm -f '${env.WORKSPACE}/stage-report.txt' '${env.WORKSPACE}/procurement.json' '${env.WORKSPACE}/procurement.sha256'
+                        rc=0
+                        docker compose run --rm uc procure stage 2>&1 | tee '${env.WORKSPACE}/stage-report.txt' || rc=\$?
+                        if [ -e procurement/procurement.json ]; then
+                            cp procurement/procurement.json '${env.WORKSPACE}/'
+                            sha256sum procurement/procurement.json > '${env.WORKSPACE}/procurement.sha256'
+                        fi
+                        exit "\$rc"
+                    """
+                }
+                stash name: 'reviewed', includes: 'procurement.sha256'
+            }
+            post {
+                always {
+                    archiveArtifacts artifacts: 'stage-report.txt, procurement.json, procurement.sha256', allowEmptyArchive: true
+                }
+            }
+        }
+        stage('review') {
+            steps {
+                // Reviewers read the archived stage-report.txt and procurement.json first;
+                // the push stage checks procurement.sha256 against the staged list.
+                input message: 'Push the staged files to the repository?', ok: 'Push', submitter: 'uc-approvers'
+            }
+        }
+        stage('push') {
+            agent { label 'uc-host' }
+            steps {
+                unstash 'reviewed'
+                dir(params.UC_DIR) {
+                    // Stop if procurement.json changed since the review.
+                    sh """#!/bin/bash
+                        set -eo pipefail
+                        sha256sum -c '${env.WORKSPACE}/procurement.sha256'
+                        docker compose run --rm uc procure push
+                    """
+                }
+            }
+        }
+        stage('generate') {
+            agent { label 'uc-host' }
+            steps {
+                dir(params.UC_DIR) {
+                    sh 'docker compose run --rm uc generate'
+                }
+            }
+        }
+        stage('verify') {
+            agent { label 'uc-host' }
+            steps {
+                dir(params.UC_DIR) {
+                    sh 'docker compose run --rm uc status'
+                    script {
+                        int rc = sh(script: 'docker compose run --rm uc doctor', returnStatus: true)
+                        if (rc > 1) {
+                            error("the repository check failed (exit ${rc})")
+                        }
+                    }
+                }
+            }
+        }
+        stage('clean') {
+            agent { label 'uc-host' }
+            steps {
+                dir(params.UC_DIR) {
+                    sh 'docker compose run --rm uc procure clean'
+                }
+            }
+        }
+    }
+}

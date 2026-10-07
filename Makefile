@@ -23,7 +23,8 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro" \
              -v "$(CURDIR)/tools:/tools:ro" \
-             -v "$(CURDIR)/web:/web:ro"              -v "$(CURDIR)/examples/pipelines:/examples/pipelines:ro" \
+             -v "$(CURDIR)/web:/web:ro" \
+             $(if $(wildcard examples/pipelines),-v "$(CURDIR)/examples/pipelines:/examples/pipelines:ro") \
              -v "$(CURDIR)/config/uc.example.toml:/examples/uc.example.toml:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
@@ -267,7 +268,6 @@ upstream-diff: build-uc ## Compare the pinned update-center2 with another versio
 	  git checkout -q update-center2-$(TO); \
 	  if git apply --check /patches/*.patch 2>/dev/null; then echo "== patches apply to $(TO)"; \
 	  else echo "== PATCHES DO NOT APPLY to $(TO); check whether upstream already reads POPULARITY_JSON_URL (Popularities.java) and CORE_AGE_DAYS (TieredUpdateSitesGenerator.java)"; fi'
-
 
 help: ## List the targets
 	@awk 'BEGIN { FS = ":.*## "; print "usage: make <target> [VAR=value]" } \
