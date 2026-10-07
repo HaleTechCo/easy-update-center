@@ -1,4 +1,4 @@
-"""Command-line entry point: uc generate | doctor | rollback | status | schedule | repo-adapter | pki (docs/reference/cli.md)."""
+"""Command-line entry point: uc generate | doctor | procure | rollback | status | schedule | repo-adapter | pki (docs/reference/cli.md)."""
 
 from __future__ import annotations
 
@@ -6,13 +6,14 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import configview, publish, status
 from .config import apply_process_env, load_pki_settings, load_settings, load_web_settings
 from .doctor import check_since, format_report, inspect_repository, record
-from .errors import UcError
+from .errors import UcError, UsageError
 from .examples import example_env, example_toml
 from .generate import generate
 from .pki import ROOT_CERT, ROOT_KEY, SIGNING_CERT, SIGNING_KEY, cert_info, init_pki, rotate_signing
@@ -35,6 +36,21 @@ if TYPE_CHECKING:
 
 EXIT_LOCKED = 75
 
+DOCTOR_MOVED = {
+    '--download-poms': 'uc procure stage --poms',
+    '--download-dependencies': 'uc procure stage --dependencies',
+    '--download-war': 'uc procure stage --war',
+    '--staging': 'uc procure stage|record|push|clean --staging',
+    '--push': 'uc procure push',
+    '--dry-run': 'uc procure push --dry-run, or uc procure clean --dry-run',
+    '--stage-local': 'uc procure record',
+    '--fix': 'uc procure record --fix',
+    '--clean': 'uc procure clean',
+}
+"""The uc doctor flags that became uc procure commands, and what replaces each (nothing has been released, so no aliases)."""
+
+NOTHING_TO_STAGE = 'nothing to stage: choose with --poms, --dependencies or --war VERSION|required, or set PROCUREMENT_POMS, PROCUREMENT_DEPENDENCIES or PROCUREMENT_WARS'
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for every uc subcommand."""
@@ -48,17 +64,30 @@ def build_parser() -> argparse.ArgumentParser:
     doctor = sub.add_parser('doctor', help='report what the generator will see in the source repository')
     doctor.add_argument('--fetch', action=argparse.BooleanOptionalAction, help='download POMs and manifests missing from the cache (default: DOCTOR_FETCH, off)')
     doctor.add_argument('--json', action=argparse.BooleanOptionalAction, help='print the report as JSON (default: DOCTOR_JSON, off)')
-    doctor.add_argument('--download-poms', action='store_true', help='stage the real .pom of every plugin whose POM is missing, derived or unusable')
-    doctor.add_argument('--download-dependencies', action='store_true', help='stage missing required dependencies, transitively, each with its .pom')
-    doctor.add_argument('--download-war', action='append', default=[], metavar='VERSION', help='stage jenkins-war VERSION, or with "required" every required core the repository lacks; repeatable')
     doctor.add_argument('--since', metavar='VERSION', help='floor for required cores (default: DOCTOR_SINCE, else the oldest core in the repository)')
     doctor.add_argument('--record', action='store_true', help='also save the report as the latest: /data/doctor/report.json, and its counts in status.json')
-    doctor.add_argument('--staging', type=Path, default=Path('/procurement'), help='the staging folder (default: /procurement)')
-    doctor.add_argument('--push', action='store_true', help='upload the files procurement.json lists to the repository, never overwriting')
-    doctor.add_argument('--dry-run', action='store_true', help='with --push or --clean: check each file, change nothing')
-    doctor.add_argument('--stage-local', action='store_true', help='record the files placed in the staging folder by hand, after the checks a download gets')
-    doctor.add_argument('--fix', action='store_true', help='with --stage-local: first move each file to the Maven path it declares')
-    doctor.add_argument('--clean', action='store_true', help='delete the staged files the repository already holds with the same content')
+    for flag in DOCTOR_MOVED:
+        doctor.add_argument(flag, nargs='?', const=True, default=None, dest='moved_' + flag[2:].replace('-', '_'), help=argparse.SUPPRESS)
+
+    procure = sub.add_parser('procure', help='stage, record, push and clean the files the repository lacks (docs/how-to/procure-missing-files.md)').add_subparsers(dest='procure_command', required=True)
+    stage = procure.add_parser('stage', help="print uc doctor's report, then stage what it finds missing for review")
+    stage.add_argument('--poms', action=argparse.BooleanOptionalAction, help='stage the real .pom of every plugin whose POM is missing, derived or unusable (default: PROCUREMENT_POMS, off)')
+    stage.add_argument('--dependencies', action=argparse.BooleanOptionalAction, help='stage missing required dependencies, transitively, each with its .pom (default: PROCUREMENT_DEPENDENCIES, off)')
+    wars = stage.add_mutually_exclusive_group()
+    wars.add_argument('--war', action='append', metavar='VERSION', help='stage jenkins-war VERSION, or with "required" every required core the repository lacks; repeatable; replaces PROCUREMENT_WARS for this run')
+    wars.add_argument('--no-wars', action='store_true', help='stage no cores, whatever PROCUREMENT_WARS says')
+    stage.add_argument('--since', metavar='VERSION', help='floor for required cores (default: DOCTOR_SINCE, else the oldest core in the repository)')
+    stage.add_argument('--fetch', action=argparse.BooleanOptionalAction, help='download POMs and manifests missing from the cache first (default: PROCUREMENT_FETCH, on)')
+    stage.add_argument('--staging', type=Path, help='the staging folder (default: PROCUREMENT_STAGING_DIR, /procurement)')
+    record_cmd = procure.add_parser('record', help='record the files placed in the staging folder by hand, after the checks a download gets')
+    record_cmd.add_argument('--fix', action=argparse.BooleanOptionalAction, help='first move each file to the Maven path it declares (default: PROCUREMENT_FIX, off)')
+    record_cmd.add_argument('--staging', type=Path, help='the staging folder (default: PROCUREMENT_STAGING_DIR, /procurement)')
+    push_cmd = procure.add_parser('push', help='upload the files procurement.json lists to the repository, never overwriting')
+    push_cmd.add_argument('--dry-run', action='store_true', help='check each file, change nothing')
+    push_cmd.add_argument('--staging', type=Path, help='the staging folder (default: PROCUREMENT_STAGING_DIR, /procurement)')
+    clean_cmd = procure.add_parser('clean', help='delete the staged files the repository already holds with the same content')
+    clean_cmd.add_argument('--dry-run', action='store_true', help='check each file, change nothing')
+    clean_cmd.add_argument('--staging', type=Path, help='the staging folder (default: PROCUREMENT_STAGING_DIR, /procurement)')
 
     rollback = sub.add_parser('rollback', help='point live at an earlier release')
     rollback.add_argument('release', nargs='?', help='release id (default: the one before live)')
@@ -109,6 +138,9 @@ def main(argv: list[str] | None = None) -> int:
     except publish.LockBusyError as exc:
         print(f'uc: {exc}', file=sys.stderr)
         return EXIT_LOCKED
+    except UsageError as exc:
+        print(f'uc: error: {exc}', file=sys.stderr)
+        return 2
     except UcError as exc:
         print(f'uc: error: {exc}', file=sys.stderr)
         return 1
@@ -122,19 +154,9 @@ def _check_config_args(parser: argparse.ArgumentParser, args: argparse.Namespace
 
 
 def _check_doctor_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
-    downloading = args.download_poms or args.download_dependencies or args.download_war
-    if args.push and (downloading or args.stage_local or args.clean or args.fetch or args.json or args.since):
-        parser.error('--push runs on its own: review the staged files between downloading and pushing')
-    if args.stage_local and (downloading or args.clean or args.fetch or args.json or args.since):
-        parser.error('--stage-local runs on its own: it records files already in the staging folder')
-    if args.clean and (downloading or args.fetch or args.json or args.since):
-        parser.error('--clean runs on its own: it compares the staging folder with the repository')
-    if args.dry_run and not (args.push or args.clean):
-        parser.error('--dry-run only applies to --push and --clean')
-    if args.fix and not args.stage_local:
-        parser.error('--fix only applies to --stage-local')
-    if args.record and (args.push or args.stage_local or args.clean):
-        parser.error('--record only applies to a report run')
+    for flag, replacement in DOCTOR_MOVED.items():
+        if getattr(args, 'moved_' + flag[2:].replace('-', '_')) is not None:
+            parser.error(f'{flag} moved: run {replacement}')
 
 
 def _dispatch(args: argparse.Namespace) -> int:
@@ -153,6 +175,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         return 0
     if args.command == 'doctor':
         return _doctor(args, settings)
+    if args.command == 'procure':
+        return _procure(args, settings)
     if args.command == 'rollback':
         with publish.RunLock(settings.data_dir):
             target = publish.rollback(settings.data_dir, args.release)
@@ -182,28 +206,60 @@ def doctor_options(args: argparse.Namespace, settings: Settings) -> tuple[bool, 
 
 
 def _doctor(args: argparse.Namespace, settings: Settings) -> int:
-    if args.push:
-        return push(settings, args.staging, dry_run=args.dry_run)
-    if args.stage_local:
-        return stage_local(args.staging, settings.procurement_source_url, fix=args.fix, out=sys.stdout)
-    if args.clean:
-        return clean(settings, args.staging, dry_run=args.dry_run, out=sys.stdout)
     fetch, as_json, since = doctor_options(args, settings)
-    downloading = args.download_poms or args.download_dependencies or bool(args.download_war)
     check_since(since)
-    if downloading:
-        check_download_allowed(settings)
-        check_war_args(args.download_war)
-    versions = VersionTool.from_settings(settings)
-    inspection = inspect_repository(settings, load_credentials(settings), fetch=fetch, versions=versions, since=since)
+    inspection = inspect_repository(settings, load_credentials(settings), fetch=fetch, versions=VersionTool.from_settings(settings), since=since)
     report = inspection.report
     print(json.dumps(report.to_dict(), indent=2) if as_json else format_report(report, settings))
-    out = sys.stderr if as_json else sys.stdout  # keep stdout valid JSON
     if args.record:
+        out = sys.stderr if as_json else sys.stdout  # keep stdout valid JSON
         print(f'saved the report as {record(report, settings.data_dir, utcnow())}', file=out)
-    if not downloading:
-        return report.exit_code()
-    return download(inspection, settings, poms=args.download_poms, dependencies=args.download_dependencies, wars=args.download_war, staging_dir=args.staging, versions=versions, out=out)
+    return report.exit_code()
+
+
+@dataclass(frozen=True)
+class StageOptions:
+    """What uc procure stage does: each option given on the command line, else its setting."""
+
+    fetch: bool
+    poms: bool
+    dependencies: bool
+    wars: tuple[str, ...]
+    since: str | None
+    staging: Path
+
+
+def procure_options(args: argparse.Namespace, settings: Settings) -> StageOptions:
+    """Return uc procure stage's options: --war replaces PROCUREMENT_WARS, --no-wars empties it."""
+    wars = () if args.no_wars else tuple(args.war) if args.war else settings.procurement_wars
+    return StageOptions(
+        fetch=settings.procurement_fetch if args.fetch is None else args.fetch,
+        poms=settings.procurement_poms if args.poms is None else args.poms,
+        dependencies=settings.procurement_dependencies if args.dependencies is None else args.dependencies,
+        wars=wars,
+        since=args.since if args.since is not None else (settings.doctor_since or None),
+        staging=args.staging or settings.procurement_staging_dir,
+    )
+
+
+def _procure(args: argparse.Namespace, settings: Settings) -> int:
+    staging = getattr(args, 'staging', None) or settings.procurement_staging_dir
+    if args.procure_command == 'push':
+        return push(settings, staging, dry_run=args.dry_run)
+    if args.procure_command == 'record':
+        return stage_local(staging, settings.procurement_source_url, fix=settings.procurement_fix if args.fix is None else args.fix, out=sys.stdout)
+    if args.procure_command == 'clean':
+        return clean(settings, staging, dry_run=args.dry_run, out=sys.stdout)
+    options = procure_options(args, settings)
+    if not (options.poms or options.dependencies or options.wars):
+        raise UsageError(NOTHING_TO_STAGE)
+    check_since(options.since)
+    check_download_allowed(settings)
+    check_war_args(options.wars)
+    versions = VersionTool.from_settings(settings)
+    inspection = inspect_repository(settings, load_credentials(settings), fetch=options.fetch, versions=versions, since=options.since)
+    print(format_report(inspection.report, settings))
+    return download(inspection, settings, poms=options.poms, dependencies=options.dependencies, wars=options.wars, staging_dir=options.staging, versions=versions, out=sys.stdout)
 
 
 def _config(args: argparse.Namespace) -> int:

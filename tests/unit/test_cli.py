@@ -19,7 +19,7 @@ import pytest
 
 from sitefixture import uc_document, write_site
 from uc import configview, pki
-from uc.cli import EXIT_LOCKED, build_parser, doctor_options, main
+from uc.cli import EXIT_LOCKED, StageOptions, build_parser, doctor_options, main, procure_options
 from uc.pki import cert_info
 from uc.publish import RunLock
 from uc.repo_adapter.server import record_port
@@ -107,18 +107,65 @@ def test_pki_init_and_show(tmp_path, capsys):
     assert 'root-ca.crt: CN=Jenkins Update Center Root CA' in shown
 
 
-def test_doctor_downloads_are_refused_air_gapped_before_listing(monkeypatch, tmp_path, secrets_dir, capsys):
+MOVED = [
+    (['--download-poms'], 'uc procure stage --poms'),
+    (['--download-dependencies'], 'uc procure stage --dependencies'),
+    (['--download-war', 'required'], 'uc procure stage --war'),
+    (['--staging', '/x'], 'uc procure stage|record|push|clean --staging'),
+    (['--push'], 'uc procure push'),
+    (['--dry-run'], 'uc procure push --dry-run, or uc procure clean --dry-run'),
+    (['--stage-local'], 'uc procure record'),
+    (['--fix'], 'uc procure record --fix'),
+    (['--clean'], 'uc procure clean'),
+]
+
+
+@pytest.mark.parametrize(('argv', 'replacement'), MOVED, ids=[argv[0] for argv, _ in MOVED])
+def test_a_removed_doctor_flag_names_its_command(argv, replacement, capsys):
+    with pytest.raises(SystemExit) as exited:
+        main(['doctor', *argv])
+    assert exited.value.code == 2
+    assert f'{argv[0]} moved: run {replacement}' in capsys.readouterr().err
+
+
+def test_procure_stage_with_nothing_selected_exits_2(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
-    assert main(['doctor', '--download-poms', '--staging', str(tmp_path / 'stage')]) == 1
+    monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
+    assert main(['procure', 'stage']) == 2
+    err = capsys.readouterr().err
+    assert err.startswith('uc: error: nothing to stage:')
+    for name in ('--poms', '--dependencies', '--war', 'PROCUREMENT_POMS', 'PROCUREMENT_DEPENDENCIES', 'PROCUREMENT_WARS'):
+        assert name in err
+
+
+def test_procure_options_come_from_the_settings_unless_given(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, procurement_poms=True, procurement_wars=('required',), procurement_fetch=True, doctor_since='2.462.1')
+    parse = build_parser().parse_args
+    assert procure_options(parse(['procure', 'stage']), settings) == StageOptions(fetch=True, poms=True, dependencies=False, wars=('required',), since='2.462.1', staging=settings.procurement_staging_dir)
+    assert procure_options(parse(['procure', 'stage', '--no-poms', '--no-fetch']), settings).poms is False  # Review Focus 5
+    assert procure_options(parse(['procure', 'stage', '--war', '2.479.1', '--war', '2.462.3']), settings).wars == ('2.479.1', '2.462.3')  # replaces the setting
+    assert procure_options(parse(['procure', 'stage', '--no-wars']), settings).wars == ()
+    assert procure_options(parse(['procure', 'stage', '--staging', '/elsewhere']), settings).staging == Path('/elsewhere')
+
+
+def test_procure_stage_refuses_war_and_no_wars_together():
+    with pytest.raises(SystemExit) as exited:
+        main(['procure', 'stage', '--war', 'required', '--no-wars'])
+    assert exited.value.code == 2
+
+
+def test_procure_stage_downloads_are_refused_air_gapped_before_listing(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    assert main(['procure', 'stage', '--poms', '--staging', str(tmp_path / 'stage')]) == 1
     assert 'uc: error: downloads need repo.jenkins-ci.org' in capsys.readouterr().err
     assert not (tmp_path / 'stage').exists()
 
 
-def test_doctor_refuses_a_bad_war_version_before_listing(monkeypatch, tmp_path, secrets_dir, capsys):
+def test_procure_stage_refuses_a_bad_war_before_listing(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
-    assert main(['doctor', '--download-war', '2.479.x']) == 1
-    assert '--download-war takes a Jenkins version' in capsys.readouterr().err
+    assert main(['procure', 'stage', '--war', '2.479.x']) == 1
+    assert '--war takes a Jenkins version such as 2.479.1, or required' in capsys.readouterr().err
 
 
 def test_doctor_refuses_a_bad_since_before_listing(monkeypatch, tmp_path, secrets_dir, capsys):
@@ -127,52 +174,20 @@ def test_doctor_refuses_a_bad_since_before_listing(monkeypatch, tmp_path, secret
     assert '--since takes a Jenkins version' in capsys.readouterr().err
 
 
-@pytest.mark.parametrize('extra', [['--download-poms'], ['--download-war', '2.479.1'], ['--fetch'], ['--json'], ['--since', '2.479.1']])
-def test_push_runs_on_its_own(extra, capsys):
-    with pytest.raises(SystemExit) as exit_info:
-        main(['doctor', '--push', *extra])
-    assert exit_info.value.code == 2
-    assert '--push runs on its own' in capsys.readouterr().err
-
-
-@pytest.mark.parametrize('extra', [['--download-poms'], ['--download-war', '2.479.1'], ['--fetch'], ['--json'], ['--since', '2.479.1']])
-def test_stage_local_runs_on_its_own(extra, capsys):
-    with pytest.raises(SystemExit) as exit_info:
-        main(['doctor', '--stage-local', *extra])
-    assert exit_info.value.code == 2
-    assert '--stage-local runs on its own' in capsys.readouterr().err
-
-
-@pytest.mark.parametrize('extra', [['--download-poms'], ['--download-war', '2.479.1'], ['--fetch'], ['--json'], ['--since', '2.479.1']])
-def test_clean_runs_on_its_own(extra, capsys):
-    with pytest.raises(SystemExit) as exit_info:
-        main(['doctor', '--clean', *extra])
-    assert exit_info.value.code == 2
-    assert '--clean runs on its own' in capsys.readouterr().err
-
-
-@pytest.mark.parametrize(('flags', 'message'), [(['--push', '--stage-local'], '--push runs on its own'), (['--push', '--clean'], '--push runs on its own'), (['--stage-local', '--clean'], '--stage-local runs on its own')])
-def test_push_stage_local_and_clean_are_separate_runs(flags, message, capsys):
-    with pytest.raises(SystemExit) as exit_info:
-        main(['doctor', *flags])
-    assert exit_info.value.code == 2
-    assert message in capsys.readouterr().err
-
-
 def test_clean_dry_run_on_an_empty_folder(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
     (secrets_dir / 'repo_push_auth').write_text('uc:tok')
     staging = tmp_path / 'stage'
     staging.mkdir()
-    assert main(['doctor', '--clean', '--dry-run', '--staging', str(staging)]) == 0
+    assert main(['procure', 'clean', '--dry-run', '--staging', str(staging)]) == 0
     assert capsys.readouterr().out.splitlines() == ['0 removed, 0 would remove, 0 kept, 0 problem(s) -> http://artifactory:8081/artifactory/jenkins/']
 
 
-def test_stage_local_needs_neither_a_source_nor_the_repository(monkeypatch, tmp_path, secrets_dir, capsys):
+def test_procure_record_needs_neither_a_source_nor_the_repository(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)  # air-gapped, no PROCUREMENT_SOURCE_URL, an unreachable repository
     staging = tmp_path / 'stage'
     staging.mkdir()
-    assert main(['doctor', '--stage-local', '--staging', str(staging)]) == 0
+    assert main(['procure', 'record', '--staging', str(staging)]) == 0
     assert capsys.readouterr().out.splitlines() == [f'0 recorded, 0 refused; review {staging}, then run uc doctor --push']
 
 
@@ -190,31 +205,9 @@ def test_doctor_record_keeps_json_output_valid_and_reports_the_saved_path_on_std
     assert read_status(data)['doctor']['recorded_at'].endswith('Z')
 
 
-@pytest.mark.parametrize('flag', ['--stage-local', '--clean'])
-def test_record_is_refused_with_a_staging_run(flag, capsys):
-    with pytest.raises(SystemExit) as exit_info:
-        main(['doctor', '--record', flag])
-    assert exit_info.value.code == 2
-    assert '--record only applies to a report run' in capsys.readouterr().err
-
-
-def test_fix_needs_stage_local(capsys):
-    with pytest.raises(SystemExit) as exit_info:
-        main(['doctor', '--fix'])
-    assert exit_info.value.code == 2
-    assert '--fix only applies to --stage-local' in capsys.readouterr().err
-
-
-def test_dry_run_needs_push(capsys):
-    with pytest.raises(SystemExit) as exit_info:
-        main(['doctor', '--dry-run'])
-    assert exit_info.value.code == 2
-    assert '--dry-run only applies to --push and --clean' in capsys.readouterr().err
-
-
 def test_push_with_nothing_staged_exits_1(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
-    assert main(['doctor', '--push', '--staging', str(tmp_path / 'empty')]) == 1
+    assert main(['procure', 'push', '--staging', str(tmp_path / 'empty')]) == 1
     assert 'uc: error: nothing to push' in capsys.readouterr().err
 
 
@@ -314,12 +307,6 @@ def test_doctor_options_come_from_the_settings_unless_given(tmp_path, secrets_di
     assert doctor_options(parser.parse_args(['doctor']), configured) == (True, True, '2.462.1')
     assert doctor_options(parser.parse_args(['doctor', '--no-fetch', '--no-json', '--since', '2.479.1']), configured) == (False, False, '2.479.1')
     assert doctor_options(parser.parse_args(['doctor']), make_settings(tmp_path, secrets_dir)) == (False, False, None)
-
-
-def test_record_only_applies_to_a_report_run(capsys):
-    with pytest.raises(SystemExit):
-        main(['doctor', '--push', '--record'])
-    assert '--record only applies to a report run' in capsys.readouterr().err
 
 
 def test_generate_accepts_wait():
