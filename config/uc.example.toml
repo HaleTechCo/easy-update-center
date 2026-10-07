@@ -119,8 +119,20 @@ public_url = "https://jenkins-updates.example.com"
 # key_file = ""
 
 [procurement]
-# Where uc doctor --download-* fetches files from, by Maven path; https://repo.jenkins-ci.org/releases/ by default. Air-gapped, downloads are refused unless it is set. (PROCUREMENT_SOURCE_URL)
+# Where uc procure stage fetches files from, by Maven path; https://repo.jenkins-ci.org/releases/ by default. Air-gapped, downloads are refused unless it is set. (PROCUREMENT_SOURCE_URL)
 # source_url = ""
+# The staging folder uc procure stage fills and the other uc procure commands read (--staging), inside the uc container; compose.yaml mounts ./procurement there. (PROCUREMENT_STAGING_DIR)
+# staging_dir = "/procurement"
+# uc procure stage first downloads the POMs and manifests missing from the cache, so it finds every missing dependency and required core (--fetch). (PROCUREMENT_FETCH)
+# fetch = true
+# uc procure stage stages the real .pom of every plugin whose POM is missing, derived or unusable (--poms). (PROCUREMENT_POMS)
+# poms = false
+# uc procure stage stages the missing required dependencies, transitively, each with its .pom (--dependencies). (PROCUREMENT_DEPENDENCIES)
+# dependencies = false
+# The Jenkins cores uc procure stage stages: versions such as 2.479.1, or required for every core plugins require that the repository lacks, from DOCTOR_SINCE up (--war). Separate them with spaces or commas. (PROCUREMENT_WARS)
+# wars = ["required"]
+# uc procure record first moves each file placed by hand to the Maven path it declares (--fix). (PROCUREMENT_FIX)
+# fix = false
 
 [pki]
 # The organization in the subjects of the certificates uc pki init and uc pki rotate create. (PKI_ORG)

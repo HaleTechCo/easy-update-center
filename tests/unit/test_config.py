@@ -262,6 +262,40 @@ def test_the_adapter_url_from_the_environment_wins_over_uc_toml(tmp_path):
     assert s.repo_adapter_url == 'http://adapter.env:9094/artifactory/'
 
 
+def test_procurement_staging_defaults():
+    settings = load_settings(AIRGAPPED)
+    assert settings.procurement_staging_dir == Path('/procurement')
+    assert settings.procurement_fetch is True
+    assert (settings.procurement_poms, settings.procurement_dependencies, settings.procurement_fix) == (False, False, False)
+    assert settings.procurement_wars == ()
+
+
+@pytest.mark.parametrize(('raw', 'wars'), [('required', ('required',)), ('required 2.479.1', ('required', '2.479.1')), ('2.462.3,2.479.1', ('2.462.3', '2.479.1')), (' required , 2.479.1 ', ('required', '2.479.1'))])
+def test_procurement_wars_from_the_environment(raw, wars):
+    assert load_settings({**AIRGAPPED, 'PROCUREMENT_WARS': raw}).procurement_wars == wars
+
+
+def test_procurement_wars_from_uc_toml_as_an_array_or_a_string(tmp_path):
+    path = tmp_path / 'uc.toml'
+    path.write_text('[procurement]\nwars = ["required", "2.479.1"]\n', encoding='utf-8')
+    assert load_settings(AIRGAPPED, config_file=path).procurement_wars == ('required', '2.479.1')
+    path.write_text('[procurement]\nwars = "required 2.479.1"\n', encoding='utf-8')
+    assert load_settings(AIRGAPPED, config_file=path).procurement_wars == ('required', '2.479.1')
+
+
+@pytest.mark.parametrize('raw', ['latest', '2.x', 'required,latest'])
+def test_a_bad_procurement_war_fails_when_the_settings_load(raw):
+    with pytest.raises(ConfigError, match=r'^PROCUREMENT_WARS takes Jenkins versions such as 2\.479\.1, or required'):
+        load_settings({**AIRGAPPED, 'PROCUREMENT_WARS': raw})
+
+
+def test_a_list_in_uc_toml_must_hold_strings(tmp_path):
+    path = tmp_path / 'uc.toml'
+    path.write_text('[procurement]\nwars = [2]\n', encoding='utf-8')
+    with pytest.raises(ConfigError, match='must be a list of strings'):
+        load_settings(AIRGAPPED, config_file=path)
+
+
 @pytest.mark.parametrize('value', ['2.462', '2.462.1', '2.440'])
 def test_doctor_since_accepts_jenkins_versions(value):
     assert load_settings({**AIRGAPPED, 'DOCTOR_SINCE': value}).doctor_since == value

@@ -111,6 +111,7 @@ SAMPLE_CHECKS = {
     'bool': lambda sample: sample in {'true', 'false'},
     'version': lambda sample: CORE_VERSION.match(sample) is not None,
     'url': lambda sample: urlsplit(sample).scheme in {'http', 'https'} and bool(urlsplit(sample).netloc),
+    'list': lambda sample: bool(sample.split()) and ',' not in sample,
 }
 """How a sample of each type must parse; only types some setting has a sample of, so no check is dead (test_every_checked_type_has_a_sample)."""
 UNCHECKED_SAMPLE_TYPES = ('str', 'path', 'cron')
@@ -297,6 +298,7 @@ OTHER_VALUES = {
     'path': lambda _setting, current: current.rstrip('/') + '/elsewhere',
     'url': lambda _setting, current: 'https://elsewhere.example' if current != 'https://elsewhere.example' else 'https://other.example',
     'version': lambda _setting, current: '2.462' if current != '2.462' else '2.479',
+    'list': lambda _setting, current: '2.479.1' if current != "('2.479.1',)" else '2.462.3',
 }
 """For each setting type, how other_value finds a valid value other than current, the str() of the setting's Settings field."""
 

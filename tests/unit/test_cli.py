@@ -838,6 +838,13 @@ def test_a_malformed_url_prints_an_error_not_a_traceback(monkeypatch, tmp_path, 
     assert 'uc: error: REPO_URL is not a valid URL: ' in capsys.readouterr().err
 
 
+def test_config_check_reports_a_bad_procurement_war(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_WARS', 'latest')
+    assert main(['config', '--check']) == 1
+    assert capsys.readouterr().err.startswith('uc: error: PROCUREMENT_WARS takes Jenkins versions')
+
+
 def test_config_check_reports_a_malformed_url_setting(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('HTTPS_PROXY', 'http://[bad')

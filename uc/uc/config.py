@@ -84,6 +84,12 @@ class Settings:
     download_proxy_ca_file: str
     procurement_source_url: str
     procurement_source_set: bool
+    procurement_staging_dir: Path
+    procurement_fetch: bool
+    procurement_poms: bool
+    procurement_dependencies: bool
+    procurement_wars: tuple[str, ...]
+    procurement_fix: bool
     retain_releases: int
     min_plugins: int
     min_plugin_ratio: float
@@ -409,6 +415,12 @@ def settings_from(r: Resolver) -> Settings:
         download_proxy_ca_file=r.raw('DOWNLOAD_PROXY_CA_FILE'),
         procurement_source_url=with_trailing_slash(procurement_source or PUBLIC_RELEASES_URL),
         procurement_source_set=bool(procurement_source),
+        procurement_staging_dir=Path(r.raw('PROCUREMENT_STAGING_DIR')),
+        procurement_fetch=_bool(r, 'PROCUREMENT_FETCH'),
+        procurement_poms=_bool(r, 'PROCUREMENT_POMS'),
+        procurement_dependencies=_bool(r, 'PROCUREMENT_DEPENDENCIES'),
+        procurement_wars=_wars(r, 'PROCUREMENT_WARS'),
+        procurement_fix=_bool(r, 'PROCUREMENT_FIX'),
         retain_releases=_int(r, 'RETAIN_RELEASES'),
         min_plugins=_int(r, 'MIN_PLUGINS'),
         min_plugin_ratio=_ratio(r, 'MIN_PLUGIN_RATIO'),
@@ -508,7 +520,9 @@ def _file_value(setting: Setting, value: object, where: str) -> str:
             return 'true' if value else 'false'
     elif (isinstance(value, int) and setting.type in {'int', 'ratio'}) or (isinstance(value, float) and setting.type == 'ratio'):
         return str(value)
-    expected = {'bool': 'true or false', 'int': 'an integer', 'ratio': 'a number'}.get(setting.type, 'a string')
+    if isinstance(value, list) and setting.type == 'list' and all(isinstance(item, str) for item in value):
+        return ' '.join(item.strip() for item in value)
+    expected = {'bool': 'true or false', 'int': 'an integer', 'ratio': 'a number', 'list': 'a list of strings'}.get(setting.type, 'a string')
     # only the TOML type: a value can hold credentials (a URL's, or a password in JAVA_TOOL_OPTIONS), so it is never quoted
     msg = f'{where} must be {expected} (got {_toml_type(value)})'
     raise ConfigError(msg)
@@ -652,6 +666,21 @@ def _version(r: Resolver, name: str) -> str:
         msg = f'{r.label(name)} must be a Jenkins version such as 2.462.1 (got {raw!r})'
         raise ConfigError(msg)
     return raw
+
+
+def _list(r: Resolver, name: str) -> tuple[str, ...]:
+    """Return a list setting's items, separated by spaces or commas (uc.toml's arrays arrive joined with spaces)."""
+    return tuple(item for item in re.split(r'[\s,]+', r.raw(name)) if item)
+
+
+def _wars(r: Resolver, name: str) -> tuple[str, ...]:
+    """Return the cores to stage: Jenkins versions, or required (uc procure stage --war)."""
+    wars = _list(r, name)
+    for item in wars:
+        if item != 'required' and not CORE_VERSION.match(item):
+            msg = f'{r.label(name)} takes Jenkins versions such as 2.479.1, or required (got {item!r})'
+            raise ConfigError(msg)
+    return wars
 
 
 def _int(r: Resolver, name: str) -> int:

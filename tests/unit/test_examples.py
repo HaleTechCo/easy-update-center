@@ -120,3 +120,8 @@ def test_the_compose_file_example_differs_by_mode():
 @pytest.mark.parametrize('make', [example_env, example_toml])
 def test_the_header_says_what_a_commented_line_shows(make):
     assert 'a line starting with # is not set: it shows the default or an example value, and the comment above it says what applies when it is unset' in make('online').replace('\n# ', ' ')
+
+
+def test_a_list_setting_shows_as_an_array_in_the_toml_example_and_as_words_in_the_env_example():
+    assert '# wars = ["required"]\n' in example_toml('airgapped')
+    assert '# PROCUREMENT_WARS=required\n' in example_env('airgapped')
