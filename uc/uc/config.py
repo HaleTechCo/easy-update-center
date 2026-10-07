@@ -16,7 +16,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 from .errors import ConfigError
 from .settings import CORE_VERSION, REGISTRY, SECTIONS, SETTINGS, env_name, toml_key, toml_label
@@ -34,9 +34,8 @@ UPSTREAM_MIRROR_URL = 'https://get.jenkins.io'
 DEFAULT_CONFIG_FILE = Path('/config/uc.toml')
 _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 _SCHEME = re.compile(r'[^/:]+://')  # what urllib's proxy handler takes as a scheme
-# urllib's proxy handler (urllib.request._parse_proxy) takes a scheme up to the first ':', if anything precedes one, then:
-_NO_AUTHORITY = re.compile(r'(?:[^/:]+:)?/(?!/)')  # a single '/' where '//' belongs, which it refuses
-_AT_AFTER_AUTHORITY = re.compile(r'(?:[^/:]+:)?//[^@]*@[^/]*/.*@', re.DOTALL)  # an '@' after the end of its authority, the first '/' after the first '@'
+_PROXY_SCHEME = re.compile(r'[^/:]+:')  # how urllib's proxy handler finds a scheme: up to the first ':', if anything precedes one
+_NOT_IN_HOST = re.compile(r'[\x00-\x20\x7f/?#@]')  # http.client refuses a space or control character; a / ? # or @ is part of a path, query or user info
 _FILE_KEYS = tuple(sorted(toml_label(setting.env) for setting in SETTINGS if not setting.env_only))
 _FILE_SECTIONS = tuple(f'[{section}]' for section in SECTIONS)
 
@@ -548,22 +547,49 @@ def _checked_url(r: Resolver, name: str) -> str:
 
 
 def _checked_proxy(r: Resolver, name: str) -> str:
-    """Return the proxy URL name sets, '' if unset; only its scheme, host and port are parsed, after the user info, which may hold anything (split_userinfo).
+    """Return the proxy URL name sets, '' if unset, checked as urllib's proxy handler will use it; no message quotes any of it.
 
-    Two forms urllib's proxy handler cannot use are refused, with a message that quotes none of the value: a single '/'
-    where '//' belongs (http:/proxy:3128, /proxy:3128, or a password that starts with '/' after a user name and no
-    scheme), which it refuses; and an '@' after the first '/' that follows the first '@', where it ends the authority
-    (http://user:secret@a/b@proxy:3128): it takes the host from before that '/', split_userinfo from after the last '@'.
+    The user info may hold anything (split_userinfo). A value urllib refuses, or whose user info it reads differently
+    from split_userinfo (_proxy_hostport), is asked for as scheme://host:port. The host and port urllib would connect to
+    must be readable: a port that is not a number, an empty host, or a host:port that runs on into a path, query or
+    fragment (http://proxy:3128?x, or proxy:3128/ without a scheme) cannot be used.
     """
     value = r.raw(name)
     if value:
         hint = '; percent-encode # ? / [ ] @ in a user name or password'
-        if _NO_AUTHORITY.match(value) or _AT_AFTER_AUTHORITY.match(value):
+        hostport = _proxy_hostport(value)
+        if hostport is None:
             msg = f'{r.label(name)} is not a valid URL: write it as scheme://host:port{hint}'
             raise ConfigError(msg)
-        scheme, _, rest = split_userinfo(value)
-        _parse_url(r, name, (scheme or '//') + rest, hint=hint)
+        if _NOT_IN_HOST.search(hostport) or not _parse_url(r, name, '//' + hostport, hint=hint).hostname:
+            msg = f'{r.label(name)} is not a valid URL: its host or port cannot be read{hint}'
+            raise ConfigError(msg)
     return value
+
+
+def _proxy_hostport(value: str) -> str | None:
+    """Return the host:port urllib's proxy handler connects to for a proxy URL (urllib.request._parse_proxy, then proxy_open's unquote).
+
+    It takes a scheme up to the first ':', if anything precedes one. When no '/' follows, the whole value is the
+    authority (user:password@proxy:3128); a single '/' it refuses (None); after '//' the authority ends at the first '/'
+    after the first '@', or at the first '/' without an '@'. The host:port follows the authority's last '@'. An '@' after
+    the authority is None too: urllib would take the host from before that '/', split_userinfo from after the last '@'.
+    """
+    match = _PROXY_SCHEME.match(value)
+    rest = value[match.end() :] if match else value
+    if not rest.startswith('/'):
+        authority = value
+    elif not rest.startswith('//'):
+        return None
+    else:
+        at = rest.find('@')
+        end = rest.find('/', 2 if at == -1 else at)
+        if end == -1:
+            end = len(rest)
+        if '@' in rest[end:]:
+            return None
+        authority = rest[2:end]
+    return unquote(authority.rpartition('@')[2])
 
 
 def split_userinfo(value: str) -> tuple[str, str | None, str]:

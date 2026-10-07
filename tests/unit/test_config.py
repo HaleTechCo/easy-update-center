@@ -388,6 +388,45 @@ def test_a_proxy_with_an_at_after_the_end_of_urllibs_authority_is_refused(name, 
         assert part not in str(error.value)
 
 
+@pytest.mark.parametrize('name', ['HTTPS_PROXY', 'HTTP_PROXY'])
+@pytest.mark.parametrize(
+    'value',
+    [
+        'http://proxy.corp:3128?x',
+        'http://proxy.corp:3128#x',
+        'proxy.corp:3128/',
+        'proxy.corp:3128/x',
+        '//proxy.corp:abc',
+        'http://proxyuser:S3cretPW@proxy.corp:3128?x',  # pragma: allowlist secret
+        'proxyuser:S3cretPW@proxy.corp:3128/x',
+        'http://proxyuser:S3cretPW@:3128',  # pragma: allowlist secret
+    ],
+)
+def test_a_proxy_whose_host_or_port_urllib_cannot_use_is_refused(name, value):
+    # urllib hands http.client everything up to the end of its authority, which a ? or # does not end, nor a / without a // before it.
+    with pytest.raises(ConfigError, match=rf'^{name} is not a valid URL: its host or port cannot be read; percent-encode # \? / \[ \] @ in a user name or password$') as error:
+        load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+    for part in ('proxyuser', 'S3cretPW', 'proxy.corp', '3128', 'abc'):
+        assert part not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    'value',
+    [
+        'http://proxy.corp:3128',
+        'http://proxyuser:S3cretPW@proxy.corp:3128',  # pragma: allowlist secret
+        'proxy.corp:3128',
+        'proxyuser:S3cretPW@proxy.corp:3128',
+        'http://proxyuser:S3cretPW@proxy.corp:3128/',  # pragma: allowlist secret
+        'http://[::1]:3128',
+        'socks5h://proxyuser:S3cretPW@proxy.corp:1080',  # pragma: allowlist secret
+        'http://proxy.corp:31%32%38',  # urllib percent-decodes the host and port
+    ],
+)
+def test_a_proxy_urllib_can_use_still_loads(value):
+    assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml')).https_proxy == value
+
+
 @pytest.mark.parametrize('value', ['proxyuser:S3cretPW@Tail/9z@proxy.corp:3128', 'http://proxyuser:S3cretPW/Tail@9z@proxy.corp:3128', 'http://proxyuser:S3cretPW@Tail9z@proxy.corp:3128/'])  # pragma: allowlist secret
 def test_a_proxy_whose_ats_are_all_in_urllibs_user_info_still_loads(value):
     # Without // urllib reads the whole value as the authority; with it, a / before the first @ or after the last one ends nothing early.
