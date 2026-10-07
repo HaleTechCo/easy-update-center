@@ -12,7 +12,7 @@ once releases are published.
   (`uc: error: <setting> must not contain credentials or an @`), so none of them can carry
   credentials, not even a password holding a `#`, `?` or `/`, which a URL parser takes for the end
   of the host. A `DOWNLOAD_BACKEND_URL` with credentials was accepted before; the web container
-  refuses one too.
+  refuses any `@` in it too, with the same message.
 - The web container logs what it serves (`entrypoint: serving <PUBLIC_URL>; downloads: ...`) before
   waiting for the first release. `uc config --web-env --out` writes through a unique temporary file
   and reports a failure as `uc: error: cannot write <path>: <reason>`.
