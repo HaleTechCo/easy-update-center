@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from uc.cli import main
-from uc.config import load_settings, load_web_settings
+from uc.config import NO_CREDENTIALS, load_settings, load_web_settings
 from uc.errors import ConfigError
 from uc.webenv import WEB_SETTINGS, WebEnvWriteError, web_env, write_web_env
 
@@ -120,6 +120,15 @@ def test_the_entrypoint_reads_exactly_the_web_settings():
     names = re.search(r'case "\$\{name\}" in\n\s*([A-Z_]+(?: \| [A-Z_]+)*)\)', script)
     assert names, 'the reader loop in web/entrypoint.sh has no case pattern of names'
     assert tuple(names.group(1).split(' | ')) == WEB_SETTINGS
+
+
+def test_the_entrypoint_refuses_an_at_in_the_backend_url_with_ucs_message():
+    env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc.example.com', 'REPO_URL': 'https://repo.corp/artifactory/', 'REPO_KEY': 'jenkins', 'DOWNLOAD_BACKEND_URL': 'https://u@backend.example'}
+    with pytest.raises(ConfigError) as refused:
+        load_web_settings(env, config_file=NO_FILE)
+    message = str(refused.value)
+    assert message.startswith(f'DOWNLOAD_BACKEND_URL {NO_CREDENTIALS}; ')
+    assert f'die "{message}"' in Path('/web/entrypoint.sh').read_text(encoding='utf-8')
 
 
 @pytest.mark.skipif(not hasattr(os, 'geteuid') or os.geteuid() == 0, reason='root can write to a read-only directory')

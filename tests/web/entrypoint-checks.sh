@@ -77,7 +77,7 @@ no_credentials="DOWNLOAD_BACKEND_URL must not contain credentials or an @; for p
 expect_exit 64 "${no_credentials}" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e DOWNLOAD_BACKEND_URL=https://u:pw@art/repo # pragma: allowlist secret
 expect_exit 64 "${no_credentials}" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e DOWNLOAD_BACKEND_URL=http://u@backend.example
 expect_exit 64 "${no_credentials}" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e "DOWNLOAD_BACKEND_URL=http://u:p@backend.example?x=1" # pragma: allowlist secret
-# Any @ is refused, as uc refuses it: a token ending in # or / would otherwise pass for the host,
+# Any @ is refused, as uc refuses it: a token holding a # or / would otherwise pass for the host,
 # and an @ in the query or fragment goes too.
 expect_exit 64 "${no_credentials}" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e "DOWNLOAD_BACKEND_URL=https://tok3n#x@host.corp/"
 expect_exit 64 "${no_credentials}" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e "DOWNLOAD_BACKEND_URL=https://tok/en@host.corp/"
