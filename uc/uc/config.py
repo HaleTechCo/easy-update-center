@@ -509,8 +509,8 @@ def _file_value(setting: Setting, value: object, where: str) -> str:
     elif (isinstance(value, int) and setting.type in {'int', 'ratio'}) or (isinstance(value, float) and setting.type == 'ratio'):
         return str(value)
     expected = {'bool': 'true or false', 'int': 'an integer', 'ratio': 'a number'}.get(setting.type, 'a string')
-    got = _toml_type(value) if setting.type == 'url' else repr(value)  # a URL's value can hold credentials, so it is never quoted
-    msg = f'{where} must be {expected} (got {got})'
+    # only the TOML type: a value can hold credentials (a URL's, or a password in JAVA_TOOL_OPTIONS), so it is never quoted
+    msg = f'{where} must be {expected} (got {_toml_type(value)})'
     raise ConfigError(msg)
 
 

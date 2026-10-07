@@ -110,8 +110,9 @@ once releases are published.
   `uc: error: <setting> is not a valid URL: its host or port cannot be read` when the settings
   load (for the proxies, with a hint to percent-encode `# ? / [ ] @` in a user name or password),
   so `uc config --check` catches it, instead of a traceback; the message never quotes the value.
-  Nor does the one for a URL setting given in `config/uc.toml` as something other than a string,
-  which names only its TOML type (`must be a string (got an array)`). Every URL setting is parsed:
+  Nor does the one for a value of the wrong TOML type in `config/uc.toml`, for any setting (a
+  `java_tool_options` array can hold a proxy password too), which names only that type
+  (`must be a string (got an array)`). Every URL setting is parsed:
   `PUBLIC_URL`, `REPO_URL`, `REPO_API_URL`, `REPO_ADAPTER_URL`, `DOWNLOAD_BACKEND_URL`,
   `PROCUREMENT_SOURCE_URL`, `RESOURCES_URL`, `POPULARITY_JSON_URL` and `TOOL_INSTALLERS_URL`.
   `HTTPS_PROXY` and `HTTP_PROXY` are checked as Python's urllib reads them: they may carry a user
