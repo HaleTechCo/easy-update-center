@@ -10,7 +10,7 @@ export UC_IMAGE UC_TEST_IMAGE WEB_IMAGE
 # to .env and compose.yaml: they unset UC_IMAGE and WEB_IMAGE, unless you gave them on make's command
 # line or in the environment. Their one-shot runs print only the command's output, without Compose's
 # container lines (older Compose releases ignore COMPOSE_PROGRESS).
-STACK_ENV = env $(foreach v,UC_IMAGE WEB_IMAGE,$(if $(filter file,$(origin $(v))),-u $(v)))
+STACK_ENV = $(strip env $(foreach v,UC_IMAGE WEB_IMAGE,$(if $(filter file,$(origin $(v))),-u $(v))))
 STACK_RUN = $(STACK_ENV) COMPOSE_PROGRESS=quiet docker compose run --rm
 # A command that prints the uc image those targets run, as Compose resolves it for the stack.
 STACK_UC_IMAGE = $(STACK_ENV) docker compose config --images setup
@@ -81,6 +81,10 @@ IN_SECRETS = $(STACK_RUN) --no-deps
 SETUP_DIR = /pki
 FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh $(SETUP_DIR) $(HOST_UID) $(HOST_GID)
 SECRET_FILES = repo_username repo_password github_username github_token download_proxy_auth repo_push_auth
+# The host path of a directory to mount: absolute, as Docker wants it (C:/... with make on Windows),
+# and whole when it holds spaces, which $(abspath) splits on, so each goes through it as <space>.
+space := $(subst ,, )
+HOST_PATH = $(subst <space>,$(space),$(abspath $(subst $(space),<space>,$(1))))
 
 # Creates the root CA and signing certificate in ./secrets, or with OUT=<directory> on make's command
 # line in that directory (relative to this one, created if missing, mounted as /out), as when
@@ -89,14 +93,16 @@ SECRET_FILES = repo_username repo_password github_username github_token download
 PKI_OUT = $(if $(filter command line,$(origin OUT)),$(OUT))
 pki-init: SETUP_DIR = $(if $(PKI_OUT),/out,/pki)
 pki-init: stack-uc-image
-	@mkdir -p secrets $(PKI_OUT)
-	$(IN_SECRETS) $(if $(PKI_OUT),-v "$(abspath $(PKI_OUT)):/out") setup -c 'uc pki init --out $(SETUP_DIR) && $(FIX_SECRETS)'
+	@mkdir -p secrets$(if $(PKI_OUT), "$(PKI_OUT)")
+	$(IN_SECRETS)$(if $(PKI_OUT), -v "$(call HOST_PATH,$(PKI_OUT)):/out") setup -c 'uc pki init --out $(SETUP_DIR) && $(FIX_SECRETS)'
 
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
-# signing certificate and keeps the previous pair as *.old.
+# signing certificate and keeps the previous pair as *.old. ROOT, like OUT, is taken from the command
+# line only.
+PKI_ROOT = $(if $(filter command line,$(origin ROOT)),$(ROOT))
 pki-rotate: stack-uc-image
-	@test -n "$(ROOT)" || { echo "usage: make pki-rotate ROOT=<directory holding root-ca.key>"; exit 2; }
-	$(IN_SECRETS) -v "$(abspath $(ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki && $(FIX_SECRETS)'
+	@test -n "$(PKI_ROOT)" || { echo "usage: make pki-rotate ROOT=<directory holding root-ca.key>"; exit 2; }
+	$(IN_SECRETS) -v "$(call HOST_PATH,$(PKI_ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki && $(FIX_SECRETS)'
 	@rmdir secrets/root 2>/dev/null || true
 
 secrets-placeholders: stack-uc-image
@@ -138,7 +144,7 @@ procure-clean: DOCTOR_MODE = --clean
 procure-download procure-clean: stack-uc-image
 	@mkdir -p procurement
 	@$(IN_PROCUREMENT) 'chown -R 10001:10001 /procurement'
-	$(STACK_RUN) uc doctor $(DOCTOR_MODE) $(ARGS); rc=$$?; \
+	$(STACK_RUN) uc doctor$(if $(DOCTOR_MODE), $(DOCTOR_MODE)) $(ARGS); rc=$$?; \
 	  $(IN_PROCUREMENT) 'chown -R $(HOST_UID):$(HOST_GID) /procurement'; exit $$rc
 
 # Usage: make procure-push [ARGS=--dry-run]
