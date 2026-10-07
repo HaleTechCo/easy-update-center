@@ -10,7 +10,7 @@ export UC_IMAGE UC_TEST_IMAGE WEB_IMAGE
 # to .env and compose.yaml: they unset UC_IMAGE and WEB_IMAGE, unless you gave them on make's command
 # line or in the environment. Their one-shot runs print only the command's output, without Compose's
 # container lines (older Compose releases ignore COMPOSE_PROGRESS).
-STACK_ENV = env $(foreach v,UC_IMAGE WEB_IMAGE,$(if $(filter file,$(origin $(v))),-u $(v)))
+STACK_ENV = $(strip env $(foreach v,UC_IMAGE WEB_IMAGE,$(if $(filter file,$(origin $(v))),-u $(v))))
 STACK_RUN = $(STACK_ENV) COMPOSE_PROGRESS=quiet docker compose run --rm
 # A command that prints the uc image those targets run, as Compose resolves it for the stack.
 STACK_UC_IMAGE = $(STACK_ENV) docker compose config --images setup
@@ -76,28 +76,52 @@ test-secrets: uc-image
 HOST_UID ?= $(shell id -u)
 HOST_GID ?= $(shell id -g)
 # The setup service (compose.yaml) reads .env, or UC_ENV_FILE, and config/ as the other services do,
-# so uc pki sees the PKI_* settings they see. It mounts ./secrets as /pki and runs as root.
+# so uc pki sees the PKI_* settings they see. It mounts ./secrets as /pki and runs as root; uc pki's
+# --display-dir makes its messages name the files where they are on the host.
 IN_SECRETS = $(STACK_RUN) --no-deps
 SETUP_DIR = /pki
 FIX_SECRETS = sh /usr/local/bin/secrets-permissions.sh $(SETUP_DIR) $(HOST_UID) $(HOST_GID)
 SECRET_FILES = repo_username repo_password github_username github_token download_proxy_auth repo_push_auth
+# The host path of a directory to mount: absolute, as Docker wants it (C:/... with make on Windows),
+# and whole when it holds spaces, which $(abspath) splits on, so each goes through it as <space>.
+space := $(subst ,, )
+HOST_PATH = $(subst <space>,$(space),$(abspath $(subst $(space),<space>,$(1))))
 
-# Creates the root CA and signing certificate in ./secrets, or with OUT=<directory> on make's command
-# line in that directory (relative to this one, created if missing, mounted as /out), as when
-# replacing the root CA (docs/how-to/rotate-signing-certificate.md). Refuses to overwrite existing
-# files. OUT is taken from the command line only, so one exported by another tool cannot redirect it.
+# OUT (pki-init) and ROOT (pki-rotate) are taken from make's command line only, so one exported by
+# another tool cannot redirect them. They reach the recipes inside quotes, so they may hold spaces,
+# but not quotes, $ or backticks: those are refused, not escaped. The usage checks below run as make
+# reads this file, before any prerequisite (the image step) runs or anything is created; UNQUOTABLE
+# reads the value unexpanded, before make could expand a $ in it. A ROOT that names a file (such as
+# the key itself) is refused too: Docker would create an empty file as its mount point in secrets/.
 PKI_OUT = $(if $(filter command line,$(origin OUT)),$(OUT))
+PKI_ROOT = $(if $(filter command line,$(origin ROOT)),$(ROOT))
+UNQUOTABLE = $(and $(filter command line,$(origin $(1))),$(or $(findstring ',$(value $(1))),$(findstring ",$(value $(1))),$(findstring $$,$(value $(1))),$(findstring `,$(value $(1)))))
+PKI_INIT_USAGE = usage: make pki-init [OUT=<directory>], where OUT may hold spaces, but not quotes, $$ or backticks
+PKI_ROTATE_USAGE = usage: make pki-rotate ROOT=<directory holding root-ca.key>, where ROOT may hold spaces, but not quotes, $$ or backticks
+ifneq ($(filter pki-init,$(MAKECMDGOALS)),)
+$(if $(call UNQUOTABLE,OUT),$(error $(PKI_INIT_USAGE)))
+endif
+ifneq ($(filter pki-rotate,$(MAKECMDGOALS)),)
+$(if $(call UNQUOTABLE,ROOT),$(error $(PKI_ROTATE_USAGE)),$(if $(PKI_ROOT),,$(error $(PKI_ROTATE_USAGE))))
+$(if $(shell test -e "$(PKI_ROOT)" && test ! -d "$(PKI_ROOT)" && echo file),$(error ROOT names a file: ROOT is the directory holding root-ca.key; $(PKI_ROTATE_USAGE)))
+endif
+
+# Creates the root CA and signing certificate in ./secrets, or with OUT=<directory> in that directory
+# (relative to this one, created if missing, mounted as /out), as when replacing the root CA
+# (docs/how-to/rotate-signing-certificate.md). Refuses to overwrite existing files.
 pki-init: SETUP_DIR = $(if $(PKI_OUT),/out,/pki)
 pki-init: stack-uc-image
-	@mkdir -p secrets $(PKI_OUT)
-	$(IN_SECRETS) $(if $(PKI_OUT),-v "$(abspath $(PKI_OUT)):/out") setup -c 'uc pki init --out $(SETUP_DIR) && $(FIX_SECRETS)'
+	@mkdir -p secrets$(if $(PKI_OUT), "$(PKI_OUT)")
+	$(IN_SECRETS)$(if $(PKI_OUT), -v "$(call HOST_PATH,$(PKI_OUT)):/out") setup -c 'uc pki init --out $(SETUP_DIR) --display-dir "$(or $(PKI_OUT),secrets)" && $(FIX_SECRETS)'
 
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
-# signing certificate and keeps the previous pair as *.old.
+# signing certificate and keeps the previous pair as *.old; when a check, a step or a rename of
+# uc pki rotate fails, secrets/ is left as it was. The mount point Docker creates, secrets/root, is
+# removed again when it is empty, also when the rotation fails: a directory, or a file that an older
+# run given the key file as ROOT left behind (Docker refuses to mount a directory on it).
 pki-rotate: stack-uc-image
-	@test -n "$(ROOT)" || { echo "usage: make pki-rotate ROOT=<directory holding root-ca.key>"; exit 2; }
-	$(IN_SECRETS) -v "$(abspath $(ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki && $(FIX_SECRETS)'
-	@rmdir secrets/root 2>/dev/null || true
+	$(IN_SECRETS) -v "$(call HOST_PATH,$(PKI_ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki --display-dir secrets --root-display-dir "$(PKI_ROOT)" && $(FIX_SECRETS)'; rc=$$?; \
+	  rmdir secrets/root 2>/dev/null; if [ -f secrets/root ] && [ ! -s secrets/root ]; then rm -f secrets/root; fi; exit $$rc
 
 secrets-placeholders: stack-uc-image
 	@mkdir -p secrets
@@ -138,7 +162,7 @@ procure-clean: DOCTOR_MODE = --clean
 procure-download procure-clean: stack-uc-image
 	@mkdir -p procurement
 	@$(IN_PROCUREMENT) 'chown -R 10001:10001 /procurement'
-	$(STACK_RUN) uc doctor $(DOCTOR_MODE) $(ARGS); rc=$$?; \
+	$(STACK_RUN) uc doctor$(if $(DOCTOR_MODE), $(DOCTOR_MODE)) $(ARGS); rc=$$?; \
 	  $(IN_PROCUREMENT) 'chown -R $(HOST_UID):$(HOST_GID) /procurement'; exit $$rc
 
 # Usage: make procure-push [ARGS=--dry-run]

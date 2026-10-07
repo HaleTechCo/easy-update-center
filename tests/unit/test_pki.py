@@ -61,13 +61,14 @@ def test_org_with_slash_is_rejected(tmp_path):
 def test_rotate_issues_a_new_cert_under_the_same_root(pki_material, tmp_path):
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
-    before = cert_info(work / 'update-center.cert').fingerprint_sha256
-    rotate_signing(work / 'root' / 'root-ca.key', work / 'root-ca.crt', work, days=5)
-    assert cert_info(work / 'update-center.cert').fingerprint_sha256 != before
+    previous = {name: (work / name).read_bytes() for name in ('update-center.key', 'update-center.cert')}
+    rotate_signing(work, days=5)
+    assert (work / 'update-center.cert').read_bytes() != previous['update-center.cert']
     assert verify_chain(work / 'root-ca.crt', work / 'update-center.cert')
     assert key_matches_cert(work / 'update-center.key', work / 'update-center.cert')
-    assert (work / 'update-center.cert.old').is_file()
-    assert (work / 'update-center.key.old').is_file()
+    assert (work / 'update-center.key').stat().st_mode & 0o777 == 0o600
+    assert {name: (work / f'{name}.old').read_bytes() for name in previous} == previous
+    assert sorted(path.name for path in work.iterdir()) == ['root', 'root-ca.crt', 'update-center.cert', 'update-center.cert.old', 'update-center.key', 'update-center.key.old']
 
 
 def test_cert_der_b64_matches_openssl(pki_material):

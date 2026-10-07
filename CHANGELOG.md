@@ -24,8 +24,8 @@ once releases are published.
   container uses, so an invalid setting web does not use no longer stops it; a uc.toml that is not
   UTF-8, or cannot be read, is reported as such.
 - The private-CA recipe (docs/getting-started/airgapped.md) sets `REPO_CA_FILE` in `.env` (or
-  `[repo] ca_file` in `config/uc.toml`), and `compose.repo-ca.yaml` only mounts the bundle. Set under
-  `environment:` on two services, as the recipe had it, it made `uc config` end with the
+  `[repo] ca_file` in `config/uc.toml`), and `compose.repo-ca.yaml` only mounts the bundle. Set
+  under `environment:` on two services, as the recipe had it, it made `uc config` end with the
   `make reload` note every time: if you followed it, move the variable to `.env`.
 - `SIGNING_CERT_DAYS`, which nothing read, is replaced by `PKI_SIGNING_DAYS`, which `uc pki` reads.
 - Compose mounts all of `./config` at `/config`, in the repo-adapter too; it mounted only
@@ -35,8 +35,25 @@ once releases are published.
 - `make pki-init`, `make pki-rotate`, `make secrets-placeholders` and `make secrets-permissions` run
   a new `setup` Compose service (root, no network, no Compose secrets; mounts `./secrets`
   read-write, `./config` and `scripts/secrets-permissions.sh`) instead of `docker run`. It reads
-  `.env`, or the file `UC_ENV_FILE` names, as the other services do, so quotes in values are handled the same way
-  and `PKI_*` settings apply to `uc pki`. The file must exist, or Compose stops.
+  `.env`, or the file `UC_ENV_FILE` names, as the other services do, so quotes in values are handled
+  the same way and `PKI_*` settings apply to `uc pki`. The file must exist, or Compose stops.
+- `uc pki rotate` (`make pki-rotate`) first checks that the root key and `root-ca.crt` can be read
+  and belong together, and that `update-center.key` and `update-center.cert` are both there or both
+  missing, then issues the new pair in a temporary directory inside the directory it rotates, and
+  only then keeps the previous pair as `*.old` and moves the new one in. When a check, a step or a
+  rename fails, it moves back what it moved, so the directory is left as it was; SIGINT and SIGTERM
+  wait until the renames are done or undone, no rename overwrites a file that appeared meanwhile,
+  and if moving back fails too, the error names the directory that keeps what was set aside. Before,
+  a missing or wrong root key left a new key and an empty `update-center.cert`, and running it again
+  moved those over the `*.old` pair. The error names the file it cannot use, the root key under the
+  new `--root-display-dir`: `make pki-rotate` passes `ROOT`, so it names `<ROOT>/root-ca.key`. An
+  encrypted root key is refused without a passphrase prompt, with a message to decrypt it to a
+  temporary file for the rotation (docs/how-to/rotate-signing-certificate.md); before, openssl asked
+  for the passphrase twice, or without a terminal called the key unreadable. Checking an encrypted
+  `update-center.key` (`uc generate`) fails instead of asking for its passphrase too. `uc pki init`
+  (`make pki-init`) likewise creates the PKI in a temporary directory and moves it in once complete,
+  so a failed run leaves nothing for the next one to refuse. A directory either cannot write in is
+  reported as `uc: error: cannot write in <dir>: <reason>` instead of a traceback.
 - `secrets/` stays owned by you on Linux. `make pki-init`, `make secrets-placeholders` and the new
   `make pki-rotate` and `make secrets-permissions` let each container read its own files through its
   group (uc 10001, web 33) instead of handing the whole directory to uid 10001, so no step needs
@@ -115,14 +132,21 @@ once releases are published.
 - `make reload` checks the settings, then recreates the services so they read them; with invalid
   settings it recreates nothing.
 - `make pki-init OUT=<dir>` creates a new PKI in `<dir>` instead of `secrets/`, through the `setup`
-  service as `make pki-init` does; `OUT` counts only on make's command line. Replacing the root CA
-  (docs/how-to/rotate-signing-certificate.md) uses it, with `newpki/`, which git ignores, instead
-  of `docker run`.
+  service as `make pki-init` does. Replacing the root CA (docs/how-to/rotate-signing-certificate.md)
+  uses it, with `newpki/`, which git ignores, instead of `docker run`. `OUT`, like `ROOT` for
+  `make pki-rotate`, counts only on make's command line, and either may hold spaces, but not quotes,
+  `$` or backticks; both targets check that, and that `ROOT` is given and is not a file (it is the
+  directory holding `root-ca.key`), before they build or pull an image or create anything.
+  `make pki-rotate` removes the mount point Docker leaves at `secrets/root` when it is empty, a
+  directory or a file, also when the rotation fails. `make pki-init` and `make pki-rotate` pass the
+  new `--display-dir` of `uc pki init` and `uc pki rotate`, the directory `--out` or `--dir` is on
+  the host, so their messages name `secrets/...` or `<dir>/...`, not the container's `/pki/...` or
+  `/out/...`.
 - Procurement with `uc doctor`, through a staging folder, `./procurement/`, whose `procurement.json`
   records each file's source, sha1 and reason for review:
-  - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the real
-    POMs, the missing required dependencies (transitively, each with its POM) and Jenkins cores from
-    repo.jenkins-ci.org (`PROCUREMENT_SOURCE_URL`). `make procure-download` wraps them.
+  - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the
+    real POMs, the missing required dependencies (transitively, each with its POM) and Jenkins cores
+    from repo.jenkins-ci.org (`PROCUREMENT_SOURCE_URL`). `make procure-download` wraps them.
   - `--stage-local` records files placed in the folder by hand, after the checks a download gets: a
     plugin's manifest coordinates and a core's `Jenkins-Version` must match the path. It names the
     Maven path a misplaced file belongs at, and `--fix` moves it there.
@@ -135,7 +159,8 @@ once releases are published.
   - `--clean` (`make procure-clean`) deletes the staged files the repository already holds with the
     same content, with their entries, so the folder keeps only what still needs pushing.
   - The report lists the cores plugins require that the repository lacks, from the oldest core it
-    holds (or `--since`), and names the oldest one below that floor with the `--since` that stages it.
+    holds (or `--since`), and names the oldest one below that floor with the `--since` that stages
+    it.
   - After upgrading, run `make secrets-placeholders` once so Compose finds `secrets/repo_push_auth`.
 - Third-party notices in the uc image, `/opt/uc/licenses/`: update-center2's MIT license with the
   Jenkins project's governance statement, every bundled Java library with its license (generated

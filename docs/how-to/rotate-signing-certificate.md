@@ -14,8 +14,8 @@ root.
 
 ## Issue a new signing certificate
 
-You need the root key from offline storage. Point `ROOT` at the directory holding `root-ca.key`, here
-`/media/offline-usb/jenkins-uc-root`:
+You need the root key from offline storage. Point `ROOT` at the directory holding `root-ca.key` (not
+at the key file, which is refused), here `/media/offline-usb/jenkins-uc-root`:
 
 ```bash
 make pki-rotate ROOT=/media/offline-usb/jenkins-uc-root
@@ -23,7 +23,10 @@ make pki-rotate ROOT=/media/offline-usb/jenkins-uc-root
 
 This writes a new `secrets/update-center.key` and `secrets/update-center.cert`, keeps the previous
 pair as `*.old`, and sets their permissions like the rest of `secrets/`. The root key is mounted
-read-only and only read; nothing on the offline media changes.
+read-only and only read; nothing on the offline media changes. If `ROOT` does not hold the key of
+`secrets/root-ca.crt` (a typo, or an old root after replacing it), it stops with an error naming the
+file. The new pair is issued in a temporary directory inside `secrets/` and only then renamed into
+place, so when a check, a step or a rename fails, `secrets/` is left as it was.
 
 Then make the running services use the new files. Compose mounts each secret file as it was when
 the container started, so recreate the scheduler:
@@ -36,6 +39,22 @@ docker compose run --rm uc status        # signing_cert.not_after is a year out
 
 (Air-gapped, with `COMPOSE_FILE` set in `.env`, as in [Deploy air-gapped](../getting-started/airgapped.md#3-configure).) Return the root
 key to offline storage. Once the new release is live, delete `secrets/*.old`.
+
+### A passphrase-protected root key
+
+`make pki-rotate` never asks for a passphrase. It refuses an encrypted root key with
+`uc: error: the root CA key <ROOT>/root-ca.key is encrypted; decrypt it to a temporary file for the
+rotation (...)`. Decrypt it into a new directory only you can read, rotate with that directory as `ROOT`,
+and delete the decrypted copy straight afterwards:
+
+```bash
+mkdir -m 700 /tmp/uc-root
+openssl pkey -in /media/offline-usb/jenkins-uc-root/root-ca.key -out /tmp/uc-root/root-ca.key  # asks for the passphrase
+make pki-rotate ROOT=/tmp/uc-root
+rm -rf /tmp/uc-root
+```
+
+The encrypted key on the offline media is only read. Then go on as above.
 
 ## Replace the root CA
 

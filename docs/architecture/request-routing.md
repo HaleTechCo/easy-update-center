@@ -124,9 +124,9 @@ file, nothing else.
 - `web-config` checks only the settings `web` uses. If one of them is invalid, or `config/uc.toml`
   cannot be read, `web-config` fails and, since `web` waits for it, `web` stays stopped after
   `docker compose up -d`. Run `docker compose logs web-config`, fix the setting and run
-  `docker compose up -d` again. `docker compose run --rm uc config --check` before applying a
-  change catches it.
+  `docker compose up -d` again. `docker compose run --rm --no-deps uc config --check` before
+  applying a change catches it.
 - Before it waits for the first release, `web` logs one line, `entrypoint: serving <PUBLIC_URL>;
   downloads: <DOWNLOAD_BACKEND> <DOWNLOAD_BACKEND_URL> (<DOWNLOAD_ACCESS>)`, so `docker compose logs web`
   shows what it is serving. It holds no secret: a `DOWNLOAD_BACKEND_URL` with credentials in it is refused, by `web-config` and by the entrypoint.
-- To see what `web` will get: `docker compose run --rm uc config --web-env`.
+- To see what `web` will get: `docker compose run --rm --no-deps uc config --web-env`.

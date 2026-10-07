@@ -136,10 +136,16 @@ Prints `status.json`, the same document served at `$PUBLIC_URL/status.json`. Fie
 ## uc config
 
 ```bash
-docker compose run --rm uc config [--json | --check]
-docker compose run --rm uc config --example toml|env [--mode online|airgapped]
-docker compose run --rm uc config --web-env [--out FILE]
+docker compose run --rm --no-deps uc config [--json | --check]
+docker compose run --rm --no-deps uc config --example toml|env [--mode online|airgapped]
+docker compose run --rm --no-deps uc config --web-env [--out FILE]
 ```
+
+`uc config` needs no other service, so run it with `--no-deps`. Without it, Compose first starts the
+repo-adapter the `uc` service depends on, recreating it when its image or settings changed: after an
+upgrade or a settings change, the adapter would then run with settings not yet checked, and a
+setting the new revision refuses would show as Compose's `dependency failed to start` instead of
+`uc: error: ...`.
 
 Shows every setting with its value and where it came from: `environment`, `uc.toml: <key>`, `mode`
 (the default for the mode), `derived` (worked out from other settings, as `REPO_URL` and the secret
@@ -223,20 +229,31 @@ the PKI in `<dir>` instead, for
 [replacing the root CA](../how-to/rotate-signing-certificate.md#replace-the-root-ca).
 
 ```bash
-uc pki init --out <dir> [--root-days 3650] [--signing-days 365] [--org <name>]
-uc pki rotate --dir <dir> [--days 365] [--org <name>]
+uc pki init --out <dir> [--display-dir <dir>] [--root-days 3650] [--signing-days 365] [--org <name>]
+uc pki rotate --dir <dir> [--display-dir <dir>] [--root-display-dir <dir>] [--days 365] [--org <name>]
 uc pki show --dir <dir>
 ```
 
+A directory `init` or `rotate` cannot write in is reported as
+`uc: error: cannot write in <dir>: <reason>` (one `init` cannot create, as
+`uc: error: cannot create <dir>: <reason>`), and nothing changes. While they rename files into
+place, both hold SIGINT and SIGTERM back (Ctrl-C, `docker stop`) until every rename is done or
+undone, and neither renames onto a file that exists: one that appears meanwhile is reported as
+`refusing to overwrite existing files: ...` and kept. If moving back fails too, the error names
+what is not back and the `.rotate-*` or `.init-*` directory inside `<dir>` that keeps what was set
+aside.
+
 | Command | What it does |
 |---|---|
-| `init` | Creates a root CA (`root-ca.crt`, and `root/root-ca.key` to move offline) and a signing key and certificate (`update-center.key`, `update-center.cert`) issued by it. |
-| `rotate` | Issues a new signing certificate from the root key in `<dir>/root/`. The previous pair is kept as `*.old`. Controllers need no change. |
+| `init` | Creates a root CA (`root-ca.crt`, and `root/root-ca.key` to move offline) and a signing key and certificate (`update-center.key`, `update-center.cert`) issued by it. It refuses to overwrite any of them. It creates them in a temporary directory inside `<dir>` and moves them in once all four exist; when a step fails, it moves back what it moved, so `<dir>` is left as it was. |
+| `rotate` | Issues a new signing certificate from the root key in `<dir>/root/`. The previous pair is kept as `*.old`, replacing an older `*.old` pair. Controllers need no change. It first checks that the root key and `root-ca.crt` can be read and belong together, and that `update-center.key` and `update-center.cert` are both there or both missing. It refuses an encrypted root key without asking for the passphrase: [decrypt it to a temporary file](../how-to/rotate-signing-certificate.md#a-passphrase-protected-root-key) for the rotation. It issues the new pair in a temporary directory inside `<dir>` and only then renames the files; when a check, a step or a rename fails, it moves back what it moved, so `<dir>` is left as it was. |
 | `show` | Prints the subject, expiry (with days left) and SHA-256 fingerprint of the root and signing certificates. |
 
 | Option | Meaning |
 |---|---|
 | `--out`, `--dir` | The directory holding the PKI files (required). |
+| `--display-dir` | `init` and `rotate`: the directory `--out` or `--dir` is on the host. Messages name the files under it (`secrets/root/root-ca.key`, not `/pki/root/root-ca.key`). `make pki-init` and `make pki-rotate` pass `secrets`, or the `OUT` directory. |
+| `--root-display-dir` | `rotate`: the directory `<dir>/root/` is on the host (default: `root/` under `--display-dir`, or under `--dir` without it). Messages name the root key under it. `make pki-rotate` passes `ROOT`, which it mounts there. |
 | `--root-days` | Lifetime of the root CA (default `PKI_ROOT_DAYS`, 3650). |
 | `--signing-days`, `--days` | Lifetime of the signing certificate (default `PKI_SIGNING_DAYS`, 365). |
 | `--org` | Organization name in the certificates' subjects (default `PKI_ORG`). |

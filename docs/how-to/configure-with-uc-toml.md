@@ -17,7 +17,7 @@ example value, and the comment above it says what applies when it is unset. Set 
 `public_url`, then uncomment what you need. For an air-gapped starting point, generate one instead:
 
 ```bash
-docker compose run --rm uc config --example toml --mode airgapped > config/uc.toml
+docker compose run --rm --no-deps uc config --example toml --mode airgapped > config/uc.toml
 ```
 
 `config/uc.toml` is gitignored. The containers read it as uid 10001, so keep it readable by everyone
@@ -63,7 +63,7 @@ them before any container starts.
 ## Check the result
 
 ```bash
-docker compose run --rm uc config
+docker compose run --rm --no-deps uc config
 ```
 
 It lists every setting with its value and where it came from: `environment`, `uc.toml: <key>`,
