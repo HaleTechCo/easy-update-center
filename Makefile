@@ -6,7 +6,9 @@ UC_TEST_IMAGE ?= jenkins-uc/uc-test:local
 WEB_IMAGE ?= jenkins-uc/web:local
 export UC_IMAGE UC_TEST_IMAGE WEB_IMAGE
 
-# The targets that run your own Compose project (pki-*, secrets-*, reload, procure-*) leave the images
+.DEFAULT_GOAL := help
+
+# The targets that run your own Compose project (setup, secrets, pki-*, reload, procure-*) leave the images
 # to .env and compose.yaml: they unset UC_IMAGE and WEB_IMAGE, unless you gave them on make's command
 # line or in the environment. Their one-shot runs print only the command's output, without Compose's
 # container lines (older Compose releases ignore COMPOSE_PROGRESS).
@@ -21,14 +23,16 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro" \
              -v "$(CURDIR)/tools:/tools:ro" \
-             -v "$(CURDIR)/web:/web:ro" \
+             -v "$(CURDIR)/web:/web:ro"              -v "$(CURDIR)/examples/pipelines:/examples/pipelines:ro" \
              -v "$(CURDIR)/config/uc.example.toml:/examples/uc.example.toml:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
 
-.PHONY: build build-uc build-web uc-image stack-uc-image test test-unit test-web test-routing test-secrets test-setup pki-init pki-rotate secrets-placeholders secrets-permissions examples reload procure-download procure-clean procure-push compose-check it-airgapped it-clean it-online it-full upstream-diff
+.PHONY: help build build-uc build-web uc-image stack-uc-image setup secrets secrets-placeholders secrets-permissions pki-init pki-rotate reload procure-stage procure-record procure-push procure-clean test test-unit test-web test-routing test-secrets test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
 
-build: build-uc build-web
+##@ Setup
+
+build: build-uc build-web ## Build the uc, uc-test and web images; works before .env exists
 
 build-uc:
 	docker build --target runtime -t $(UC_IMAGE) uc
@@ -51,30 +55,6 @@ stack-uc-image:
 	  elif [ "$$image" = jenkins-uc/uc:local ]; then echo "docker build --target runtime -t $$image uc"; docker build --target runtime -t "$$image" uc; \
 	  else echo "docker pull $$image"; docker pull "$$image"; fi
 
-test: test-unit test-web test-routing test-secrets test-setup
-
-test-unit: build-uc
-	docker run --rm $(SRC_MOUNTS) $(UC_TEST_IMAGE) -q /tests/unit $(ARGS)
-
-test-web: build-web
-	bash tests/web/entrypoint-checks.sh $(WEB_IMAGE)
-
-ROUTING = docker compose -f tests/routing/compose.yaml
-
-test-routing: build-uc build-web
-	$(ROUTING) run --rm tester $(ARGS); rc=$$?; \
-	  $(ROUTING) down -v --remove-orphans >/dev/null 2>&1; exit $$rc
-
-# Ownership is real only on a Linux filesystem, so the checks run inside the uc image as root.
-test-secrets: uc-image
-	docker run --rm --user 0:0 --entrypoint bash -v "$(CURDIR)/uc/bin:/scripts:ro" \
-	  -v "$(CURDIR)/tests/secrets:/tests:ro" $(UC_IMAGE) /tests/permissions-checks.sh
-
-# uc-setup's checks, as root in the uc image (which needs the acl package: hence build-uc).
-test-setup: build-uc
-	docker run --rm --user 0:0 --entrypoint bash -v "$(CURDIR)/uc/bin:/scripts:ro" \
-	  -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" -v "$(CURDIR)/tests/setup:/tests:ro" $(UC_IMAGE) /tests/setup-checks.sh
-
 # secrets/ stays yours; the containers read their files through their group (uc 10001, web 33).
 # The setup service (compose.yaml) sets that up, as root, in every target that writes to secrets/:
 # its entrypoint, uc-setup (uc/bin/), runs uc/bin/secrets-permissions.sh for the owner of ./config.
@@ -82,7 +62,19 @@ test-setup: build-uc
 # .env, or UC_ENV_FILE, and config/ as the other services do, so uc pki sees the PKI_* settings they
 # see. It mounts ./secrets at /setup/secrets; uc pki's --display-dir makes its messages name the
 # files where they are on the host.
-IN_SECRETS = $(STACK_RUN) --no-deps
+IN_SETUP = $(STACK_RUN) --no-deps
+
+setup: stack-uc-image ## First-time setup, safe to repeat: credential placeholders, ./procurement shared with the uc containers, signing keys if there are none
+	@mkdir -p secrets procurement
+	$(IN_SETUP) setup
+
+secrets: stack-uc-image ## Create the missing credential files and set the permissions of secrets/
+	@mkdir -p secrets
+	$(IN_SETUP) setup secrets
+
+# Aliases of secrets.
+secrets-placeholders secrets-permissions: secrets
+
 # The host path of a directory to mount: absolute, as Docker wants it (C:/... with make on Windows),
 # and whole when it holds spaces, which $(abspath) splits on, so each goes through it as <space>.
 space := $(subst ,, )
@@ -110,68 +102,97 @@ endif
 # Creates the root CA and signing certificate in ./secrets, or with OUT=<directory> in that directory
 # (relative to this one, created if missing, mounted at /setup/out), as when replacing the root CA
 # (docs/how-to/rotate-signing-certificate.md). Refuses to overwrite existing files.
-pki-init: stack-uc-image
+pki-init: stack-uc-image ## Create the root CA and signing certificate in secrets/, or in OUT=<dir>
 	@mkdir -p secrets$(if $(PKI_OUT), "$(PKI_OUT)")
-	$(IN_SECRETS)$(if $(PKI_OUT), -v "$(call HOST_PATH,$(PKI_OUT)):/setup/out") setup pki-init$(if $(PKI_OUT), --out /setup/out --display-dir "$(PKI_OUT)")
+	$(IN_SETUP)$(if $(PKI_OUT), -v "$(call HOST_PATH,$(PKI_OUT)):/setup/out") setup pki-init$(if $(PKI_OUT), --out /setup/out --display-dir "$(PKI_OUT)")
 
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
 # signing certificate and keeps the previous pair as *.old; when a check, a step or a rename of
 # uc pki rotate fails, secrets/ is left as it was. The mount point Docker creates, secrets/root, is
 # removed again when it is empty, also when the rotation fails: a directory, or a file that an older
 # run given the key file as ROOT left behind (Docker refuses to mount a directory on it).
-pki-rotate: stack-uc-image
-	$(IN_SECRETS) -v "$(call HOST_PATH,$(PKI_ROOT)):/setup/secrets/root:ro" setup pki-rotate --root-display-dir "$(PKI_ROOT)"; rc=$$?; \
+pki-rotate: stack-uc-image ## Issue a new signing certificate from the root key in ROOT=<dir>
+	$(IN_SETUP) -v "$(call HOST_PATH,$(PKI_ROOT)):/setup/secrets/root:ro" setup pki-rotate --root-display-dir "$(PKI_ROOT)"; rc=$$?; \
 	  rmdir secrets/root 2>/dev/null; if [ -f secrets/root ] && [ ! -s secrets/root ]; then rm -f secrets/root; fi; exit $$rc
 
-# Both create any missing credential file, empty, and set the permissions (setup secrets).
-secrets-placeholders secrets-permissions: stack-uc-image
-	@mkdir -p secrets
-	@$(IN_SECRETS) setup secrets
-
-# The example settings files are generated from the settings registry (uc/uc/settings.py), using the
-# working tree's code; test-unit fails while a committed copy is out of date.
-EXAMPLE = docker run --rm -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" $(UC_IMAGE) config --example
-
-examples: uc-image
-	$(EXAMPLE) toml --mode online > config/uc.example.toml
-	$(EXAMPLE) env --mode online > .env.online.example
-	$(EXAMPLE) env --mode airgapped > .env.airgapped.example
+##@ Running
 
 # Check the settings, then recreate every service so it reads the current .env and config/uc.toml
 # (docs/reference/configuration.md#when-changes-apply). A failed check stops here, leaving every
 # service running as it was; web-config runs the check, needing no network and no secrets.
 # A generation in progress restarts.
-reload: stack-uc-image
+reload: stack-uc-image ## Check the settings, then recreate every service so it reads them
 	$(STACK_RUN) web-config config --check
 	$(STACK_ENV) docker compose up -d --force-recreate
 
-# uc doctor --download-* stages files into ./procurement for review, and uc doctor --clean deletes the
-# ones the repository already holds (docs/how-to/procure-missing-files.md). The uc container runs as
-# uid 10001: it gets the folder for the run, and the host user gets it back after, also when the run
-# fails. Usage: make procure-download ARGS="--fetch --download-poms --download-dependencies"
-#               make procure-clean [ARGS=--dry-run]
+##@ Procurement
+
+# uc procure stage, record and clean write to ./procurement. Where uc-setup could not share it through
+# ACLs (make setup says so), these hand the folder to the uc containers' uid for the run and back to
+# you after, also when the run fails. ARGS passes options through, e.g. make procure-stage ARGS="--poms --dependencies".
 PROCUREMENT = $(CURDIR)/procurement
 HOST_UID ?= $(shell id -u)
 HOST_GID ?= $(shell id -g)
 IN_PROCUREMENT = docker run --rm --user 0:0 --entrypoint sh -v "$(PROCUREMENT):/procurement" "$$($(STACK_UC_IMAGE))" -c
+HANDED_OVER = mkdir -p procurement && $(IN_PROCUREMENT) 'chown -R 10001:10001 /procurement' && \
+  { $(STACK_RUN) uc procure $(1)$(if $(ARGS), $(ARGS)); rc=$$?; $(IN_PROCUREMENT) 'chown -R $(HOST_UID):$(HOST_GID) /procurement'; exit $$rc; }
 
-procure-clean: DOCTOR_MODE = --clean
-procure-download procure-clean: stack-uc-image
-	@mkdir -p procurement
-	@$(IN_PROCUREMENT) 'chown -R 10001:10001 /procurement'
-	$(STACK_RUN) uc doctor$(if $(DOCTOR_MODE), $(DOCTOR_MODE)) $(ARGS); rc=$$?; \
-	  $(IN_PROCUREMENT) 'chown -R $(HOST_UID):$(HOST_GID) /procurement'; exit $$rc
+procure-stage: stack-uc-image ## Stage what uc doctor finds missing into ./procurement for review (ARGS="--poms ...")
+	$(call HANDED_OVER,stage)
 
-# Usage: make procure-push [ARGS=--dry-run]
-procure-push: stack-uc-image
-	$(STACK_RUN) uc doctor --push $(ARGS)
+procure-record: stack-uc-image ## Record files you placed in ./procurement by hand (ARGS=--fix)
+	$(call HANDED_OVER,record)
+
+procure-push: stack-uc-image ## Push what procurement.json lists to the repository (ARGS=--dry-run)
+	$(STACK_RUN) uc procure push$(if $(ARGS), $(ARGS))
+
+procure-clean: stack-uc-image ## Delete the staged files the repository now holds (ARGS=--dry-run)
+	$(call HANDED_OVER,clean)
+
+##@ Development
+
+test: test-unit test-web test-routing test-secrets test-setup ## Run the unit, web, routing, secrets and setup tests
+
+test-unit: build-uc ## Run the unit tests in the uc-test image (ARGS=pytest options)
+	docker run --rm $(SRC_MOUNTS) $(UC_TEST_IMAGE) -q /tests/unit $(ARGS)
+
+test-web: build-web ## Check the web image's entrypoint
+	bash tests/web/entrypoint-checks.sh $(WEB_IMAGE)
+
+ROUTING = docker compose -f tests/routing/compose.yaml
+
+test-routing: build-uc build-web ## Run the routing tests against the web image, in their own Compose project
+	$(ROUTING) run --rm tester $(ARGS); rc=$$?; \
+	  $(ROUTING) down -v --remove-orphans >/dev/null 2>&1; exit $$rc
+
+# Ownership is real only on a Linux filesystem, so the checks run inside the uc image as root.
+test-secrets: uc-image ## Check the permissions of secrets/ as root in the uc image
+	docker run --rm --user 0:0 --entrypoint bash -v "$(CURDIR)/uc/bin:/scripts:ro" \
+	  -v "$(CURDIR)/tests/secrets:/tests:ro" $(UC_IMAGE) /tests/permissions-checks.sh
+
+# uc-setup's checks, as root in the uc image (which needs the acl package: hence build-uc).
+test-setup: build-uc ## Check uc-setup as root in the uc image
+	docker run --rm --user 0:0 --entrypoint bash -v "$(CURDIR)/uc/bin:/scripts:ro" \
+	  -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" -v "$(CURDIR)/tests/setup:/tests:ro" $(UC_IMAGE) /tests/setup-checks.sh
+
+test-pipelines: build-uc ## Check the example pipelines run the procurement stages in order, with the approval before the push
+	docker run --rm $(SRC_MOUNTS) $(UC_TEST_IMAGE) -q /tests/unit/test_pipeline_examples.py
+
+# The example settings files are generated from the settings registry (uc/uc/settings.py), using the
+# working tree's code; test-unit fails while a committed copy is out of date.
+EXAMPLE = docker run --rm -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" $(UC_IMAGE) config --example
+
+examples: uc-image ## Regenerate the example settings files from the settings registry
+	$(EXAMPLE) toml --mode online > config/uc.example.toml
+	$(EXAMPLE) env --mode online > .env.online.example
+	$(EXAMPLE) env --mode airgapped > .env.airgapped.example
 
 # UC_ENV_FILE selects the services' env_file; --env-file only feeds compose's own interpolation.
 # check_isolation.py asserts the network and secret boundaries the repo-adapter relies on.
 ISOLATION = docker run -i --rm -v "$(CURDIR)/tests:/tests:ro" --entrypoint python3 $(UC_TEST_IMAGE) \
   /tests/compose/check_isolation.py
 
-compose-check: build-uc
+compose-check: build-uc ## Validate compose.yaml and check the services' network and secret boundaries
 	UC_ENV_FILE=.env.online.example docker compose --env-file .env.online.example config --quiet
 	UC_ENV_FILE=.env.airgapped.example docker compose --env-file .env.airgapped.example \
 	  -f compose.yaml -f compose.airgapped.yaml config --quiet
@@ -186,7 +207,7 @@ IT_AIR = docker compose -f $(IT_DIR)/airgapped.yaml --env-file $(IT_DIR)/.versio
 IT_TYPES ?= artifactory artifact-keeper
 IT_STATE = uc-it-airgapped_uc-data uc-it-airgapped_uc-data-proxy uc-it-airgapped_uc-data-age uc-it-airgapped_uc-data-push uc-it-airgapped_push-repo uc-it-airgapped_web-config
 
-it-airgapped: build
+it-airgapped: build ## Run the air-gapped integration test against a seeded repository (IT_TYPES=, ARGS=)
 	docker compose -f $(IT_DIR)/airgapped.yaml --profile seed run --rm -T seed-versions > $(IT_DIR)/.versions.env
 	cat $(IT_DIR)/.versions.env
 	$(IT_AIR) --profile seed run --rm seed-plugins
@@ -200,7 +221,7 @@ it-airgapped: build
 	done; \
 	$(IT_AIR) --profile seed down -v --remove-orphans >/dev/null 2>&1; exit $$rc
 
-it-clean:
+it-clean: ## Remove the integration tests' containers and volumes
 	docker compose -f $(IT_DIR)/airgapped.yaml --profile seed down -v --remove-orphans
 	# Compose interpolates online.yaml's required (:?) vars even for `down`, which never starts
 	# the pki service that actually needs them, so harmless placeholders are enough here.
@@ -209,7 +230,7 @@ it-clean:
 
 IT_ONLINE = docker compose -f $(IT_DIR)/online.yaml
 
-it-online: build
+it-online: build ## Run the online integration test (needs JENKINS_COMMUNITY_USERNAME and _PASSWORD)
 	@test -n "$$JENKINS_COMMUNITY_USERNAME" -a -n "$$JENKINS_COMMUNITY_PASSWORD" || \
 	  { echo "export JENKINS_COMMUNITY_USERNAME and JENKINS_COMMUNITY_PASSWORD (a Jenkins community account for repo.jenkins-ci.org; test-only, a deployment reads secrets/repo_*)"; exit 2; }
 	@mkdir -p $(IT_DIR)/.results
@@ -219,7 +240,7 @@ it-online: build
 
 # Full catalog, no plugin cap: records duration, cache and site size
 # (docs/getting-started/requirements.md#host-sizing). Takes hours on first run.
-it-full:
+it-full: ## Run the online integration test on the full catalog; takes hours
 	$(MAKE) it-online UC_EXTRA_ARGS= JAVA_TOOL_OPTIONS=-Xmx6g
 
 UC2_VERSION ?= 3.18.4
@@ -235,7 +256,7 @@ UPSTREAM_FILES = site/generate.sh site/generate-htaccess.sh site/test/test.sh \
   src/main/java/io/jenkins/update_center/json/TieredUpdateSitesGenerator.java
 
 # Usage: make upstream-diff TO=3.19   (compares the pinned UC2_VERSION with TO; see docs/development/upgrading-upstream.md)
-upstream-diff: build-uc
+upstream-diff: build-uc ## Compare the pinned update-center2 with another version (TO=3.19)
 	@test -n "$(TO)" || { echo "usage: make upstream-diff TO=<update-center2 version>"; exit 2; }
 	docker run --rm --entrypoint sh -v "$(CURDIR)/uc/patches:/patches:ro" $(UC_TEST_IMAGE) -c '\
 	  set -e; git clone -q https://github.com/jenkins-infra/update-center2.git /tmp/uc2; cd /tmp/uc2; \
@@ -246,3 +267,9 @@ upstream-diff: build-uc
 	  git checkout -q update-center2-$(TO); \
 	  if git apply --check /patches/*.patch 2>/dev/null; then echo "== patches apply to $(TO)"; \
 	  else echo "== PATCHES DO NOT APPLY to $(TO); check whether upstream already reads POPULARITY_JSON_URL (Popularities.java) and CORE_AGE_DAYS (TieredUpdateSitesGenerator.java)"; fi'
+
+
+help: ## List the targets
+	@awk 'BEGIN { FS = ":.*## "; print "usage: make <target> [VAR=value]" } \
+	  /^##@ / { printf "\n%s\n", substr($$0, 5); next } \
+	  /^[a-zA-Z0-9_-]+:.*## / { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
