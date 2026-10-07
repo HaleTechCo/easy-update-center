@@ -14,8 +14,8 @@ root.
 
 ## Issue a new signing certificate
 
-You need the root key from offline storage. Point `ROOT` at the directory holding `root-ca.key`, here
-`/media/offline-usb/jenkins-uc-root`:
+You need the root key from offline storage. Point `ROOT` at the directory holding `root-ca.key` (not
+at the key file, which is refused), here `/media/offline-usb/jenkins-uc-root`:
 
 ```bash
 make pki-rotate ROOT=/media/offline-usb/jenkins-uc-root

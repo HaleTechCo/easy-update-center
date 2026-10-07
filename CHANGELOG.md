@@ -131,10 +131,13 @@ once releases are published.
   service as `make pki-init` does. Replacing the root CA (docs/how-to/rotate-signing-certificate.md)
   uses it, with `newpki/`, which git ignores, instead of `docker run`. `OUT`, like `ROOT` for
   `make pki-rotate`, counts only on make's command line, and either may hold spaces, but not quotes,
-  `$` or backticks; both targets check that, and that `ROOT` is given, before they build or pull an
-  image or create anything. `make pki-init` and `make pki-rotate` pass the new `--display-dir` of
-  `uc pki init` and `uc pki rotate`, the directory `--out` or `--dir` is on the host, so their
-  messages name `secrets/...` or `<dir>/...`, not the container's `/pki/...` or `/out/...`.
+  `$` or backticks; both targets check that, and that `ROOT` is given and is not a file (it is the
+  directory holding `root-ca.key`), before they build or pull an image or create anything.
+  `make pki-rotate` removes the mount point Docker leaves at `secrets/root` when it is empty, a
+  directory or a file, also when the rotation fails. `make pki-init` and `make pki-rotate` pass the
+  new `--display-dir` of `uc pki init` and `uc pki rotate`, the directory `--out` or `--dir` is on
+  the host, so their messages name `secrets/...` or `<dir>/...`, not the container's `/pki/...` or
+  `/out/...`.
 - Procurement with `uc doctor`, through a staging folder, `./procurement/`, whose `procurement.json`
   records each file's source, sha1 and reason for review:
   - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the

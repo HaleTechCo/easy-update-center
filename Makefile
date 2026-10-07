@@ -91,7 +91,8 @@ HOST_PATH = $(subst <space>,$(space),$(abspath $(subst $(space),<space>,$(1))))
 # another tool cannot redirect them. They reach the recipes inside quotes, so they may hold spaces,
 # but not quotes, $ or backticks: those are refused, not escaped. The usage checks below run as make
 # reads this file, before any prerequisite (the image step) runs or anything is created; UNQUOTABLE
-# reads the value unexpanded, before make could expand a $ in it.
+# reads the value unexpanded, before make could expand a $ in it. A ROOT that names a file (such as
+# the key itself) is refused too: Docker would create an empty file as its mount point in secrets/.
 PKI_OUT = $(if $(filter command line,$(origin OUT)),$(OUT))
 PKI_ROOT = $(if $(filter command line,$(origin ROOT)),$(ROOT))
 UNQUOTABLE = $(and $(filter command line,$(origin $(1))),$(or $(findstring ',$(value $(1))),$(findstring ",$(value $(1))),$(findstring $$,$(value $(1))),$(findstring `,$(value $(1)))))
@@ -102,6 +103,7 @@ $(if $(call UNQUOTABLE,OUT),$(error $(PKI_INIT_USAGE)))
 endif
 ifneq ($(filter pki-rotate,$(MAKECMDGOALS)),)
 $(if $(call UNQUOTABLE,ROOT),$(error $(PKI_ROTATE_USAGE)),$(if $(PKI_ROOT),,$(error $(PKI_ROTATE_USAGE))))
+$(if $(shell test -e "$(PKI_ROOT)" && test ! -d "$(PKI_ROOT)" && echo file),$(error ROOT names a file: ROOT is the directory holding root-ca.key; $(PKI_ROTATE_USAGE)))
 endif
 
 # Creates the root CA and signing certificate in ./secrets, or with OUT=<directory> in that directory
@@ -113,12 +115,13 @@ pki-init: stack-uc-image
 	$(IN_SECRETS)$(if $(PKI_OUT), -v "$(call HOST_PATH,$(PKI_OUT)):/out") setup -c 'uc pki init --out $(SETUP_DIR) --display-dir "$(or $(PKI_OUT),secrets)" && $(FIX_SECRETS)'
 
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
-# signing certificate and keeps the previous pair as *.old; uc pki rotate changes nothing in secrets/
-# when the root key or certificate is missing or unusable, or a step fails. The mount point Docker
-# creates, secrets/root, is removed again (when empty) also when the rotation fails.
+# signing certificate and keeps the previous pair as *.old; when a check, a step or a rename of
+# uc pki rotate fails, secrets/ is left as it was. The mount point Docker creates, secrets/root, is
+# removed again when it is empty, also when the rotation fails: a directory, or a file that an older
+# run given the key file as ROOT left behind (Docker refuses to mount a directory on it).
 pki-rotate: stack-uc-image
 	$(IN_SECRETS) -v "$(call HOST_PATH,$(PKI_ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki --display-dir secrets --root-display-dir "$(PKI_ROOT)" && $(FIX_SECRETS)'; rc=$$?; \
-	  rmdir secrets/root 2>/dev/null; exit $$rc
+	  rmdir secrets/root 2>/dev/null; if [ -f secrets/root ] && [ ! -s secrets/root ]; then rm -f secrets/root; fi; exit $$rc
 
 secrets-placeholders: stack-uc-image
 	@mkdir -p secrets
