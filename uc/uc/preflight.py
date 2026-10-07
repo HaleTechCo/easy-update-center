@@ -6,7 +6,7 @@ import ipaddress
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from .config import Settings, read_secret
+from .config import NO_CREDENTIALS, Settings, read_secret
 from .errors import UcError
 from .model import Credentials
 from .pki import CertInfo, cert_info, key_matches_cert, verify_chain
@@ -37,7 +37,7 @@ def check_public_url(url: str, *, allow_local: bool) -> list[str]:
     Any '@' is refused first, as the settings refuse it, so the messages that quote the URL never quote credentials.
     """
     if '@' in url:
-        msg = 'PUBLIC_URL must not contain credentials or an @'
+        msg = f'PUBLIC_URL {NO_CREDENTIALS}'
         raise PreflightError(msg)
     parts = urlsplit(url)
     if parts.scheme not in ('http', 'https') or not parts.hostname:

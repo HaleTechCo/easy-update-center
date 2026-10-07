@@ -199,11 +199,6 @@ def test_with_explicit_port(url, expected):
     assert with_explicit_port(url) == expected
 
 
-def test_credentials_in_repo_url_are_rejected():
-    with pytest.raises(ConfigError, match='credentials'):
-        load_settings({**AIRGAPPED, 'REPO_URL': 'https://u:p@artifactory.corp/'})  # pragma: allowlist secret
-
-
 def test_read_secret(tmp_path):
     assert read_secret(tmp_path / 'missing') is None
     (tmp_path / 'empty').write_text('\n')
@@ -223,11 +218,6 @@ def test_procurement_source_can_point_at_a_proxy_repository():
     s = load_settings({**AIRGAPPED, 'PROCUREMENT_SOURCE_URL': 'https://artifacts.corp/maven/jenkins-remote'})
     assert s.procurement_source_url == 'https://artifacts.corp/maven/jenkins-remote/'
     assert s.procurement_source_set is True
-
-
-def test_procurement_source_must_not_carry_credentials():
-    with pytest.raises(ConfigError, match='PROCUREMENT_SOURCE_URL must not contain credentials'):
-        load_settings({**AIRGAPPED, 'PROCUREMENT_SOURCE_URL': 'https://u:p@mirror.corp/releases/'})  # pragma: allowlist secret
 
 
 def test_maven_url_follows_the_repository_type():
@@ -463,10 +453,23 @@ def test_an_at_in_a_url_setting_from_uc_toml_names_its_key(tmp_path, name, toml)
     assert TOKEN not in str(error.value)
 
 
-@pytest.mark.parametrize(('load', 'name'), NO_AT_LOADS)
-def test_a_url_setting_that_never_carries_credentials_loads_without_an_at(load, name):
-    value = 'https://host.corp/jenkins%40corp'  # an encoded @ is not one
-    assert value in repr(load({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml')))
+ENCODED_AT = 'https://host.corp/jenkins%40corp'  # an encoded @ is not one
+
+
+@pytest.mark.parametrize(
+    ('load', 'name', 'field', 'expected'),
+    [
+        (load_settings, 'PUBLIC_URL', 'public_url', ENCODED_AT),
+        (load_settings, 'REPO_URL', 'repo_url', ENCODED_AT + '/'),
+        (load_settings, 'DOWNLOAD_BACKEND_URL', 'download_backend_url', ENCODED_AT),
+        (load_settings, 'PROCUREMENT_SOURCE_URL', 'procurement_source_url', ENCODED_AT + '/'),
+        (load_web_settings, 'PUBLIC_URL', 'public_url', ENCODED_AT),
+        (load_web_settings, 'REPO_URL', 'download_backend_url', ENCODED_AT + '/jenkins-local'),  # web reads the repository only for the default backend URL
+        (load_web_settings, 'DOWNLOAD_BACKEND_URL', 'download_backend_url', ENCODED_AT),
+    ],
+)
+def test_a_url_setting_that_never_carries_credentials_loads_without_an_at(load, name, field, expected):
+    assert getattr(load({**AIRGAPPED, name: ENCODED_AT}, config_file=Path('/nonexistent/uc.toml')), field) == expected
 
 
 def test_a_malformed_url_from_uc_toml_names_its_key(tmp_path):

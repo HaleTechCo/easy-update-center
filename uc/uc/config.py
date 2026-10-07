@@ -43,6 +43,9 @@ _FILE_SECTIONS = tuple(f'[{section}]' for section in SECTIONS)
 PROCESS_ENV = ('JAVA_TOOL_OPTIONS', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY')
 """Settings read straight from the process environment, by the JVM and by Python's urllib."""
 
+NO_CREDENTIALS = 'must not contain credentials or an @'
+"""What follows the setting's name when a URL setting that never carries credentials holds an '@'; preflight's PUBLIC_URL check says the same."""
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -584,7 +587,7 @@ def _check_credential_free_url(r: Resolver, name: str, value: str, *, advice: st
     refusing the '@' first also keeps any later message from quoting the token. advice follows the message.
     """
     if '@' in value:
-        msg = f'{r.label(name)} must not contain credentials or an @{advice}'
+        msg = f'{r.label(name)} {NO_CREDENTIALS}{advice}'
         raise ConfigError(msg)
     _parse_url(r, name, value)
 
@@ -687,8 +690,10 @@ def settings_digest(settings: Settings, environ: Mapping[str, str]) -> str:
     marked = {setting.env: getattr(settings, setting.attribute) for setting in SETTINGS if setting.restart and setting.attribute}
     given = {}
     for name, setting in REGISTRY.items():
-        value = environ.get(name, '').strip()
-        if name in environ and (value or setting.empty_means_off):
+        if name not in environ:
+            continue
+        value = environ[name].strip()
+        if value or setting.empty_means_off:
             given[name] = value
     text = json.dumps({'effective': marked, 'environment': given}, default=str, sort_keys=True)
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
