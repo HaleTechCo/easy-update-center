@@ -1,27 +1,49 @@
 # Jenkins update center, self-hosted
 
+**The upstream Jenkins update-center2, containerized and extended, with support for Artifact Keeper
+and air-gapped networks.**
+
 The same update center Jenkins uses (`updates.jenkins.io`), in containers on your own host. Jenkins
 controllers and `jenkins-plugin-cli` point at it with no plugin or code change. It reads plugins
 from the public plugin repository or from your own, and runs online or fully air-gapped.
 
 ## What you get
 
-- **Version routing:** `/update-center.json?version=2.528.1` redirects each controller to the tiered
-  site that only offers plugins its core can run, exactly as updates.jenkins.io does.
+### From upstream
+
+[update-center2](https://github.com/jenkins-infra/update-center2) is the generator the Jenkins
+project runs to build updates.jenkins.io. This repository builds it from a pinned release, so you
+get what Jenkins controllers already expect:
+
 - **Every upstream file:** `update-center.json`, `plugin-versions.json`, `release-history.json`,
   the experimental and stable sites, download index pages, and tool installers.
-- **Your own signing keys:** metadata is signed with your PKI; controllers trust your root CA.
+- **Version routing:** `/update-center.json?version=2.528.1` redirects each controller to the tiered
+  site that only offers plugins its core can run, exactly as updates.jenkins.io does.
+
+### What this repository adds
+
+On its own, update-center2 is a Java program that reads repo.jenkins-ci.org's Artifactory and
+writes files. Around it, this repository adds:
+
+- **Containers and a scheduler:** a uc image (the generator and the `uc` command) and an Apache web
+  image, run with Docker Compose. The scheduler regenerates the site on your schedule, and Apache
+  serves it, sending downloads to get.jenkins.io or to your repository.
+- **Artifact Keeper, and your own Artifactory:** update-center2 only speaks Artifactory's API and
+  expects repo.jenkins-ci.org's layout. The [repo-adapter](docs/architecture/repo-adapter.md)
+  answers its requests from Artifactory or Artifact Keeper, and fills in the POMs, descriptions and
+  release dates a private repository lacks from the plugins themselves.
+- **Air-gapped mode:** nothing is fetched from the internet, and what that makes unreachable is
+  dropped with a warning. Online, security warnings, popularity and labels come live from upstream.
+- **Two small generator patches:** popularity data becomes optional (upstream fails without it,
+  which rules out air-gapped runs), and the 400-day core age for tiers becomes a setting.
+  [The patches](docs/development/upgrading-upstream.md#the-patches) are meant to go upstream.
+- **Your own signing keys:** `uc pki` creates and rotates the PKI that signs the metadata;
+  controllers trust your root CA.
 - **Safe publishing:** each release is validated before it goes live, the switch is atomic, the last
   five releases are kept, and `uc rollback` goes back in one command.
-- **The public repository or yours:** plugins from repo.jenkins-ci.org, or from your Artifactory or
-  Artifact Keeper, with missing POMs, descriptions and release dates filled in from the plugins
-  themselves.
 - **Procurement help:** `uc doctor` stages the real POMs, missing dependencies and cores your
   repository lacks for review, records files you add by hand (moving misplaced ones), pushes exactly
   what you approved, and cleans up what the repository then holds.
-- **Online or air-gapped:** online, security warnings, popularity and labels come live from
-  upstream; air-gapped, nothing is fetched from the internet, and what that makes unreachable is
-  dropped with a warning.
 - **Your own policy:** hide plugins or releases, and publish your own security warnings.
 - **Monitoring:** `status.json` reports the last run, the certificate's expiry and the age of the
   security data.
