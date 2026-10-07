@@ -4,12 +4,13 @@ import hashlib
 import json
 import re
 import stat
+from pathlib import Path
 
 import pytest
 
 from procurefixture import SOURCE, stage
 from uc.procure import ProcureError
-from uc.procure.staging import MANIFEST, Staging, check_path, sha1_of
+from uc.procure.staging import MANIFEST, Staging, check_path, review_line, sha1_of
 
 POM = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.pom'
 
@@ -43,10 +44,23 @@ def test_committed_files_are_recorded_and_saved(tmp_path):
         'replaces_unusable': False,
     }
     assert (tmp_path / 'stage' / POM).read_bytes() == b'<project/>'
-    assert stat.S_IMODE((tmp_path / 'stage' / POM).stat().st_mode) == 0o644
-    assert stat.S_IMODE((tmp_path / 'stage' / MANIFEST).stat().st_mode) == 0o644
     assert not list((tmp_path / 'stage').glob('.part-*'))
     assert Staging.open(tmp_path / 'stage', SOURCE).files == staging.files
+
+
+def test_review_line_shows_the_host_folder_for_the_default_staging_dir():
+    assert review_line(Path('/procurement'), 3) == 'next: review ./procurement (procurement.json lists 3 files), then uc procure push'
+    assert review_line(Path('/procurement'), 1) == 'next: review ./procurement (procurement.json lists 1 file), then uc procure push'
+    assert review_line(Path('/srv/stage'), 2) == 'next: review /srv/stage (procurement.json lists 2 files), then uc procure push'
+
+
+def test_staged_files_and_procurement_json_are_group_writable(tmp_path):
+    # Under the default ACLs uc-setup sets, a file's mode caps what the named users (the host user, uid 10001) may do: 0o664 lets the host user edit what uc staged.
+    staging = Staging.open(tmp_path / 'stage', SOURCE)
+    stage(staging, POM, b'<project/>')
+    staging.save()
+    assert stat.S_IMODE((tmp_path / 'stage' / MANIFEST).stat().st_mode) == 0o664
+    assert stat.S_IMODE((tmp_path / 'stage' / POM).stat().st_mode) == 0o664
 
 
 def test_intact_means_recorded_and_unchanged(tmp_path):

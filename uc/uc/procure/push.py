@@ -1,4 +1,4 @@
-"""uc doctor --push: upload the files procurement.json lists to the repository, never overwriting (docs/how-to/procure-missing-files.md#3-push)."""
+"""uc procure push: upload the files procurement.json lists to the repository, never overwriting (docs/how-to/procure-missing-files.md#3-push)."""
 
 from __future__ import annotations
 
@@ -128,7 +128,7 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
         msg = 'push does not write to the public repo.jenkins-ci.org: set REPO_URL and REPO_KEY to your repository'
         raise ProcureError(msg)
     if not (staging_dir / MANIFEST).is_file():
-        msg = f'nothing to push: no {MANIFEST} in {staging_dir}; stage files with uc doctor --download-poms, --download-dependencies or --download-war first'
+        msg = f'nothing to push: no {MANIFEST} in {staging_dir}; stage files with uc procure stage first'
         raise ProcureError(msg)
     staging = Staging.open(staging_dir, settings.procurement_source_url)
     target = Target(settings.maven_url, http or Http(settings.repo_ca_file), push_headers(settings))
@@ -212,10 +212,11 @@ def push(settings: Settings, staging_dir: Path, *, dry_run: bool, out: TextIO = 
             say('FAILED', path, detail)
     unlisted = staging.unrecorded()
     for path in unlisted:
-        hint = 'record it with uc doctor --stage-local' if in_layout(path) else 'not a Maven path'
+        hint = 'record it with uc procure record' if in_layout(path) else 'not a Maven path'
         say('unlisted', path, f'not in procurement.json, so not pushed; {hint}')
     planned = f'{would_put} would put, ' if dry_run else ''
     ignored = f', {len(unlisted)} not in procurement.json' if unlisted else ''
     print(f'{uploaded} uploaded, {planned}{present} already present, {problems} problem(s){ignored} -> {settings.maven_url}', file=out)
-    print('run uc doctor --fetch to confirm what the generator will see', file=out)
+    if not dry_run and not problems:
+        print('next: uc generate (or wait for the schedule), then uc procure clean', file=out)
     return 1 if problems else 0

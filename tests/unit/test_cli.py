@@ -19,7 +19,9 @@ import pytest
 
 from sitefixture import uc_document, write_site
 from uc import configview, pki
+from uc.aql import classify
 from uc.cli import EXIT_LOCKED, StageOptions, build_parser, doctor_options, main, procure_options
+from uc.doctor import DoctorReport, Inspection
 from uc.pki import cert_info
 from uc.publish import RunLock
 from uc.repo_adapter.server import record_port
@@ -128,6 +130,13 @@ def test_a_removed_doctor_flag_names_its_command(argv, replacement, capsys):
     assert f'{argv[0]} moved: run {replacement}' in capsys.readouterr().err
 
 
+def test_a_moved_flag_beside_a_valid_one_still_exits_2(capsys):
+    with pytest.raises(SystemExit) as exited:
+        main(['doctor', '--push', '--fetch'])
+    assert exited.value.code == 2
+    assert '--push moved: run uc procure push' in capsys.readouterr().err
+
+
 def test_procure_stage_with_nothing_selected_exits_2(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
@@ -142,7 +151,7 @@ def test_procure_options_come_from_the_settings_unless_given(tmp_path, secrets_d
     settings = make_settings(tmp_path, secrets_dir, procurement_poms=True, procurement_wars=('required',), procurement_fetch=True, doctor_since='2.462.1')
     parse = build_parser().parse_args
     assert procure_options(parse(['procure', 'stage']), settings) == StageOptions(fetch=True, poms=True, dependencies=False, wars=('required',), since='2.462.1', staging=settings.procurement_staging_dir)
-    assert procure_options(parse(['procure', 'stage', '--no-poms', '--no-fetch']), settings).poms is False  # Review Focus 5
+    assert procure_options(parse(['procure', 'stage', '--no-poms', '--no-fetch']), settings).poms is False  # --no-poms beats PROCUREMENT_POMS=true
     assert procure_options(parse(['procure', 'stage', '--war', '2.479.1', '--war', '2.462.3']), settings).wars == ('2.479.1', '2.462.3')  # replaces the setting
     assert procure_options(parse(['procure', 'stage', '--no-wars']), settings).wars == ()
     assert procure_options(parse(['procure', 'stage', '--staging', '/elsewhere']), settings).staging == Path('/elsewhere')
@@ -168,6 +177,14 @@ def test_procure_stage_refuses_a_bad_war_before_listing(monkeypatch, tmp_path, s
     assert '--war takes a Jenkins version such as 2.479.1, or required' in capsys.readouterr().err
 
 
+def test_procure_stage_refuses_a_bad_since_before_listing(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
+    assert main(['procure', 'stage', '--poms', '--since', 'two', '--staging', str(tmp_path / 'stage')]) == 1
+    assert '--since takes a Jenkins version' in capsys.readouterr().err
+    assert not (tmp_path / 'stage').exists()
+
+
 def test_doctor_refuses_a_bad_since_before_listing(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
     assert main(['doctor', '--since', 'two']) == 1
@@ -188,7 +205,38 @@ def test_procure_record_needs_neither_a_source_nor_the_repository(monkeypatch, t
     staging = tmp_path / 'stage'
     staging.mkdir()
     assert main(['procure', 'record', '--staging', str(staging)]) == 0
-    assert capsys.readouterr().out.splitlines() == [f'0 recorded, 0 refused; review {staging}, then run uc doctor --push']
+    assert capsys.readouterr().out.splitlines() == ['0 recorded, 0 refused']
+
+
+@pytest.mark.parametrize(('given', 'expected'), [(([], 'true'), True), (([], 'false'), False), ((['--fix'], 'false'), True), ((['--no-fix'], 'true'), False)])
+def test_procure_record_takes_fix_over_the_setting(monkeypatch, tmp_path, secrets_dir, given, expected):
+    argv, setting = given
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_FIX', setting)
+    seen = {}
+    monkeypatch.setattr('uc.cli.stage_local', lambda *_, fix, **__: seen.update(fix=fix) or 0)
+    assert main(['procure', 'record', *argv, '--staging', str(tmp_path / 'stage')]) == 0
+    assert seen == {'fix': expected}
+
+
+@pytest.mark.parametrize('command', ['push', 'clean'])
+def test_staging_on_push_and_clean_reaches_the_command(monkeypatch, tmp_path, secrets_dir, command):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    seen = {}
+    monkeypatch.setattr(f'uc.cli.{command}', lambda _settings, staging, **__: seen.update(staging=staging) or 0)
+    assert main(['procure', command, '--staging', str(tmp_path / 'elsewhere')]) == 0
+    assert seen == {'staging': tmp_path / 'elsewhere'}
+
+
+def test_doctor_json_prints_the_next_line_on_stderr_and_keeps_stdout_valid(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    report = DoctorReport(missing_dependencies=['a 1.0 requires b 2.0'])
+    monkeypatch.setattr('uc.cli.inspect_repository', lambda *_, **__: Inspection(report, classify([]), None))
+    main(['doctor', '--json', '--no-fetch'])
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)['plugins'] == 0
+    assert captured.err.splitlines()[-1] == 'next: uc procure stage --dependencies (or set PROCUREMENT_DEPENDENCIES=true)'
+    assert 'next:' not in captured.out
 
 
 def test_doctor_record_keeps_json_output_valid_and_reports_the_saved_path_on_stderr(artifactory, monkeypatch, tmp_path, secrets_dir, capsys):

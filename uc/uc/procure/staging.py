@@ -19,6 +19,15 @@ FORMAT = 1
 KINDS = ('pom', 'dependency', 'core', 'local')
 EXTENSIONS = ('hpi', 'jpi', 'war', 'pom')
 SHA1 = re.compile(r'^[0-9a-f]{40}$')
+DEFAULT_STAGING = Path('/procurement')
+"""PROCUREMENT_STAGING_DIR's default: where compose.yaml mounts ./procurement in the uc container."""
+
+
+def review_line(staging_dir: Path, listed: int) -> str:
+    """Return the next: line after staging or recording: review the folder, then push."""
+    shown = './procurement' if staging_dir == DEFAULT_STAGING else str(staging_dir)
+    files = '1 file' if listed == 1 else f'{listed} files'
+    return f'next: review {shown} (procurement.json lists {files}), then uc procure push'
 
 
 @dataclass(frozen=True)
@@ -29,7 +38,7 @@ class StagedFile:
     url: str
     sha1: str
     size: int
-    kind: str  # pom, dependency, core, or local (placed by hand, recorded by uc doctor --stage-local)
+    kind: str  # pom, dependency, core, or local (placed by hand, recorded by uc procure record)
     reason: str
     staged_at: str
     required_core: str | None = None  # plugin archives: the manifest's Jenkins-Version
@@ -132,11 +141,11 @@ class Staging:
         return Path(name)
 
     def commit(self, staged: StagedFile, part: Path) -> None:
-        """Move a downloaded file into place, readable by everyone, and record it."""
+        """Move a downloaded file into place, readable by everyone and writable by the group, and record it."""
         target = self.file(staged.path)
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
-            part.chmod(0o644)
+            part.chmod(0o664)  # group-writable: under the ACLs uc-setup procurement sets, the mode caps the named users, and the host user must be able to edit what uc staged
             part.replace(target)
         except OSError as exc:
             msg = f'cannot write {target}: {exc}'
@@ -167,5 +176,5 @@ class Staging:
         body = {'format': FORMAT, 'source': self.source, 'files': {path: {k: v for k, v in asdict(staged).items() if k != 'path'} for path, staged in sorted(self.files.items())}}
         part = self.temporary()
         part.write_text(json.dumps(body, indent=2) + '\n', encoding='utf-8')
-        part.chmod(0o644)
+        part.chmod(0o664)  # group-writable: under the ACLs uc-setup procurement sets, the mode caps the named users, and the host user must be able to edit what uc staged
         part.replace(self.root / MANIFEST)

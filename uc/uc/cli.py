@@ -21,7 +21,7 @@ from .preflight import load_credentials
 from .procure.clean import clean
 from .procure.download import check_download_allowed, download
 from .procure.local import stage_local
-from .procure.plan import check_war_args
+from .procure.plan import check_war_args, suggest_stage
 from .procure.push import push
 from .repo_adapter.server import healthcheck, serve
 from .schedule import run_schedule
@@ -211,9 +211,11 @@ def _doctor(args: argparse.Namespace, settings: Settings) -> int:
     inspection = inspect_repository(settings, load_credentials(settings), fetch=fetch, versions=VersionTool.from_settings(settings), since=since)
     report = inspection.report
     print(json.dumps(report.to_dict(), indent=2) if as_json else format_report(report, settings))
+    out = sys.stderr if as_json else sys.stdout  # keep stdout valid JSON
     if args.record:
-        out = sys.stderr if as_json else sys.stdout  # keep stdout valid JSON
         print(f'saved the report as {record(report, settings.data_dir, utcnow())}', file=out)
+    if (line := suggest_stage(report)) is not None:
+        print(line, file=out)
     return report.exit_code()
 
 

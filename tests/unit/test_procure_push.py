@@ -68,6 +68,7 @@ def test_push_uploads_what_the_repository_lacks_and_verifies_it(keeper, tmp_path
     assert f'uploaded  {HPI}' in lines
     assert f'uploaded  {POM}' in lines
     assert f'2 uploaded, 0 already present, 0 problem(s) -> {url}maven/jenkins/' in lines
+    assert lines[-1] == 'next: uc generate (or wait for the schedule), then uc procure clean'
 
 
 def test_a_file_already_there_with_the_same_content_is_present(keeper, tmp_path, secrets_dir):
@@ -85,6 +86,7 @@ def test_a_different_file_is_left_alone(keeper, tmp_path, secrets_dir):
     staged(tmp_path / 'stage', {POM: b'<project/>'}, replaces_unusable=True)
     code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
     assert code == 1
+    assert not [line for line in lines if line.startswith('next:')]
     assert (repo / POM).read_bytes() == b'<html>404</html>'
     digest = hashlib.sha1(b'<html>404</html>', usedforsecurity=False).hexdigest()
     assert f"DIFFERENT {POM}  (the repository holds another file (sha1 {digest}); delete it in the repository first, then run Artifact Keeper's storage garbage collection)" in lines
@@ -125,6 +127,7 @@ def test_a_dry_run_uploads_nothing(keeper, tmp_path, secrets_dir):
     code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage', dry_run=True)
     assert code == 0
     assert f'would put {POM}' in lines
+    assert not [line for line in lines if line.startswith('next:')]
     assert f'0 uploaded, 1 would put, 0 already present, 0 problem(s) -> {url}maven/jenkins/' in lines
     assert not (repo / POM).exists()
 
@@ -300,7 +303,7 @@ def test_files_procurement_json_does_not_list_are_reported_not_pushed(keeper, tm
     code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
     assert code == 0
     assert not (repo / HPI).exists()
-    assert f'unlisted  {HPI}  (not in procurement.json, so not pushed; record it with uc doctor --stage-local)' in lines
+    assert f'unlisted  {HPI}  (not in procurement.json, so not pushed; record it with uc procure record)' in lines
     assert 'unlisted  notes.txt  (not in procurement.json, so not pushed; not a Maven path)' in lines
     assert not [line for line in lines if '.part-' in line]
     assert f'1 uploaded, 0 already present, 0 problem(s), 2 not in procurement.json -> {url}maven/jenkins/' in lines

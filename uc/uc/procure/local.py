@@ -1,4 +1,4 @@
-"""uc doctor --stage-local [--fix]: record files placed in the staging folder by hand, after the checks a download gets (docs/how-to/procure-missing-files.md#files-you-place-by-hand)."""
+"""uc procure record [--fix]: record files placed in the staging folder by hand, after the checks a download gets (docs/how-to/procure-missing-files.md#files-you-place-by-hand)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from uc.timeutil import iso, utcnow
 
 from . import ProcureError
 from .dependencies import archive_manifest
-from .staging import EXTENSIONS, StagedFile, Staging, check_path, prune_empty, sha1_of
+from .staging import EXTENSIONS, StagedFile, Staging, check_path, prune_empty, review_line, sha1_of
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -71,7 +71,9 @@ def stage_local(root: Path, source: str, *, fix: bool = False, out: TextIO = sys
     if recorded:
         staging.save()
     done = f'{moved} moved, ' if fix else ''
-    print(f'{done}{recorded} recorded, {refused} refused; review {root}, then run uc doctor --push', file=out)
+    print(f'{done}{recorded} recorded, {refused} refused', file=out)
+    if staging.files:
+        print(review_line(root, len(staging.files)), file=out)
     return 1 if refused else 0
 
 
