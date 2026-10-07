@@ -87,11 +87,26 @@ SECRET_FILES = repo_username repo_password github_username github_token download
 space := $(subst ,, )
 HOST_PATH = $(subst <space>,$(space),$(abspath $(subst $(space),<space>,$(1))))
 
-# Creates the root CA and signing certificate in ./secrets, or with OUT=<directory> on make's command
-# line in that directory (relative to this one, created if missing, mounted as /out), as when
-# replacing the root CA (docs/how-to/rotate-signing-certificate.md). Refuses to overwrite existing
-# files. OUT is taken from the command line only, so one exported by another tool cannot redirect it.
+# OUT (pki-init) and ROOT (pki-rotate) are taken from make's command line only, so one exported by
+# another tool cannot redirect them. They reach the recipes inside quotes, so they may hold spaces,
+# but not quotes, $ or backticks: those are refused, not escaped. The usage checks below run as make
+# reads this file, before any prerequisite (the image step) runs or anything is created; UNQUOTABLE
+# reads the value unexpanded, before make could expand a $ in it.
 PKI_OUT = $(if $(filter command line,$(origin OUT)),$(OUT))
+PKI_ROOT = $(if $(filter command line,$(origin ROOT)),$(ROOT))
+UNQUOTABLE = $(and $(filter command line,$(origin $(1))),$(or $(findstring ',$(value $(1))),$(findstring ",$(value $(1))),$(findstring $$,$(value $(1))),$(findstring `,$(value $(1)))))
+PKI_INIT_USAGE = usage: make pki-init [OUT=<directory>], where OUT may hold spaces, but not quotes, $$ or backticks
+PKI_ROTATE_USAGE = usage: make pki-rotate ROOT=<directory holding root-ca.key>, where ROOT may hold spaces, but not quotes, $$ or backticks
+ifneq ($(filter pki-init,$(MAKECMDGOALS)),)
+$(if $(call UNQUOTABLE,OUT),$(error $(PKI_INIT_USAGE)))
+endif
+ifneq ($(filter pki-rotate,$(MAKECMDGOALS)),)
+$(if $(call UNQUOTABLE,ROOT),$(error $(PKI_ROTATE_USAGE)),$(if $(PKI_ROOT),,$(error $(PKI_ROTATE_USAGE))))
+endif
+
+# Creates the root CA and signing certificate in ./secrets, or with OUT=<directory> in that directory
+# (relative to this one, created if missing, mounted as /out), as when replacing the root CA
+# (docs/how-to/rotate-signing-certificate.md). Refuses to overwrite existing files.
 pki-init: SETUP_DIR = $(if $(PKI_OUT),/out,/pki)
 pki-init: stack-uc-image
 	@mkdir -p secrets$(if $(PKI_OUT), "$(PKI_OUT)")
@@ -99,11 +114,8 @@ pki-init: stack-uc-image
 
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
 # signing certificate and keeps the previous pair as *.old; uc pki rotate changes nothing in secrets/
-# when the root key or certificate is missing or unusable, or a step fails. ROOT, like OUT, is taken
-# from the command line only.
-PKI_ROOT = $(if $(filter command line,$(origin ROOT)),$(ROOT))
+# when the root key or certificate is missing or unusable, or a step fails.
 pki-rotate: stack-uc-image
-	@test -n "$(PKI_ROOT)" || { echo "usage: make pki-rotate ROOT=<directory holding root-ca.key>"; exit 2; }
 	$(IN_SECRETS) -v "$(call HOST_PATH,$(PKI_ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki --display-dir secrets --root-display-dir "$(PKI_ROOT)" && $(FIX_SECRETS)'
 	@rmdir secrets/root 2>/dev/null || true
 

@@ -120,10 +120,11 @@ once releases are published.
 - `make reload` checks the settings, then recreates the services so they read them; with invalid
   settings it recreates nothing.
 - `make pki-init OUT=<dir>` creates a new PKI in `<dir>` instead of `secrets/`, through the `setup`
-  service as `make pki-init` does. `OUT`, like `ROOT` for `make pki-rotate`, counts only on make's
-  command line, and either may hold spaces. Replacing the root CA
-  (docs/how-to/rotate-signing-certificate.md) uses it, with `newpki/`, which git ignores, instead
-  of `docker run`. `make pki-init` and `make pki-rotate` pass the new `--display-dir` of
+  service as `make pki-init` does. Replacing the root CA (docs/how-to/rotate-signing-certificate.md)
+  uses it, with `newpki/`, which git ignores, instead of `docker run`. `OUT`, like `ROOT` for
+  `make pki-rotate`, counts only on make's command line, and either may hold spaces, but not quotes,
+  `$` or backticks; both targets check that, and that `ROOT` is given, before they build or pull an
+  image or create anything. `make pki-init` and `make pki-rotate` pass the new `--display-dir` of
   `uc pki init` and `uc pki rotate`, the directory `--out` or `--dir` is on the host, so their
   messages name `secrets/...` or `<dir>/...`, not the container's `/pki/...` or `/out/...`.
 - Procurement with `uc doctor`, through a staging folder, `./procurement/`, whose `procurement.json`
