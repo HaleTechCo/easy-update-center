@@ -95,7 +95,10 @@ def query_repository(api_url: str, repository: str, username: str, password: str
         with urllib.request.urlopen(request, timeout=timeout) as response:
             payload = json.loads(response.read())
     except urllib.error.HTTPError as exc:
-        detail = exc.read()[:300].decode('utf-8', 'replace')
+        try:
+            detail = exc.read()[:300].decode('utf-8', 'replace')
+        finally:
+            exc.close()  # it holds the response
         msg = f'AQL query to {api_url} failed with HTTP {exc.code}: {detail}'
         raise AqlError(msg) from exc
     except (OSError, ValueError) as exc:

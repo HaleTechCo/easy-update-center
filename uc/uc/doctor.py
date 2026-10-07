@@ -171,6 +171,7 @@ class ArtifactSource:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 return response.read()
         except urllib.error.HTTPError as exc:
+            exc.close()  # it holds the response
             if exc.code == HTTP_NOT_FOUND:
                 return None
             msg = f'GET {url} failed with HTTP {exc.code}'

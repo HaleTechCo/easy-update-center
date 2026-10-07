@@ -55,7 +55,10 @@ def fetch(url, *, token=TOKEN, data=None):
         with urllib.request.urlopen(request, timeout=10) as response:
             return response.status, dict(response.headers), response.read()
     except urllib.error.HTTPError as exc:
-        return exc.code, dict(exc.headers), exc.read()
+        try:
+            return exc.code, dict(exc.headers), exc.read()
+        finally:
+            exc.close()  # it holds the response
 
 
 def aql(url, key=KEY):

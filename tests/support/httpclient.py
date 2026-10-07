@@ -13,4 +13,5 @@ def put(url: str, data: bytes, auth: str | None = None) -> int:
         with urllib.request.urlopen(request) as response:
             return response.status
     except urllib.error.HTTPError as exc:
+        exc.close()  # it holds the response
         return exc.code

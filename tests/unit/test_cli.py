@@ -355,18 +355,21 @@ def test_pki_init_names_the_files_under_the_display_dir(monkeypatch, tmp_path, c
     ]
 
 
-@pytest.mark.parametrize('display_dir', [None, 'secrets'])
-def test_pki_init_names_the_existing_files_it_refuses_under_the_display_dir(monkeypatch, tmp_path, capsys, display_dir):
+@pytest.mark.parametrize(
+    ('display', 'files'),
+    [
+        ([], '{out}/root/root-ca.key, {out}/root-ca.crt, {out}/update-center.key, {out}/update-center.cert'),
+        (['--display-dir', 'secrets'], 'secrets/root/root-ca.key, secrets/root-ca.crt, secrets/update-center.key, secrets/update-center.cert'),
+    ],
+)
+def test_pki_init_names_the_existing_files_it_refuses_under_the_display_dir(monkeypatch, tmp_path, capsys, display, files):
     monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     out = tmp_path / 'pki'
     (out / 'root').mkdir(parents=True)
     for name in ('root/root-ca.key', 'root-ca.crt', 'update-center.key', 'update-center.cert'):
         (out / name).write_text('kept\n', encoding='utf-8')
-    display = ['--display-dir', display_dir] if display_dir else []
     assert main(['pki', 'init', '--out', str(out), *display]) == 1
-    shown = Path(display_dir) if display_dir else out
-    files = ', '.join(str(shown / name) for name in ('root/root-ca.key', 'root-ca.crt', 'update-center.key', 'update-center.cert'))
-    assert capsys.readouterr().err == f'uc: error: refusing to overwrite existing files: {files}\n'
+    assert capsys.readouterr().err == f'uc: error: refusing to overwrite existing files: {files.format(out=out)}\n'
 
 
 def test_pki_rotate_names_the_certificate_under_the_display_dir(monkeypatch, tmp_path, capsys, pki_material):
