@@ -660,6 +660,10 @@ def settings_digest(settings: Settings, environ: Mapping[str, str]) -> str:
     uc config compares it to tell whether the running services use the current settings.
     """
     marked = {setting.env: getattr(settings, setting.attribute) for setting in SETTINGS if setting.restart and setting.attribute}
-    given = {name: value for name, setting in REGISTRY.items() if name in environ and ((value := environ[name].strip()) or setting.empty_means_off)}
+    given = {}
+    for name, setting in REGISTRY.items():
+        value = environ.get(name, '').strip()
+        if name in environ and (value or setting.empty_means_off):
+            given[name] = value
     text = json.dumps({'effective': marked, 'environment': given}, default=str, sort_keys=True)
     return hashlib.sha256(text.encode('utf-8')).hexdigest()

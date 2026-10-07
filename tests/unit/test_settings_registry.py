@@ -156,7 +156,14 @@ def test_a_mode_sample_comes_before_the_common_one():
 
 
 PROXY_VARIABLES = {'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY'}
-"""The settings apply_process_env exports that the repo-adapter uses: urllib takes the proxies from the environment. The rest of PROCESS_ENV (JAVA_TOOL_OPTIONS) is for the generator's JVM."""
+"""The settings apply_process_env exports that the repo-adapter uses: urllib takes the proxies from the environment."""
+NOT_READ_BY_THE_ADAPTER = {'JAVA_TOOL_OPTIONS': "only the generator's JVM uses it"}
+"""The rest of PROCESS_ENV, each with the reason the repo-adapter does not use it."""
+
+
+def test_every_process_env_variable_is_classified():
+    assert not PROXY_VARIABLES & set(NOT_READ_BY_THE_ADAPTER)
+    assert PROXY_VARIABLES | set(NOT_READ_BY_THE_ADAPTER) == set(config.PROCESS_ENV), 'add each PROCESS_ENV variable to PROXY_VARIABLES if the repo-adapter uses it, else to NOT_READ_BY_THE_ADAPTER with the reason'
 
 
 def test_restart_marks_what_the_services_read_at_start(monkeypatch, tmp_path):
@@ -224,9 +231,8 @@ class RecordingSettings:
 def recorded_repo_adapter_reads(monkeypatch, tmp_path):
     """Return every setting `uc repo-adapter` reads from Settings as it starts, for an air-gapped Artifactory and Artifact Keeper repository.
 
-    It runs the real command, so what the CLI reads before serving counts too. Left out: the PROCESS_ENV settings
-    other than PROXY_VARIABLES (JAVA_TOOL_OPTIONS), which apply_process_env reads for every command and the
-    repo-adapter does not use.
+    It runs the real command, so what the CLI reads before serving counts too. Left out: NOT_READ_BY_THE_ADAPTER,
+    the PROCESS_ENV settings apply_process_env reads for every command and the repo-adapter does not use.
     """
     seen: set[str] = set()
     started = []
@@ -266,24 +272,45 @@ def recorded_repo_adapter_reads(monkeypatch, tmp_path):
     fields = {setting.attribute: setting.env for setting in SETTINGS if setting.attribute}
     properties = {name for name, member in vars(Settings).items() if isinstance(member, property)}
     assert seen - set(fields) <= properties  # a field without a setting would go unchecked
-    return {fields[name] for name in seen if name in fields} - (set(config.PROCESS_ENV) - PROXY_VARIABLES)
+    return {fields[name] for name in seen if name in fields} - set(NOT_READ_BY_THE_ADAPTER)
+
+
+VARIATION_BASE = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc.example.com', 'REPO_URL': 'https://repo.corp/artifactory/', 'REPO_KEY': 'jenkins'}
+"""The settings read_values_follow and the other-value check change one setting from; every derived setting stays at its default."""
 
 
 def read_values_follow(name, reads):
     """Return whether the value of a setting in reads changes when name does, with every derived setting left at its default."""
-    env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc.example.com', 'REPO_URL': 'https://repo.corp/artifactory/', 'REPO_KEY': 'jenkins'}
-    before = config.load_settings(env, config_file=Path('none.toml'))
+    before = config.load_settings(VARIATION_BASE, config_file=Path('none.toml'))
     setting = REGISTRY[name]
-    after = config.load_settings({**env, name: other_value(setting, str(getattr(before, setting.attribute)))}, config_file=Path('none.toml'))
+    after = config.load_settings({**VARIATION_BASE, name: other_value(setting, str(getattr(before, setting.attribute)))}, config_file=Path('none.toml'))
     return any(getattr(before, REGISTRY[read].attribute) != getattr(after, REGISTRY[read].attribute) for read in reads)
+
+
+OTHER_VALUES = {
+    'str': lambda _setting, current: 'other' if current != 'other' else 'another',
+    'bool': lambda _setting, current: 'false' if current == 'True' else 'true',
+    'int': lambda _setting, current: str(int(current) + 1),
+    'ratio': lambda _setting, current: '0.5' if current != '0.5' else '0.25',
+    'choice': lambda setting, current: next(choice for choice in setting.choices if choice != current),
+    'cron': lambda _setting, current: '17 4 * * *' if current != '17 4 * * *' else '18 4 * * *',
+    'path': lambda _setting, current: current.rstrip('/') + '/elsewhere',
+    'url': lambda _setting, current: 'https://elsewhere.example' if current != 'https://elsewhere.example' else 'https://other.example',
+    'version': lambda _setting, current: '2.462' if current != '2.462' else '2.479',
+}
+"""For each setting type, how other_value finds a valid value other than current, the str() of the setting's Settings field."""
 
 
 def other_value(setting, current):
     """Return a valid value for setting other than current."""
-    if setting.type == 'choice':
-        return next(choice for choice in setting.choices if choice != current)
-    if setting.type == 'path':
-        return current.rstrip('/') + '/elsewhere'
-    if setting.type == 'url':
-        return 'https://elsewhere.example'
-    pytest.fail(f'no other value to try for {setting.env}, of type {setting.type}')
+    return OTHER_VALUES[setting.type](setting, current)
+
+
+def test_other_value_has_a_valid_value_for_every_type():
+    assert set(OTHER_VALUES) == set(TYPES)
+    before = config.load_settings(VARIATION_BASE, config_file=Path('none.toml'))
+    for setting in SETTINGS:
+        if setting.attribute:
+            current = getattr(before, setting.attribute)
+            after = config.load_settings({**VARIATION_BASE, setting.env: other_value(setting, str(current))}, config_file=Path('none.toml'))
+            assert getattr(after, setting.attribute) != current, setting.env
