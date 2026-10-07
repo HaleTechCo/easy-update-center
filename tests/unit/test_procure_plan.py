@@ -82,5 +82,5 @@ def test_war_arguments_accepted(value):
 
 @pytest.mark.parametrize('value', ['2.479.x', 'latest', '2.479.1-rc', '../2.479.1', ''])
 def test_war_arguments_refused(value):
-    with pytest.raises(ProcureError, match='--download-war takes a Jenkins version'):
+    with pytest.raises(ProcureError, match='--war takes a Jenkins version'):
         check_war_args([value])

@@ -46,10 +46,10 @@ def plan_poms(report: DoctorReport) -> list[Wanted]:
 
 
 def check_war_args(values: Sequence[str]) -> None:
-    """Refuse --download-war values that are neither a Jenkins version nor 'required', before anything runs."""
+    """Refuse --war values that are neither a Jenkins version nor 'required', before anything runs."""
     for value in values:
         if value != REQUIRED and not CORE_VERSION.match(value):
-            msg = f'--download-war takes a Jenkins version such as 2.479.1, or required (got {value!r})'
+            msg = f'--war takes a Jenkins version such as 2.479.1, or required (got {value!r})'
             raise ProcureError(msg)
 
 

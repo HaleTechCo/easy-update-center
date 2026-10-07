@@ -5,6 +5,10 @@ class UcError(Exception):
     """An expected failure: the CLI prints the message and exits 1."""
 
 
+class UsageError(UcError):
+    """The command line asks for nothing, or for something that cannot be done; uc exits 2, as for a bad argument."""
+
+
 class ConfigError(UcError):
     """The environment does not describe a valid configuration."""
 
