@@ -224,20 +224,21 @@ the PKI in `<dir>` instead, for
 
 ```bash
 uc pki init --out <dir> [--display-dir <dir>] [--root-days 3650] [--signing-days 365] [--org <name>]
-uc pki rotate --dir <dir> [--display-dir <dir>] [--days 365] [--org <name>]
+uc pki rotate --dir <dir> [--display-dir <dir>] [--root-display-dir <dir>] [--days 365] [--org <name>]
 uc pki show --dir <dir>
 ```
 
 | Command | What it does |
 |---|---|
 | `init` | Creates a root CA (`root-ca.crt`, and `root/root-ca.key` to move offline) and a signing key and certificate (`update-center.key`, `update-center.cert`) issued by it. |
-| `rotate` | Issues a new signing certificate from the root key in `<dir>/root/`. The previous pair is kept as `*.old`. Controllers need no change. |
+| `rotate` | Issues a new signing certificate from the root key in `<dir>/root/`. The previous pair is kept as `*.old`. Controllers need no change. It first checks that the root key and `root-ca.crt` can be read and belong together, and issues the new pair in a temporary directory inside `<dir>`, so when anything fails `<dir>` is left as it was. |
 | `show` | Prints the subject, expiry (with days left) and SHA-256 fingerprint of the root and signing certificates. |
 
 | Option | Meaning |
 |---|---|
 | `--out`, `--dir` | The directory holding the PKI files (required). |
 | `--display-dir` | `init` and `rotate`: the directory `--out` or `--dir` is on the host. Messages name the files under it (`secrets/root/root-ca.key`, not `/pki/root/root-ca.key`). `make pki-init` and `make pki-rotate` pass `secrets`, or the `OUT` directory. |
+| `--root-display-dir` | `rotate`: the directory `<dir>/root/` is on the host (default: `root/` under `--display-dir`). Messages name the root key under it. `make pki-rotate` passes `ROOT`, which it mounts there. |
 | `--root-days` | Lifetime of the root CA (default `PKI_ROOT_DAYS`, 3650). |
 | `--signing-days`, `--days` | Lifetime of the signing certificate (default `PKI_SIGNING_DAYS`, 365). |
 | `--org` | Organization name in the certificates' subjects (default `PKI_ORG`). |

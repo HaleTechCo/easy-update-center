@@ -113,6 +113,29 @@ def _check_org(org: str) -> None:
         raise PkiError(msg)
 
 
+def _check_root(root_key: Path, root_cert: Path, shown_key: Path, shown_cert: Path) -> None:
+    """Refuse a root CA key or certificate that is missing, unreadable or not what openssl can use, and a key that is not the certificate's; messages name them as shown_key and shown_cert."""
+    for path, shown, what in ((root_key, shown_key, 'root CA key'), (root_cert, shown_cert, 'root CA certificate')):
+        try:
+            path.open('rb').close()
+        except OSError as exc:
+            msg = f'cannot read the {what} {shown}: {exc.strerror or type(exc).__name__}'
+            raise PkiError(msg) from None
+    try:
+        public_key = _openssl('pkey', '-in', str(root_key), '-pubout')
+    except PkiError:
+        msg = f'the root CA key {shown_key} is not a private key openssl can read'
+        raise PkiError(msg) from None
+    try:
+        cert_key = _openssl('x509', '-in', str(root_cert), '-noout', '-pubkey')
+    except PkiError:
+        msg = f'the root CA certificate {shown_cert} is not a certificate openssl can read'
+        raise PkiError(msg) from None
+    if public_key != cert_key:
+        msg = f'the root CA key {shown_key} is not the key of the root CA certificate {shown_cert}'
+        raise PkiError(msg)
+
+
 def _refuse_existing(out_dir: Path, display_dir: Path, *names: Path | str) -> None:
     existing = [str(display_dir / name) for name in names if (out_dir / name).exists()]
     if existing:
@@ -201,14 +224,26 @@ def init_pki(out_dir: Path, *, root_days: int = 3650, signing_days: int = 365, o
         _issue_signing(root_key, root_cert, out_dir, days=signing_days, org=org, cnf=cnf)
 
 
-def rotate_signing(root_key: Path, root_cert: Path, out_dir: Path, *, days: int = 365, org: str = DEFAULT_ORG) -> None:
-    """Issue a fresh signing key and certificate; the previous pair is kept as *.old."""
+def rotate_signing(out_dir: Path, *, days: int = 365, org: str = DEFAULT_ORG, display_dir: Path | None = None, root_display_dir: Path | None = None) -> None:
+    """Issue a fresh signing key and certificate in out_dir from its root CA (root-ca.crt, root/root-ca.key); the previous pair is kept as *.old.
+
+    Nothing in out_dir changes until the new pair exists: the root files are checked first, the pair is issued in a
+    temporary directory inside out_dir (the same filesystem), and only then is the current pair renamed to *.old and
+    the new one moved in. display_dir, when given, is where out_dir is on the host, and root_display_dir where its
+    root/ is (default: root/ under display_dir); messages name the root files under them.
+    """
     _check_org(org)
-    for name in (SIGNING_KEY, SIGNING_CERT):
-        current = out_dir / name
-        if current.exists():
-            current.replace(out_dir / f'{name}.old')
-    with tempfile.TemporaryDirectory() as tmp:
-        cnf = Path(tmp) / 'ext.cnf'
+    shown = display_dir or out_dir
+    root_key, root_cert = out_dir / 'root' / ROOT_KEY, out_dir / ROOT_CERT
+    _check_root(root_key, root_cert, (root_display_dir or shown / 'root') / ROOT_KEY, shown / ROOT_CERT)
+    with tempfile.TemporaryDirectory(prefix='.rotate-', dir=out_dir) as tmp:
+        work = Path(tmp)
+        cnf = work / 'ext.cnf'
         cnf.write_text(_EXTENSIONS)
-        _issue_signing(root_key, root_cert, out_dir, days=days, org=org, cnf=cnf)
+        _issue_signing(root_key, root_cert, work, days=days, org=org, cnf=cnf)
+        for name in (SIGNING_KEY, SIGNING_CERT):
+            current = out_dir / name
+            if current.exists():
+                current.replace(out_dir / f'{name}.old')
+        for name in (SIGNING_KEY, SIGNING_CERT):
+            (work / name).replace(out_dir / name)

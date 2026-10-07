@@ -23,7 +23,9 @@ make pki-rotate ROOT=/media/offline-usb/jenkins-uc-root
 
 This writes a new `secrets/update-center.key` and `secrets/update-center.cert`, keeps the previous
 pair as `*.old`, and sets their permissions like the rest of `secrets/`. The root key is mounted
-read-only and only read; nothing on the offline media changes.
+read-only and only read; nothing on the offline media changes. If `ROOT` does not hold the key of
+`secrets/root-ca.crt` (a typo, or an old root after replacing it), it stops with an error naming the
+file and leaves `secrets/` as it was.
 
 Then make the running services use the new files. Compose mounts each secret file as it was when
 the container started, so recreate the scheduler:

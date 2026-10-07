@@ -37,6 +37,12 @@ once releases are published.
   read-write, `./config` and `scripts/secrets-permissions.sh`) instead of `docker run`. It reads
   `.env`, or the file `UC_ENV_FILE` names, as the other services do, so quotes in values are handled
   the same way and `PKI_*` settings apply to `uc pki`. The file must exist, or Compose stops.
+- `uc pki rotate` (`make pki-rotate`) first checks that the root key and `root-ca.crt` can be read
+  and belong together, and issues the new pair in a temporary directory beside them before it keeps
+  the previous pair as `*.old`, so a failure leaves the directory as it was. Before, a missing or
+  wrong root key left a new key and an empty `update-center.cert`, and running it again moved those
+  over the `*.old` pair. The error names the file it cannot use, the root key under the new
+  `--root-display-dir`: `make pki-rotate` passes `ROOT`, so it names `<ROOT>/root-ca.key`.
 - `secrets/` stays owned by you on Linux. `make pki-init`, `make secrets-placeholders` and the new
   `make pki-rotate` and `make secrets-permissions` let each container read its own files through its
   group (uc 10001, web 33) instead of handing the whole directory to uid 10001, so no step needs

@@ -98,12 +98,13 @@ pki-init: stack-uc-image
 	$(IN_SECRETS)$(if $(PKI_OUT), -v "$(call HOST_PATH,$(PKI_OUT)):/out") setup -c 'uc pki init --out $(SETUP_DIR) --display-dir "$(or $(PKI_OUT),secrets)" && $(FIX_SECRETS)'
 
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
-# signing certificate and keeps the previous pair as *.old. ROOT, like OUT, is taken from the command
-# line only.
+# signing certificate and keeps the previous pair as *.old; uc pki rotate changes nothing in secrets/
+# when the root key or certificate is missing or unusable, or a step fails. ROOT, like OUT, is taken
+# from the command line only.
 PKI_ROOT = $(if $(filter command line,$(origin ROOT)),$(ROOT))
 pki-rotate: stack-uc-image
 	@test -n "$(PKI_ROOT)" || { echo "usage: make pki-rotate ROOT=<directory holding root-ca.key>"; exit 2; }
-	$(IN_SECRETS) -v "$(call HOST_PATH,$(PKI_ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki --display-dir secrets && $(FIX_SECRETS)'
+	$(IN_SECRETS) -v "$(call HOST_PATH,$(PKI_ROOT)):/pki/root:ro" setup -c 'uc pki rotate --dir /pki --display-dir secrets --root-display-dir "$(PKI_ROOT)" && $(FIX_SECRETS)'
 	@rmdir secrets/root 2>/dev/null || true
 
 secrets-placeholders: stack-uc-image

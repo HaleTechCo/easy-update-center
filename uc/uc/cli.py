@@ -88,6 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     rotate = pki.add_parser('rotate', help='issue a new signing certificate from the root in --dir/root/')
     rotate.add_argument('--dir', type=Path, required=True)
     rotate.add_argument('--display-dir', type=Path, metavar='DIR', help='the directory --dir is on the host, used in messages')
+    rotate.add_argument('--root-display-dir', type=Path, metavar='DIR', help='the directory --dir/root/ is on the host, used in messages (default: root/ under --display-dir)')
     rotate.add_argument('--days', type=int, help='lifetime of the new signing certificate in days (default: PKI_SIGNING_DAYS, 365)')
     rotate.add_argument('--org', help='organization in the subject (default: PKI_ORG)')
     show = pki.add_parser('show', help='print subjects, expiry and fingerprints')
@@ -234,7 +235,7 @@ def _pki(args: argparse.Namespace) -> int:
         print(f"move {shown / 'root' / ROOT_KEY} to offline storage; only 'uc pki rotate' needs it")
     elif args.pki_command == 'rotate':
         days = defaults.signing_days if args.days is None else args.days
-        rotate_signing(args.dir / 'root' / ROOT_KEY, args.dir / ROOT_CERT, args.dir, days=days, org=org)
+        rotate_signing(args.dir, days=days, org=org, display_dir=args.display_dir, root_display_dir=args.root_display_dir)
         print(f'issued a new {(args.display_dir or args.dir) / SIGNING_CERT}; the previous pair is kept as *.old')
     else:
         now = utcnow()

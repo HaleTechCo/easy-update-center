@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import socket
+import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -12,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from sitefixture import uc_document, write_site
-from uc import configview
+from uc import configview, pki
 from uc.cli import EXIT_LOCKED, build_parser, doctor_options, main
 from uc.pki import cert_info
 from uc.publish import RunLock
@@ -371,6 +372,78 @@ def test_pki_rotate_names_the_certificate_under_the_display_dir(monkeypatch, tmp
     assert capsys.readouterr().out == 'issued a new secrets/update-center.cert; the previous pair is kept as *.old\n'
     assert main(['pki', 'rotate', '--dir', str(work)]) == 0
     assert capsys.readouterr().out == f'issued a new {work / "update-center.cert"}; the previous pair is kept as *.old\n'
+
+
+def tree_bytes(directory):
+    """Return every path under directory, with each file's bytes (None for a directory)."""
+    return {path.relative_to(directory).as_posix(): path.read_bytes() if path.is_file() else None for path in directory.rglob('*')}
+
+
+ROTATE_REFUSALS = {
+    'no root key': 'cannot read the root CA key {work}/root/root-ca.key: No such file or directory',
+    'no root certificate': 'cannot read the root CA certificate {work}/root-ca.crt: No such file or directory',
+    'a root key openssl cannot read': 'the root CA key {work}/root/root-ca.key is not a private key openssl can read',
+    "another root CA's key": 'the root CA key {work}/root/root-ca.key is not the key of the root CA certificate {work}/root-ca.crt',
+}
+"""How uc pki rotate refuses each unusable root, before it changes anything."""
+
+
+def break_root(work, case):
+    root_key = work / 'root' / 'root-ca.key'
+    if case == 'no root key':
+        root_key.unlink()
+    elif case == 'no root certificate':
+        (work / 'root-ca.crt').unlink()
+    elif case == 'a root key openssl cannot read':
+        root_key.write_text('not a key\n', encoding='utf-8')
+    else:
+        subprocess.run(['openssl', 'genpkey', '-algorithm', 'RSA', '-pkeyopt', 'rsa_keygen_bits:2048', '-out', str(root_key)], check=True, capture_output=True)
+
+
+@pytest.mark.parametrize('case', list(ROTATE_REFUSALS))
+def test_pki_rotate_refuses_an_unusable_root_and_changes_nothing(monkeypatch, tmp_path, capsys, pki_material, case):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    break_root(work, case)
+    before = tree_bytes(work)
+    assert main(['pki', 'rotate', '--dir', str(work)]) == 1
+    assert tree_bytes(work) == before
+    assert capsys.readouterr().err == f'uc: error: {ROTATE_REFUSALS[case].format(work=work)}\n'
+
+
+def test_pki_rotate_changes_nothing_when_openssl_fails_partway(monkeypatch, tmp_path, capsys, pki_material):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    before = tree_bytes(work)
+    openssl = pki._openssl  # noqa: SLF001 - every openssl call but the signing one runs for real
+
+    def failing_signing(*args):
+        if args[:2] == ('x509', '-req'):  # signing the new certificate, after openssl req wrote the new key
+            msg = 'openssl x509 failed: disk full'
+            raise pki.PkiError(msg)
+        return openssl(*args)
+
+    monkeypatch.setattr(pki, '_openssl', failing_signing)
+    assert main(['pki', 'rotate', '--dir', str(work)]) == 1
+    assert tree_bytes(work) == before
+    assert capsys.readouterr().err == 'uc: error: openssl x509 failed: disk full\n'
+
+
+def test_pki_rotate_names_the_root_files_where_they_are_on_the_host(monkeypatch, tmp_path, capsys, pki_material):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    (work / 'root' / 'root-ca.key').unlink()
+    assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets', '--root-display-dir', 'old root']) == 1
+    assert capsys.readouterr().err == 'uc: error: cannot read the root CA key old root/root-ca.key: No such file or directory\n'
+    assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets']) == 1  # without --root-display-dir: root/ under --display-dir
+    assert capsys.readouterr().err == 'uc: error: cannot read the root CA key secrets/root/root-ca.key: No such file or directory\n'
+    shutil.copy(pki_material / 'root' / 'root-ca.key', work / 'root' / 'root-ca.key')
+    (work / 'root-ca.crt').unlink()
+    assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets', '--root-display-dir', 'old root']) == 1
+    assert capsys.readouterr().err == 'uc: error: cannot read the root CA certificate secrets/root-ca.crt: No such file or directory\n'
 
 
 def test_pki_init_flags_override_the_settings(monkeypatch, tmp_path):
