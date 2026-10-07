@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -16,7 +17,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 from .errors import ConfigError
 from .settings import CORE_VERSION, REGISTRY, SECTIONS, SETTINGS, env_name, toml_key, toml_label
@@ -33,12 +34,17 @@ PUBLIC_RELEASES_URL = PUBLIC_ARTIFACTORY_URL + 'releases/'
 UPSTREAM_MIRROR_URL = 'https://get.jenkins.io'
 DEFAULT_CONFIG_FILE = Path('/config/uc.toml')
 _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
-_SCHEME = re.compile(r'[^/:]+://')  # what urllib's proxy handler takes as a scheme
+_SCHEME = re.compile(r'[^/:]+://')  # the scheme split_userinfo keeps in front of the user info uc config masks
+_PROXY_SCHEME = re.compile(r'[^/:]+:')  # how urllib's proxy handler finds a scheme: up to the first ':', if anything precedes one
+_NOT_IN_HOST = re.compile(r'[\x00-\x20\x7f/?#@]')  # http.client refuses a space or control character; a / ? # or @ is part of a path, query or user info
 _FILE_KEYS = tuple(sorted(toml_label(setting.env) for setting in SETTINGS if not setting.env_only))
 _FILE_SECTIONS = tuple(f'[{section}]' for section in SECTIONS)
 
 PROCESS_ENV = ('JAVA_TOOL_OPTIONS', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY')
 """Settings read straight from the process environment, by the JVM and by Python's urllib."""
+
+NO_CREDENTIALS = 'must not contain credentials or an @'
+"""What follows the setting's name when a URL setting that never carries credentials holds an '@'; preflight's PUBLIC_URL check says the same."""
 
 
 @dataclass(frozen=True)
@@ -269,7 +275,7 @@ def load_web_settings(env: Mapping[str, str] | None = None, *, config_file: Path
     if not public_url:
         msg = 'PUBLIC_URL must be set'
         raise ConfigError(msg)
-    _parse_url(r, 'PUBLIC_URL', public_url)
+    _check_credential_free_url(r, 'PUBLIC_URL', public_url)
     backend = _choice(r, 'DOWNLOAD_BACKEND')
     backend_url = _explicit_backend_url(r) or _default_backend_url(r, backend)
     return WebSettings(
@@ -308,10 +314,7 @@ def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
     if not _REPOSITORY_RE.match(repo_key):
         msg = f'{r.label("REPO_KEY")} contains unsupported characters: {repo_key!r}'
         raise ConfigError(msg)
-    parts = _parse_url(r, 'REPO_URL', repo_url)
-    if parts.username or parts.password:
-        msg = 'URLs must not contain credentials; use the secret files instead'
-        raise ConfigError(msg)
+    _check_credential_free_url(r, 'REPO_URL', repo_url, advice='; use the secret files instead')
     return repo_type, with_trailing_slash(repo_url), repo_key
 
 
@@ -344,7 +347,7 @@ def settings_from(r: Resolver) -> Settings:
     if not public_url:
         msg = 'PUBLIC_URL must be set'
         raise ConfigError(msg)
-    _parse_url(r, 'PUBLIC_URL', public_url)
+    _check_credential_free_url(r, 'PUBLIC_URL', public_url)
 
     repo_type, repo_url, repo_key = _repository(r, online=online)
     repo_url_with_port = with_explicit_port(repo_url)
@@ -368,10 +371,7 @@ def settings_from(r: Resolver) -> Settings:
     resources_url = _checked_url(r, 'RESOURCES_URL')
 
     procurement_source = r.raw('PROCUREMENT_SOURCE_URL')
-    source_parts = _parse_url(r, 'PROCUREMENT_SOURCE_URL', procurement_source)
-    if source_parts.username or source_parts.password:
-        msg = 'PROCUREMENT_SOURCE_URL must not contain credentials'
-        raise ConfigError(msg)
+    _check_credential_free_url(r, 'PROCUREMENT_SOURCE_URL', procurement_source)
 
     secrets_dir = Path(r.raw('SECRETS_DIR'))
 
@@ -509,8 +509,17 @@ def _file_value(setting: Setting, value: object, where: str) -> str:
     elif (isinstance(value, int) and setting.type in {'int', 'ratio'}) or (isinstance(value, float) and setting.type == 'ratio'):
         return str(value)
     expected = {'bool': 'true or false', 'int': 'an integer', 'ratio': 'a number'}.get(setting.type, 'a string')
-    msg = f'{where} must be {expected} (got {value!r})'
+    # only the TOML type: a value can hold credentials (a URL's, or a password in JAVA_TOOL_OPTIONS), so it is never quoted
+    msg = f'{where} must be {expected} (got {_toml_type(value)})'
     raise ConfigError(msg)
+
+
+def _toml_type(value: object) -> str:
+    """Return what a uc.toml value that is not a string is, in TOML's words."""
+    for kind, name in ((bool, 'a boolean'), (int, 'an integer'), (float, 'a float'), (list, 'an array'), (dict, 'a table')):
+        if isinstance(value, kind):
+            return name
+    return 'a date or time'
 
 
 def _choice(r: Resolver, name: str) -> str:
@@ -523,13 +532,10 @@ def _choice(r: Resolver, name: str) -> str:
 
 
 def _explicit_backend_url(r: Resolver) -> str:
-    """Return DOWNLOAD_BACKEND_URL as set ('' if unset); credentials in it are refused, since web logs it and sends it to controllers."""
+    """Return DOWNLOAD_BACKEND_URL as set ('' if unset); an '@' in it, and so any credentials, is refused, since web logs it and sends it to controllers."""
     value = r.raw('DOWNLOAD_BACKEND_URL')
     if value:
-        parts = _parse_url(r, 'DOWNLOAD_BACKEND_URL', value)
-        if parts.username or parts.password:
-            msg = f'{r.label("DOWNLOAD_BACKEND_URL")} must not contain credentials; for proxied downloads put them in secrets/download_proxy_auth'
-            raise ConfigError(msg)
+        _check_credential_free_url(r, 'DOWNLOAD_BACKEND_URL', value, advice='; for proxied downloads put them in secrets/download_proxy_auth')
     return value
 
 
@@ -542,12 +548,62 @@ def _checked_url(r: Resolver, name: str) -> str:
 
 
 def _checked_proxy(r: Resolver, name: str) -> str:
-    """Return the proxy URL name sets, '' if unset; only its scheme, host and port are parsed, after the user info, which may hold anything (split_userinfo)."""
+    """Return the proxy URL name sets, '' if unset, checked as urllib's proxy handler will use it; no message quotes any of it.
+
+    The user info may hold anything (split_userinfo). A value urllib refuses, or whose user info it reads differently
+    from split_userinfo (_proxy_hostport), is asked for as scheme://host:port. The host and port urllib would connect to
+    must be readable: a port that is not a number, an empty host, a host:port that runs on into a path, query or
+    fragment (http://proxy:3128?x, or proxy:3128/ without a scheme), or brackets around anything but an IPv6 address
+    cannot be used.
+    """
     value = r.raw(name)
     if value:
-        scheme, _, rest = split_userinfo(value)
-        _parse_url(r, name, (scheme or '//') + rest, hint='; percent-encode # ? / [ ] @ in a user name or password')
+        hint = '; percent-encode # ? / [ ] @ in a user name or password'
+        hostport = _proxy_hostport(value)
+        if hostport is None:
+            msg = f'{r.label(name)} is not a valid URL: write it as scheme://host:port{hint}'
+            raise ConfigError(msg)
+        unreadable = f'{r.label(name)} is not a valid URL: its host or port cannot be read{hint}'
+        if _NOT_IN_HOST.search(hostport):
+            raise ConfigError(unreadable)
+        host = _parse_url(r, name, '//' + hostport, hint=hint).hostname  # raises the same message for a port that is not a number or broken brackets
+        if not host or (hostport.startswith('[') and not _is_ipv6(host)):  # urlsplit also takes an IPvFuture literal ([v1.x]), which http.client cannot use
+            raise ConfigError(unreadable)
     return value
+
+
+def _is_ipv6(host: str) -> bool:
+    """Return whether host is an IPv6 address, the only kind of host http.client connects to in brackets."""
+    try:
+        ipaddress.IPv6Address(host)
+    except ValueError:
+        return False
+    return True
+
+
+def _proxy_hostport(value: str) -> str | None:
+    """Return the host:port urllib's proxy handler connects to for a proxy URL (urllib.request._parse_proxy, then proxy_open's unquote).
+
+    It takes a scheme up to the first ':', if anything precedes one. When no '/' follows, the whole value is the
+    authority (user:password@proxy:3128); a single '/' it refuses (None); after '//' the authority ends at the first '/'
+    after the first '@', or at the first '/' without an '@'. The host:port follows the authority's last '@'. An '@' after
+    the authority is None too: urllib would take the host from before that '/', split_userinfo from after the last '@'.
+    """
+    match = _PROXY_SCHEME.match(value)
+    rest = value[match.end() :] if match else value
+    if not rest.startswith('/'):
+        authority = value
+    elif not rest.startswith('//'):
+        return None
+    else:
+        at = rest.find('@')
+        end = rest.find('/', 2 if at == -1 else at)
+        if end == -1:
+            end = len(rest)
+        if '@' in rest[end:]:
+            return None
+        authority = rest[2:end]
+    return unquote(authority.rpartition('@')[2])
 
 
 def split_userinfo(value: str) -> tuple[str, str | None, str]:
@@ -555,13 +611,25 @@ def split_userinfo(value: str) -> tuple[str, str | None, str]:
 
     The user info may hold an unencoded # ? / that urlsplit takes as the end of the host, and without a scheme the whole
     value is user info and host (user:password@proxy:3128). urllib ends the user info at the authority's last '@'; taking
-    it to the value's last '@' reads the same wherever the '@'s are all in the user info, and never leaves part of a
-    password in the rest.
+    it to the value's last '@' reads the same wherever the '@'s are all in the user info (_checked_proxy refuses a proxy
+    where they are not), and never leaves part of a password in the rest.
     """
     match = _SCHEME.match(value)
     scheme = match.group() if match else ''
     userinfo, at, rest = value[len(scheme) :].rpartition('@')
     return scheme, userinfo if at else None, rest
+
+
+def _check_credential_free_url(r: Resolver, name: str, value: str, *, advice: str = '') -> None:
+    """Refuse any '@' in a URL setting that never carries credentials, then parse it (_parse_url).
+
+    urlsplit ends the user info at a # ? or /, so it would read a token followed by one as the host and accept it;
+    refusing the '@' first also keeps any later message from quoting the token. advice follows the message.
+    """
+    if '@' in value:
+        msg = f'{r.label(name)} {NO_CREDENTIALS}{advice}'
+        raise ConfigError(msg)
+    _parse_url(r, name, value)
 
 
 def _parse_url(r: Resolver, name: str, value: str, *, hint: str = '') -> SplitResult:
@@ -662,8 +730,10 @@ def settings_digest(settings: Settings, environ: Mapping[str, str]) -> str:
     marked = {setting.env: getattr(settings, setting.attribute) for setting in SETTINGS if setting.restart and setting.attribute}
     given = {}
     for name, setting in REGISTRY.items():
-        value = environ.get(name, '').strip()
-        if name in environ and (value or setting.empty_means_off):
+        if name not in environ:
+            continue
+        value = environ[name].strip()
+        if value or setting.empty_means_off:
             given[name] = value
     text = json.dumps({'effective': marked, 'environment': given}, default=str, sort_keys=True)
     return hashlib.sha256(text.encode('utf-8')).hexdigest()

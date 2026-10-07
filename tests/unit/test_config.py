@@ -1,10 +1,12 @@
 """Unit tests for uc.config: per-mode defaults, overrides and the rejection of invalid settings."""
 
+import urllib.request
 from pathlib import Path
+from urllib.parse import unquote
 
 import pytest
 
-from uc.config import load_settings, load_web_settings, read_secret, settings_digest, with_explicit_port
+from uc.config import _proxy_hostport, load_settings, load_web_settings, read_secret, settings_digest, split_userinfo, with_explicit_port
 from uc.errors import ConfigError
 from uc.settings import SETTINGS
 
@@ -199,11 +201,6 @@ def test_with_explicit_port(url, expected):
     assert with_explicit_port(url) == expected
 
 
-def test_credentials_in_repo_url_are_rejected():
-    with pytest.raises(ConfigError, match='credentials'):
-        load_settings({**AIRGAPPED, 'REPO_URL': 'https://u:p@artifactory.corp/'})  # pragma: allowlist secret
-
-
 def test_read_secret(tmp_path):
     assert read_secret(tmp_path / 'missing') is None
     (tmp_path / 'empty').write_text('\n')
@@ -223,11 +220,6 @@ def test_procurement_source_can_point_at_a_proxy_repository():
     s = load_settings({**AIRGAPPED, 'PROCUREMENT_SOURCE_URL': 'https://artifacts.corp/maven/jenkins-remote'})
     assert s.procurement_source_url == 'https://artifacts.corp/maven/jenkins-remote/'
     assert s.procurement_source_set is True
-
-
-def test_procurement_source_must_not_carry_credentials():
-    with pytest.raises(ConfigError, match='PROCUREMENT_SOURCE_URL must not contain credentials'):
-        load_settings({**AIRGAPPED, 'PROCUREMENT_SOURCE_URL': 'https://u:p@mirror.corp/releases/'})  # pragma: allowlist secret
 
 
 def test_maven_url_follows_the_repository_type():
@@ -338,6 +330,7 @@ def test_a_malformed_url_setting_from_uc_toml_names_its_key(tmp_path, name, toml
     [
         ('HTTPS_PROXY', 'proxy.corp:3128'),
         ('HTTP_PROXY', 'http://user:pw@proxy.corp:3128'),  # pragma: allowlist secret
+        ('HTTPS_PROXY', 'svc:S3cretPW@proxy.corp:3128'),  # urllib reads a scheme-less svc: with no / after it as the user name # pragma: allowlist secret
         ('REPO_API_URL', 'https://artifactory.corp/artifactory/api/'),
         ('RESOURCES_URL', 'https://mirror.corp/resources.zip'),
     ],
@@ -346,8 +339,12 @@ def test_valid_url_settings_still_load(name, value):
     assert load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
 
 
-@pytest.mark.parametrize('delimiter', ['#', '?', '/', '[', ']'])
-@pytest.mark.parametrize('form', ['http://proxyuser:{}@proxy.corp:3128', 'proxyuser:{}@proxy.corp:3128'], ids=['scheme', 'no-scheme'])  # pragma: allowlist secret
+PASSWORD_DELIMITERS = ['#', '?', '/', '[', ']']
+PASSWORD_FORMS = ['http://proxyuser:{}@proxy.corp:3128', 'proxyuser:{}@proxy.corp:3128']  # pragma: allowlist secret
+
+
+@pytest.mark.parametrize('delimiter', PASSWORD_DELIMITERS)
+@pytest.mark.parametrize('form', PASSWORD_FORMS, ids=['scheme', 'no-scheme'])
 def test_a_proxy_password_may_hold_what_ends_a_url_host(tmp_path, delimiter, form):
     # urllib's proxy handler takes the user info up to the last @, so these work there and must not stop uc.
     value = form.format(f'S3cret{delimiter}Tail9z')
@@ -357,16 +354,16 @@ def test_a_proxy_password_may_hold_what_ends_a_url_host(tmp_path, delimiter, for
     assert load_settings(AIRGAPPED, config_file=path).http_proxy == value
 
 
-@pytest.mark.parametrize(
-    'value',
-    [
-        'http://proxy.corp:abc',
-        'http://proxyuser:S3cretPW@proxy.corp:abc',  # pragma: allowlist secret
-        'proxyuser:S3cretPW@proxy.corp:abc',
-        'http://proxyuser:S3cretPW@proxy.corp:99999',  # pragma: allowlist secret
-        'http://proxyuser:S3cretPW@[proxy.corp:3128',  # pragma: allowlist secret
-    ],
-)
+UNREADABLE_PROXIES = [
+    'http://proxy.corp:abc',
+    'http://proxyuser:S3cretPW@proxy.corp:abc',  # pragma: allowlist secret
+    'proxyuser:S3cretPW@proxy.corp:abc',
+    'http://proxyuser:S3cretPW@proxy.corp:99999',  # pragma: allowlist secret
+    'http://proxyuser:S3cretPW@[proxy.corp:3128',  # pragma: allowlist secret
+]
+
+
+@pytest.mark.parametrize('value', UNREADABLE_PROXIES)
 def test_a_proxy_whose_host_or_port_cannot_be_read_is_refused_without_quoting_it(value):
     with pytest.raises(ConfigError, match=r'^HTTPS_PROXY is not a valid URL: ') as error:
         load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml'))
@@ -374,13 +371,162 @@ def test_a_proxy_whose_host_or_port_cannot_be_read_is_refused_without_quoting_it
         assert part not in str(error.value)
 
 
+PROXY_REFUSAL = r'is not a valid URL: write it as scheme://host:port; percent-encode # \? / \[ \] @ in a user name or password$'
+UNREADABLE_PROXY = r'is not a valid URL: its host or port cannot be read; percent-encode # \? / \[ \] @ in a user name or password$'
+SINGLE_SLASH_PROXIES = ['svc:/S3cretPW@proxy.corp:3128', 'http:/proxy.corp:3128', '/S3cretPW@proxy.corp:3128', '/proxy.corp:3128']  # pragma: allowlist secret
+
+
+@pytest.mark.parametrize('name', ['HTTPS_PROXY', 'HTTP_PROXY'])
+@pytest.mark.parametrize('value', SINGLE_SLASH_PROXIES)
+def test_a_proxy_with_a_single_slash_where_two_belong_is_refused_as_urllib_refuses_it(name, value):
+    # urllib takes what precedes the first : as the scheme, if anything does, and refuses a rest that starts with / but not //.
+    with pytest.raises(ConfigError, match=f'^{name} {PROXY_REFUSAL}') as error:
+        load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+    for part in ('svc', 'S3cretPW', 'proxy.corp'):
+        assert part not in str(error.value)
+
+
+AT_AFTER_AUTHORITY_PROXIES = ['http://proxyuser:S3cretPW@Tail/9z@proxy.corp:3128', 'http://proxyuser:S3cretPW@proxy.corp:3128/x@other.corp', '//proxyuser:S3cretPW@Tail/9z@proxy.corp:3128']  # pragma: allowlist secret
+
+
+@pytest.mark.parametrize('name', ['HTTPS_PROXY', 'HTTP_PROXY'])
+@pytest.mark.parametrize('value', AT_AFTER_AUTHORITY_PROXIES)
+def test_a_proxy_with_an_at_after_the_end_of_urllibs_authority_is_refused(name, value):
+    # urllib ends the authority at the first / after the first @ and takes the host from before that /; uc reads it after the last @.
+    with pytest.raises(ConfigError, match=f'^{name} {PROXY_REFUSAL}') as error:
+        load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+    for part in ('proxyuser', 'S3cretPW', 'Tail', 'proxy.corp', 'other.corp'):
+        assert part not in str(error.value)
+
+
+UNUSABLE_HOSTPORT_PROXIES = [
+    'http://proxy.corp:3128?x',
+    'http://proxy.corp:3128#x',
+    'proxy.corp:3128/',
+    'proxy.corp:3128/x',
+    '//proxy.corp:abc',
+    'http://proxyuser:S3cretPW@proxy.corp:3128?x',  # pragma: allowlist secret
+    'proxyuser:S3cretPW@proxy.corp:3128/x',
+    'http://proxyuser:S3cretPW@:3128',  # pragma: allowlist secret
+]
+
+
+@pytest.mark.parametrize('name', ['HTTPS_PROXY', 'HTTP_PROXY'])
+@pytest.mark.parametrize('value', UNUSABLE_HOSTPORT_PROXIES)
+def test_a_proxy_whose_host_or_port_urllib_cannot_use_is_refused(name, value):
+    # urllib hands http.client everything up to the end of its authority, which a ? or # does not end, nor a / without a // before it.
+    with pytest.raises(ConfigError, match=f'^{name} {UNREADABLE_PROXY}') as error:
+        load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+    for part in ('proxyuser', 'S3cretPW', 'proxy.corp', '3128', 'abc'):
+        assert part not in str(error.value)
+
+
+BRACKETED_NOT_IPV6_PROXIES = [
+    'http://[v1.x]:3128',
+    'http://%5Bv1.x%5D:3128',
+    '%5Bv1.x%5D:3128',
+    '[v1.x[::1]',
+    'http://[v1.x[::1]:3128',
+    'http://proxyuser:S3cretPW@[v1.x]:3128',  # pragma: allowlist secret
+]
+
+
+@pytest.mark.parametrize('value', BRACKETED_NOT_IPV6_PROXIES)
+def test_a_proxy_host_in_brackets_must_be_an_ipv6_address(value):
+    # urlsplit also takes an IPvFuture literal ([v1.x], even [v1.x[::1]), which http.client cannot connect to.
+    with pytest.raises(ConfigError, match=f'^HTTPS_PROXY {UNREADABLE_PROXY}') as error:
+        load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml'))
+    for part in ('proxyuser', 'S3cretPW', 'v1.x', '3128'):
+        assert part not in str(error.value)
+
+
+USABLE_PROXIES = [
+    'http://proxy.corp:3128',
+    'http://proxyuser:S3cretPW@proxy.corp:3128',  # pragma: allowlist secret
+    'proxy.corp:3128',
+    'proxyuser:S3cretPW@proxy.corp:3128',
+    'http://proxyuser:S3cretPW@proxy.corp:3128/',  # pragma: allowlist secret
+    'http://[::1]:3128',
+    'http://[fe80::1%25eth0]:3128',  # a scoped IPv6 address, percent-encoded
+    'socks5h://proxyuser:S3cretPW@proxy.corp:1080',  # pragma: allowlist secret
+    'http://proxy.corp:31%32%38',  # urllib percent-decodes the host and port
+]
+
+
+@pytest.mark.parametrize('value', USABLE_PROXIES)
+def test_a_proxy_urllib_can_use_still_loads(value):
+    assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml')).https_proxy == value
+
+
+ATS_IN_USER_INFO_PROXIES = ['proxyuser:S3cretPW@Tail/9z@proxy.corp:3128', 'http://proxyuser:S3cretPW/Tail@9z@proxy.corp:3128', 'http://proxyuser:S3cretPW@Tail9z@proxy.corp:3128/']  # pragma: allowlist secret
+
+
+@pytest.mark.parametrize('value', ATS_IN_USER_INFO_PROXIES)
+def test_a_proxy_whose_ats_are_all_in_urllibs_user_info_still_loads(value):
+    # Without // urllib reads the whole value as the authority; with it, a / before the first @ or after the last one ends nothing early.
+    assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml')).https_proxy == value
+
+
+def urllib_reading(value):
+    """Return (user info, host:port) as urllib itself reads a proxy URL (_parse_proxy, then proxy_open's unquote); None when it refuses it."""
+    try:
+        _, user, password, hostport = urllib.request._parse_proxy(value)  # noqa: SLF001 - the point is to compare with urllib itself
+    except ValueError:
+        return None
+    return (None if user is None else user + ('' if password is None else ':' + password)), unquote(hostport)
+
+
+DRIFT_PROXIES = [
+    'proxy.corp:3128',
+    'http://user:pw@proxy.corp:3128',  # pragma: allowlist secret
+    'svc:S3cretPW@proxy.corp:3128',
+    *(form.format(f'S3cret{delimiter}Tail9z') for form in PASSWORD_FORMS for delimiter in PASSWORD_DELIMITERS),
+    *UNREADABLE_PROXIES,
+    *SINGLE_SLASH_PROXIES,
+    *AT_AFTER_AUTHORITY_PROXIES,
+    *UNUSABLE_HOSTPORT_PROXIES,
+    *BRACKETED_NOT_IPV6_PROXIES,
+    *USABLE_PROXIES,
+    *ATS_IN_USER_INFO_PROXIES,
+    '//proxy.corp:3128',
+    '//proxyuser:S3cretPW@proxy.corp:3128',
+    'http:///proxy.corp:3128',
+    'HTTP://Proxy.Corp:3128',
+    'http://proxy.corp',
+    ':@proxy.corp:3128',
+    'http://proxy%40corp:3128',
+    'http://proxyuser:S3cret%40Tail9z@proxy.corp:3128',  # pragma: allowlist secret
+    'socks5h://proxy.corp:1080/',
+    'u:a@b/c@proxy.corp:3128',
+    'a:b:c@proxy.corp:3128',
+]
+
+
+@pytest.mark.parametrize('value', DRIFT_PROXIES)
+def test_the_proxy_host_and_port_follow_urllibs_own_parser(value):
+    # Pins the mirror to urllib itself, so a Python update that changes how urllib reads a proxy URL fails here.
+    ours, theirs = _proxy_hostport(value), urllib_reading(value)
+    if ours is None:
+        assert theirs is None or theirs[0] != split_userinfo(value)[1]  # urllib refuses it, or reads other user info
+    else:
+        assert theirs is not None
+        assert ours == theirs[1]
+
+
 ALL_URL_SETTINGS = [setting.env for setting in SETTINGS if setting.type == 'url']
 WEB_URL_SETTINGS = ['PUBLIC_URL', 'REPO_URL', 'DOWNLOAD_BACKEND_URL']
+NO_AT_SETTINGS = {'PUBLIC_URL': 'public_url', 'REPO_URL': '[repo]\nurl', 'DOWNLOAD_BACKEND_URL': '[download]\nbackend_url', 'PROCUREMENT_SOURCE_URL': '[procurement]\nsource_url'}
+"""The URL settings that never carry credentials, so any @ in them is refused, with their uc.toml keys."""
+
+
+def refused(name):
+    """Return how the message refusing a URL setting's malformed value starts: an @ in a setting that never carries credentials is refused before the URL is parsed."""
+    return f'^{name} must not contain credentials or an @' if name in NO_AT_SETTINGS else f'^{name} is not a valid URL: '
 
 
 @pytest.mark.parametrize(('load', 'name'), [*((load_settings, name) for name in ALL_URL_SETTINGS), *((load_web_settings, name) for name in WEB_URL_SETTINGS)])
 def test_a_malformed_url_message_does_not_quote_the_value(load, name):
-    with pytest.raises(ConfigError, match=f'^{name} is not a valid URL: ') as error:
+    with pytest.raises(ConfigError, match=refused(name)) as error:
         load({**AIRGAPPED, name: 'https://admin:S3cretPW@host.corp:wxyz/'}, config_file=Path('/nonexistent/uc.toml'))  # pragma: allowlist secret
     for part in ('admin', 'S3cretPW', 'wxyz'):
         assert part not in str(error.value)
@@ -389,9 +535,60 @@ def test_a_malformed_url_message_does_not_quote_the_value(load, name):
 @pytest.mark.parametrize('name', [name for name in ALL_URL_SETTINGS if not name.endswith('_PROXY')])
 def test_a_password_that_ends_the_host_early_is_not_quoted(name):
     # Only the proxies take the user info up to the last @; elsewhere urlsplit reads S3cretPW as the port.
-    with pytest.raises(ConfigError, match=f'^{name} is not a valid URL: ') as error:
+    with pytest.raises(ConfigError, match=refused(name)) as error:
         load_settings({**AIRGAPPED, name: 'https://admin:S3cretPW#x@host.corp/'}, config_file=Path('/nonexistent/uc.toml'))  # pragma: allowlist secret
     assert 'S3cretPW' not in str(error.value)
+
+
+TOKEN = 'Tok3nQx7'
+AT_VALUES = {
+    'user info': f'https://admin:{TOKEN}@host.corp/',  # pragma: allowlist secret
+    'user only': f'https://{TOKEN}@host.corp/',
+    'user info then #': f'https://admin:{TOKEN}#x@host.corp/',  # pragma: allowlist secret
+    'token then #': f'https://{TOKEN}#x@host.corp/',
+    'token then ?': f'https://{TOKEN}?x@host.corp/',
+    'token then /': f'https://{TOKEN}/x@host.corp/',
+    'path': f'https://host.corp/{TOKEN}@b',
+    'query': f'https://host.corp?x={TOKEN}@b',
+}
+NO_AT_LOADS = [*((load_settings, name) for name in NO_AT_SETTINGS), *((load_web_settings, name) for name in WEB_URL_SETTINGS)]
+
+
+@pytest.mark.parametrize('value', AT_VALUES.values(), ids=AT_VALUES.keys())
+@pytest.mark.parametrize(('load', 'name'), NO_AT_LOADS)
+def test_any_at_is_refused_in_a_url_setting_that_never_carries_credentials(load, name, value):
+    # urlsplit ends the user info at a # ? or /, and would read a token before one as the host.
+    with pytest.raises(ConfigError, match=f'^{name} must not contain credentials or an @') as error:
+        load({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+    assert TOKEN not in str(error.value)
+
+
+@pytest.mark.parametrize(('name', 'toml'), NO_AT_SETTINGS.items())
+def test_an_at_in_a_url_setting_from_uc_toml_names_its_key(tmp_path, name, toml):
+    path = tmp_path / 'uc.toml'
+    path.write_text(f'{toml} = "https://{TOKEN}#x@host.corp/"\n', encoding='utf-8')
+    with pytest.raises(ConfigError, match=rf'^{name} \(.* in .*uc\.toml\) must not contain credentials or an @') as error:
+        load_settings({key: value for key, value in AIRGAPPED.items() if key != name}, config_file=path)
+    assert TOKEN not in str(error.value)
+
+
+ENCODED_AT = 'https://host.corp/jenkins%40corp'  # an encoded @ is not one
+
+
+@pytest.mark.parametrize(
+    ('load', 'name', 'field', 'expected'),
+    [
+        (load_settings, 'PUBLIC_URL', 'public_url', ENCODED_AT),
+        (load_settings, 'REPO_URL', 'repo_url', ENCODED_AT + '/'),
+        (load_settings, 'DOWNLOAD_BACKEND_URL', 'download_backend_url', ENCODED_AT),
+        (load_settings, 'PROCUREMENT_SOURCE_URL', 'procurement_source_url', ENCODED_AT + '/'),
+        (load_web_settings, 'PUBLIC_URL', 'public_url', ENCODED_AT),
+        (load_web_settings, 'REPO_URL', 'download_backend_url', ENCODED_AT + '/jenkins-local'),  # web reads the repository only for the default backend URL
+        (load_web_settings, 'DOWNLOAD_BACKEND_URL', 'download_backend_url', ENCODED_AT),
+    ],
+)
+def test_a_url_setting_that_never_carries_credentials_loads_without_an_at(load, name, field, expected):
+    assert getattr(load({**AIRGAPPED, name: ENCODED_AT}, config_file=Path('/nonexistent/uc.toml')), field) == expected
 
 
 def test_a_malformed_url_from_uc_toml_names_its_key(tmp_path):

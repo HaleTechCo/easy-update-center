@@ -84,6 +84,31 @@ def test_file_errors_name_the_key_and_the_file(tmp_path, text, message):
         load_settings(ONLINE, config_file=toml(tmp_path, text))
 
 
+@pytest.mark.parametrize(
+    ('text', 'expected', 'got'),
+    [
+        ('https_proxy = ["http://proxyuser:S3cretPW@proxy.corp:3128"]\n', 'a string', 'an array'),  # pragma: allowlist secret
+        ('[repo]\nurl = { url = "https://admin:S3cretPW@artifactory.corp/" }\n', 'a string', 'a table'),  # pragma: allowlist secret
+        ('public_url = 31415926\n', 'a string', 'an integer'),
+        ('[download]\nbackend_url = 2.71828\n', 'a string', 'a float'),
+        ('[resources]\nurl = 2026-10-06\n', 'a string', 'a date or time'),
+        ('java_tool_options = ["-Xmx6g", "-Dhttps.proxyUser=proxyuser", "-Dhttps.proxyPassword=S3cretPW"]\n', 'a string', 'an array'),  # pragma: allowlist secret
+        ('[pki]\norg = { name = "S3cretPW" }\n', 'a string', 'a table'),
+        ('retain_releases = [31415926]\n', 'an integer', 'an array'),
+        ('retain_releases = 2.71828\n', 'an integer', 'a float'),
+        ('min_plugin_ratio = 2026-10-06T10:00:00\n', 'a number', 'a date or time'),
+        ('[repo]\nadapter = 31415926\n', 'true or false', 'an integer'),
+    ],
+    ids=['url array', 'url table', 'url integer', 'url float', 'url date', 'string array', 'string table', 'integer array', 'integer float', 'number date', 'boolean integer'],
+)
+def test_a_setting_of_the_wrong_type_in_the_file_is_refused_without_quoting_it(tmp_path, text, expected, got):
+    # A value can hold credentials (a URL's, or a password in JAVA_TOOL_OPTIONS), so only its TOML type is named.
+    with pytest.raises(ConfigError, match=rf' in .*uc\.toml must be {expected} \(got {got}\)$') as error:
+        load_settings(AIRGAPPED, config_file=toml(tmp_path, text))
+    for part in ('proxyuser', 'admin', 'S3cretPW', 'Xmx6g', '31415926', '2.71828', '2026'):
+        assert part not in str(error.value)
+
+
 def test_a_byte_order_mark_and_crlf_are_fine(tmp_path):
     path = tmp_path / 'uc.toml'
     path.write_bytes(b'\xef\xbb\xbfretain_releases = 4\r\n[repo]\r\nmax_archive_mb = 64\r\n')

@@ -81,7 +81,7 @@ and which you can run by hand; "doctor" means `uc doctor`.
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
 | `MODE` | `mode` | none | every uc-image service (`web-config` resolves it for web) | `online` or `airgapped`. It only sets defaults; every setting below can still be set explicitly. |
-| `PUBLIC_URL` | `public_url` | none | every uc-image service (`web-config` resolves it for web) | The exact origin Jenkins uses, with no path, for example `https://jenkins-updates.example.com`. See [A hostname for PUBLIC_URL](../getting-started/requirements.md#a-hostname-for-public_url). |
+| `PUBLIC_URL` | `public_url` | none | every uc-image service (`web-config` resolves it for web) | The exact origin Jenkins uses, with no path, for example `https://jenkins-updates.example.com`. Must not contain credentials or any `@`. See [A hostname for PUBLIC_URL](../getting-started/requirements.md#a-hostname-for-public_url). |
 
 ## Mode defaults
 
@@ -108,7 +108,7 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
 | `REPO_TYPE` | `[repo] type` | `artifactory` | generate, doctor, repo-adapter, web-config | `artifactory` or `artifact-keeper`. Artifact Keeper is read only through the repo-adapter. |
-| `REPO_URL` | `[repo] url` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web-config | Artifactory: the `/artifactory/` base URL. Artifact Keeper: the server's base URL. A trailing slash is optional. Must not contain credentials. |
+| `REPO_URL` | `[repo] url` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web-config | Artifactory: the `/artifactory/` base URL. Artifact Keeper: the server's base URL. A trailing slash is optional. Must not contain credentials or any `@`. |
 | `REPO_API_URL` | `[repo] api_url` | `${REPO_URL}api/` | generate, doctor, repo-adapter | Artifactory's API base, for the listing query. Set it only when the API is served elsewhere. |
 | `REPO_KEY` | `[repo] key` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web-config | The repository key (for Artifact Keeper, the key, not the display name). Letters, digits, `.`, `_` and `-` only. |
 
@@ -128,7 +128,7 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
 | `DOWNLOAD_BACKEND` | `[download] backend` | see [Mode defaults](#mode-defaults) | generate, web-config | `mirror` (get.jenkins.io layout) or `artifactory` (any Maven-layout repository, looked up through the release's download map). |
-| `DOWNLOAD_BACKEND_URL` | `[download] backend_url` | see [Mode defaults](#mode-defaults) | web-config | Where `/download/...` requests are sent. It must not contain credentials (uc and web refuse them; for `DOWNLOAD_ACCESS=proxy` put them in `secrets/download_proxy_auth`). Controllers must be able to read it without credentials unless `DOWNLOAD_ACCESS=proxy`. |
+| `DOWNLOAD_BACKEND_URL` | `[download] backend_url` | see [Mode defaults](#mode-defaults) | web-config | Where `/download/...` requests are sent. It must not contain credentials or any `@` (uc and web refuse them; for `DOWNLOAD_ACCESS=proxy` put them in `secrets/download_proxy_auth`). Controllers must be able to read it without credentials unless `DOWNLOAD_ACCESS=proxy`. |
 | `DOWNLOAD_ACCESS` | `[download] access` | `redirect` | web-config | `redirect` sends controllers to the backend; `proxy` streams the file through the web container. See [Proxy plugin downloads](../how-to/proxy-downloads.md). |
 | `DOWNLOAD_PROXY_CA_FILE` | `[download] proxy_ca_file` | `/etc/ssl/certs/ca-certificates.crt` | web-config | Proxy mode only: the CA bundle the backend's certificate must verify against. |
 | `DOWNLOAD_PROXY_AUTH_FILE` | `[download] proxy_auth_file` | `${SECRETS_DIR}/download_proxy_auth` | web-config | Proxy mode only: the file holding `username:password` for the backend. |
@@ -226,7 +226,7 @@ requests see them.
 
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
-| `PROCUREMENT_SOURCE_URL` | `[procurement] source_url` | `https://repo.jenkins-ci.org/releases/` | doctor | Where `uc doctor --download-poms`, `--download-dependencies` and `--download-war` fetch files from, by Maven path, each checked against the `.sha1` beside it. Set it to reach repo.jenkins-ci.org through your own proxy repository. Air-gapped, downloads are refused unless it is set. Must not contain credentials. See [Procure missing files](../how-to/procure-missing-files.md). |
+| `PROCUREMENT_SOURCE_URL` | `[procurement] source_url` | `https://repo.jenkins-ci.org/releases/` | doctor | Where `uc doctor --download-poms`, `--download-dependencies` and `--download-war` fetch files from, by Maven path, each checked against the `.sha1` beside it. Set it to reach repo.jenkins-ci.org through your own proxy repository. Air-gapped, downloads are refused unless it is set. Must not contain credentials or any `@`. See [Procure missing files](../how-to/procure-missing-files.md). |
 
 ## Internal
 

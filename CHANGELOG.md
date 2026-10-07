@@ -8,8 +8,11 @@ once releases are published.
 
 ### Changed
 
-- A `DOWNLOAD_BACKEND_URL` with credentials in it is refused, as `REPO_URL` is, by `uc` and by
-  the web container.
+- `PUBLIC_URL`, `REPO_URL`, `DOWNLOAD_BACKEND_URL` and `PROCUREMENT_SOURCE_URL` refuse any `@`
+  (`uc: error: <setting> must not contain credentials or an @`), so none of them can carry
+  credentials, not even a password holding a `#`, `?` or `/`, which a URL parser takes for the end
+  of the host. A `DOWNLOAD_BACKEND_URL` with credentials was accepted before; the web container
+  refuses any `@` in it too, with the same message.
 - The web container logs what it serves (`entrypoint: serving <PUBLIC_URL>; downloads: ...`) before
   waiting for the first release. `uc config --web-env --out` writes through a unique temporary file
   and reports a failure as `uc: error: cannot write <path>: <reason>`.
@@ -93,11 +96,20 @@ once releases are published.
   `uc: error: <setting> is not a valid URL: its host or port cannot be read` when the settings
   load (for the proxies, with a hint to percent-encode `# ? / [ ] @` in a user name or password),
   so `uc config --check` catches it, instead of a traceback; the message never quotes the value.
-  Every URL setting is parsed: `PUBLIC_URL`, `REPO_URL`, `REPO_API_URL`, `REPO_ADAPTER_URL`,
-  `DOWNLOAD_BACKEND_URL`, `PROCUREMENT_SOURCE_URL`, `RESOURCES_URL`, `POPULARITY_JSON_URL` and
-  `TOOL_INSTALLERS_URL`. `HTTPS_PROXY` and `HTTP_PROXY` are checked as Python's urllib reads them:
-  they may carry a user name and password, which may hold `#`, `?` or `/`, and only the host and
-  port after the last `@` must be readable.
+  Nor does the one for a value of the wrong TOML type in `config/uc.toml`, for any setting (a
+  `java_tool_options` array can hold a proxy password too), which names only that type
+  (`must be a string (got an array)`). Every URL setting is parsed:
+  `PUBLIC_URL`, `REPO_URL`, `REPO_API_URL`, `REPO_ADAPTER_URL`, `DOWNLOAD_BACKEND_URL`,
+  `PROCUREMENT_SOURCE_URL`, `RESOURCES_URL`, `POPULARITY_JSON_URL` and `TOOL_INSTALLERS_URL`.
+  `HTTPS_PROXY` and `HTTP_PROXY` are checked as Python's urllib reads them: they may carry a user
+  name and password, which may hold `#`, `?` or `/`, and only the host and port urllib connects to,
+  after the last `@`, must be readable. urllib reads a `?` or `#` after them, or a `/` with no `//`
+  before it, as part of the host and port, so `http://proxy:3128?x` and `http://proxy?x` are
+  refused, as is a host in brackets that is not an IPv6 address (`[v1.x]`). A single `/` where `//`
+  belongs (`http:/proxy:3128`, `/proxy:3128`), which urllib refuses, and an `@`, a `/` and another
+  `@` in that order after the `//` (`http://user:secret@a/b@proxy:3128`), where urllib takes the
+  host from before that `/`, are reported as
+  `uc: error: <setting> is not a valid URL: write it as scheme://host:port`, with the same hint.
 - `uc generate --wait` waits for a running generation or rollback instead of exiting 75; scheduled
   generations use it.
 - `make reload` checks the settings, then recreates the services so they read them; with invalid

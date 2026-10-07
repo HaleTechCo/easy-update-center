@@ -44,6 +44,13 @@ def test_bad_public_urls_are_rejected(url, message):
         check_public_url(url, allow_local=False)
 
 
+@pytest.mark.parametrize('url', ['ftp://u:S3cretPW@host', 'https://u:S3cretPW@host/path', 'https://S3cretPW#x@host/'])  # pragma: allowlist secret
+def test_credentials_in_the_public_url_are_refused_before_a_message_could_quote_them(url):
+    with pytest.raises(PreflightError, match=r'^PUBLIC_URL must not contain credentials or an @$') as error:
+        check_public_url(url, allow_local=False)
+    assert 'S3cretPW' not in str(error.value)
+
+
 def test_local_urls_allowed_for_tests():
     check_public_url('http://localhost:8080', allow_local=True)
 

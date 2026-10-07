@@ -41,10 +41,9 @@ case "${DOWNLOAD_BACKEND}" in
         ;;
     *) die "DOWNLOAD_BACKEND must be mirror or artifactory (got '${DOWNLOAD_BACKEND}')" ;;
 esac
-# Credentials can only be in the authority: after :// up to the first /, ? or #, the cut uc makes
-# for a URL with a scheme.
-authority="${backend_url#*://}"
-[[ "${authority%%[/?#]*}" != *@* ]] || die "DOWNLOAD_BACKEND_URL must not contain credentials; for proxied downloads put them in the download_proxy_auth secret"
+# Any @ is refused, as uc refuses it (uc/uc/config.py): a URL parser ends the user info at a /, ? or
+# #, so a token holding one would pass for the host.
+[[ "${backend_url}" != *@* ]] || die "DOWNLOAD_BACKEND_URL must not contain credentials or an @; for proxied downloads put them in secrets/download_proxy_auth"
 export DOWNLOAD_BACKEND_URL="${backend_url%/}"
 
 case "${DOWNLOAD_ACCESS}" in
