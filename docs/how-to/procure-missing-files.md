@@ -1,16 +1,30 @@
 # Procure missing POMs, dependencies and cores
 
-How to let `uc doctor` download what your repository lacks, review it, push it into the repository,
+How to stage what your repository lacks with `uc procure`, review it, push it into the repository,
 and clean up afterwards.
 
 ## When to use it
 
 `uc doctor` reports what the generator will drop or degrade: plugins without a usable POM, required
 dependencies the repository lacks, and cores plugins require (without which their tiers are missing).
-It can also fetch those files from repo.jenkins-ci.org into a staging folder, `./procurement/`, for your
-team to review, then push exactly the reviewed files to the repository. Files you obtain elsewhere go
-through the same folder. Nothing reaches the repository without the separate push step, and once the
-files are in, their staged copies can be cleaned up.
+`uc procure stage` fetches those files from repo.jenkins-ci.org into a staging folder,
+`./procurement/`, for your team to review, and `uc procure push` then pushes exactly the reviewed
+files to the repository. Files you obtain elsewhere go through the same folder. Nothing reaches the
+repository without the separate push step, and once the files are in, `uc procure clean` deletes
+their staged copies.
+
+| Stage | Command | `make` shortcut |
+|---|---|---|
+| [1. Check](#1-check) | `uc doctor` | |
+| [2. Stage](#2-stage) | `uc procure stage`, and `uc procure record` for files you add by hand | `make procure-stage`, `make procure-record` |
+| [3. Review](#3-review) | none: you read `./procurement/procurement.json` | |
+| [4. Push](#4-push) | `uc procure push` | `make procure-push` |
+| [5. Confirm](#5-confirm) | `uc generate`, then `uc doctor` | |
+| [6. Clean up](#6-clean-up) | `uc procure clean` | `make procure-clean` |
+
+To run these stages with an approval before the push, and a record of who approved it:
+[Run procurement from a pipeline](run-procurement-from-a-pipeline.md). Every command and option:
+[uc procure](../reference/cli.md#uc-procure).
 
 ## Before you start
 
@@ -23,7 +37,7 @@ files are in, their staged copies can be cleaned up.
   one-shot `uc` service ever receives it.
 
   ```bash
-  make secrets-placeholders        # creates secrets/repo_push_auth if missing
+  docker compose run --rm setup secrets      # creates secrets/repo_push_auth if missing (make secrets)
   printf '%s' 'svc-upload:token' > secrets/repo_push_auth
   ```
 
@@ -31,41 +45,103 @@ files are in, their staged copies can be cleaned up.
   push only uploads paths that do not exist yet, but Artifactory offers no create-only upload, so an
   account allowed to overwrite could replace a file uploaded by someone else in the moment between
   push's check and its own upload.
+- `./procurement/` must be writable by the uc containers (uid 10001) and by you. Share it once:
 
-## 1. Stage
+  ```bash
+  docker compose run --rm setup procurement  # make setup runs it too, with the rest of first-time setup
+  ```
+
+  It gives the folder to you, with ACLs that let you and the uc containers both read, write and
+  delete everything in it ([Sharing ./procurement](../reference/cli.md#sharing-procurement)). On
+  Docker Desktop it finds nothing to do. On a filesystem without ACLs that the uc containers cannot
+  write either, it fails and says so: then run the stage, record and clean steps with their `make`
+  shortcuts (`make procure-stage`, `make procure-record`, `make procure-clean`), which hand the
+  folder to the uc containers for each run and back to you after.
+
+## 1. Check
 
 ```bash
-make procure-download ARGS="--fetch --download-poms --download-dependencies --download-war required"
+docker compose run --rm uc doctor --fetch
 ```
 
-It prints the doctor report, then one line per file. Keep `--fetch`: it reads the POMs and manifests
-the generator has not cached yet, and without them the run cannot see every missing dependency or
-required core (a `warning` line before the summary then says how many releases went unchecked). The
-download options combine freely:
+It prints the report: what the generator drops, and the POMs, dependencies and cores to procure, each
+with its repo.jenkins-ci.org URL. What to do about each section:
+[Check with uc doctor](stock-airgapped-repository.md#check-with-uc-doctor). `--fetch` reads the POMs
+and manifests the generator has not cached yet, so every missing dependency and required core shows.
+When it finds something `uc procure stage` can fetch, it ends with that step, naming the options for
+what it found:
 
-| Option | Stages |
-|---|---|
-| `--download-poms` | The real `.pom` of every plugin whose POM is missing, derived from its archive, or unusable. |
-| `--download-dependencies` | Each required dependency the repository lacks or holds only in an older version, at the highest minimum any plugin declares, with its `.pom`; then their dependencies, until nothing is missing. Optional dependencies are skipped. |
-| `--download-war VERSION` | That core's `.war` and `.pom`. Repeatable. |
-| `--download-war required` | Every core plugins require that the repository lacks, at or above the oldest core it holds, or `--since VERSION`. With no core in the repository, `--since` is needed: use the oldest version your controllers run. It is also refused for the public repository: name the versions instead. Older required cores are left out; the report names the oldest and the `--since` that stages them. Once an older core is in the repository, it is the floor for every later run. |
+```text
+next: uc procure stage --poms --dependencies --war required (or set PROCUREMENT_POMS=true, PROCUREMENT_DEPENDENCIES=true, PROCUREMENT_WARS=required)
+```
 
-`make procure-download` lends `./procurement/` to the container (uid 10001) for the run and hands it
-back to you afterwards. On Docker Desktop, plain Compose works too:
-`docker compose run --rm uc doctor --fetch --download-poms`. A run exits 0 when everything planned is
-staged, 1 otherwise; files it could not get are listed as `FAILED` with the reason. Running it again
-keeps what is already staged and downloads only what is missing or changed.
+It exits 1 when anything will be dropped or a dependency is missing; that is the reason to procure,
+not an error.
+
+## 2. Stage
+
+```bash
+docker compose run --rm uc procure stage --poms --dependencies --war required
+```
+
+(`make procure-stage ARGS="--poms --dependencies --war required"`.) It prints the doctor report,
+then one line per file. Choose what to stage with options, or once for every run with the
+`PROCUREMENT_*` settings in `.env` or `config/uc.toml`; the options combine freely:
+
+| Option | Setting | Stages |
+|---|---|---|
+| `--poms` | `PROCUREMENT_POMS=true` | The real `.pom` of every plugin whose POM is missing, derived from its archive, or unusable. |
+| `--dependencies` | `PROCUREMENT_DEPENDENCIES=true` | Each required dependency the repository lacks or holds only in an older version, at the highest minimum any plugin declares, with its `.pom`; then their dependencies, until nothing is missing. Optional dependencies are skipped. |
+| `--war VERSION` | `PROCUREMENT_WARS=2.479.1` | That core's `.war` and `.pom`. Repeatable. |
+| `--war required` | `PROCUREMENT_WARS=required` | Every core plugins require that the repository lacks, at or above the oldest core it holds, or `--since VERSION` (`DOCTOR_SINCE`). With no core in the repository, `--since` is needed: use the oldest version your controllers run. It is also refused for the public repository: name the versions instead. Older required cores are left out; the report names the oldest and the `--since` that stages them. Once an older core is in the repository, it is the floor for every later run. |
+
+With the settings, a plain `docker compose run --rm uc procure stage` (or `make procure-stage`)
+stages the same every time:
+
+```toml
+# config/uc.toml
+[procurement]
+poms = true
+dependencies = true
+wars = ["required"]
+```
+
+An option beats its setting for one run: `--no-poms`, `--no-dependencies` and `--no-wars` turn a
+configured one off, and `--war` replaces the configured cores. With nothing chosen either way, the
+run stages nothing and exits 2, naming the options and the settings.
+
+Before it stages, it reads the POMs and manifests the generator has not cached yet
+(`PROCUREMENT_FETCH`, on by default): without them the run cannot see every missing dependency or
+required core, and a `warning` line before the summary then says how many releases went unchecked.
+`--no-fetch` skips it for one run.
+
+Each file lands in `./procurement/` at the path it will have in the repository, checked against the
+`.sha1` published beside it, and is listed in `./procurement/procurement.json`. Staged files are
+yours to edit or delete: they are readable by everyone and writable by you and the uc containers. A
+run exits 0 when everything planned is staged, 1 otherwise; files it could not get are listed as
+`FAILED` with the reason. Running it again keeps what is already staged and downloads only what is
+missing or changed. It ends with the next step, also after a run with problems, since what it did
+stage still needs review:
+
+```text
+next: review ./procurement (procurement.json lists 12 files), then uc procure push
+```
 
 ### Files you place by hand
 
 Push uploads only what `procurement.json` lists, so a file you copy into `./procurement/` yourself (a
-WAR downloaded elsewhere, a plugin from another source) must be recorded first. Put it in the folder,
-then:
+WAR downloaded elsewhere, a plugin from another source) must be recorded first. Files and folders you
+move or copy into it from elsewhere can keep their own modes and ACLs, so run
+`docker compose run --rm setup procurement` (or `make setup`) again after bringing them in, so the uc
+containers can move and delete them. Then:
 
 ```bash
-make procure-download ARGS=--stage-local          # check and record; report misplaced files
-make procure-download ARGS="--stage-local --fix"  # move misplaced files first, then record them
+docker compose run --rm uc procure record         # check and record; report misplaced files
+docker compose run --rm uc procure record --fix   # move misplaced files first, then record them
 ```
+
+(`make procure-record`, `make procure-record ARGS=--fix`; `PROCUREMENT_FIX=true` makes `--fix` the
+default, and `--no-fix` turns it off for one run.)
 
 It records every `.hpi`, `.jpi`, `.war` and `.pom` in the folder that `procurement.json` does not list
 yet, with the reason `added by hand`, after the checks a download gets: a plugin's manifest must name
@@ -81,17 +157,18 @@ holds another file, that `procurement.json` lists, or that leads out of the fold
 file instead. A file that declares no coordinates, such as a plugin whose manifest names no group,
 stays where it is.
 
-It needs no network access, so it works air-gapped too. `--stage-local` runs on its own: download and
-record hand-placed files in separate runs.
+It needs no network access, so it works air-gapped too. It ends with the same `next:` line as a
+stage run.
 
-## 2. Review
+## 3. Review
 
 Everything staged is in `./procurement/`, in the paths it will have in the repository, and listed in
-`./procurement/procurement.json` with its source URL, sha1 and reason:
+`./procurement/procurement.json` with its source URL, sha1, size, kind and reason:
 
-- `reason`: why it is there, for example `active-directory 2.967.v1 requires mailer 534.v1`;
-- `required_core`: for a plugin, the Jenkins version it needs; the run also points out any newer than
-  the newest core in the repository;
+- `reason`: why it is there, for example `active-directory 2.967.v1 requires mailer 534.v1`, or
+  `added by hand`;
+- `required_core`: for a plugin, the Jenkins version it needs; the stage run also points out any
+  newer than the newest core in the repository;
 - `replaces_unusable`: the repository holds an unusable file at this path (such as a saved error page).
   Delete that file in the repository before pushing: push never overwrites. On Artifact Keeper,
   deleting a release leaves a tombstone that refuses different bytes at that path (HTTP 409,
@@ -99,19 +176,20 @@ Everything staged is in `./procurement/`, in the paths it will have in the repos
   as an Artifact Keeper administrator, `POST /api/v1/repositories/<key>/storage-gc` with
   `{"dry_run": true}`, then `{"dry_run": false}` (it also runs on Artifact Keeper's own schedule).
 
-Remove what your process rejects by deleting its entry from `procurement.json` (and the file). Push
-refuses a file whose content changed, or that went missing, after it was downloaded.
+Remove what your process rejects by deleting its entry from `procurement.json` (and the file), as
+yourself: the folder's ACLs let you edit and delete what uc staged, no `sudo` needed. Push refuses a
+file whose content changed, or that went missing, after it was staged.
 
-## 3. Push
+## 4. Push
 
 ```bash
-make procure-push ARGS=--dry-run   # check each file, upload nothing
-make procure-push
+docker compose run --rm uc procure push --dry-run   # check each file, upload nothing
+docker compose run --rm uc procure push
 ```
 
-The first time you push to a repository, run the dry run first, then a real push, then
-`uc doctor --fetch` (next section), so a misconfigured `repo_push_auth` or a changed file shows up
-before anything is written.
+(`make procure-push ARGS=--dry-run`, `make procure-push`.) The first time you push to a repository,
+run the dry run first, then a real push, then `uc doctor --fetch` ([Confirm](#5-confirm)), so a
+misconfigured `repo_push_auth` or a changed file shows up before anything is written.
 
 Push sends each file's sha1 with the upload (`X-Checksum-Sha1`), so Artifactory can verify it, and
 never uploads over a path the repository already holds, even when the repository publishes no
@@ -125,12 +203,17 @@ them, when they are the staged file's ([Large files](#large-files)).
 | `would put` | Dry run: it would be uploaded. |
 | `DIFFERENT` | The repository holds another file at that path, or Artifact Keeper stored other bytes there without recording them; it is left alone. |
 | `TAMPERED` | The staged file changed, or is missing, since it was downloaded: download it again. Or it cannot be read: check its permissions. |
-| `ERROR`, `FAILED` | The repository refused or failed (for example 401: check `secrets/repo_push_auth`), or Artifactory holds the path but publishes no checksum for it (check that file by hand). `FAILED` shows the repository's own reason when it gives one; a 409 from Artifact Keeper after you deleted a file is its tombstone (see [Review](#2-review)); a 503 `request timed out`, a 502 or a broken connection on a large file is a timeout ([Large files](#large-files)). |
-| `unlisted` | In the folder but not in `procurement.json`, so not pushed: record it with `--stage-local` ([Files you place by hand](#files-you-place-by-hand)) or delete it. The summary counts these. |
+| `ERROR`, `FAILED` | The repository refused or failed (for example 401: check `secrets/repo_push_auth`), or Artifactory holds the path but publishes no checksum for it (check that file by hand). `FAILED` shows the repository's own reason when it gives one; a 409 from Artifact Keeper after you deleted a file is its tombstone (see [Review](#3-review)); a 503 `request timed out`, a 502 or a broken connection on a large file is a timeout ([Large files](#large-files)). |
+| `unlisted` | In the folder but not in `procurement.json`, so not pushed: record it with `uc procure record` ([Files you place by hand](#files-you-place-by-hand)) or delete it. The summary counts these. |
 
 Push exits 0 when every listed file ends up in the repository with the recorded content; unlisted
 files do not change the exit code. After a push that failed partway, run it again: files already in
-the repository show as `present`. To keep only what is still missing, [clean up](#5-clean-up) first.
+the repository show as `present`. To keep only what is still missing, [clean up](#6-clean-up) first.
+A real push with no problem ends with the next steps:
+
+```text
+next: uc generate (or wait for the schedule), then uc procure clean
+```
 
 ### Large files
 
@@ -147,7 +230,7 @@ push and the repository can cut such an upload off:
 - **A proxy's upload limit.** Cloudflare's proxy accepts at most 100 MB per request on its Free and
   Pro plans. When the repository's hostname goes through it, push with a hostname that bypasses the
   proxy for that run (one that reaches Artifact Keeper directly, with a certificate the uc container
-  trusts): `docker compose run --rm -e REPO_URL=https://<direct-host>/ uc doctor --push`.
+  trusts): `docker compose run --rm -e REPO_URL=https://<direct-host>/ uc procure push`.
 
 A timed-out upload can leave Artifact Keeper with the file's bytes stored but not recorded. It serves
 them on download, but its UI, its `.sha1` and the update center do not see them, and its storage
@@ -156,29 +239,30 @@ file's, it uploads them again, which records them; when they differ, it reports 
 them, and only deleting them from Artifact Keeper's storage on its server clears the path. Clean keeps
 the staged file for push.
 
-## 4. Confirm
+## 5. Confirm
 
 ```bash
+docker compose run --rm uc generate        # publish now, or wait for the next scheduled generation
 docker compose run --rm uc doctor --fetch
 ```
 
-The next generation publishes the new files; `docker compose run --rm uc generate` publishes at once.
+The next generation publishes the new files; `uc generate` publishes at once. `uc doctor` should no
+longer list what you pushed.
 
-## 5. Clean up
+## 6. Clean up
 
 Once files are in the repository, their staged copies can go:
 
 ```bash
-make procure-clean ARGS=--dry-run   # list what would be deleted, change nothing
-make procure-clean
+docker compose run --rm uc procure clean --dry-run   # list what would be deleted, change nothing
+docker compose run --rm uc procure clean
 ```
 
-It checks every `.hpi`, `.jpi`, `.war` and `.pom` in `./procurement/`, listed in `procurement.json` or
-placed by hand, against the repository. It deletes only the files the repository holds with the same
-content (the same sha1), with their `procurement.json` entries and any folder left empty, so what
-remains is what still needs pushing. Like push, it reads the repository with
-`secrets/repo_push_auth` and runs on its own; like `make procure-download`, `make procure-clean` lends
-`./procurement/` to the container for the run.
+(`make procure-clean ARGS=--dry-run`, `make procure-clean`.) It checks every `.hpi`, `.jpi`, `.war`
+and `.pom` in `./procurement/`, listed in `procurement.json` or placed by hand, against the
+repository. It deletes only the files the repository holds with the same content (the same sha1),
+with their `procurement.json` entries and any folder left empty, so what remains is what still needs
+pushing. Like push, it reads the repository with `secrets/repo_push_auth`.
 
 | Result | Meaning |
 |---|---|

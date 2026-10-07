@@ -79,7 +79,7 @@ Tiers come from the core versions plugin releases declare as their minimum, when
 that core's `.war`: an LTS version `2.x.y` becomes an LTS tier and also brings the weekly tier
 `2.(x+1)`, whose `.war` is not needed; a weekly version becomes a weekly tier and also brings the next
 LTS release the repository holds. A required core whose `.war` is missing brings no tier: `uc doctor`
-lists those, and `uc doctor --download-war required` stages them
+lists those, and `uc procure stage --war required` stages them
 ([Procure missing files](../how-to/procure-missing-files.md)). `CORE_AGE_DAYS` limits which cores count:
 
 - online, `400`: like updates.jenkins.io. Every such core released in the last 400 days gets a tier,

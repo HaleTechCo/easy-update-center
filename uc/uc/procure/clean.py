@@ -1,4 +1,4 @@
-"""uc procure clean: delete the staged files the repository already holds with the same content (docs/how-to/procure-missing-files.md#5-clean-up)."""
+"""uc procure clean: delete the staged files the repository already holds with the same content (docs/how-to/procure-missing-files.md#6-clean-up)."""
 
 from __future__ import annotations
 
