@@ -275,6 +275,7 @@ def healthcheck(port: int | None = None) -> None:
             status = response.status
     except urllib.error.HTTPError as exc:
         status = exc.code
+        exc.close()  # it holds the response
     except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:  # HTTPException: something on the port answers with bytes that are not HTTP
         reason = (exc.reason if isinstance(exc, urllib.error.URLError) else exc) or type(exc).__name__
         msg = f'repo-adapter is not healthy on port {port}: {reason}'
