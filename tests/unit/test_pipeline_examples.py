@@ -118,6 +118,8 @@ def test_the_approval_comes_before_the_push(name):
         assert order.index('review') < order.index('push')
         assert 'when: manual' in found['review']
         assert 'allow_failure: false' in found['review']
+        assert 'environment: procurement' in found['review']
+        assert 'needs:' not in found['push'] or 'review' in found['push'].split('needs:')[1].splitlines()[0]
         for job, block in found.items():
             assert f'stage: {job}\n' in block, job
     else:
@@ -136,6 +138,11 @@ def test_the_push_checks_what_was_reviewed(name):
         assert push.index('actions/download-artifact@v4') < push.index('sha256sum -c')
     if name == 'Jenkinsfile':
         assert push.index('unstash') < push.index('sha256sum -c')
+        assert re.search(r'set -e\w*', push[: push.index('sha256sum -c')]) is not None
+    if name == 'gitlab-ci.yml':
+        assert all('||' not in line for line in push.splitlines() if 'sha256sum -c' in line)
+    if name == 'github-actions.yml':
+        assert 'continue-on-error' not in push
 
 
 @pytest.mark.parametrize('name', NAMES)
