@@ -1,0 +1,68 @@
+---
+# Procurement with an approval before anything is pushed (docs/how-to/run-procurement-from-a-pipeline.md).
+# Runs on a shell runner on the update center's Docker host (tag uc-host), in the deployment directory
+# UC_DIR, which holds .env, config/uc.toml and secrets/. Run it from Build > Pipelines > Run pipeline.
+# Protect the "procurement" environment (Settings > CI/CD > Protected environments) so only its
+# approvers can run the review job.
+variables:
+  UC_DIR: /opt/jenkins-update-center
+
+stages: [check, stage, review, push, generate, verify, clean]
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    # - if: $CI_PIPELINE_SOURCE == "schedule"  # a weekly schedule, set in Build > Pipeline schedules
+
+default:
+  tags: [uc-host]
+  # One run at a time: the staging folder is shared.
+  resource_group: jenkins-update-center
+  before_script:
+    - set -o pipefail
+    - cd "$UC_DIR"
+
+check:
+  stage: check
+  script:
+    - docker compose run --rm --no-deps uc config --check
+    # Exit 1 means there is something to procure, which is what this pipeline is for.
+    - docker compose run --rm uc doctor || [ $? -eq 1 ]
+
+stage:
+  stage: stage
+  script:
+    - docker compose run --rm uc procure stage 2>&1 | tee "$CI_PROJECT_DIR/stage-report.txt"
+    - if [ -e procurement/procurement.json ]; then cp procurement/procurement.json "$CI_PROJECT_DIR/"; fi
+  artifacts:
+    paths: [stage-report.txt, procurement.json]
+    when: always
+
+review:
+  stage: review
+  environment: procurement
+  when: manual
+  allow_failure: false
+  script:
+    - echo "approved by $GITLAB_USER_LOGIN"
+
+push:
+  stage: push
+  script:
+    - docker compose run --rm uc procure push
+
+generate:
+  stage: generate
+  script:
+    - docker compose run --rm uc generate
+
+verify:
+  stage: verify
+  script:
+    - docker compose run --rm uc status
+    - docker compose run --rm uc doctor || [ $? -eq 1 ]
+
+clean:
+  stage: clean
+  script:
+    - docker compose run --rm uc procure clean
