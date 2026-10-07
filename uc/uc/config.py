@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -33,7 +34,7 @@ PUBLIC_RELEASES_URL = PUBLIC_ARTIFACTORY_URL + 'releases/'
 UPSTREAM_MIRROR_URL = 'https://get.jenkins.io'
 DEFAULT_CONFIG_FILE = Path('/config/uc.toml')
 _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
-_SCHEME = re.compile(r'[^/:]+://')  # what urllib's proxy handler takes as a scheme
+_SCHEME = re.compile(r'[^/:]+://')  # the scheme split_userinfo keeps in front of the user info uc config masks
 _PROXY_SCHEME = re.compile(r'[^/:]+:')  # how urllib's proxy handler finds a scheme: up to the first ':', if anything precedes one
 _NOT_IN_HOST = re.compile(r'[\x00-\x20\x7f/?#@]')  # http.client refuses a space or control character; a / ? # or @ is part of a path, query or user info
 _FILE_KEYS = tuple(sorted(toml_label(setting.env) for setting in SETTINGS if not setting.env_only))
@@ -551,8 +552,9 @@ def _checked_proxy(r: Resolver, name: str) -> str:
 
     The user info may hold anything (split_userinfo). A value urllib refuses, or whose user info it reads differently
     from split_userinfo (_proxy_hostport), is asked for as scheme://host:port. The host and port urllib would connect to
-    must be readable: a port that is not a number, an empty host, or a host:port that runs on into a path, query or
-    fragment (http://proxy:3128?x, or proxy:3128/ without a scheme) cannot be used.
+    must be readable: a port that is not a number, an empty host, a host:port that runs on into a path, query or
+    fragment (http://proxy:3128?x, or proxy:3128/ without a scheme), or brackets around anything but an IPv6 address
+    cannot be used.
     """
     value = r.raw(name)
     if value:
@@ -561,10 +563,22 @@ def _checked_proxy(r: Resolver, name: str) -> str:
         if hostport is None:
             msg = f'{r.label(name)} is not a valid URL: write it as scheme://host:port{hint}'
             raise ConfigError(msg)
-        if _NOT_IN_HOST.search(hostport) or not _parse_url(r, name, '//' + hostport, hint=hint).hostname:
-            msg = f'{r.label(name)} is not a valid URL: its host or port cannot be read{hint}'
-            raise ConfigError(msg)
+        unreadable = f'{r.label(name)} is not a valid URL: its host or port cannot be read{hint}'
+        if _NOT_IN_HOST.search(hostport):
+            raise ConfigError(unreadable)
+        host = _parse_url(r, name, '//' + hostport, hint=hint).hostname  # raises the same message for a port that is not a number or broken brackets
+        if not host or (hostport.startswith('[') and not _is_ipv6(host)):  # urlsplit also takes an IPvFuture literal ([v1.x]), which http.client cannot use
+            raise ConfigError(unreadable)
     return value
+
+
+def _is_ipv6(host: str) -> bool:
+    """Return whether host is an IPv6 address, the only kind of host http.client connects to in brackets."""
+    try:
+        ipaddress.IPv6Address(host)
+    except ValueError:
+        return False
+    return True
 
 
 def _proxy_hostport(value: str) -> str | None:

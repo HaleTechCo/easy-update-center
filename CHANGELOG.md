@@ -102,8 +102,9 @@ once releases are published.
   `PROCUREMENT_SOURCE_URL`, `RESOURCES_URL`, `POPULARITY_JSON_URL` and `TOOL_INSTALLERS_URL`.
   `HTTPS_PROXY` and `HTTP_PROXY` are checked as Python's urllib reads them: they may carry a user
   name and password, which may hold `#`, `?` or `/`, and only the host and port urllib connects to,
-  after the last `@`, must be readable: urllib reads a `?` or `#` after them, or a `/` with no `//`
-  before it, as part of the port, so `http://proxy:3128?x` is refused. A single `/` where `//`
+  after the last `@`, must be readable. urllib reads a `?` or `#` after them, or a `/` with no `//`
+  before it, as part of the host and port, so `http://proxy:3128?x` and `http://proxy?x` are
+  refused, as is a host in brackets that is not an IPv6 address (`[v1.x]`). A single `/` where `//`
   belongs (`http:/proxy:3128`, `/proxy:3128`), which urllib refuses, and an `@`, a `/` and another
   `@` in that order after the `//` (`http://user:secret@a/b@proxy:3128`), where urllib takes the
   host from before that `/`, are reported as

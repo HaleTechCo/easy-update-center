@@ -1,10 +1,12 @@
 """Unit tests for uc.config: per-mode defaults, overrides and the rejection of invalid settings."""
 
+import urllib.request
 from pathlib import Path
+from urllib.parse import unquote
 
 import pytest
 
-from uc.config import load_settings, load_web_settings, read_secret, settings_digest, with_explicit_port
+from uc.config import _proxy_hostport, load_settings, load_web_settings, read_secret, settings_digest, split_userinfo, with_explicit_port
 from uc.errors import ConfigError
 from uc.settings import SETTINGS
 
@@ -337,8 +339,12 @@ def test_valid_url_settings_still_load(name, value):
     assert load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
 
 
-@pytest.mark.parametrize('delimiter', ['#', '?', '/', '[', ']'])
-@pytest.mark.parametrize('form', ['http://proxyuser:{}@proxy.corp:3128', 'proxyuser:{}@proxy.corp:3128'], ids=['scheme', 'no-scheme'])  # pragma: allowlist secret
+PASSWORD_DELIMITERS = ['#', '?', '/', '[', ']']
+PASSWORD_FORMS = ['http://proxyuser:{}@proxy.corp:3128', 'proxyuser:{}@proxy.corp:3128']  # pragma: allowlist secret
+
+
+@pytest.mark.parametrize('delimiter', PASSWORD_DELIMITERS)
+@pytest.mark.parametrize('form', PASSWORD_FORMS, ids=['scheme', 'no-scheme'])
 def test_a_proxy_password_may_hold_what_ends_a_url_host(tmp_path, delimiter, form):
     # urllib's proxy handler takes the user info up to the last @, so these work there and must not stop uc.
     value = form.format(f'S3cret{delimiter}Tail9z')
@@ -348,16 +354,16 @@ def test_a_proxy_password_may_hold_what_ends_a_url_host(tmp_path, delimiter, for
     assert load_settings(AIRGAPPED, config_file=path).http_proxy == value
 
 
-@pytest.mark.parametrize(
-    'value',
-    [
-        'http://proxy.corp:abc',
-        'http://proxyuser:S3cretPW@proxy.corp:abc',  # pragma: allowlist secret
-        'proxyuser:S3cretPW@proxy.corp:abc',
-        'http://proxyuser:S3cretPW@proxy.corp:99999',  # pragma: allowlist secret
-        'http://proxyuser:S3cretPW@[proxy.corp:3128',  # pragma: allowlist secret
-    ],
-)
+UNREADABLE_PROXIES = [
+    'http://proxy.corp:abc',
+    'http://proxyuser:S3cretPW@proxy.corp:abc',  # pragma: allowlist secret
+    'proxyuser:S3cretPW@proxy.corp:abc',
+    'http://proxyuser:S3cretPW@proxy.corp:99999',  # pragma: allowlist secret
+    'http://proxyuser:S3cretPW@[proxy.corp:3128',  # pragma: allowlist secret
+]
+
+
+@pytest.mark.parametrize('value', UNREADABLE_PROXIES)
 def test_a_proxy_whose_host_or_port_cannot_be_read_is_refused_without_quoting_it(value):
     with pytest.raises(ConfigError, match=r'^HTTPS_PROXY is not a valid URL: ') as error:
         load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml'))
@@ -366,10 +372,12 @@ def test_a_proxy_whose_host_or_port_cannot_be_read_is_refused_without_quoting_it
 
 
 PROXY_REFUSAL = r'is not a valid URL: write it as scheme://host:port; percent-encode # \? / \[ \] @ in a user name or password$'
+UNREADABLE_PROXY = r'is not a valid URL: its host or port cannot be read; percent-encode # \? / \[ \] @ in a user name or password$'
+SINGLE_SLASH_PROXIES = ['svc:/S3cretPW@proxy.corp:3128', 'http:/proxy.corp:3128', '/S3cretPW@proxy.corp:3128', '/proxy.corp:3128']  # pragma: allowlist secret
 
 
 @pytest.mark.parametrize('name', ['HTTPS_PROXY', 'HTTP_PROXY'])
-@pytest.mark.parametrize('value', ['svc:/S3cretPW@proxy.corp:3128', 'http:/proxy.corp:3128', '/S3cretPW@proxy.corp:3128', '/proxy.corp:3128'])  # pragma: allowlist secret
+@pytest.mark.parametrize('value', SINGLE_SLASH_PROXIES)
 def test_a_proxy_with_a_single_slash_where_two_belong_is_refused_as_urllib_refuses_it(name, value):
     # urllib takes what precedes the first : as the scheme, if anything does, and refuses a rest that starts with / but not //.
     with pytest.raises(ConfigError, match=f'^{name} {PROXY_REFUSAL}') as error:
@@ -378,8 +386,11 @@ def test_a_proxy_with_a_single_slash_where_two_belong_is_refused_as_urllib_refus
         assert part not in str(error.value)
 
 
+AT_AFTER_AUTHORITY_PROXIES = ['http://proxyuser:S3cretPW@Tail/9z@proxy.corp:3128', 'http://proxyuser:S3cretPW@proxy.corp:3128/x@other.corp', '//proxyuser:S3cretPW@Tail/9z@proxy.corp:3128']  # pragma: allowlist secret
+
+
 @pytest.mark.parametrize('name', ['HTTPS_PROXY', 'HTTP_PROXY'])
-@pytest.mark.parametrize('value', ['http://proxyuser:S3cretPW@Tail/9z@proxy.corp:3128', 'http://proxyuser:S3cretPW@proxy.corp:3128/x@other.corp', '//proxyuser:S3cretPW@Tail/9z@proxy.corp:3128'])  # pragma: allowlist secret
+@pytest.mark.parametrize('value', AT_AFTER_AUTHORITY_PROXIES)
 def test_a_proxy_with_an_at_after_the_end_of_urllibs_authority_is_refused(name, value):
     # urllib ends the authority at the first / after the first @ and takes the host from before that /; uc reads it after the last @.
     with pytest.raises(ConfigError, match=f'^{name} {PROXY_REFUSAL}') as error:
@@ -388,49 +399,118 @@ def test_a_proxy_with_an_at_after_the_end_of_urllibs_authority_is_refused(name, 
         assert part not in str(error.value)
 
 
+UNUSABLE_HOSTPORT_PROXIES = [
+    'http://proxy.corp:3128?x',
+    'http://proxy.corp:3128#x',
+    'proxy.corp:3128/',
+    'proxy.corp:3128/x',
+    '//proxy.corp:abc',
+    'http://proxyuser:S3cretPW@proxy.corp:3128?x',  # pragma: allowlist secret
+    'proxyuser:S3cretPW@proxy.corp:3128/x',
+    'http://proxyuser:S3cretPW@:3128',  # pragma: allowlist secret
+]
+
+
 @pytest.mark.parametrize('name', ['HTTPS_PROXY', 'HTTP_PROXY'])
-@pytest.mark.parametrize(
-    'value',
-    [
-        'http://proxy.corp:3128?x',
-        'http://proxy.corp:3128#x',
-        'proxy.corp:3128/',
-        'proxy.corp:3128/x',
-        '//proxy.corp:abc',
-        'http://proxyuser:S3cretPW@proxy.corp:3128?x',  # pragma: allowlist secret
-        'proxyuser:S3cretPW@proxy.corp:3128/x',
-        'http://proxyuser:S3cretPW@:3128',  # pragma: allowlist secret
-    ],
-)
+@pytest.mark.parametrize('value', UNUSABLE_HOSTPORT_PROXIES)
 def test_a_proxy_whose_host_or_port_urllib_cannot_use_is_refused(name, value):
     # urllib hands http.client everything up to the end of its authority, which a ? or # does not end, nor a / without a // before it.
-    with pytest.raises(ConfigError, match=rf'^{name} is not a valid URL: its host or port cannot be read; percent-encode # \? / \[ \] @ in a user name or password$') as error:
+    with pytest.raises(ConfigError, match=f'^{name} {UNREADABLE_PROXY}') as error:
         load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
     for part in ('proxyuser', 'S3cretPW', 'proxy.corp', '3128', 'abc'):
         assert part not in str(error.value)
 
 
-@pytest.mark.parametrize(
-    'value',
-    [
-        'http://proxy.corp:3128',
-        'http://proxyuser:S3cretPW@proxy.corp:3128',  # pragma: allowlist secret
-        'proxy.corp:3128',
-        'proxyuser:S3cretPW@proxy.corp:3128',
-        'http://proxyuser:S3cretPW@proxy.corp:3128/',  # pragma: allowlist secret
-        'http://[::1]:3128',
-        'socks5h://proxyuser:S3cretPW@proxy.corp:1080',  # pragma: allowlist secret
-        'http://proxy.corp:31%32%38',  # urllib percent-decodes the host and port
-    ],
-)
+BRACKETED_NOT_IPV6_PROXIES = [
+    'http://[v1.x]:3128',
+    'http://%5Bv1.x%5D:3128',
+    '%5Bv1.x%5D:3128',
+    '[v1.x[::1]',
+    'http://[v1.x[::1]:3128',
+    'http://proxyuser:S3cretPW@[v1.x]:3128',  # pragma: allowlist secret
+]
+
+
+@pytest.mark.parametrize('value', BRACKETED_NOT_IPV6_PROXIES)
+def test_a_proxy_host_in_brackets_must_be_an_ipv6_address(value):
+    # urlsplit also takes an IPvFuture literal ([v1.x], even [v1.x[::1]), which http.client cannot connect to.
+    with pytest.raises(ConfigError, match=f'^HTTPS_PROXY {UNREADABLE_PROXY}') as error:
+        load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml'))
+    for part in ('proxyuser', 'S3cretPW', 'v1.x', '3128'):
+        assert part not in str(error.value)
+
+
+USABLE_PROXIES = [
+    'http://proxy.corp:3128',
+    'http://proxyuser:S3cretPW@proxy.corp:3128',  # pragma: allowlist secret
+    'proxy.corp:3128',
+    'proxyuser:S3cretPW@proxy.corp:3128',
+    'http://proxyuser:S3cretPW@proxy.corp:3128/',  # pragma: allowlist secret
+    'http://[::1]:3128',
+    'http://[fe80::1%25eth0]:3128',  # a scoped IPv6 address, percent-encoded
+    'socks5h://proxyuser:S3cretPW@proxy.corp:1080',  # pragma: allowlist secret
+    'http://proxy.corp:31%32%38',  # urllib percent-decodes the host and port
+]
+
+
+@pytest.mark.parametrize('value', USABLE_PROXIES)
 def test_a_proxy_urllib_can_use_still_loads(value):
     assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml')).https_proxy == value
 
 
-@pytest.mark.parametrize('value', ['proxyuser:S3cretPW@Tail/9z@proxy.corp:3128', 'http://proxyuser:S3cretPW/Tail@9z@proxy.corp:3128', 'http://proxyuser:S3cretPW@Tail9z@proxy.corp:3128/'])  # pragma: allowlist secret
+ATS_IN_USER_INFO_PROXIES = ['proxyuser:S3cretPW@Tail/9z@proxy.corp:3128', 'http://proxyuser:S3cretPW/Tail@9z@proxy.corp:3128', 'http://proxyuser:S3cretPW@Tail9z@proxy.corp:3128/']  # pragma: allowlist secret
+
+
+@pytest.mark.parametrize('value', ATS_IN_USER_INFO_PROXIES)
 def test_a_proxy_whose_ats_are_all_in_urllibs_user_info_still_loads(value):
     # Without // urllib reads the whole value as the authority; with it, a / before the first @ or after the last one ends nothing early.
     assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml')).https_proxy == value
+
+
+def urllib_reading(value):
+    """Return (user info, host:port) as urllib itself reads a proxy URL (_parse_proxy, then proxy_open's unquote); None when it refuses it."""
+    try:
+        _, user, password, hostport = urllib.request._parse_proxy(value)  # noqa: SLF001 - the point is to compare with urllib itself
+    except ValueError:
+        return None
+    return (None if user is None else user + ('' if password is None else ':' + password)), unquote(hostport)
+
+
+DRIFT_PROXIES = [
+    'proxy.corp:3128',
+    'http://user:pw@proxy.corp:3128',  # pragma: allowlist secret
+    'svc:S3cretPW@proxy.corp:3128',
+    *(form.format(f'S3cret{delimiter}Tail9z') for form in PASSWORD_FORMS for delimiter in PASSWORD_DELIMITERS),
+    *UNREADABLE_PROXIES,
+    *SINGLE_SLASH_PROXIES,
+    *AT_AFTER_AUTHORITY_PROXIES,
+    *UNUSABLE_HOSTPORT_PROXIES,
+    *BRACKETED_NOT_IPV6_PROXIES,
+    *USABLE_PROXIES,
+    *ATS_IN_USER_INFO_PROXIES,
+    '//proxy.corp:3128',
+    '//proxyuser:S3cretPW@proxy.corp:3128',
+    'http:///proxy.corp:3128',
+    'HTTP://Proxy.Corp:3128',
+    'http://proxy.corp',
+    ':@proxy.corp:3128',
+    'http://proxy%40corp:3128',
+    'http://proxyuser:S3cret%40Tail9z@proxy.corp:3128',  # pragma: allowlist secret
+    'socks5h://proxy.corp:1080/',
+    'u:a@b/c@proxy.corp:3128',
+    'a:b:c@proxy.corp:3128',
+]
+
+
+@pytest.mark.parametrize('value', DRIFT_PROXIES)
+def test_the_proxy_host_and_port_follow_urllibs_own_parser(value):
+    # Pins the mirror to urllib itself, so a Python update that changes how urllib reads a proxy URL fails here.
+    ours, theirs = _proxy_hostport(value), urllib_reading(value)
+    if ours is None:
+        assert theirs is None or theirs[0] != split_userinfo(value)[1]  # urllib refuses it, or reads other user info
+    else:
+        assert theirs is not None
+        assert ours == theirs[1]
 
 
 ALL_URL_SETTINGS = [setting.env for setting in SETTINGS if setting.type == 'url']
