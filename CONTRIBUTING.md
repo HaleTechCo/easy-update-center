@@ -31,18 +31,20 @@ tools and the details of each hook: [tools/README.md](tools/README.md).
 ```text
 uc/                   the uc image: Dockerfile, update-center2 patches, VersionTool, templates,
                       licenses/ (third-party notices shipped in the image)
+uc/bin/               the image's commands: uc, and the setup service's uc-setup with the
+                      secrets permissions script it runs
 uc/uc/                the uc Python package (standard library only): CLI, generation, doctor,
                       PKI, status; repo_adapter/ is the repo-adapter service
 web/                  the web image: Apache configuration, entrypoint, health check
 compose.yaml          the stack; compose.airgapped.yaml is the air-gapped override
 config/overlay/       operator overlay merged into upstream's resources/
 secrets/              keys and credentials (gitignored except its README)
-scripts/              helpers the Makefile runs in the uc image (secrets permissions)
 tests/unit/           pytest, run in the uc test image
 tests/routing/        the web image's routing against generated fixture sites
 tests/web/            the web entrypoint's configuration checks
 tests/compose/        network and secret isolation of the Compose files
-tests/secrets/        the permissions scripts/secrets-permissions.sh gives secrets/
+tests/secrets/        the permissions uc/bin/secrets-permissions.sh gives secrets/
+tests/setup/          uc-setup: first-time setup, the ACLs on procurement/, pki-init and pki-rotate
 tests/integration/    end to end: fake Artifactory and Artifact Keeper, real Jenkins controllers
 tests/support/        helpers shared by the suites
 tools/                pre-commit hook scripts
@@ -55,13 +57,14 @@ How the pieces fit: [Architecture overview](docs/architecture/overview.md).
 
 | Command | What it runs | Needs |
 |---|---|---|
-| `make test` | Unit, web entrypoint, routing and secrets-permission tests. The gate for every change. | Docker |
+| `make test` | Unit, web entrypoint, routing, secrets-permission and setup tests. The gate for every change. | Docker |
 | `make test-unit ARGS='-k name'` | A subset of the unit tests. | Docker |
 | `make compose-check` | Both Compose configurations, and the network and secret isolation the repo-adapter relies on. | Docker |
 | `make it-airgapped` | End to end against a fake Artifactory and a fake Artifact Keeper, with real Jenkins controllers installing plugins. | Docker |
 | `make it-online` | End to end against repo.jenkins-ci.org, capped at 25 plugins. | `JENKINS_COMMUNITY_USERNAME` and `JENKINS_COMMUNITY_PASSWORD` exported (a free account); optional `GITHUB_USERNAME`, `GITHUB_TOKEN` |
 | `make it-full` | The online run with the whole catalog. Takes hours. | as above |
-| `make test-secrets` | The ownership and modes `scripts/secrets-permissions.sh` gives `secrets/`, checked with real Linux permissions inside the uc image (part of `make test`). | Docker |
+| `make test-secrets` | The ownership and modes `uc/bin/secrets-permissions.sh` gives `secrets/`, checked with real Linux permissions inside the uc image (part of `make test`). | Docker |
+| `make test-setup` | `uc/bin/uc-setup`, the setup service's entrypoint, checked as root inside the uc image with real Linux ownership and ACLs: first-time setup, sharing `procurement/` with uid 10001, `pki-init` and `pki-rotate` (part of `make test`). | Docker |
 | `make it-clean` | Removes the integration suites' containers and volumes. | Docker |
 
 Unit tests read `uc/uc/`, `uc/templates/` and `tools/` straight from the working tree, so they need

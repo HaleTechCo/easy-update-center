@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Permission checks for scripts/secrets-permissions.sh. Runs as root inside the uc image, on a
+# Permission checks for uc/bin/secrets-permissions.sh. Runs as root inside the uc image, on a
 # Linux-native directory where ownership is real (Docker Desktop bind mounts ignore it), and acts as
 # each party with setpriv: the host user (1000), the uc containers (10001), web (33) and anyone else
 # (2000). Usage, from the Makefile: make test-secrets
