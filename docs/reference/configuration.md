@@ -81,7 +81,7 @@ and which you can run by hand; "doctor" means `uc doctor`.
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
 | `MODE` | `mode` | none | every uc-image service (`web-config` resolves it for web) | `online` or `airgapped`. It only sets defaults; every setting below can still be set explicitly. |
-| `PUBLIC_URL` | `public_url` | none | every uc-image service (`web-config` resolves it for web) | The exact origin Jenkins uses, with no path, for example `https://jenkins-updates.example.com`. See [A hostname for PUBLIC_URL](../getting-started/requirements.md#a-hostname-for-public_url). |
+| `PUBLIC_URL` | `public_url` | none | every uc-image service (`web-config` resolves it for web) | The exact origin Jenkins uses, with no path, for example `https://jenkins-updates.example.com`. Must not contain credentials or any `@`. See [A hostname for PUBLIC_URL](../getting-started/requirements.md#a-hostname-for-public_url). |
 
 ## Mode defaults
 
