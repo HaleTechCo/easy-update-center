@@ -92,7 +92,7 @@ def test_airgapped_without_a_backend_url_or_repository_is_refused():
 @pytest.mark.parametrize('load', [load_web_settings, load_settings])
 def test_credentials_in_the_repository_url_are_refused(load):
     env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'REPO_URL': 'https://u:p@artifactory.corp/artifactory/', 'REPO_KEY': 'jenkins'}  # pragma: allowlist secret
-    with pytest.raises(ConfigError, match=r'^URLs must not contain credentials; use the secret files instead$'):
+    with pytest.raises(ConfigError, match=r'^REPO_URL must not contain credentials or an @; use the secret files instead$'):
         load(env, config_file=NO_FILE)
 
 
@@ -151,12 +151,6 @@ def test_credentials_in_the_backend_url_are_refused(load, tmp_path):
     path.write_text(f'[download]\nbackend_url = "{CREDENTIAL_URL}"\n', encoding='utf-8')
     with pytest.raises(ConfigError, match=r'\[download\] backend_url in .*must not contain credentials'):
         load({'MODE': 'online', 'PUBLIC_URL': 'https://uc'}, config_file=path)
-
-
-@pytest.mark.parametrize('load', [load_web_settings, load_settings])
-def test_an_at_sign_in_the_backend_url_path_or_query_is_not_a_credential(load):
-    env = {'MODE': 'online', 'PUBLIC_URL': 'https://uc', 'DOWNLOAD_BACKEND_URL': 'http://art/repo?x=a@b'}
-    assert load(env, config_file=NO_FILE).download_backend_url == 'http://art/repo?x=a@b'
 
 
 def test_web_env_refuses_a_credentialed_backend_url_at_the_command_line(monkeypatch, tmp_path, capsys):

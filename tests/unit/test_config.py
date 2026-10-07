@@ -376,11 +376,18 @@ def test_a_proxy_whose_host_or_port_cannot_be_read_is_refused_without_quoting_it
 
 ALL_URL_SETTINGS = [setting.env for setting in SETTINGS if setting.type == 'url']
 WEB_URL_SETTINGS = ['PUBLIC_URL', 'REPO_URL', 'DOWNLOAD_BACKEND_URL']
+NO_AT_SETTINGS = {'PUBLIC_URL': 'public_url', 'REPO_URL': '[repo]\nurl', 'DOWNLOAD_BACKEND_URL': '[download]\nbackend_url', 'PROCUREMENT_SOURCE_URL': '[procurement]\nsource_url'}
+"""The URL settings that never carry credentials, so any @ in them is refused, with their uc.toml keys."""
+
+
+def refused(name):
+    """Return how the message refusing a URL setting's malformed value starts: an @ in a setting that never carries credentials is refused before the URL is parsed."""
+    return f'^{name} must not contain credentials or an @' if name in NO_AT_SETTINGS else f'^{name} is not a valid URL: '
 
 
 @pytest.mark.parametrize(('load', 'name'), [*((load_settings, name) for name in ALL_URL_SETTINGS), *((load_web_settings, name) for name in WEB_URL_SETTINGS)])
 def test_a_malformed_url_message_does_not_quote_the_value(load, name):
-    with pytest.raises(ConfigError, match=f'^{name} is not a valid URL: ') as error:
+    with pytest.raises(ConfigError, match=refused(name)) as error:
         load({**AIRGAPPED, name: 'https://admin:S3cretPW@host.corp:wxyz/'}, config_file=Path('/nonexistent/uc.toml'))  # pragma: allowlist secret
     for part in ('admin', 'S3cretPW', 'wxyz'):
         assert part not in str(error.value)
@@ -389,9 +396,47 @@ def test_a_malformed_url_message_does_not_quote_the_value(load, name):
 @pytest.mark.parametrize('name', [name for name in ALL_URL_SETTINGS if not name.endswith('_PROXY')])
 def test_a_password_that_ends_the_host_early_is_not_quoted(name):
     # Only the proxies take the user info up to the last @; elsewhere urlsplit reads S3cretPW as the port.
-    with pytest.raises(ConfigError, match=f'^{name} is not a valid URL: ') as error:
+    with pytest.raises(ConfigError, match=refused(name)) as error:
         load_settings({**AIRGAPPED, name: 'https://admin:S3cretPW#x@host.corp/'}, config_file=Path('/nonexistent/uc.toml'))  # pragma: allowlist secret
     assert 'S3cretPW' not in str(error.value)
+
+
+TOKEN = 'Tok3nQx7'
+AT_VALUES = {
+    'user info': f'https://admin:{TOKEN}@host.corp/',  # pragma: allowlist secret
+    'user only': f'https://{TOKEN}@host.corp/',
+    'user info then #': f'https://admin:{TOKEN}#x@host.corp/',  # pragma: allowlist secret
+    'token then #': f'https://{TOKEN}#x@host.corp/',
+    'token then ?': f'https://{TOKEN}?x@host.corp/',
+    'token then /': f'https://{TOKEN}/x@host.corp/',
+    'path': f'https://host.corp/{TOKEN}@b',
+    'query': f'https://host.corp?x={TOKEN}@b',
+}
+NO_AT_LOADS = [*((load_settings, name) for name in NO_AT_SETTINGS), *((load_web_settings, name) for name in WEB_URL_SETTINGS)]
+
+
+@pytest.mark.parametrize('value', AT_VALUES.values(), ids=AT_VALUES.keys())
+@pytest.mark.parametrize(('load', 'name'), NO_AT_LOADS)
+def test_any_at_is_refused_in_a_url_setting_that_never_carries_credentials(load, name, value):
+    # urlsplit ends the user info at a # ? or /, and would read a token before one as the host.
+    with pytest.raises(ConfigError, match=f'^{name} must not contain credentials or an @') as error:
+        load({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+    assert TOKEN not in str(error.value)
+
+
+@pytest.mark.parametrize(('name', 'toml'), NO_AT_SETTINGS.items())
+def test_an_at_in_a_url_setting_from_uc_toml_names_its_key(tmp_path, name, toml):
+    path = tmp_path / 'uc.toml'
+    path.write_text(f'{toml} = "https://{TOKEN}#x@host.corp/"\n', encoding='utf-8')
+    with pytest.raises(ConfigError, match=rf'^{name} \(.* in .*uc\.toml\) must not contain credentials or an @') as error:
+        load_settings({key: value for key, value in AIRGAPPED.items() if key != name}, config_file=path)
+    assert TOKEN not in str(error.value)
+
+
+@pytest.mark.parametrize(('load', 'name'), NO_AT_LOADS)
+def test_a_url_setting_that_never_carries_credentials_loads_without_an_at(load, name):
+    value = 'https://host.corp/jenkins%40corp'  # an encoded @ is not one
+    assert value in repr(load({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml')))
 
 
 def test_a_malformed_url_from_uc_toml_names_its_key(tmp_path):

@@ -269,7 +269,7 @@ def load_web_settings(env: Mapping[str, str] | None = None, *, config_file: Path
     if not public_url:
         msg = 'PUBLIC_URL must be set'
         raise ConfigError(msg)
-    _parse_url(r, 'PUBLIC_URL', public_url)
+    _check_credential_free_url(r, 'PUBLIC_URL', public_url)
     backend = _choice(r, 'DOWNLOAD_BACKEND')
     backend_url = _explicit_backend_url(r) or _default_backend_url(r, backend)
     return WebSettings(
@@ -308,10 +308,7 @@ def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
     if not _REPOSITORY_RE.match(repo_key):
         msg = f'{r.label("REPO_KEY")} contains unsupported characters: {repo_key!r}'
         raise ConfigError(msg)
-    parts = _parse_url(r, 'REPO_URL', repo_url)
-    if parts.username or parts.password:
-        msg = 'URLs must not contain credentials; use the secret files instead'
-        raise ConfigError(msg)
+    _check_credential_free_url(r, 'REPO_URL', repo_url, advice='; use the secret files instead')
     return repo_type, with_trailing_slash(repo_url), repo_key
 
 
@@ -344,7 +341,7 @@ def settings_from(r: Resolver) -> Settings:
     if not public_url:
         msg = 'PUBLIC_URL must be set'
         raise ConfigError(msg)
-    _parse_url(r, 'PUBLIC_URL', public_url)
+    _check_credential_free_url(r, 'PUBLIC_URL', public_url)
 
     repo_type, repo_url, repo_key = _repository(r, online=online)
     repo_url_with_port = with_explicit_port(repo_url)
@@ -368,10 +365,7 @@ def settings_from(r: Resolver) -> Settings:
     resources_url = _checked_url(r, 'RESOURCES_URL')
 
     procurement_source = r.raw('PROCUREMENT_SOURCE_URL')
-    source_parts = _parse_url(r, 'PROCUREMENT_SOURCE_URL', procurement_source)
-    if source_parts.username or source_parts.password:
-        msg = 'PROCUREMENT_SOURCE_URL must not contain credentials'
-        raise ConfigError(msg)
+    _check_credential_free_url(r, 'PROCUREMENT_SOURCE_URL', procurement_source)
 
     secrets_dir = Path(r.raw('SECRETS_DIR'))
 
@@ -523,13 +517,10 @@ def _choice(r: Resolver, name: str) -> str:
 
 
 def _explicit_backend_url(r: Resolver) -> str:
-    """Return DOWNLOAD_BACKEND_URL as set ('' if unset); credentials in it are refused, since web logs it and sends it to controllers."""
+    """Return DOWNLOAD_BACKEND_URL as set ('' if unset); an '@' in it, and so any credentials, is refused, since web logs it and sends it to controllers."""
     value = r.raw('DOWNLOAD_BACKEND_URL')
     if value:
-        parts = _parse_url(r, 'DOWNLOAD_BACKEND_URL', value)
-        if parts.username or parts.password:
-            msg = f'{r.label("DOWNLOAD_BACKEND_URL")} must not contain credentials; for proxied downloads put them in secrets/download_proxy_auth'
-            raise ConfigError(msg)
+        _check_credential_free_url(r, 'DOWNLOAD_BACKEND_URL', value, advice='; for proxied downloads put them in secrets/download_proxy_auth')
     return value
 
 
@@ -562,6 +553,18 @@ def split_userinfo(value: str) -> tuple[str, str | None, str]:
     scheme = match.group() if match else ''
     userinfo, at, rest = value[len(scheme) :].rpartition('@')
     return scheme, userinfo if at else None, rest
+
+
+def _check_credential_free_url(r: Resolver, name: str, value: str, *, advice: str = '') -> None:
+    """Refuse any '@' in a URL setting that never carries credentials, then parse it (_parse_url).
+
+    urlsplit ends the user info at a # ? or /, so it would read a token followed by one as the host and accept it;
+    refusing the '@' first also keeps any later message from quoting the token. advice follows the message.
+    """
+    if '@' in value:
+        msg = f'{r.label(name)} must not contain credentials or an @{advice}'
+        raise ConfigError(msg)
+    _parse_url(r, name, value)
 
 
 def _parse_url(r: Resolver, name: str, value: str, *, hint: str = '') -> SplitResult:

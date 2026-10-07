@@ -32,13 +32,16 @@ def _is_local(host: str) -> bool:
 
 
 def check_public_url(url: str, *, allow_local: bool) -> list[str]:
-    """Require PUBLIC_URL to be a bare http(s) origin that controllers can reach; return warnings (plain http)."""
+    """Require PUBLIC_URL to be a bare http(s) origin that controllers can reach; return warnings (plain http).
+
+    Any '@' is refused first, as the settings refuse it, so the messages that quote the URL never quote credentials.
+    """
+    if '@' in url:
+        msg = 'PUBLIC_URL must not contain credentials or an @'
+        raise PreflightError(msg)
     parts = urlsplit(url)
     if parts.scheme not in ('http', 'https') or not parts.hostname:
         msg = f'PUBLIC_URL must be an http(s) URL with a host (got {url!r})'
-        raise PreflightError(msg)
-    if parts.username or parts.password:
-        msg = 'PUBLIC_URL must not contain credentials'
         raise PreflightError(msg)
     if parts.path not in ('', '/') or parts.query or parts.fragment:
         msg = f'PUBLIC_URL must be a bare origin such as https://uc.example.com (got {url!r}); upstream routing and jenkins-plugin-cli do not support a path prefix'

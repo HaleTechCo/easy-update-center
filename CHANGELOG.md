@@ -8,8 +8,11 @@ once releases are published.
 
 ### Changed
 
-- A `DOWNLOAD_BACKEND_URL` with credentials in it is refused, as `REPO_URL` is, by `uc` and by
-  the web container.
+- `PUBLIC_URL`, `REPO_URL`, `DOWNLOAD_BACKEND_URL` and `PROCUREMENT_SOURCE_URL` refuse any `@`
+  (`uc: error: <setting> must not contain credentials or an @`), so none of them can carry
+  credentials, not even a password holding a `#`, `?` or `/`, which a URL parser takes for the end
+  of the host. A `DOWNLOAD_BACKEND_URL` with credentials was accepted before; the web container
+  refuses one too.
 - The web container logs what it serves (`entrypoint: serving <PUBLIC_URL>; downloads: ...`) before
   waiting for the first release. `uc config --web-env --out` writes through a unique temporary file
   and reports a failure as `uc: error: cannot write <path>: <reason>`.
