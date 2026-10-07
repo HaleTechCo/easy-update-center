@@ -56,7 +56,7 @@ class DoctorReport:
     tiers: dict | None = None
     # From the repo-adapter's report.json (docs/architecture/repo-adapter.md#report); None when the adapter is off.
     repo_adapter: dict | None = None
-    # Each required dependency that is absent or too old, as data (uc doctor --download-dependencies).
+    # Each required dependency that is absent or too old, as data (uc procure stage --dependencies).
     missing_dependency_details: list[dict] = field(default_factory=list)
     # Core versions plugin releases require, ascending, with the releases requiring each; None when not
     # checked (the public repository). See docs/architecture/modes.md#core-age.
@@ -322,7 +322,7 @@ def attach_core_check(report: DoctorReport, listing: Listing, source: Source, ve
 
 @dataclass(frozen=True)
 class Inspection:
-    """One doctor run: the report, and the listing and source it was built from (uc doctor --download-*)."""
+    """One doctor run: the report, and the listing and source it was built from (uc procure stage)."""
 
     report: DoctorReport
     listing: Listing
@@ -454,7 +454,7 @@ def core_lines(report: DoctorReport) -> list[str]:
     lines: list[str] = []
     if report.core_floor is None:
         if required:
-            lines.append(f'No Jenkins core in the repository: plugins require {len(required)} cores, from {required[0]} to {required[-1]}. Stage the ones your controllers need with: uc doctor --download-war required --since <oldest version your controllers run>')
+            lines.append(f'No Jenkins core in the repository: plugins require {len(required)} cores, from {required[0]} to {required[-1]}. Stage the ones your controllers need with: uc procure stage --war required --since <oldest version your controllers run>')
     else:
         if report.missing_cores:
             lines.append(f'Cores plugins require that the repository lacks, at or above {report.core_floor} ({len(report.missing_cores)}):')
@@ -463,12 +463,12 @@ def core_lines(report: DoctorReport) -> list[str]:
         if below:
             if below == 1:
                 lines.append(f'1 older required core below {report.core_floor} not listed: {oldest}')
-                lines.append(f'  To stage it: uc doctor --download-war required --since {oldest}')
+                lines.append(f'  To stage it: uc procure stage --war required --since {oldest}')
             else:
                 lines.append(f'{below} older required cores below {report.core_floor} not listed, the oldest {oldest}')
-                lines.append(f'  To stage them: uc doctor --download-war required --since {oldest} (a later version stages only those from it up)')
+                lines.append(f'  To stage them: uc procure stage --war required --since {oldest} (a later version stages only those from it up)')
             if report.cores and report.core_floor == report.cores[0]:  # the floor is the repository's oldest core, which an older one replaces
-                lines.append(f'  Warning: once pushed, {oldest} is the oldest core in the repository, and so the floor: every later --download-war required also stages the missing cores plugins require from {oldest} up, for plugins you add later too')
+                lines.append(f'  Warning: once pushed, {oldest} is the oldest core in the repository, and so the floor: every later uc procure stage --war required also stages the missing cores plugins require from {oldest} up, for plugins you add later too')
     if report.cores_unchecked:
         lines.append(f'Required cores not checked (manifest unavailable; run with --fetch): {report.cores_unchecked}')
     return lines

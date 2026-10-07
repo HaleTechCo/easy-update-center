@@ -316,27 +316,27 @@ def test_the_report_lists_missing_cores(tmp_path, secrets_dir):
     assert not [line for line in lines if 'older required core' in line]
 
 
-WARNING = '  Warning: once pushed, 2.361.4 is the oldest core in the repository, and so the floor: every later --download-war required also stages the missing cores plugins require from 2.361.4 up, for plugins you add later too'
+WARNING = '  Warning: once pushed, 2.361.4 is the oldest core in the repository, and so the floor: every later uc procure stage --war required also stages the missing cores plugins require from 2.361.4 up, for plugins you add later too'
 
 
 def test_the_report_names_the_older_core_it_leaves_out_and_how_to_stage_it(tmp_path, secrets_dir):
     report = DoctorReport(cores=['2.462.1', '2.479.1'], required_cores={'2.361.4': ['g:j:1']}, core_floor='2.462.1', missing_cores_below_floor=1, oldest_core_below_floor='2.361.4')
     lines = format_report(report, make_settings(tmp_path, secrets_dir)).splitlines()
     start = lines.index('1 older required core below 2.462.1 not listed: 2.361.4')
-    assert lines[start + 1 : start + 3] == ['  To stage it: uc doctor --download-war required --since 2.361.4', WARNING]
+    assert lines[start + 1 : start + 3] == ['  To stage it: uc procure stage --war required --since 2.361.4', WARNING]
 
 
 def test_several_older_cores_are_staged_from_the_oldest(tmp_path, secrets_dir):
     report = DoctorReport(cores=['2.462.1'], required_cores={'2.361.4': ['g:j:1'], '2.401.3': ['g:k:1']}, core_floor='2.462.1', missing_cores_below_floor=2, oldest_core_below_floor='2.361.4')
     lines = format_report(report, make_settings(tmp_path, secrets_dir)).splitlines()
     start = lines.index('2 older required cores below 2.462.1 not listed, the oldest 2.361.4')
-    assert lines[start + 1 : start + 3] == ['  To stage them: uc doctor --download-war required --since 2.361.4 (a later version stages only those from it up)', WARNING]
+    assert lines[start + 1 : start + 3] == ['  To stage them: uc procure stage --war required --since 2.361.4 (a later version stages only those from it up)', WARNING]
 
 
 def test_a_floor_set_with_since_gets_no_floor_warning(tmp_path, secrets_dir):
     report = DoctorReport(cores=['2.462.1'], required_cores={'2.479.1': ['g:a:1']}, core_floor='2.500.1', missing_cores_below_floor=1, oldest_core_below_floor='2.479.1')
     lines = format_report(report, make_settings(tmp_path, secrets_dir)).splitlines()
-    assert '  To stage it: uc doctor --download-war required --since 2.479.1' in lines
+    assert '  To stage it: uc procure stage --war required --since 2.479.1' in lines
     assert not [line for line in lines if 'Warning' in line]
 
 
@@ -344,7 +344,7 @@ def test_without_any_core_the_report_says_how_to_choose_a_floor(tmp_path, secret
     report = DoctorReport(required_cores={'2.479.1': ['g:a:1'], '2.541.3': ['g:c:1']})
     text = format_report(report, make_settings(tmp_path, secrets_dir))
     assert 'No Jenkins core in the repository: plugins require 2 cores, from 2.479.1 to 2.541.3.' in text
-    assert 'uc doctor --download-war required --since <oldest version your controllers run>' in text
+    assert 'uc procure stage --war required --since <oldest version your controllers run>' in text
 
 
 def test_the_public_repository_is_not_checked_for_cores(tmp_path, secrets_dir):

@@ -22,8 +22,8 @@ def run(root, *, fix=False):
     return stage_local(root, SOURCE, fix=fix, out=out), out.getvalue().splitlines()
 
 
-def summary(root, recorded, refused, moved=None):
-    return ('' if moved is None else f'{moved} moved, ') + f'{recorded} recorded, {refused} refused; review {root}, then run uc doctor --push'
+def summary(_root, recorded, refused, moved=None):
+    return ('' if moved is None else f'{moved} moved, ') + f'{recorded} recorded, {refused} refused'
 
 
 def test_files_placed_by_hand_are_recorded(tmp_path):
@@ -42,7 +42,8 @@ def test_files_placed_by_hand_are_recorded(tmp_path):
     assert files[AD + '.hpi'].required_core == '2.541.3'
     assert files[WAR + '.war'].required_core is None
     assert f'recorded  {AD}.hpi  (added by hand)' in lines
-    assert lines[-1] == summary(tmp_path, 4, 0)
+    assert lines[-2] == summary(tmp_path, 4, 0)
+    assert lines[-1] == f'next: review {tmp_path} (procurement.json lists 4 files), then uc procure push'
 
 
 def test_files_already_recorded_are_left_alone(tmp_path):
@@ -52,7 +53,7 @@ def test_files_already_recorded_are_left_alone(tmp_path):
     code, lines = run(tmp_path)
     assert code == 0
     assert Staging.open(tmp_path, SOURCE).files[AD + '.pom'].kind == 'pom'
-    assert lines == [summary(tmp_path, 0, 0)]
+    assert lines == [summary(tmp_path, 0, 0), f'next: review {tmp_path} (procurement.json lists 1 file), then uc procure push']
 
 
 def test_a_plugin_under_the_wrong_group_is_refused(tmp_path):
@@ -130,7 +131,7 @@ def test_one_refusal_does_not_stop_the_rest(tmp_path):
     code, lines = run(tmp_path)
     assert code == 1
     assert set(Staging.open(tmp_path, SOURCE).files) == {WAR + '.war'}
-    assert lines[-1] == summary(tmp_path, 1, 1)
+    assert lines[-2] == summary(tmp_path, 1, 1)
 
 
 @pytest.mark.parametrize(
@@ -171,7 +172,7 @@ def test_fix_moves_each_file_to_the_path_it_declares_and_records_it(tmp_path):
     assert f'recorded  {AD}.hpi  (added by hand)' in lines
     assert not (tmp_path / 'active-directory-2.967.v1.hpi').exists()
     assert not (tmp_path / 'downloads').exists()  # emptied folders go
-    assert lines[-1] == summary(tmp_path, 3, 0, moved=3)
+    assert lines[-2] == summary(tmp_path, 3, 0, moved=3)
 
 
 def test_fix_moves_a_plugin_off_the_wrong_maven_path(tmp_path):

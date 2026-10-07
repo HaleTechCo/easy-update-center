@@ -53,6 +53,7 @@ def test_files_the_repository_holds_are_removed_and_the_rest_kept(keeper, tmp_pa
     assert (tmp_path / 'stage' / HPI).read_bytes() == b'hpi bytes'
     assert listed(tmp_path / 'stage') == {HPI}
     assert lines == [line('kept', HPI, 'not in the repository yet'), line('removed', POM), f'1 removed, 1 kept, 0 problem(s) -> {url}maven/jenkins/']
+    assert not [line for line in lines if line.startswith('next:')]
 
 
 def test_files_placed_by_hand_are_checked_too(keeper, tmp_path, secrets_dir):

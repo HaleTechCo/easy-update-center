@@ -4,7 +4,7 @@ import pytest
 
 from uc.doctor import DoctorReport
 from uc.procure import ProcureError
-from uc.procure.plan import check_war_args, plan_cores, plan_poms
+from uc.procure.plan import check_war_args, plan_cores, plan_poms, suggest_stage
 from uc.procure.stager import Wanted
 
 AD = 'org.jenkins-ci.plugins:active-directory:2.967.v1'
@@ -84,3 +84,13 @@ def test_war_arguments_accepted(value):
 def test_war_arguments_refused(value):
     with pytest.raises(ProcureError, match='--war takes a Jenkins version'):
         check_war_args([value])
+
+
+def test_suggest_stage_names_only_what_the_report_finds():
+    assert suggest_stage(DoctorReport()) is None
+    report = DoctorReport(missing_dependencies=['a 1.0 requires b 2.0'], missing_cores=[{'version': '2.479.1', 'url': 'u', 'required_by': 1, 'example': 'a:b:1'}])
+    assert suggest_stage(report) == 'next: uc procure stage --dependencies --war required (or set PROCUREMENT_DEPENDENCIES=true, PROCUREMENT_WARS=required)'
+    assert suggest_stage(adapter(derived_poms=[{'gav': AD, 'url': 'u'}])) == 'next: uc procure stage --poms (or set PROCUREMENT_POMS=true)'
+    both = adapter(needs_pom=[{'gav': AD, 'url': 'u'}])
+    both.missing_dependencies = ['a 1.0 requires b 2.0']
+    assert suggest_stage(both) == 'next: uc procure stage --poms --dependencies (or set PROCUREMENT_POMS=true, PROCUREMENT_DEPENDENCIES=true)'

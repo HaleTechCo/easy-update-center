@@ -1,4 +1,4 @@
-"""uc doctor --download-poms, --download-dependencies and --download-war: stage what the report finds missing (docs/how-to/procure-missing-files.md)."""
+"""uc procure stage --poms, --dependencies and --war: stage what the report finds missing (docs/how-to/procure-missing-files.md)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from . import ProcureError
 from .dependencies import resolve_dependencies
 from .plan import plan_cores, plan_poms
 from .stager import Stager
-from .staging import Staging
+from .staging import Staging, review_line
 from .upstream import Upstream
 
 if TYPE_CHECKING:
@@ -64,7 +64,9 @@ def download(
     _newer_cores(staging, report, versions, out)
     if report.unchecked or report.cores_unchecked:  # manifests missing from the cache hide dependencies and required cores
         print(f'warning   {report.unchecked} plugin release(s) not checked for dependencies and {report.cores_unchecked} for required cores (POM or manifest unavailable); run with --fetch so dependencies and required cores are complete', file=out)
-    print(f'{stager.staged} staged, {stager.kept} kept, {stager.problems} problem(s); review {staging_dir}, then run uc doctor --push', file=out)
+    print(f'{stager.staged} staged, {stager.kept} kept, {stager.problems} problem(s)', file=out)
+    if staging.files:
+        print(review_line(staging_dir, len(staging.files)), file=out)
     return 1 if stager.problems else 0
 
 

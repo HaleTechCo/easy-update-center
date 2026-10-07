@@ -1,4 +1,4 @@
-"""--download-dependencies: stage each missing required dependency at the highest minimum any plugin declares, and theirs in turn."""
+"""uc procure stage --dependencies: stage each missing required dependency at the highest minimum any plugin declares, and theirs in turn."""
 
 from __future__ import annotations
 

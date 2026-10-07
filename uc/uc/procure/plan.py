@@ -1,4 +1,4 @@
-"""What --download-poms and --download-war stage, worked out from the doctor report."""
+"""What uc procure stage --poms and --war stage, worked out from the doctor report."""
 
 from __future__ import annotations
 
@@ -45,6 +45,20 @@ def plan_poms(report: DoctorReport) -> list[Wanted]:
     return [wanted[path] for path in sorted(wanted)]
 
 
+def suggest_stage(report: DoctorReport) -> str | None:
+    """Return uc doctor's next: line when the report finds something uc procure stage can fetch, else None."""
+    found = [
+        ('--poms', 'PROCUREMENT_POMS=true', bool(plan_poms(report))),
+        ('--dependencies', 'PROCUREMENT_DEPENDENCIES=true', bool(report.missing_dependencies)),
+        ('--war required', 'PROCUREMENT_WARS=required', bool(report.missing_cores)),
+    ]
+    flags = [flag for flag, _, present in found if present]
+    if not flags:
+        return None
+    settings = [setting for _, setting, present in found if present]
+    return f'next: uc procure stage {" ".join(flags)} (or set {", ".join(settings)})'
+
+
 def check_war_args(values: Sequence[str]) -> None:
     """Refuse --war values that are neither a Jenkins version nor 'required', before anything runs."""
     for value in values:
@@ -62,7 +76,7 @@ class CorePlan:
 
 
 def plan_cores(values: Sequence[str], report: DoctorReport) -> CorePlan:
-    """Resolve --download-war values (versions, or 'required') into the .war and .pom of each core to stage."""
+    """Resolve --war values (versions, or 'required') into the .war and .pom of each core to stage."""
     check_war_args(values)
     stocked = set(report.cores)
     reasons: dict[str, str] = {}
@@ -75,7 +89,7 @@ def plan_cores(values: Sequence[str], report: DoctorReport) -> CorePlan:
                 reasons[value] = 'requested'
             continue
         if report.required_cores is None:
-            msg = '--download-war required is not available when the source is the public repo.jenkins-ci.org; name the versions instead'
+            msg = '--war required is not available when the source is the public repo.jenkins-ci.org; name the versions instead'
             raise ProcureError(msg)
         if report.core_floor is None:
             msg = 'the repository holds no Jenkins core, so "required" has no floor: add --since <oldest version your controllers run>'
