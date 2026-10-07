@@ -24,8 +24,8 @@ once releases are published.
   container uses, so an invalid setting web does not use no longer stops it; a uc.toml that is not
   UTF-8, or cannot be read, is reported as such.
 - The private-CA recipe (docs/getting-started/airgapped.md) sets `REPO_CA_FILE` in `.env` (or
-  `[repo] ca_file` in `config/uc.toml`), and `compose.repo-ca.yaml` only mounts the bundle. Set under
-  `environment:` on two services, as the recipe had it, it made `uc config` end with the
+  `[repo] ca_file` in `config/uc.toml`), and `compose.repo-ca.yaml` only mounts the bundle. Set
+  under `environment:` on two services, as the recipe had it, it made `uc config` end with the
   `make reload` note every time: if you followed it, move the variable to `.env`.
 - `SIGNING_CERT_DAYS`, which nothing read, is replaced by `PKI_SIGNING_DAYS`, which `uc pki` reads.
 - Compose mounts all of `./config` at `/config`, in the repo-adapter too; it mounted only
@@ -35,8 +35,8 @@ once releases are published.
 - `make pki-init`, `make pki-rotate`, `make secrets-placeholders` and `make secrets-permissions` run
   a new `setup` Compose service (root, no network, no Compose secrets; mounts `./secrets`
   read-write, `./config` and `scripts/secrets-permissions.sh`) instead of `docker run`. It reads
-  `.env`, or the file `UC_ENV_FILE` names, as the other services do, so quotes in values are handled the same way
-  and `PKI_*` settings apply to `uc pki`. The file must exist, or Compose stops.
+  `.env`, or the file `UC_ENV_FILE` names, as the other services do, so quotes in values are handled
+  the same way and `PKI_*` settings apply to `uc pki`. The file must exist, or Compose stops.
 - `secrets/` stays owned by you on Linux. `make pki-init`, `make secrets-placeholders` and the new
   `make pki-rotate` and `make secrets-permissions` let each container read its own files through its
   group (uc 10001, web 33) instead of handing the whole directory to uid 10001, so no step needs
@@ -122,9 +122,9 @@ once releases are published.
   messages name `secrets/...` or `<dir>/...`, not the container's `/pki/...` or `/out/...`.
 - Procurement with `uc doctor`, through a staging folder, `./procurement/`, whose `procurement.json`
   records each file's source, sha1 and reason for review:
-  - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the real
-    POMs, the missing required dependencies (transitively, each with its POM) and Jenkins cores from
-    repo.jenkins-ci.org (`PROCUREMENT_SOURCE_URL`). `make procure-download` wraps them.
+  - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the
+    real POMs, the missing required dependencies (transitively, each with its POM) and Jenkins cores
+    from repo.jenkins-ci.org (`PROCUREMENT_SOURCE_URL`). `make procure-download` wraps them.
   - `--stage-local` records files placed in the folder by hand, after the checks a download gets: a
     plugin's manifest coordinates and a core's `Jenkins-Version` must match the path. It names the
     Maven path a misplaced file belongs at, and `--fix` moves it there.
@@ -137,7 +137,8 @@ once releases are published.
   - `--clean` (`make procure-clean`) deletes the staged files the repository already holds with the
     same content, with their entries, so the folder keeps only what still needs pushing.
   - The report lists the cores plugins require that the repository lacks, from the oldest core it
-    holds (or `--since`), and names the oldest one below that floor with the `--since` that stages it.
+    holds (or `--since`), and names the oldest one below that floor with the `--since` that stages
+    it.
   - After upgrading, run `make secrets-placeholders` once so Compose finds `secrets/repo_push_auth`.
 - Third-party notices in the uc image, `/opt/uc/licenses/`: update-center2's MIT license with the
   Jenkins project's governance statement, every bundled Java library with its license (generated
