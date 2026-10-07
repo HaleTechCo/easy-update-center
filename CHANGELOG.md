@@ -100,7 +100,9 @@ once releases are published.
   `DOWNLOAD_BACKEND_URL`, `PROCUREMENT_SOURCE_URL`, `RESOURCES_URL`, `POPULARITY_JSON_URL` and
   `TOOL_INSTALLERS_URL`. `HTTPS_PROXY` and `HTTP_PROXY` are checked as Python's urllib reads them:
   they may carry a user name and password, which may hold `#`, `?` or `/`, and only the host and
-  port after the last `@` must be readable.
+  port after the last `@` must be readable. A single `/` after the scheme (`http:/proxy:3128`, or
+  `user:/password@proxy:3128`), which urllib refuses, is reported as
+  `uc: error: <setting> is not a valid URL: write it as scheme://host:port`, with the same hint.
 - `uc generate --wait` waits for a running generation or rollback instead of exiting 75; scheduled
   generations use it.
 - `make reload` checks the settings, then recreates the services so they read them; with invalid

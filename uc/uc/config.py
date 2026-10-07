@@ -34,6 +34,7 @@ UPSTREAM_MIRROR_URL = 'https://get.jenkins.io'
 DEFAULT_CONFIG_FILE = Path('/config/uc.toml')
 _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 _SCHEME = re.compile(r'[^/:]+://')  # what urllib's proxy handler takes as a scheme
+_NO_AUTHORITY = re.compile(r'[^/:]+:/(?!/)')  # urllib's proxy handler takes a scheme up to the first ':' and refuses a single '/' after it
 _FILE_KEYS = tuple(sorted(toml_label(setting.env) for setting in SETTINGS if not setting.env_only))
 _FILE_SECTIONS = tuple(f'[{section}]' for section in SECTIONS)
 
@@ -533,11 +534,19 @@ def _checked_url(r: Resolver, name: str) -> str:
 
 
 def _checked_proxy(r: Resolver, name: str) -> str:
-    """Return the proxy URL name sets, '' if unset; only its scheme, host and port are parsed, after the user info, which may hold anything (split_userinfo)."""
+    """Return the proxy URL name sets, '' if unset; only its scheme, host and port are parsed, after the user info, which may hold anything (split_userinfo).
+
+    A value urllib's proxy handler refuses as having no authority (http:/proxy:3128, or svc:/password@proxy:3128 without
+    a scheme) is refused too, with a message that quotes none of it.
+    """
     value = r.raw(name)
     if value:
+        hint = '; percent-encode # ? / [ ] @ in a user name or password'
+        if _NO_AUTHORITY.match(value):
+            msg = f'{r.label(name)} is not a valid URL: write it as scheme://host:port{hint}'
+            raise ConfigError(msg)
         scheme, _, rest = split_userinfo(value)
-        _parse_url(r, name, (scheme or '//') + rest, hint='; percent-encode # ? / [ ] @ in a user name or password')
+        _parse_url(r, name, (scheme or '//') + rest, hint=hint)
     return value
 
 

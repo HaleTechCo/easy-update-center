@@ -338,6 +338,7 @@ def test_a_malformed_url_setting_from_uc_toml_names_its_key(tmp_path, name, toml
     [
         ('HTTPS_PROXY', 'proxy.corp:3128'),
         ('HTTP_PROXY', 'http://user:pw@proxy.corp:3128'),  # pragma: allowlist secret
+        ('HTTPS_PROXY', 'svc:S3cretPW@proxy.corp:3128'),  # urllib reads a scheme-less svc: with no / after it as the user name # pragma: allowlist secret
         ('REPO_API_URL', 'https://artifactory.corp/artifactory/api/'),
         ('RESOURCES_URL', 'https://mirror.corp/resources.zip'),
     ],
@@ -371,6 +372,16 @@ def test_a_proxy_whose_host_or_port_cannot_be_read_is_refused_without_quoting_it
     with pytest.raises(ConfigError, match=r'^HTTPS_PROXY is not a valid URL: ') as error:
         load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml'))
     for part in ('abc', '99999', 'proxyuser', 'S3cretPW'):
+        assert part not in str(error.value)
+
+
+@pytest.mark.parametrize('name', ['HTTPS_PROXY', 'HTTP_PROXY'])
+@pytest.mark.parametrize('value', ['svc:/S3cretPW@proxy.corp:3128', 'http:/proxy.corp:3128'])  # pragma: allowlist secret
+def test_a_proxy_with_a_single_slash_after_its_scheme_is_refused_as_urllib_refuses_it(name, value):
+    # urllib takes what precedes the first : as the scheme, and refuses a rest that starts with / but not //.
+    with pytest.raises(ConfigError, match=rf'^{name} is not a valid URL: write it as scheme://host:port; percent-encode # \? / \[ \] @ in a user name or password$') as error:
+        load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+    for part in ('svc', 'S3cretPW', 'proxy.corp'):
         assert part not in str(error.value)
 
 
