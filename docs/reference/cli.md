@@ -223,10 +223,10 @@ Manages the signing PKI. It reads only the `PKI_*` settings (from the environmen
 configured. `make pki-init` wraps `init`, and `make pki-rotate ROOT=<dir>` wraps `rotate`; both run
 the [`setup` Compose service](#the-setup-service), which reads `.env` (or the file `UC_ENV_FILE`
 names, which must exist) and `config/` as the other services do, so `uc pki` sees the settings they
-see, and then set the permissions of `secrets/`
-([File ownership on Linux](secrets.md#file-ownership-on-linux)). `make pki-init OUT=<dir>` creates
-the PKI in `<dir>` instead, for
-[replacing the root CA](../how-to/rotate-signing-certificate.md#replace-the-root-ca).
+see, and then run its `secrets` step: they create any missing credential file empty and set the
+permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)).
+`make pki-init OUT=<dir>` creates the PKI in `<dir>` instead, and only sets the permissions there,
+for [replacing the root CA](../how-to/rotate-signing-certificate.md#replace-the-root-ca).
 
 ```bash
 uc pki init --out <dir> [--display-dir <dir>] [--root-days 3650] [--signing-days 365] [--org <name>]

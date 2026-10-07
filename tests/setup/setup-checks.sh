@@ -304,6 +304,14 @@ stat_is "no checkout: secrets/ stays root's" %u:%g 0:0 "${secrets}"
 stat_is "no checkout: procurement/ stays root's" %u:%g 0:0 "${procurement}"
 left="$(ls -A "${secrets}" 2>&1)"
 same "no checkout: nothing created in secrets/" "" "${left}"
+# A root-owned config/ that holds files is a checkout whose ownership shows as root (Docker Desktop
+# bind mounts): setup runs.
+fresh
+chown 0:0 "${config}" && touch "${config}/uc.example.toml"
+run secrets
+same "root's checkout: setup secrets exits 0" 0 "${rc}"
+says "root's checkout: does the secrets step" "secrets/: created any missing credential files"
+is_file "root's checkout: the credential files exist" "${secrets}/repo_username"
 fresh
 
 # 11. Usage.
