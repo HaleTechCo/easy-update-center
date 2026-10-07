@@ -8,6 +8,9 @@ import sys
 
 REPO_SECRETS = {'repo_username', 'repo_password'}
 PUSH_SECRET = 'repo_push_auth'
+WEB_SECRETS = {'download_proxy_auth'}
+UC_SERVICES = ('uc', 'scheduler', 'repo-adapter', 'web-config')
+UC_IMAGE_SERVICES = (*UC_SERVICES, 'setup')
 STAGING = '/procurement'
 # What compose.yaml mounts into setup: target -> (source, relative to the project directory; read-only).
 SETUP_MOUNTS = {
@@ -28,6 +31,11 @@ def secrets(service: dict) -> set[str]:
 
 def mounts(service: dict) -> set[str]:
     return {volume.get('target') for volume in service.get('volumes') or []}
+
+
+def context_dir(build: dict) -> str:
+    # Compose gives the absolute build context, with backslashes on Windows.
+    return str(build.get('context', '')).replace('\\', '/').rsplit('/', 1)[-1]
 
 
 def setup_mount_problems(setup: dict) -> list[str]:
@@ -104,6 +112,20 @@ def main() -> None:
         problems.append('web must start after web-config has written its settings')
     if not any(volume.get('target') == '/run/uc-web' and volume.get('read_only') for volume in web.get('volumes') or []):
         problems.append('web must mount the web-config volume read-only at /run/uc-web')
+    if web.get('env_file'):
+        problems.append('web must have no env_file: .env holds settings and credentials web does not need')
+    if secrets(web) != WEB_SECRETS:
+        problems.append(f'web secrets are {sorted(secrets(web))}, not {sorted(WEB_SECRETS)}')
+    for name in UC_SERVICES:
+        # The image's own user is non-root; only setup overrides it.
+        if name in services and services[name].get('user'):
+            problems.append(f"{name} sets user {services[name]['user']!r}; it must run as the image's non-root user")
+    for name in UC_IMAGE_SERVICES:
+        build = services.get(name, {}).get('build') or {}
+        if (context_dir(build), build.get('target')) != ('uc', 'runtime'):
+            problems.append(f'{name} needs build: {{context: uc, target: runtime}} so docker compose build builds its image')
+    if context_dir(web.get('build') or {}) != 'web':
+        problems.append('web needs build: {context: web} so docker compose build builds its image')
     for problem in problems:
         print(f'compose-check ({mode}): {problem}')
     if problems:

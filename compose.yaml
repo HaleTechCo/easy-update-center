@@ -7,6 +7,7 @@ name: jenkins-update-center
 
 x-uc: &uc
   image: ${UC_IMAGE:-jenkins-uc/uc:local}
+  build: {context: uc, target: runtime}
   env_file: ${UC_ENV_FILE:-.env}
   read_only: true
   tmpfs:
@@ -29,6 +30,7 @@ x-uc: &uc
 services:
   web:
     image: ${WEB_IMAGE:-jenkins-uc/web:local}
+    build: {context: web}
     read_only: true
     tmpfs:
       - /tmp
@@ -50,6 +52,7 @@ services:
   # and writes them to the web-config volume. No network, no secrets.
   web-config:
     image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    build: {context: uc, target: runtime}
     env_file: ${UC_ENV_FILE:-.env}
     command: ["config", "--web-env", "--out", "/run/uc-web/web.env"]
     read_only: true
@@ -64,6 +67,7 @@ services:
   # (or UC_ENV_FILE) and config/uc.toml as the other services do, so .env must exist.
   setup:
     image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    build: {context: uc, target: runtime}
     profiles: ["setup"]
     user: "0:0"
     network_mode: none
@@ -83,6 +87,7 @@ services:
   # descriptions and release dates from the archives. Idle when REPO_ADAPTER is off (the online default).
   repo-adapter:
     image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    build: {context: uc, target: runtime}
     env_file: ${UC_ENV_FILE:-.env}
     command: ["repo-adapter"]
     read_only: true
