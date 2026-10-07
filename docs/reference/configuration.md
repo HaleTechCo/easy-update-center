@@ -33,6 +33,8 @@ Run `uc config` to see every value and where it came from ([uc config](cli.md#uc
 - **Types**: booleans accept `1`, `true`, `yes`, `on` and `0`, `false`, `no`, `off`. In `uc.toml`,
   write numbers and booleans as TOML values (`retain_releases = 5`,
   `allow_local_public_url = true`) or as strings spelled as in the environment (`"5"`, `"yes"`).
+  A list (`PROCUREMENT_WARS`) is separated by spaces or commas in the environment, and is an array
+  of strings (`wars = ["required", "2.479.1"]`) or one such string in `uc.toml`.
 - **Mistakes**: an invalid value stops the command that reads it with a message naming the
   setting. An unknown or misplaced key in `uc.toml` stops it too, naming the right key;
   environment variables cannot be checked that way.
@@ -44,7 +46,7 @@ Run `uc config` to see every value and where it came from ([uc config](cli.md#uc
 When each change takes effect: [When changes apply](#when-changes-apply).
 
 In the tables, "generate" means `uc generate`, which the `scheduler` service runs on its schedule
-and which you can run by hand; "doctor" means `uc doctor`.
+and which you can run by hand; "doctor" means `uc doctor`; "procure" means `uc procure`.
 
 ## When changes apply
 
@@ -227,6 +229,12 @@ requests see them.
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
 | `PROCUREMENT_SOURCE_URL` | `[procurement] source_url` | `https://repo.jenkins-ci.org/releases/` | doctor | Where `uc doctor --download-poms`, `--download-dependencies` and `--download-war` fetch files from, by Maven path, each checked against the `.sha1` beside it. Set it to reach repo.jenkins-ci.org through your own proxy repository. Air-gapped, downloads are refused unless it is set. Must not contain credentials or any `@`. See [Procure missing files](../how-to/procure-missing-files.md). |
+| `PROCUREMENT_STAGING_DIR` | `[procurement] staging_dir` | `/procurement` | procure | The staging folder `uc procure stage` fills and the other `uc procure` commands read (`--staging`), inside the `uc` container. `compose.yaml` mounts `./procurement` there. |
+| `PROCUREMENT_FETCH` | `[procurement] fetch` | `true` | procure | `uc procure stage` first downloads the POMs and manifests missing from the cache, so it finds every missing dependency and required core (`--fetch`). |
+| `PROCUREMENT_POMS` | `[procurement] poms` | `false` | procure | `uc procure stage` stages the real `.pom` of every plugin whose POM is missing, derived or unusable (`--poms`). |
+| `PROCUREMENT_DEPENDENCIES` | `[procurement] dependencies` | `false` | procure | `uc procure stage` stages the missing required dependencies, transitively, each with its `.pom` (`--dependencies`). |
+| `PROCUREMENT_WARS` | `[procurement] wars` | none | procure | The Jenkins cores `uc procure stage` stages: versions such as `2.479.1`, or `required` for every core plugins require that the repository lacks, from `DOCTOR_SINCE` up (`--war`). Separate them with spaces or commas; in `uc.toml`, an array of strings. |
+| `PROCUREMENT_FIX` | `[procurement] fix` | `false` | procure | `uc procure record` first moves each file placed by hand to the Maven path it declares (`--fix`). |
 
 ## Internal
 

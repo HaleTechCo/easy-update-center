@@ -92,4 +92,6 @@ def _toml_value(setting: Setting, value: str) -> str:
         return value
     if value and setting.type == 'bool':
         return value.lower()
+    if setting.type == 'list':
+        return json.dumps(value.replace(',', ' ').split())
     return json.dumps(value)
