@@ -2,12 +2,14 @@
 
 import base64
 import datetime as dt
+import re
 import socket
 import stat
 import threading
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 
 import pytest
 
@@ -18,7 +20,7 @@ from uc.doctor import ArtifactSource
 from uc.errors import UcError
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import read_report
-from uc.repo_adapter.server import Adapter, UnhealthyError, ensure_token, healthcheck, make_handler, make_server, record_port
+from uc.repo_adapter.server import Adapter, RecordPortError, UnhealthyError, ensure_token, healthcheck, make_handler, make_server, record_port
 from ucsupport import make_settings
 
 NOW = dt.datetime(2026, 9, 23, tzinfo=dt.UTC)
@@ -203,3 +205,21 @@ def test_record_port_into_a_missing_directory_is_a_uc_error(tmp_path):
         record_port(4321, path)
     assert str(caught.value).startswith(f'repo-adapter cannot record its port in {path}: ')
     assert not path.with_name('adapter.port.tmp').exists()
+
+
+def test_a_failed_replace_is_reported_and_removes_the_temporary_port_file(tmp_path, monkeypatch):
+    path = tmp_path / 'adapter.port'
+    path.mkdir()  # the temporary file is written beside it, then cannot replace a directory
+    replace = Path.replace
+    written = []
+
+    def watched_replace(self, target):
+        written.append((self.name, self.read_text(encoding='utf-8')))
+        return replace(self, target)
+
+    monkeypatch.setattr(Path, 'replace', watched_replace)
+    with pytest.raises(RecordPortError, match=rf'^repo-adapter cannot record its port in {re.escape(str(path))}: Is a directory$'):
+        record_port(4321, path)
+    assert written == [('adapter.port.tmp', '4321\n')]
+    assert [entry.name for entry in tmp_path.iterdir()] == ['adapter.port']
+    assert path.is_dir()

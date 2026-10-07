@@ -515,8 +515,9 @@ def test_an_environment_value_is_taken_stripped_in_the_digest():
     assert digest({**AIRGAPPED, 'RETAIN_RELEASES': ' 5'}) == digest({**AIRGAPPED, 'RETAIN_RELEASES': '5'})
 
 
-def test_an_empty_value_that_turns_a_setting_off_stays_in_the_digest():
-    assert digest({**AIRGAPPED, 'POPULARITY_JSON_URL': ''}) != digest(AIRGAPPED)
+@pytest.mark.parametrize('name', ['POPULARITY_JSON_URL', 'TOOL_INSTALLERS_URL'])
+def test_an_empty_value_that_turns_a_setting_off_stays_in_the_digest(name):
+    assert digest({**AIRGAPPED, name: ''}) != digest(AIRGAPPED)
 
 
 @pytest.mark.parametrize(('name', 'value', 'toml'), [('RETAIN_RELEASES', '9', 'retain_releases = 9\n'), ('JAVA_TOOL_OPTIONS', '-Xmx1g', 'java_tool_options = "-Xmx1g"\n')])
