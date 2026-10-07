@@ -88,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     rotate = pki.add_parser('rotate', help='issue a new signing certificate from the root in --dir/root/')
     rotate.add_argument('--dir', type=Path, required=True)
     rotate.add_argument('--display-dir', type=Path, metavar='DIR', help='the directory --dir is on the host, used in messages')
-    rotate.add_argument('--root-display-dir', type=Path, metavar='DIR', help='the directory --dir/root/ is on the host, used in messages (default: root/ under --display-dir)')
+    rotate.add_argument('--root-display-dir', type=Path, metavar='DIR', help='the directory --dir/root/ is on the host, used in messages (default: root/ under --display-dir, or under --dir without it)')
     rotate.add_argument('--days', type=int, help='lifetime of the new signing certificate in days (default: PKI_SIGNING_DAYS, 365)')
     rotate.add_argument('--org', help='organization in the subject (default: PKI_ORG)')
     show = pki.add_parser('show', help='print subjects, expiry and fingerprints')

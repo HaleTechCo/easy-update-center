@@ -1,11 +1,14 @@
 """Unit tests for uc.cli: exit codes, status output, rollback, the run lock and the pki subcommands."""
 
+import errno
 import io
 import json
 import os
 import shutil
 import socket
+import stat
 import subprocess
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -377,16 +380,60 @@ def test_pki_rotate_names_the_certificate_under_the_display_dir(monkeypatch, tmp
     assert capsys.readouterr().out == f'issued a new {work / "update-center.cert"}; the previous pair is kept as *.old\n'
 
 
-def tree_bytes(directory):
-    """Return every path under directory, with each file's bytes (None for a directory)."""
-    return {path.relative_to(directory).as_posix(): path.read_bytes() if path.is_file() else None for path in directory.rglob('*')}
+def tree_state(directory):
+    """Return every path under directory, with its mode and each file's bytes (None for a directory)."""
+    return {path.relative_to(directory).as_posix(): (stat.S_IMODE(path.lstat().st_mode), path.read_bytes() if path.is_file() else None) for path in directory.rglob('*')}
 
+
+def fail_at_call(monkeypatch, owner, name, failing, error):
+    """Make the failing-th call of owner.name raise error; the calls before and after it run as usual. Return the calls' arguments."""
+    original = getattr(owner, name)
+    calls = []
+
+    def counting(*args):
+        calls.append(args)
+        if len(calls) == failing:
+            raise error
+        return original(*args)
+
+    monkeypatch.setattr(owner, name, counting)
+    return calls
+
+
+@pytest.fixture
+def small_keys(monkeypatch):
+    """Make uc pki generate 2048-bit keys, which are quicker: the tests that interrupt it check what it moves, not the keys."""
+    openssl = pki._openssl  # noqa: SLF001 - every call still runs openssl
+
+    def smaller(*args):
+        return openssl(*('rsa:2048' if arg == 'rsa:4096' else arg for arg in args))
+
+    monkeypatch.setattr(pki, '_openssl', smaller)
+
+
+def denied():
+    return PermissionError(errno.EACCES, 'Permission denied')
+
+
+DUMMY_PASSPHRASE = 'pass:dummy-passphrase'  # pragma: allowlist secret
+
+
+def encrypt_key(key, *options):
+    """Replace the private key at key with a copy that openssl, given options, encrypts under a dummy passphrase."""
+    encrypted = key.with_name('encrypted')
+    subprocess.run(['openssl', *options, '-in', str(key), '-passout', DUMMY_PASSPHRASE, '-out', str(encrypted)], check=True, capture_output=True)
+    encrypted.replace(key)
+
+
+ENCRYPTED_REFUSAL = 'the root CA key {work}/root/root-ca.key is encrypted; decrypt it to a temporary file for the rotation (docs/how-to/rotate-signing-certificate.md)'
 
 ROTATE_REFUSALS = {
     'no root key': 'cannot read the root CA key {work}/root/root-ca.key: No such file or directory',
     'no root certificate': 'cannot read the root CA certificate {work}/root-ca.crt: No such file or directory',
     'a root key openssl cannot read': 'the root CA key {work}/root/root-ca.key is not a private key openssl can read',
+    'a root certificate openssl cannot read': 'the root CA certificate {work}/root-ca.crt is not a certificate openssl can read',
     "another root CA's key": 'the root CA key {work}/root/root-ca.key is not the key of the root CA certificate {work}/root-ca.crt',
+    'an encrypted root key': ENCRYPTED_REFUSAL,
 }
 """How uc pki rotate refuses each unusable root, before it changes anything."""
 
@@ -399,6 +446,10 @@ def break_root(work, case):
         (work / 'root-ca.crt').unlink()
     elif case == 'a root key openssl cannot read':
         root_key.write_text('not a key\n', encoding='utf-8')
+    elif case == 'a root certificate openssl cannot read':
+        (work / 'root-ca.crt').write_text('not a certificate\n', encoding='utf-8')
+    elif case == 'an encrypted root key':
+        encrypt_key(root_key, 'pkey', '-aes256')
     else:
         subprocess.run(['openssl', 'genpkey', '-algorithm', 'RSA', '-pkeyopt', 'rsa_keygen_bits:2048', '-out', str(root_key)], check=True, capture_output=True)
 
@@ -409,17 +460,64 @@ def test_pki_rotate_refuses_an_unusable_root_and_changes_nothing(monkeypatch, tm
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
     break_root(work, case)
-    before = tree_bytes(work)
+    before = tree_state(work)
     assert main(['pki', 'rotate', '--dir', str(work)]) == 1
-    assert tree_bytes(work) == before
+    assert tree_state(work) == before
     assert capsys.readouterr().err == f'uc: error: {ROTATE_REFUSALS[case].format(work=work)}\n'
+
+
+ENCRYPTED_ROOT_KEYS = {
+    'PKCS#8 PEM': (('pkey', '-aes256'), ENCRYPTED_REFUSAL),
+    'traditional PEM': (('pkey', '-traditional', '-aes256'), ENCRYPTED_REFUSAL),
+    'PKCS#8 DER': (('pkcs8', '-topk8', '-outform', 'DER', '-v2', 'aes-256-cbc'), ROTATE_REFUSALS['a root key openssl cannot read']),  # no PEM header to tell
+}
+
+
+@pytest.mark.parametrize('form', list(ENCRYPTED_ROOT_KEYS))
+def test_pki_rotate_never_asks_for_a_passphrase(tmp_path, pki_material, form):
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    options, refusal = ENCRYPTED_ROOT_KEYS[form]
+    encrypt_key(work / 'root' / 'root-ca.key', *options)
+    before = tree_state(work)
+    # stdin stays open and silent, and the new session has no terminal: an openssl that asked for the passphrase would wait for it
+    reader, writer = os.pipe()
+    try:
+        proc = subprocess.run(
+            [sys.executable, '-m', 'uc', 'pki', 'rotate', '--dir', str(work)],
+            stdin=reader,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            start_new_session=True,
+            env={**os.environ, 'UC_CONFIG_FILE': str(tmp_path / 'uc.toml')},
+            check=False,
+        )
+    finally:
+        os.close(reader)
+        os.close(writer)
+    assert (proc.returncode, proc.stdout, proc.stderr) == (1, '', f'uc: error: {refusal.format(work=work)}\n')
+    assert tree_state(work) == before
+
+
+@pytest.mark.parametrize('missing', ['update-center.key', 'update-center.cert'])
+def test_pki_rotate_refuses_half_a_signing_pair_and_changes_nothing(monkeypatch, tmp_path, capsys, pki_material, missing):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    (work / missing).unlink()
+    left = 'update-center.cert' if missing == 'update-center.key' else 'update-center.key'
+    before = tree_state(work)
+    assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets']) == 1
+    assert tree_state(work) == before
+    assert capsys.readouterr().err == f'uc: error: found secrets/{left} without secrets/{missing}: put {missing} back, or move {left} away, then rotate again\n'
 
 
 def test_pki_rotate_changes_nothing_when_openssl_fails_partway(monkeypatch, tmp_path, capsys, pki_material):
     monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
-    before = tree_bytes(work)
+    before = tree_state(work)
     openssl = pki._openssl  # noqa: SLF001 - every openssl call but the signing one runs for real
 
     def failing_signing(*args):
@@ -430,8 +528,116 @@ def test_pki_rotate_changes_nothing_when_openssl_fails_partway(monkeypatch, tmp_
 
     monkeypatch.setattr(pki, '_openssl', failing_signing)
     assert main(['pki', 'rotate', '--dir', str(work)]) == 1
-    assert tree_bytes(work) == before
+    assert tree_state(work) == before
     assert capsys.readouterr().err == 'uc: error: openssl x509 failed: disk full\n'
+
+
+ROTATE_RENAMES = {'first rotation': 4, 'with a previous *.old pair': 6}
+"""How many renames move the new pair in: the current pair to *.old and the new one in, after setting aside any *.old pair."""
+
+ROTATE_RENAME_FAILURES = {
+    **{f'{previous}, rename {failing} fails': (previous, failing, denied) for previous, renames in ROTATE_RENAMES.items() for failing in range(1, renames + 1)},
+    **{f'{previous}, interrupted at rename {renames}': (previous, renames, KeyboardInterrupt) for previous, renames in ROTATE_RENAMES.items()},
+}
+
+
+@pytest.mark.usefixtures('small_keys')
+@pytest.mark.parametrize('case', list(ROTATE_RENAME_FAILURES))
+def test_pki_rotate_puts_back_what_it_moved_when_a_rename_fails(monkeypatch, tmp_path, capsys, pki_material, case):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    previous, failing, error = ROTATE_RENAME_FAILURES[case]
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    if previous == 'with a previous *.old pair':
+        assert main(['pki', 'rotate', '--dir', str(work)]) == 0
+    before = tree_state(work)
+    pair = {name: (work / name).read_bytes() for name in ('update-center.key', 'update-center.cert')}
+    calls = fail_at_call(monkeypatch, Path, 'rename', failing, error())
+    if error is denied:
+        assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets']) == 1
+        assert capsys.readouterr().err == 'uc: error: cannot write in secrets: Permission denied\n'
+    else:
+        with pytest.raises(KeyboardInterrupt):
+            main(['pki', 'rotate', '--dir', str(work)])
+    assert tree_state(work) == before
+    done = len(calls)
+    assert main(['pki', 'rotate', '--dir', str(work)]) == 0  # a rerun keeps the pair from before as *.old
+    assert len(calls) - done == ROTATE_RENAMES[previous]
+    assert {name: (work / f'{name}.old').read_bytes() for name in pair} == pair
+
+
+def test_pki_rotate_reports_a_directory_it_cannot_write_in(monkeypatch, tmp_path, capsys, pki_material):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    before = tree_state(work)
+    work.chmod(0o555)
+    try:
+        assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets']) == 1
+    finally:
+        work.chmod(0o755)
+    assert capsys.readouterr().err == 'uc: error: cannot write in secrets: Permission denied\n'
+    assert tree_state(work) == before
+
+
+INIT_FAILURES = {
+    **{f'openssl step {step}': ('_openssl', step) for step in (1, 2, 3)},  # the root CA, the signing request, the signing certificate
+    **{f'rename {step}': ('rename', step) for step in (1, 2, 3, 4)},  # the root key (or root/), root-ca.crt, update-center.key, update-center.cert
+}
+
+
+@pytest.mark.usefixtures('small_keys')
+@pytest.mark.parametrize('existing', ['no directory', 'a directory with root/ and other files'])
+@pytest.mark.parametrize('failure', list(INIT_FAILURES))
+def test_pki_init_leaves_nothing_behind_when_a_step_fails(monkeypatch, tmp_path, capsys, existing, failure):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    out = tmp_path / 'new' / 'pki'
+    if existing != 'no directory':
+        (out / 'root').mkdir(parents=True)
+        (out / 'repo_username').write_text('uc\n', encoding='utf-8')
+    before = tree_state(tmp_path)
+    name, failing = INIT_FAILURES[failure]
+    if name == '_openssl':
+        fail_at_call(monkeypatch, pki, name, failing, pki.PkiError('openssl req failed: disk full'))
+        message = 'openssl req failed: disk full'
+    else:
+        fail_at_call(monkeypatch, Path, name, failing, denied())
+        message = 'cannot write in new pki: Permission denied'
+    assert main(['pki', 'init', '--out', str(out), '--display-dir', 'new pki', '--root-days', '30', '--signing-days', '10']) == 1
+    assert capsys.readouterr().err == f'uc: error: {message}\n'
+    assert tree_state(tmp_path) == before
+
+
+@pytest.mark.usefixtures('small_keys')
+def test_pki_init_puts_back_what_it_moved_when_interrupted(monkeypatch, tmp_path):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    out = tmp_path / 'pki'
+    out.mkdir()
+    calls = fail_at_call(monkeypatch, Path, 'rename', 4, KeyboardInterrupt())
+    with pytest.raises(KeyboardInterrupt):
+        main(['pki', 'init', '--out', str(out), '--root-days', '30', '--signing-days', '10'])
+    assert list(out.iterdir()) == []
+    done = len(calls)
+    assert main(['pki', 'init', '--out', str(out), '--root-days', '30', '--signing-days', '10']) == 0
+    assert len(calls) - done == 4  # the renames INIT_FAILURES interrupts one by one
+    assert sorted(path.relative_to(out).as_posix() for path in out.rglob('*')) == ['root', 'root-ca.crt', 'root/root-ca.key', 'update-center.cert', 'update-center.key']
+
+
+@pytest.mark.parametrize('missing', [False, True], ids=['read-only directory', 'missing directory in a read-only one'])
+def test_pki_init_reports_a_directory_it_cannot_write_in(monkeypatch, tmp_path, capsys, missing):
+    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+    parent = tmp_path / 'parent'
+    out = parent / 'pki'
+    out.mkdir(parents=True)
+    if missing:
+        out.rmdir()
+    (parent if missing else out).chmod(0o555)
+    try:
+        assert main(['pki', 'init', '--out', str(out), '--display-dir', 'secrets']) == 1
+    finally:
+        (parent if missing else out).chmod(0o755)
+    assert capsys.readouterr().err == f'uc: error: cannot {"create" if missing else "write in"} secrets: Permission denied\n'
+    assert [path.relative_to(parent).as_posix() for path in parent.rglob('*')] == ([] if missing else ['pki'])
 
 
 def test_pki_rotate_names_the_root_files_where_they_are_on_the_host(monkeypatch, tmp_path, capsys, pki_material):
