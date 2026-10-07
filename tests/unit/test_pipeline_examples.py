@@ -1,4 +1,4 @@
-"""The example pipelines run the procurement stages in the documented order, with the approval before the push (the how-to "Run procurement from a pipeline")."""
+"""The example pipelines run the procurement stages in the documented order, with the approval before the push (docs/how-to/run-procurement-from-a-pipeline.md)."""
 
 import re
 from pathlib import Path

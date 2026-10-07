@@ -1,4 +1,4 @@
-"""uc procure push: upload the files procurement.json lists to the repository, never overwriting (docs/how-to/procure-missing-files.md#3-push)."""
+"""uc procure push: upload the files procurement.json lists to the repository, never overwriting (docs/how-to/procure-missing-files.md#4-push)."""
 
 from __future__ import annotations
 

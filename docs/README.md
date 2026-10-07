@@ -13,7 +13,8 @@ Which page to read for which job. New here? Start with the [README](../README.md
 - [Configure Jenkins controllers](how-to/configure-jenkins.md)
 - [Configure with uc.toml](how-to/configure-with-uc-toml.md) - settings in a file, and what each one ends up as
 - [Stock an air-gapped repository](how-to/stock-airgapped-repository.md)
-- [Procure missing POMs, dependencies and cores](how-to/procure-missing-files.md)
+- [Procure missing POMs, dependencies and cores](how-to/procure-missing-files.md) - stage, review, push and clean up with `uc procure`
+- [Run procurement from a pipeline](how-to/run-procurement-from-a-pipeline.md) - Jenkins, GitLab CI or GitHub Actions, with an approval before the push
 - [Keep upstream data fresh](how-to/keep-upstream-data-fresh.md)
 - [Enable TLS](how-to/enable-tls.md)
 - [Proxy plugin downloads](how-to/proxy-downloads.md)
@@ -26,7 +27,7 @@ Which page to read for which job. New here? Start with the [README](../README.md
 ## Reference
 
 - [Configuration](reference/configuration.md) - every setting
-- [uc commands](reference/cli.md)
+- [uc commands](reference/cli.md) - and the setup service
 - [Secrets](reference/secrets.md)
 - [status.json](reference/status-json.md)
 - [Site layout](reference/site-layout.md) - every URL served

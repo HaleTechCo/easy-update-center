@@ -111,5 +111,5 @@ def test_an_unwritable_folder_says_how_to_fix_it(tmp_path):
     root = tmp_path / 'stage'
     root.mkdir()
     root.chmod(0o555)
-    with pytest.raises(ProcureError, match='make procure-download'):
+    with pytest.raises(ProcureError, match=r'docker compose run --rm setup procurement \(make setup\).* make procure-stage, procure-record and procure-clean'):
         Staging.open(root, SOURCE).temporary()

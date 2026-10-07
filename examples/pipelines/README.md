@@ -27,4 +27,5 @@ jobs, not whole pipelines, so this check is what guarantees that only reviewed f
 | verify | `uc status`, `uc doctor` | `uc doctor` exit 1 does not fail the stage. |
 | clean | `uc procure clean` | |
 
-The how-to "Run procurement from a pipeline" (docs/how-to, added with Task 9) will document these stages.
+How to set them up, the approval in each system and what each exit code means:
+[Run procurement from a pipeline](../../docs/how-to/run-procurement-from-a-pipeline.md).

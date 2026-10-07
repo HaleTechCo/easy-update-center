@@ -2,7 +2,7 @@
 # Jenkins update center (docs/architecture/overview.md).
 #   online:     docker compose up -d
 #   air-gapped: docker compose -f compose.yaml -f compose.airgapped.yaml up -d
-#   one-shot:   docker compose run --rm uc doctor | generate | rollback | status
+#   one-shot:   docker compose run --rm uc doctor | procure | generate | rollback | status
 name: jenkins-update-center
 
 x-uc: &uc
@@ -114,7 +114,7 @@ services:
     restart: unless-stopped
 
   # One-shot commands. Only this service stages downloads for review and writes to the repository
-  # (uc doctor --download-* and --push, docs/how-to/procure-missing-files.md): it alone mounts
+  # (uc procure stage and push, docs/how-to/procure-missing-files.md): it alone mounts
   # ./procurement and receives repo_push_auth.
   # It runs only when an operator calls it.
   uc:

@@ -135,7 +135,7 @@ class Staging:
             self.root.mkdir(parents=True, exist_ok=True)
             fd, name = tempfile.mkstemp(dir=self.root, prefix='.part-')
         except OSError as exc:
-            msg = f'cannot write to {self.root}: {exc}. On Linux, run make procure-download, which lets the uc container write there'
+            msg = f'cannot write to {self.root}: {exc}. On Linux, share the folder with the uc containers once with docker compose run --rm setup procurement (make setup), or, where that fails, use make procure-stage, procure-record and procure-clean, which hand it over for each run'
             raise ProcureError(msg) from exc
         os.close(fd)
         return Path(name)

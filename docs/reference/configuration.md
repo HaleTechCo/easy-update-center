@@ -109,21 +109,21 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
-| `REPO_TYPE` | `[repo] type` | `artifactory` | generate, doctor, repo-adapter, web-config | `artifactory` or `artifact-keeper`. Artifact Keeper is read only through the repo-adapter. |
-| `REPO_URL` | `[repo] url` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web-config | Artifactory: the `/artifactory/` base URL. Artifact Keeper: the server's base URL. A trailing slash is optional. Must not contain credentials or any `@`. |
-| `REPO_API_URL` | `[repo] api_url` | `${REPO_URL}api/` | generate, doctor, repo-adapter | Artifactory's API base, for the listing query. Set it only when the API is served elsewhere. |
-| `REPO_KEY` | `[repo] key` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter, web-config | The repository key (for Artifact Keeper, the key, not the display name). Letters, digits, `.`, `_` and `-` only. |
+| `REPO_TYPE` | `[repo] type` | `artifactory` | generate, doctor, procure, repo-adapter, web-config | `artifactory` or `artifact-keeper`. Artifact Keeper is read only through the repo-adapter. |
+| `REPO_URL` | `[repo] url` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter, web-config | Artifactory: the `/artifactory/` base URL. Artifact Keeper: the server's base URL. A trailing slash is optional. Must not contain credentials or any `@`. |
+| `REPO_API_URL` | `[repo] api_url` | `${REPO_URL}api/` | generate, doctor, procure, repo-adapter | Artifactory's API base, for the listing query. Set it only when the API is served elsewhere. |
+| `REPO_KEY` | `[repo] key` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter, web-config | The repository key (for Artifact Keeper, the key, not the display name). Letters, digits, `.`, `_` and `-` only. |
 
 ## repo-adapter
 
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
-| `REPO_ADAPTER` | `[repo] adapter` | see [Mode defaults](#mode-defaults) | generate, doctor, repo-adapter | Whether the generator reads the repository through the [repo-adapter](../architecture/repo-adapter.md). `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is refused. The service stays idle when off. |
-| `REPO_ADAPTER_URL` | `[repo] adapter_url` | `http://repo-adapter:${REPO_ADAPTER_PORT}/artifactory/` | generate, doctor | Where `uc` finds the adapter; it follows `REPO_ADAPTER_PORT`. Change it only with a non-default Compose layout. |
-| `REPO_ADAPTER_DIR` | `[repo] adapter_dir` | `/data/repo-adapter` | generate, doctor, repo-adapter | The adapter's token, cache and `report.json`. |
-| `REPO_ADAPTER_PORT` | `[repo] adapter_port` | `8081` | generate, doctor, repo-adapter | The port the repo-adapter listens on; `--port` overrides it. The default `REPO_ADAPTER_URL`, which generate and doctor use, follows it, and the `repo-adapter` healthcheck (`uc repo-adapter --healthcheck`) probes the port the running adapter bound; a change applies after `make reload`. Nothing else needs to change with it. Minimum 1. |
-| `REPO_CA_FILE` | `[repo] ca_file` | none | repo-adapter, doctor | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca): set it in `.env` or `config/uc.toml`, and mount the file with `compose.repo-ca.yaml`. `uc doctor --push`, `--clean` and the downloads verify against it too. |
-| `REPO_MAX_ARCHIVE_MB` | `[repo] max_archive_mb` | `512` | repo-adapter, doctor | Archives larger than this are skipped and reported. `uc doctor --download-dependencies` and `--download-war` download none larger either. Minimum 1. |
+| `REPO_ADAPTER` | `[repo] adapter` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter | Whether the generator reads the repository through the [repo-adapter](../architecture/repo-adapter.md). `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is refused. The service stays idle when off. |
+| `REPO_ADAPTER_URL` | `[repo] adapter_url` | `http://repo-adapter:${REPO_ADAPTER_PORT}/artifactory/` | generate, doctor, procure | Where `uc` finds the adapter; it follows `REPO_ADAPTER_PORT`. Change it only with a non-default Compose layout. |
+| `REPO_ADAPTER_DIR` | `[repo] adapter_dir` | `/data/repo-adapter` | generate, doctor, procure, repo-adapter | The adapter's token, cache and `report.json`. |
+| `REPO_ADAPTER_PORT` | `[repo] adapter_port` | `8081` | generate, doctor, procure, repo-adapter | The port the repo-adapter listens on; `--port` overrides it. The default `REPO_ADAPTER_URL`, which generate and doctor use, follows it, and the `repo-adapter` healthcheck (`uc repo-adapter --healthcheck`) probes the port the running adapter bound; a change applies after `make reload`. Nothing else needs to change with it. Minimum 1. |
+| `REPO_CA_FILE` | `[repo] ca_file` | none | repo-adapter, procure | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca): set it in `.env` or `config/uc.toml`, and mount the file with `compose.repo-ca.yaml`. `uc procure push` and `clean`, and the downloads of `uc procure stage`, verify against it too. |
+| `REPO_MAX_ARCHIVE_MB` | `[repo] max_archive_mb` | `512` | repo-adapter, procure | Archives larger than this are skipped and reported. `uc procure stage --dependencies` and `--war` download none larger either. Minimum 1. |
 
 ## Downloads
 
@@ -166,7 +166,7 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 |---|---|---|---|---|
 | `DOCTOR_SCHEDULE` | `[doctor] schedule` | empty: none | scheduler | Cron expression (or an `@macro`) for a read-only `uc doctor --record` run, which saves the report and puts its counts in `status.json`. It never stages, pushes or cleans. |
 | `DOCTOR_FETCH` | `[doctor] fetch` | `false` | doctor | Download the POMs and manifests missing from the generator's cache, as `--fetch` does; `--no-fetch` turns it off for one run. |
-| `DOCTOR_SINCE` | `[doctor] since` | empty: the oldest core in the repository | doctor | The floor for required cores, as `--since`. A Jenkins version such as `2.462.1`; anything else is refused when the settings load. |
+| `DOCTOR_SINCE` | `[doctor] since` | empty: the oldest core in the repository | doctor, procure | The floor for required cores, as `--since`, so also the floor of `uc procure stage --war required` and `PROCUREMENT_WARS=required`. A Jenkins version such as `2.462.1`; anything else is refused when the settings load. |
 | `DOCTOR_JSON` | `[doctor] json` | `false` | doctor | Print the report as JSON, as `--json`; `--no-json` turns it off for one run. |
 
 ## Signing
@@ -228,7 +228,7 @@ requests see them.
 
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
-| `PROCUREMENT_SOURCE_URL` | `[procurement] source_url` | `https://repo.jenkins-ci.org/releases/` | doctor | Where `uc doctor --download-poms`, `--download-dependencies` and `--download-war` fetch files from, by Maven path, each checked against the `.sha1` beside it. Set it to reach repo.jenkins-ci.org through your own proxy repository. Air-gapped, downloads are refused unless it is set. Must not contain credentials or any `@`. See [Procure missing files](../how-to/procure-missing-files.md). |
+| `PROCUREMENT_SOURCE_URL` | `[procurement] source_url` | `https://repo.jenkins-ci.org/releases/` | procure | Where `uc procure stage` fetches files from, by Maven path, each checked against the `.sha1` beside it. Set it to reach repo.jenkins-ci.org through your own proxy repository. Air-gapped, downloads are refused unless it is set. Must not contain credentials or any `@`. See [Procure missing files](../how-to/procure-missing-files.md). |
 | `PROCUREMENT_STAGING_DIR` | `[procurement] staging_dir` | `/procurement` | procure | The staging folder `uc procure stage` fills and the other `uc procure` commands read (`--staging`), inside the `uc` container. `compose.yaml` mounts `./procurement` there. |
 | `PROCUREMENT_FETCH` | `[procurement] fetch` | `true` | procure | `uc procure stage` first downloads the POMs and manifests missing from the cache, so it finds every missing dependency and required core (`--fetch`). |
 | `PROCUREMENT_POMS` | `[procurement] poms` | `false` | procure | `uc procure stage` stages the real `.pom` of every plugin whose POM is missing, derived or unusable (`--poms`). |

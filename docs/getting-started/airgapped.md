@@ -185,7 +185,7 @@ services:
   repo-adapter:
     volumes:
       - ./secrets/repo-ca.crt:/etc/ssl/uc-repo-ca.crt:ro
-  uc:  # uc doctor --push and --clean talk to the repository directly, not through the repo-adapter
+  uc:  # uc procure push and clean talk to the repository directly, not through the repo-adapter
     volumes:
       - ./secrets/repo-ca.crt:/etc/ssl/uc-repo-ca.crt:ro
 ```

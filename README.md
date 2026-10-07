@@ -41,7 +41,7 @@ writes files. Around it, this repository adds:
   controllers trust your root CA.
 - **Safe publishing:** each release is validated before it goes live, the switch is atomic, the last
   five releases are kept, and `uc rollback` goes back in one command.
-- **Procurement help:** `uc doctor` stages the real POMs, missing dependencies and cores your
+- **Procurement help:** `uc procure` stages the real POMs, missing dependencies and cores your
   repository lacks for review, records files you add by hand (moving misplaced ones), pushes exactly
   what you approved, and cleans up what the repository then holds.
 - **Your own policy:** hide plugins or releases, and publish your own security warnings.

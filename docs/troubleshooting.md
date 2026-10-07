@@ -89,15 +89,18 @@ The commands of [Procure missing POMs, dependencies and cores](how-to/procure-mi
 
 | Symptom | Cause and fix |
 |---|---|
-| `--stage-local`: `REFUSED ... it belongs at <path>; --fix moves it there` | A file you added is not at the Maven path its manifest or POM declares. Move it there, or run `--stage-local --fix` ([Files you place by hand](how-to/procure-missing-files.md#files-you-place-by-hand)). |
-| `--stage-local`: `REFUSED ... not a Maven path to a .hpi, .jpi, .war or .pom` | The file declares no coordinates to place it by, such as a plugin whose manifest names no group. Find its group and move it to its Maven path by hand. |
-| Push lists files as `unlisted` and skips them | They were added by hand and not recorded: run `make procure-download ARGS=--stage-local`. |
+| `uc doctor: error: --push moved: run uc procure push` (or another option) | The options that staged, pushed and cleaned up moved from `uc doctor` to `uc procure`: run the command the message names ([Removed uc doctor options](reference/cli.md#uc-doctor)). |
+| `uc procure stage`: `nothing to stage: choose with --poms, ...` (exit 2) | No POMs, dependencies or cores are selected: add the options, or set `PROCUREMENT_POMS`, `PROCUREMENT_DEPENDENCIES` or `PROCUREMENT_WARS` ([Stage](how-to/procure-missing-files.md#2-stage)). |
+| `uc procure`: `cannot write to /procurement: ... Permission denied` | The uc containers cannot write `./procurement`: run `docker compose run --rm setup procurement` (`make setup`), or, where it fails, the `make procure-*` targets ([Sharing ./procurement](reference/cli.md#sharing-procurement)). |
+| `uc procure record`: `REFUSED ... it belongs at <path>; --fix moves it there` | A file you added is not at the Maven path its manifest or POM declares. Move it there, or run `uc procure record --fix` ([Files you place by hand](how-to/procure-missing-files.md#files-you-place-by-hand)). |
+| `uc procure record`: `REFUSED ... not a Maven path to a .hpi, .jpi, .war or .pom` | The file declares no coordinates to place it by, such as a plugin whose manifest names no group. Find its group and move it to its Maven path by hand. |
+| Push lists files as `unlisted` and skips them | They were added by hand and not recorded: run `docker compose run --rm uc procure record` (`make procure-record`). |
 | Push: `FAILED ... HTTP 503: Server overloaded, please retry: request timed out`, a broken pipe, a dropped connection or an HTTP 502, on large files | Artifact Keeper's request timeout, or a proxy's upload limit ([Large files](how-to/procure-missing-files.md#large-files)). |
-| Push: `FAILED ... HTTP 409: Artifact version already exists and is immutable` after you deleted the file | Artifact Keeper keeps the deleted release as a tombstone: run its storage garbage collection ([Review](how-to/procure-missing-files.md#2-review)). |
+| Push: `FAILED ... HTTP 409: Artifact version already exists and is immutable` after you deleted the file | Artifact Keeper keeps the deleted release as a tombstone: run its storage garbage collection ([Review](how-to/procure-missing-files.md#3-review)). |
 | Push: `DIFFERENT ... Artifact Keeper stored other bytes here without recording them` | An earlier upload left other bytes at that path. Delete them from Artifact Keeper's storage on its server, then push again ([Large files](how-to/procure-missing-files.md#large-files)). |
 | Push or clean: `ERROR ... the repository holds this path but publishes no checksum for it` | Artifactory holds the file without a `.sha1`: compare it with the staged file by hand. |
-| `uc doctor`: `older required core(s) below <version> not listed` | Information: plugins require cores older than the oldest one stored. Stage them only for controllers that old; the next lines give the `--since` that does it and what storing them does to the floor ([Stage](how-to/procure-missing-files.md#1-stage)). |
-| `the repository holds no Jenkins core, so "required" has no floor` | Add `--since <oldest version your controllers run>` to `--download-war required`. |
+| `uc doctor`: `older required core(s) below <version> not listed` | Information: plugins require cores older than the oldest one stored. Stage them only for controllers that old; the next lines give the `--since` that does it and what storing them does to the floor ([Stage](how-to/procure-missing-files.md#2-stage)). |
+| `the repository holds no Jenkins core, so "required" has no floor` | Add `--since <oldest version your controllers run>` to `uc procure stage --war required`, or set `DOCTOR_SINCE`. |
 
 ## Jenkins controllers
 

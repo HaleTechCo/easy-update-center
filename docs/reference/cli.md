@@ -32,7 +32,7 @@ Exit codes shared by every command:
 |---|---|
 | `0` | Success. |
 | `1` | An expected failure; the message is printed as `uc: error: ...`. For `uc doctor`, also "something in the repository will be dropped". |
-| `2` | Invalid command line. |
+| `2` | Invalid command line. For `uc procure stage`, also "nothing selected to stage". |
 | `75` | Another `uc generate` or `uc rollback` holds the run lock (`/data/.lock`). Try again later. |
 
 ## uc generate
@@ -56,14 +56,11 @@ The scheduler runs the same command on `GENERATE_SCHEDULE`.
 
 ```bash
 docker compose run --rm uc doctor [--fetch | --no-fetch] [--json | --no-json] [--since VERSION] [--record]
-docker compose run --rm uc doctor [--fetch] [--download-poms] [--download-dependencies] [--download-war VERSION|required ...] [--since VERSION] [--staging DIR]
-docker compose run --rm uc doctor --push [--dry-run] [--staging DIR]
-docker compose run --rm uc doctor --stage-local [--fix] [--staging DIR]
-docker compose run --rm uc doctor --clean [--dry-run] [--staging DIR]
 ```
 
 Reports what the generator will and will not see in the source repository, without generating. It
-runs the same listing query the generator runs and prints:
+changes neither the repository nor the staging folder: [uc procure](#uc-procure) stages, pushes and
+cleans up. It runs the same listing query the generator runs and prints:
 
 - the source, the number of plugins with a POM, and the Jenkins cores with a POM (no cores means the
   site offers no core and no tiers);
@@ -89,29 +86,155 @@ was, such as an internal one, has no `.pom` there.
 
 | Option | Meaning |
 |---|---|
-| `--fetch`, `--no-fetch` | Download the POMs and manifests missing from the generator's cache, so dependencies and required cores can be checked before the first generation. Without it, unchecked items are counted and reported, and a download run may miss what they need: use it with the download options. The default is `DOCTOR_FETCH` (off). |
-| `--json`, `--no-json` | Print the full report as JSON. The default is `DOCTOR_JSON` (off). |
+| `--fetch`, `--no-fetch` | Download the POMs and manifests missing from the generator's cache, so dependencies and required cores can be checked before the first generation. Without it, unchecked items are counted and reported. The default is `DOCTOR_FETCH` (off). |
+| `--json`, `--no-json` | Print the full report as JSON. The default is `DOCTOR_JSON` (off). The `next:` line, and the line `--record` prints, then go to standard error, so standard output stays valid JSON. |
 | `--since VERSION` | The floor for required cores, instead of the oldest core in the repository. The default is `DOCTOR_SINCE`. |
-| `--record` | Also save the report as the latest: in full as `/data/doctor/report.json` (not served), and its counts in `status.json`'s `doctor` block with `checked_at` and `recorded_at`. The scheduler runs it on `DOCTOR_SCHEDULE`. Not with `--push`, `--stage-local` or `--clean`. |
-| `--download-poms` | Stage the real `.pom` of every plugin whose POM is missing, derived or unusable. |
-| `--download-dependencies` | Stage missing required dependencies, transitively, each with its `.pom`. |
-| `--download-war VERSION` | Stage that core's `.war` and `.pom`; `required` stages every required core the repository lacks at or above the floor. Repeatable. |
-| `--staging DIR` | The staging folder (default `/procurement`, `./procurement` on the host). |
-| `--push` | Upload the files `procurement.json` lists to the repository, never overwriting. On its own only. |
-| `--dry-run` | With `--push` or `--clean`: check each file, change nothing. |
-| `--stage-local` | Record the `.hpi`, `.jpi`, `.war` and `.pom` files placed in the staging folder by hand that `procurement.json` does not list yet, after the checks a download gets. A misplaced file is refused with the path it belongs at. Needs no network. On its own only. |
-| `--fix` | With `--stage-local`: first move each misplaced file to the Maven path it declares, never onto another file, a listed path or out of the folder. |
-| `--clean` | Delete the staged files, listed or placed by hand, that the repository holds with the same content, with their `procurement.json` entries. On its own only. |
+| `--record` | Also save the report as the latest: in full as `/data/doctor/report.json` (not served), and its counts in `status.json`'s `doctor` block with `checked_at` and `recorded_at`. The scheduler runs it on `DOCTOR_SCHEDULE`. |
 
-Exits 1 when anything will be dropped or a dependency is missing, else 0. A download run exits 0
-when everything planned is staged, else 1; a push, 0 when every listed file ends up in the
-repository with the recorded content; `--stage-local`, 0 unless it refused a file; `--clean`, 0
-unless a file differs from the repository's or could not be checked or deleted. `--push`,
-`--stage-local` and `--clean` each run on their own: combined with one another, a download option,
-`--fetch`, `--json` or `--since`, they exit 2, as does `--dry-run` without `--push` or `--clean`, and
-`--fix` without `--stage-local`. How to use them:
-[Procure missing POMs, dependencies and cores](../how-to/procure-missing-files.md). What the
-repository must contain: [Stock an air-gapped repository](../how-to/stock-airgapped-repository.md).
+Exits 1 when anything will be dropped or a dependency is missing, else 0; required cores the
+repository lacks are reported but do not change the exit code. When the report finds something
+`uc procure stage` can fetch (POMs to procure, missing dependencies, missing required cores), it ends
+with that step, naming the options for what it found and the settings that choose them for every
+run:
+
+```text
+next: uc procure stage --poms --dependencies --war required (or set PROCUREMENT_POMS=true, PROCUREMENT_DEPENDENCIES=true, PROCUREMENT_WARS=required)
+```
+
+What the repository must contain:
+[Stock an air-gapped repository](../how-to/stock-airgapped-repository.md).
+
+The options that staged, recorded, pushed and cleaned up files moved to [uc procure](#uc-procure).
+Each now exits 2 naming the command that replaces it, such as
+`uc doctor: error: --push moved: run uc procure push`:
+
+| Removed `uc doctor` option | Use instead |
+|---|---|
+| `--download-poms` | `uc procure stage --poms` |
+| `--download-dependencies` | `uc procure stage --dependencies` |
+| `--download-war VERSION\|required` | `uc procure stage --war VERSION\|required` |
+| `--staging DIR` | `--staging DIR` of `uc procure stage`, `record`, `push` or `clean` |
+| `--push` | `uc procure push` |
+| `--dry-run` | `uc procure push --dry-run`, or `uc procure clean --dry-run` |
+| `--stage-local` | `uc procure record` |
+| `--fix` | `uc procure record --fix` |
+| `--clean` | `uc procure clean` |
+
+## uc procure
+
+```bash
+docker compose run --rm uc procure stage [--poms | --no-poms] [--dependencies | --no-dependencies] [--war VERSION|required ... | --no-wars] [--since VERSION] [--fetch | --no-fetch] [--staging DIR]
+docker compose run --rm uc procure record [--fix | --no-fix] [--staging DIR]
+docker compose run --rm uc procure push [--dry-run] [--staging DIR]
+docker compose run --rm uc procure clean [--dry-run] [--staging DIR]
+```
+
+One command per stage of procurement: `stage` fetches what `uc doctor` finds missing into a staging
+folder for review, `record` adds the files you place there by hand, `push` uploads exactly the files
+the folder's `procurement.json` lists to the repository, and `clean` deletes the staged copies the
+repository then holds. Nothing reaches the repository without `push`. How to use them, in order:
+[Procure missing POMs, dependencies and cores](../how-to/procure-missing-files.md); with an
+approval before the push:
+[Run procurement from a pipeline](../how-to/run-procurement-from-a-pipeline.md).
+
+The staging folder is `./procurement` on the host, which the `uc` service mounts at `/procurement`
+(`PROCUREMENT_STAGING_DIR`). Every command takes `--staging DIR` to use another folder inside the
+`uc` container for one run. On Linux, the uc containers (uid 10001) can write `./procurement` once
+[the setup service](#the-setup-service) has shared it with them
+(`docker compose run --rm setup procurement`, part of `make setup`). Each command has a `make`
+shortcut, which passes options through `ARGS=`. For `stage`, `record` and `clean`, it also hands the
+folder to uid 10001 for the run and back to you after, so it works where the folder cannot be
+shared:
+
+| Command | `make` shortcut |
+|---|---|
+| `uc procure stage` | `make procure-stage ARGS="--poms --dependencies"` |
+| `uc procure record` | `make procure-record ARGS=--fix` |
+| `uc procure push` | `make procure-push ARGS=--dry-run` |
+| `uc procure clean` | `make procure-clean ARGS=--dry-run` |
+
+### uc procure stage
+
+Prints `uc doctor`'s report, then stages the missing files you chose with the options below: each is
+downloaded from `PROCUREMENT_SOURCE_URL` (repo.jenkins-ci.org by default), checked against the
+`.sha1` published beside it, saved in the folder at its Maven path and listed in `procurement.json`
+with its source URL, sha1, size and reason. Staged files are readable by everyone and writable by
+their group (mode `664`), so you can edit them under the folder's ACLs. One line per file says what
+happened (`staged`, `kept`: already staged and intact, `FAILED`: with the reason), then a summary.
+Running it again keeps what is already staged and downloads only what is missing or changed.
+Air-gapped, it is refused unless `PROCUREMENT_SOURCE_URL` names a copy the update center can reach.
+
+| Option | Meaning |
+|---|---|
+| `--poms`, `--no-poms` | Stage the real `.pom` of every plugin whose POM is missing, derived from its archive, or unusable. The default is `PROCUREMENT_POMS` (off). |
+| `--dependencies`, `--no-dependencies` | Stage the required dependencies the repository lacks or holds only in an older version, transitively, each with its `.pom`. The default is `PROCUREMENT_DEPENDENCIES` (off). |
+| `--war VERSION`, `--war required` | Stage that core's `.war` and `.pom`; `required` stages every core plugins require that the repository lacks, at or above the floor. Repeatable. It replaces `PROCUREMENT_WARS` for the run. |
+| `--no-wars` | Stage no core, whatever `PROCUREMENT_WARS` says. Not with `--war`. |
+| `--since VERSION` | The floor for `required`, instead of the oldest core in the repository. The default is `DOCTOR_SINCE`. |
+| `--fetch`, `--no-fetch` | First download the POMs and manifests missing from the generator's cache, so the run finds every missing dependency and required core. The default is `PROCUREMENT_FETCH` (on). |
+| `--staging DIR` | The staging folder. The default is `PROCUREMENT_STAGING_DIR` (`/procurement`). |
+
+Exits 0 when everything planned is staged; 1 when a file could not be staged, or when the run is
+refused as `uc: error: ...` (air-gapped without `PROCUREMENT_SOURCE_URL`, a `--war` that is neither a
+version nor `required`); 2 when nothing is selected: no POMs, dependencies or cores, by option or by
+setting (`uc: error: nothing to stage: ...`, naming the options and `PROCUREMENT_POMS`,
+`PROCUREMENT_DEPENDENCIES` and `PROCUREMENT_WARS`). Whenever `procurement.json` lists files, also
+after a run with problems, it ends with the review:
+
+```text
+next: review ./procurement (procurement.json lists 12 files), then uc procure push
+```
+
+With `--staging`, the line names that folder instead.
+
+### uc procure record
+
+Records every `.hpi`, `.jpi`, `.war` and `.pom` placed in the folder by hand that `procurement.json`
+does not list yet, with the reason `added by hand`, after the checks a download gets. A misplaced
+file is refused with the Maven path it belongs at, from the coordinates its manifest or POM
+declares. It needs no network.
+
+| Option | Meaning |
+|---|---|
+| `--fix`, `--no-fix` | First move each misplaced file to the Maven path it declares, never onto another file, a listed path or out of the folder. The default is `PROCUREMENT_FIX` (off). |
+| `--staging DIR` | The staging folder. The default is `PROCUREMENT_STAGING_DIR` (`/procurement`). |
+
+Exits 0 unless it refused a file, else 1. It ends with the same `next:` line as `stage`.
+
+### uc procure push
+
+Uploads the files `procurement.json` lists that the repository lacks, with
+`secrets/repo_push_auth`, never overwriting a path the repository already holds. It first checks
+that each file is the one recorded, and reports the files in the folder that `procurement.json` does
+not list (`unlisted`), which it does not push. It refuses the public repo.jenkins-ci.org, and a
+folder with no `procurement.json`.
+
+| Option | Meaning |
+|---|---|
+| `--dry-run` | Check each file, upload nothing. |
+| `--staging DIR` | The staging folder. The default is `PROCUREMENT_STAGING_DIR` (`/procurement`). |
+
+Exits 0 when every listed file ends up in the repository with the recorded content, else 1;
+unlisted files do not change it. After a real push with no problem, it ends with:
+
+```text
+next: uc generate (or wait for the schedule), then uc procure clean
+```
+
+### uc procure clean
+
+Deletes the staged files, listed or placed by hand, that the repository holds with the same content
+(the same sha1), with their `procurement.json` entries and any folder left empty, so the folder keeps
+only what still needs pushing. It reads the repository with `secrets/repo_push_auth`, as push does,
+and likewise refuses the public repo.jenkins-ci.org.
+
+| Option | Meaning |
+|---|---|
+| `--dry-run` | Check each file, delete nothing. |
+| `--staging DIR` | The staging folder. The default is `PROCUREMENT_STAGING_DIR` (`/procurement`). |
+
+Exits 0 unless a file differs from the repository's or could not be checked or deleted, else 1. It
+prints no `next:` line: procurement is done.
 
 ## uc rollback
 
@@ -262,25 +385,51 @@ How to run `rotate` safely: [Rotate the signing certificate](../how-to/rotate-si
 
 ## The setup service
 
-The `setup` Compose service runs `uc-setup`, not `uc`: the jobs that write to `./secrets` and
-`./procurement`, as root, with no network and no Compose secrets, and only when you call it. It
-mounts `./secrets` at `/setup/secrets`, `./procurement` at `/setup/procurement` and `./config`
-read-only at `/setup/config`, and reads `.env` (or the file `UC_ENV_FILE` names) as the other
-services do, so the file must exist. "You" below is the owner of `./config`: `uc-setup` gives
-`./secrets` and `./procurement` to it when Docker has just created them as root. When `./config` is
-empty and owned by root, Docker created it too, so this is not a checkout: `uc-setup` then exits 1
-and changes nothing.
+The `setup` Compose service runs `uc-setup`, not `uc`: first-time setup, and the jobs that write to
+`./secrets` and `./procurement`. It is the only container that runs as root, and it runs only when
+you call it: it sits in its own Compose profile, so `docker compose up` never starts it. It has no
+network and no Compose secrets. It mounts `./secrets` at `/setup/secrets`, `./procurement` at
+`/setup/procurement` and `./config` read-only at `/setup/config`, and reads `.env` (or the file
+`UC_ENV_FILE` names) as the other services do, so the file must exist. "You" below is the owner of
+`./config`: `uc-setup` gives `./secrets` and `./procurement` to it when Docker has just created them
+as root. When `./config` is empty and owned by root, Docker created it too, so this is not a
+checkout: `uc-setup` then exits 1 and changes nothing.
 
 ```bash
-docker compose run --rm setup [secrets | procurement | pki-init [--out DIR] [--display-dir NAME] | pki-rotate [--root-display-dir NAME]]
+docker compose run --rm setup
+docker compose run --rm setup secrets
+docker compose run --rm setup procurement
+docker compose run --rm setup pki-init [--out DIR] [--display-dir NAME]
+docker compose run --rm -v /path/to/root:/setup/secrets/root:ro setup pki-rotate [--root-display-dir NAME]
 ```
 
-| Command | What it does |
-|---|---|
-| (none) | First-time setup, safe to repeat: `secrets`, then `pki-init` unless `secrets/update-center.key` exists, then `procurement`, last because it is the one step that can fail on some filesystems. |
-| `secrets` | Creates the missing credential files empty and sets the permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)). `make secrets-placeholders` and `make secrets-permissions` run it. |
-| `procurement` | Shares `./procurement` with the uc containers (uid 10001) through ACLs, so you and they can both review, edit, move and delete every file in it. On a filesystem without ACLs it succeeds when uid 10001 can already write the folder (Docker Desktop), and otherwise exits 1, naming the make targets that hand the folder over for each run. When the ACLs take on the folder but not on everything in it, it exits 1 with setfacl's message. |
-| `pki-init` | Runs `uc pki init` in `secrets/`, then the `secrets` step; or in `--out DIR` (a directory you mount for a new PKI), naming the files under `--display-dir NAME` in its messages, then only sets the permissions there. `make pki-init [OUT=<dir>]` runs it. |
-| `pki-rotate` | Runs `uc pki rotate` on `secrets/`, with the directory holding the root key mounted read-only at `/setup/secrets/root` (named `--root-display-dir NAME` in messages), then the `secrets` step. Without that directory it exits 1, naming `make pki-rotate ROOT=<dir>`, which mounts it. `make pki-rotate ROOT=<dir>` runs it. |
+| Command | What it does | `make` shortcut |
+|---|---|---|
+| (none) | First-time setup, safe to repeat: `secrets`, then `pki-init` unless `secrets/update-center.key` exists, then `procurement`, last because it is the one step that can fail on some filesystems. | `make setup` |
+| `secrets` | Creates the missing credential files empty and sets the permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)). | `make secrets` (or its aliases `make secrets-placeholders` and `make secrets-permissions`) |
+| `procurement` | Shares `./procurement` with the uc containers ([below](#sharing-procurement)). | `make setup` runs it, after the other steps |
+| `pki-init` | Runs `uc pki init` in `secrets/`, then the `secrets` step; or in `--out DIR` (a directory you mount for a new PKI), naming the files under `--display-dir NAME` in its messages, then only sets the permissions there. | `make pki-init`, or `make pki-init OUT=<dir>`, which mounts `<dir>` at `/setup/out` |
+| `pki-rotate` | Runs `uc pki rotate` on `secrets/`, with the directory holding the root key mounted read-only at `/setup/secrets/root` (named `--root-display-dir NAME` in messages), then the `secrets` step. Without that directory it exits 1, naming `make pki-rotate ROOT=<dir>`. | `make pki-rotate ROOT=<dir>`, which mounts `<dir>` there |
 
 Any other argument exits 2 with the usage line.
+
+### Sharing ./procurement
+
+`procurement` gives `./procurement` to you and sets ACLs on it and on everything in it: you and uid
+10001, the user the uc containers run as, can both read, write and delete, and a default ACL on
+every directory passes the same on to whatever is created in it later. [uc procure](#uc-procure) can
+then stage into the folder, and you can review, edit, move and delete every file in it as yourself,
+with no change of ownership around each run. It is safe to repeat: run it again after moving or
+copying files in from elsewhere, which can keep their own modes and ACLs.
+
+On a filesystem without ACLs, such as Docker Desktop's bind mounts or some network filesystems, it
+sets nothing:
+
+- When uid 10001 can already write the folder, as on Docker Desktop, which ignores ownership, it says
+  so and exits 0: nothing is needed.
+- Otherwise it exits 1, naming `make procure-stage`, `procure-record` and `procure-clean`. Use those
+  instead of `docker compose run --rm uc procure stage`, `record` and `clean`: they hand the folder
+  to uid 10001 for each run and back to you after. `push` only reads the folder.
+
+When the ACLs take on the folder but not on everything in it, it exits 1 with setfacl's message;
+run it again once that is fixed.
