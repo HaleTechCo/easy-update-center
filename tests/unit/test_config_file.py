@@ -84,6 +84,25 @@ def test_file_errors_name_the_key_and_the_file(tmp_path, text, message):
         load_settings(ONLINE, config_file=toml(tmp_path, text))
 
 
+@pytest.mark.parametrize(
+    ('text', 'got'),
+    [
+        ('https_proxy = ["http://proxyuser:S3cretPW@proxy.corp:3128"]\n', 'an array'),  # pragma: allowlist secret
+        ('[repo]\nurl = { url = "https://admin:S3cretPW@artifactory.corp/" }\n', 'a table'),  # pragma: allowlist secret
+        ('public_url = 31415926\n', 'an integer'),
+        ('[download]\nbackend_url = 2.71828\n', 'a float'),
+        ('[resources]\nurl = 2026-10-06\n', 'a date or time'),
+    ],
+    ids=['array', 'table', 'integer', 'float', 'date'],
+)
+def test_a_url_setting_that_is_not_a_string_in_the_file_is_refused_without_quoting_it(tmp_path, text, got):
+    # A URL's value can hold credentials, so only its TOML type is named.
+    with pytest.raises(ConfigError, match=rf' in .*uc\.toml must be a string \(got {got}\)$') as error:
+        load_settings(AIRGAPPED, config_file=toml(tmp_path, text))
+    for part in ('proxyuser', 'admin', 'S3cretPW', '31415926', '2.71828', '2026'):
+        assert part not in str(error.value)
+
+
 def test_a_byte_order_mark_and_crlf_are_fine(tmp_path):
     path = tmp_path / 'uc.toml'
     path.write_bytes(b'\xef\xbb\xbfretain_releases = 4\r\n[repo]\r\nmax_archive_mb = 64\r\n')

@@ -506,8 +506,17 @@ def _file_value(setting: Setting, value: object, where: str) -> str:
     elif (isinstance(value, int) and setting.type in {'int', 'ratio'}) or (isinstance(value, float) and setting.type == 'ratio'):
         return str(value)
     expected = {'bool': 'true or false', 'int': 'an integer', 'ratio': 'a number'}.get(setting.type, 'a string')
-    msg = f'{where} must be {expected} (got {value!r})'
+    got = _toml_type(value) if setting.type == 'url' else repr(value)  # a URL's value can hold credentials, so it is never quoted
+    msg = f'{where} must be {expected} (got {got})'
     raise ConfigError(msg)
+
+
+def _toml_type(value: object) -> str:
+    """Return what a uc.toml value that is not a string is, in TOML's words."""
+    for kind, name in ((bool, 'a boolean'), (int, 'an integer'), (float, 'a float'), (list, 'an array'), (dict, 'a table')):
+        if isinstance(value, kind):
+            return name
+    return 'a date or time'
 
 
 def _choice(r: Resolver, name: str) -> str:
