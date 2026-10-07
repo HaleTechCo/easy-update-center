@@ -34,7 +34,9 @@ UPSTREAM_MIRROR_URL = 'https://get.jenkins.io'
 DEFAULT_CONFIG_FILE = Path('/config/uc.toml')
 _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 _SCHEME = re.compile(r'[^/:]+://')  # what urllib's proxy handler takes as a scheme
-_NO_AUTHORITY = re.compile(r'[^/:]+:/(?!/)')  # urllib's proxy handler takes a scheme up to the first ':' and refuses a single '/' after it
+# urllib's proxy handler (urllib.request._parse_proxy) takes a scheme up to the first ':', if anything precedes one, then:
+_NO_AUTHORITY = re.compile(r'(?:[^/:]+:)?/(?!/)')  # a single '/' where '//' belongs, which it refuses
+_AT_AFTER_AUTHORITY = re.compile(r'(?:[^/:]+:)?//[^@]*@[^/]*/.*@', re.DOTALL)  # an '@' after the end of its authority, the first '/' after the first '@'
 _FILE_KEYS = tuple(sorted(toml_label(setting.env) for setting in SETTINGS if not setting.env_only))
 _FILE_SECTIONS = tuple(f'[{section}]' for section in SECTIONS)
 
@@ -536,13 +538,15 @@ def _checked_url(r: Resolver, name: str) -> str:
 def _checked_proxy(r: Resolver, name: str) -> str:
     """Return the proxy URL name sets, '' if unset; only its scheme, host and port are parsed, after the user info, which may hold anything (split_userinfo).
 
-    A value urllib's proxy handler refuses as having no authority (http:/proxy:3128, or svc:/password@proxy:3128 without
-    a scheme) is refused too, with a message that quotes none of it.
+    Two forms urllib's proxy handler cannot use are refused, with a message that quotes none of the value: a single '/'
+    where '//' belongs (http:/proxy:3128, /proxy:3128, or a password that starts with '/' after a user name and no
+    scheme), which it refuses; and an '@' after the first '/' that follows the first '@', where it ends the authority
+    (http://user:secret@a/b@proxy:3128): it takes the host from before that '/', split_userinfo from after the last '@'.
     """
     value = r.raw(name)
     if value:
         hint = '; percent-encode # ? / [ ] @ in a user name or password'
-        if _NO_AUTHORITY.match(value):
+        if _NO_AUTHORITY.match(value) or _AT_AFTER_AUTHORITY.match(value):
             msg = f'{r.label(name)} is not a valid URL: write it as scheme://host:port{hint}'
             raise ConfigError(msg)
         scheme, _, rest = split_userinfo(value)
@@ -555,8 +559,8 @@ def split_userinfo(value: str) -> tuple[str, str | None, str]:
 
     The user info may hold an unencoded # ? / that urlsplit takes as the end of the host, and without a scheme the whole
     value is user info and host (user:password@proxy:3128). urllib ends the user info at the authority's last '@'; taking
-    it to the value's last '@' reads the same wherever the '@'s are all in the user info, and never leaves part of a
-    password in the rest.
+    it to the value's last '@' reads the same wherever the '@'s are all in the user info (_checked_proxy refuses a proxy
+    where they are not), and never leaves part of a password in the rest.
     """
     match = _SCHEME.match(value)
     scheme = match.group() if match else ''

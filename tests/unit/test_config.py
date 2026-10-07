@@ -375,14 +375,33 @@ def test_a_proxy_whose_host_or_port_cannot_be_read_is_refused_without_quoting_it
         assert part not in str(error.value)
 
 
+PROXY_REFUSAL = r'is not a valid URL: write it as scheme://host:port; percent-encode # \? / \[ \] @ in a user name or password$'
+
+
 @pytest.mark.parametrize('name', ['HTTPS_PROXY', 'HTTP_PROXY'])
-@pytest.mark.parametrize('value', ['svc:/S3cretPW@proxy.corp:3128', 'http:/proxy.corp:3128'])  # pragma: allowlist secret
-def test_a_proxy_with_a_single_slash_after_its_scheme_is_refused_as_urllib_refuses_it(name, value):
-    # urllib takes what precedes the first : as the scheme, and refuses a rest that starts with / but not //.
-    with pytest.raises(ConfigError, match=rf'^{name} is not a valid URL: write it as scheme://host:port; percent-encode # \? / \[ \] @ in a user name or password$') as error:
+@pytest.mark.parametrize('value', ['svc:/S3cretPW@proxy.corp:3128', 'http:/proxy.corp:3128', '/S3cretPW@proxy.corp:3128', '/proxy.corp:3128'])  # pragma: allowlist secret
+def test_a_proxy_with_a_single_slash_where_two_belong_is_refused_as_urllib_refuses_it(name, value):
+    # urllib takes what precedes the first : as the scheme, if anything does, and refuses a rest that starts with / but not //.
+    with pytest.raises(ConfigError, match=f'^{name} {PROXY_REFUSAL}') as error:
         load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
     for part in ('svc', 'S3cretPW', 'proxy.corp'):
         assert part not in str(error.value)
+
+
+@pytest.mark.parametrize('name', ['HTTPS_PROXY', 'HTTP_PROXY'])
+@pytest.mark.parametrize('value', ['http://proxyuser:S3cretPW@Tail/9z@proxy.corp:3128', 'http://proxyuser:S3cretPW@proxy.corp:3128/x@other.corp', '//proxyuser:S3cretPW@Tail/9z@proxy.corp:3128'])  # pragma: allowlist secret
+def test_a_proxy_with_an_at_after_the_end_of_urllibs_authority_is_refused(name, value):
+    # urllib ends the authority at the first / after the first @ and takes the host from before that /; uc reads it after the last @.
+    with pytest.raises(ConfigError, match=f'^{name} {PROXY_REFUSAL}') as error:
+        load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+    for part in ('proxyuser', 'S3cretPW', 'Tail', 'proxy.corp', 'other.corp'):
+        assert part not in str(error.value)
+
+
+@pytest.mark.parametrize('value', ['proxyuser:S3cretPW@Tail/9z@proxy.corp:3128', 'http://proxyuser:S3cretPW/Tail@9z@proxy.corp:3128', 'http://proxyuser:S3cretPW@Tail9z@proxy.corp:3128/'])  # pragma: allowlist secret
+def test_a_proxy_whose_ats_are_all_in_urllibs_user_info_still_loads(value):
+    # Without // urllib reads the whole value as the authority; with it, a / before the first @ or after the last one ends nothing early.
+    assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml')).https_proxy == value
 
 
 ALL_URL_SETTINGS = [setting.env for setting in SETTINGS if setting.type == 'url']
