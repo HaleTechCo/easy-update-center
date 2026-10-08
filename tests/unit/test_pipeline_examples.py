@@ -1,6 +1,8 @@
 """The example pipelines run the procurement stages in the documented order, with the approval before the push (docs/how-to/run-procurement-from-a-pipeline.md)."""
 
+import json
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -39,6 +41,14 @@ KEEPS_ARTIFACTS = {
     'gitlab-ci.yml': re.compile(r'^\s*when: always$', re.MULTILINE),
     'github-actions.yml': re.compile(r'^\s*if: always\(\)$', re.MULTILINE),
 }
+REVIEWERS_STEP = 'Check that the procurement environment requires reviewers'
+"""The GitHub push job's first step: it stops the job unless the procurement environment has required reviewers."""
+CURL_STUB = """#!/bin/bash
+printf '%s\\n' "$@" > "$STUB_DIR/curl-args"
+[ -e "$STUB_DIR/answer.json" ] || { echo 'curl: (22) The requested URL returned error: 404' >&2; exit 22; }
+cat "$STUB_DIR/answer.json"
+"""
+"""Stands in for curl in the reviewers check: records its arguments and prints answer.json, or fails as curl -f does on an HTTP error."""
 
 
 def code(name: str) -> str:
@@ -83,6 +93,26 @@ def expected_stages(name: str) -> list[str]:
     return [stage for stage in STAGE_NAMES if not (stage == 'review' and name == 'github-actions.yml')]
 
 
+def github_step(job: str, name: str) -> str:
+    """Return the step of a GitHub job with this name, up to the next step."""
+    start = job.index(f'      - name: {name}\n')
+    end = job.find('\n      - ', start)
+    return job[start:] if end == -1 else job[start:end]
+
+
+def run_reviewers_check(tmp_path: Path) -> subprocess.CompletedProcess[str]:
+    """Run the GitHub reviewers check as the runner runs a bash step, against a stub curl that answers with tmp_path/answer.json, or fails without one."""
+    step = github_step(blocks('github-actions.yml')['push'], REVIEWERS_STEP)
+    script = [line[10:] for line in step.split('\n        run: |\n', 1)[1].splitlines()]
+    (tmp_path / 'step.sh').write_text('\n'.join(script) + '\n', encoding='utf-8')
+    stubs = tmp_path / 'bin'
+    stubs.mkdir()
+    (stubs / 'curl').write_text(CURL_STUB, encoding='utf-8')
+    (stubs / 'curl').chmod(0o755)
+    env = {'PATH': f'{stubs}:/usr/bin:/bin', 'STUB_DIR': str(tmp_path), 'GH_TOKEN': 'token-1', 'GITHUB_API_URL': 'https://api.github.example', 'GITHUB_REPOSITORY': 'corp/uc-pipelines'}
+    return subprocess.run(['bash', '--noprofile', '--norc', '-eo', 'pipefail', str(tmp_path / 'step.sh')], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False, timeout=30)
+
+
 def test_every_example_is_checked():
     assert sorted(path.name for path in PIPELINES.iterdir() if path.name != 'README.md') == NAMES
 
@@ -125,6 +155,34 @@ def test_the_approval_comes_before_the_push(name):
     else:
         assert APPROVAL[name].search(found['push']) is not None
         assert 'needs: stage' in found['push']
+
+
+def test_the_github_push_job_first_checks_that_the_environment_requires_reviewers():
+    # GitHub creates a missing environment unprotected and runs its job without waiting, so the job checks before anything else.
+    push = blocks('github-actions.yml')['push']
+    assert re.search(r'^    permissions:\n      actions: read\n    steps:\n      - name: ' + re.escape(REVIEWERS_STEP) + '\n', push, re.MULTILINE) is not None
+    assert 'GH_TOKEN: ${{ github.token }}' in github_step(push, REVIEWERS_STEP)
+    assert push.index(REVIEWERS_STEP) < push.index('actions/download-artifact@v4') < push.index('sha256sum -c') < push.index('uc procure push')
+
+
+@pytest.mark.parametrize(('rules', 'passes'), [(['required_reviewers'], True), (['wait_timer', 'required_reviewers', 'branch_policy'], True), ([], False), (['wait_timer', 'branch_policy'], False)])
+@pytest.mark.parametrize('layout', [{'indent': 2}, {'separators': (',', ':')}])
+def test_the_reviewers_check_passes_only_with_required_reviewers(tmp_path, rules, passes, layout):
+    # As GitHub's API answers: every rule has a type; a required_reviewers rule lists reviewers, each with its own type (User or Team).
+    environment = {'id': 1, 'name': 'procurement', 'protection_rules': [{'id': n, 'type': rule, 'reviewers': [{'type': 'User', 'reviewer': {'login': 'alice'}}]} for n, rule in enumerate(rules)]}
+    (tmp_path / 'answer.json').write_text(json.dumps(environment, **layout), encoding='utf-8')
+    result = run_reviewers_check(tmp_path)
+    assert (result.returncode == 0) is passes, result.stdout
+    assert ('no required reviewers' in result.stdout) is not passes
+    called = (tmp_path / 'curl-args').read_text(encoding='utf-8').splitlines()
+    assert 'Authorization: Bearer token-1' in called  # pragma: allowlist secret
+    assert called[-1] == 'https://api.github.example/repos/corp/uc-pipelines/environments/procurement'
+
+
+def test_the_reviewers_check_stops_when_the_environment_cannot_be_read(tmp_path):
+    result = run_reviewers_check(tmp_path)  # no answer: the stub curl fails as curl -f does on an HTTP error
+    assert result.returncode != 0
+    assert 'cannot read' in result.stdout
 
 
 @pytest.mark.parametrize('name', NAMES)

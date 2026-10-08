@@ -10,8 +10,8 @@ from Jenkins, GitLab CI or GitHub Actions, with an approval before anything is p
 
 - **An approval before the push.** The pipeline stages the files, then stops until one of the people
   you named has read what was staged and approved it. Only then does it push, and only the list they
-  approved. The GitHub Actions example stops only where GitHub offers required reviewers: in a
-  private repository on GitHub Free, Pro or Team it pushes with no approval
+  approved. The GitHub Actions example pushes only where the `procurement` environment has
+  required reviewers, which a private repository on GitHub Free, Pro or Team cannot have
   ([The approval](#the-approval)).
 - **A record.** Each run keeps who approved it, the stage report and `procurement.json` as it was
   approved, for as long as your CI system keeps runs and their artifacts.
@@ -43,15 +43,27 @@ The agent's or runner's user needs:
 - membership of the `docker` group, or an equivalent way to reach the Docker daemon (which gives that
   user root on the host, so treat the runner accordingly);
 - read access to `UC_DIR`;
+- `curl`, for the GitHub Actions example, which checks the approval through GitHub's API;
 - GNU make, only if it runs the `make procure-*` targets instead (below).
 
-Before the first run, prepare the host once, as for running the stages by hand
-([Before you start](procure-missing-files.md#before-you-start)): fill in `secrets/repo_push_auth`,
-and run `docker compose run --rm setup procurement` (or `make setup`) so the uc containers can write
-`./procurement`. Where that step fails (a filesystem without ACLs), the uc containers cannot write
-the folder: change the pipeline's `uc procure stage` and `uc procure clean` commands to
-`make procure-stage` and `make procure-clean`, which hand the folder to the uc containers for each
-run and back to the user running them.
+Before the first run:
+
+- **Prepare the host** once, as for running the stages by hand
+  ([Before you start](procure-missing-files.md#before-you-start)): fill in
+  `secrets/repo_push_auth`, and run `docker compose run --rm setup procurement` (or `make setup`) so
+  the uc containers can write `./procurement`. Where that step fails (a filesystem without ACLs),
+  the uc containers cannot write the folder: change the pipeline's `uc procure stage` and
+  `uc procure clean` commands to `make procure-stage` and `make procure-clean`, which hand the
+  folder to the uc containers for each run and back to the user running them.
+- **Set up the approval** ([The approval](#the-approval)):
+  - GitHub Actions: create the `procurement` environment with required reviewers. Without them,
+    GitHub creates the environment on the first run, unprotected, and runs the push job without
+    waiting; the example's push job then stops at its first step, pushing nothing.
+  - GitLab CI: protect the `procurement` environment and allow only the approvers to deploy to it
+    (GitLab Premium or Ultimate). Without that, any developer who can run the pipeline can run the
+    review job too, and so approve their own run.
+  - Jenkins: the users or groups `submitter` names must exist. Without them, no one but a Jenkins
+    administrator can approve, and each run waits at the review until it is aborted.
 
 ## Choose what to stage
 
@@ -71,6 +83,10 @@ or `PROCUREMENT_POMS=true`, `PROCUREMENT_DEPENDENCIES=true` and `PROCUREMENT_WAR
 `.env`. With none of them set, the stage step exits 2 and the run stops before the review. What each
 one stages: [2. Stage](procure-missing-files.md#2-stage).
 
+The examples assume the default staging folder: they read the staged list as
+`procurement/procurement.json` in `UC_DIR`, where `PROCUREMENT_STAGING_DIR`'s default,
+`/procurement`, is mounted. If you set another folder, change that path in the stage and push steps.
+
 ## The stages
 
 Each `uc ...` command runs as `docker compose run --rm uc ...` in `UC_DIR` (`uc config` with
@@ -81,7 +97,7 @@ Each `uc ...` command runs as `docker compose run --rm uc ...` in `UC_DIR` (`uc 
 | check | `uc config --check`, `uc doctor` | `uc doctor`'s exit 1 (something to procure) does not fail the stage; above 1 does. |
 | stage | `uc procure stage` | Its output and `procurement.json` become pipeline artifacts for the reviewers, with the checksum of `procurement.json`. |
 | review | none | The approval ([below](#the-approval)). |
-| push | `sha256sum -c`, then `uc procure push` | Stops, pushing nothing, if `procurement.json` changed since the review. |
+| push | `sha256sum -c`, then `uc procure push` | Stops, pushing nothing, if `procurement.json` changed since the review. On GitHub it first checks that the `procurement` environment has required reviewers. |
 | generate | `uc generate` | Publishes now instead of at the next schedule. |
 | verify | `uc status`, `uc doctor` | `uc doctor`'s exit 1 does not fail it. |
 | clean | `uc procure clean` | Deletes the staged copies the repository now holds. |
@@ -94,7 +110,7 @@ When a stage fails, the run stops there: the later stages, the push included, do
 |---|---|---|
 | Jenkins | The `review` stage's `input` step, with `submitter: 'uc-approvers'`. It holds no agent while it waits. | Set `submitter` to the users or groups allowed to approve, comma-separated. |
 | GitLab CI | The `review` job: `when: manual` on the `procurement` environment, with `allow_failure: false`, so the later jobs wait for it. | Protect the `procurement` environment (Settings > CI/CD > Protected environments) and allow only the approvers to deploy to it. Protected environments need GitLab Premium or Ultimate; without them, any developer who can run the pipeline can also run the review job. |
-| GitHub Actions | The `procurement` environment on the `push` job, which waits until a reviewer approves it. | Give the `procurement` environment required reviewers (Settings > Environments). In a private repository on GitHub Free, Pro or Team, an environment cannot have required reviewers, so the push job does not wait: the example pushes with no approval. Use instead a plan that offers required reviewers in private repositories (GitHub Enterprise), a public repository (where every plan offers them, though GitHub recommends self-hosted runners only for private repositories), or the Jenkins or GitLab CI example. |
+| GitHub Actions | The `procurement` environment on the `push` job, which waits until a reviewer approves it. Without required reviewers GitHub would run the job without waiting, so its first step reads the environment through GitHub's API, with the job's token, and stops the job, pushing nothing, unless it has them. | Give the `procurement` environment required reviewers (Settings > Environments). In a private repository on GitHub Free, Pro or Team, an environment cannot have required reviewers, so the push job always stops. Use instead a plan that offers required reviewers in private repositories (GitHub Enterprise), a public repository (where every plan offers them, though GitHub recommends self-hosted runners only for private repositories), or the Jenkins or GitLab CI example. |
 
 Each system records who approved the run: the Jenkins build log, the GitLab review job (it prints
 `approved by <user>`) and the GitHub run's deployment review.
@@ -151,6 +167,7 @@ A scheduled run still waits for the approval before it pushes.
 | `uc doctor` | 2 or more | An invalid command line: the stage fails. |
 | `uc procure stage` | 1 | A file could not be staged (`FAILED` in `stage-report.txt`), or the run was refused (`uc: error: ...`, for example air-gapped without `PROCUREMENT_SOURCE_URL`). |
 | `uc procure stage` | 2 | Nothing selected to stage: set `PROCUREMENT_POMS`, `PROCUREMENT_DEPENDENCIES` or `PROCUREMENT_WARS` ([above](#choose-what-to-stage)). |
+| GitHub's reviewers check | 1 | The `procurement` environment has no required reviewers, or could not be read; nothing was pushed. |
 | `sha256sum -c` | 1 | `procurement.json` changed after the review; nothing was pushed. |
 | `uc procure push` | 1 | A file did not end up in the repository; its line says why ([4. Push](procure-missing-files.md#4-push)). Run the pipeline again once it is fixed: files already pushed show as `present`. |
 | `uc generate` | 1 | The generation failed; the live release is unchanged. The next scheduled generation publishes the pushed files. |
@@ -168,7 +185,8 @@ A scheduled run still waits for the approval before it pushes.
 - [github-actions.yml](../../examples/pipelines/github-actions.yml): a workflow in
   `.github/workflows/` of a private repository whose self-hosted runner sits on the host. Set
   `UC_DIR` under `env:` and give the `procurement` environment required reviewers, which a private
-  repository has only with GitHub Enterprise ([The approval](#the-approval)).
+  repository has only with GitHub Enterprise ([The approval](#the-approval)); without them, the push
+  job stops.
 
 [examples/pipelines/README.md](../../examples/pipelines/README.md) sums them up, with a shorter stage
 table.

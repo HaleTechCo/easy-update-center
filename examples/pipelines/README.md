@@ -12,10 +12,23 @@ deployment directory `UC_DIR` (a pipeline variable, default `/opt/jenkins-update
 triggered by hand (a weekly trigger is included, commented out). Jenkins and GitHub allow one run at a
 time; GitLab allows one job at a time, so the checksum below is the guard there.
 
-The GitHub workflow's approval is the `procurement` environment's required reviewers. In a private
-repository on GitHub Free, Pro or Team, an environment cannot have required reviewers, so the push
-job does not wait and the workflow pushes with no approval. There, use GitHub Enterprise (required
-reviewers in private repositories), a public repository, or the Jenkins or GitLab CI example.
+Set up the approval before the first run:
+
+- GitHub: create the `procurement` environment with required reviewers. Without them, GitHub creates
+  it unprotected and runs the push job without waiting, so the push job's first step checks for
+  them through GitHub's API (it needs `curl` on the runner) and stops, pushing nothing. In a private
+  repository on GitHub Free, Pro or Team, an environment cannot have required reviewers, so the push
+  job always stops. There, use GitHub Enterprise (required reviewers in private repositories), a
+  public repository, or the Jenkins or GitLab CI example.
+- GitLab: protect the `procurement` environment and allow only the approvers to deploy to it
+  (GitLab Premium or Ultimate). Without that, any developer who can run the pipeline can also run
+  the review job.
+- Jenkins: the users or groups `submitter` names must exist. Without them, no one but a Jenkins
+  administrator can approve, and the run waits at the review until it is aborted.
+
+The examples assume the default staging folder (`PROCUREMENT_STAGING_DIR` unset): they read
+`procurement/procurement.json` in `UC_DIR`. With another folder, change that path in the stage and
+push steps.
 
 The stage step records the checksum of the staged list (`procurement.sha256`) beside the artifacts
 the reviewers read. The push step runs `sha256sum -c` on it in `UC_DIR` and stops if
@@ -26,7 +39,7 @@ jobs, not whole pipelines, so this check is what guarantees that only reviewed f
 |---|---|---|
 | check | `uc config --check`, `uc doctor` | `uc doctor` exit 1 (something to procure) does not fail the stage; above 1 does. |
 | stage | `uc procure stage` | Its output and `procurement.json` become pipeline artifacts for the reviewers. |
-| review | none | Jenkins `input` with `submitter`; a GitLab `when: manual` job on a protected environment; a GitHub environment with required reviewers on the push job. |
+| review | none | Jenkins `input` with `submitter`; a GitLab `when: manual` job on a protected environment; a GitHub environment with required reviewers on the push job, which checks that it has them. |
 | push | `uc procure push` | |
 | generate | `uc generate` | Publishes now instead of at the next schedule. |
 | verify | `uc status`, `uc doctor` | `uc doctor` exit 1 does not fail the stage. |
