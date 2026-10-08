@@ -901,6 +901,13 @@ def test_config_check_reports_a_bad_procurement_war(monkeypatch, tmp_path, secre
     assert capsys.readouterr().err.startswith('uc: error: PROCUREMENT_WARS takes Jenkins versions')
 
 
+def test_config_check_refuses_a_staging_folder_in_the_data_volume(monkeypatch, tmp_path, secrets_dir, capsys):
+    data = use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_STAGING_DIR', str(data / 'procurement'))
+    assert main(['config', '--check']) == 1
+    assert capsys.readouterr().err.startswith(f'uc: error: PROCUREMENT_STAGING_DIR must be outside UC_DATA_DIR ({data})')
+
+
 def test_config_check_reports_a_malformed_url_setting(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('HTTPS_PROXY', 'http://[bad')
