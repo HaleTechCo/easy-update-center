@@ -3,10 +3,10 @@
 # Runs on a self-hosted runner on the update center's Docker host (label uc-host), in the deployment
 # directory UC_DIR, which holds .env, config/uc.toml and secrets/; GitHub-hosted runners cannot reach
 # it. Give the "procurement" environment required reviewers (Settings > Environments): they are the
-# approval. In a private repository on GitHub Free, Pro or Team, an environment cannot have required
-# reviewers, so the push job does not wait and this workflow pushes with no approval. There, use GitHub
-# Enterprise (required reviewers in private repositories), a public repository, or the Jenkins or
-# GitLab CI example.
+# approval. Without them GitHub runs the push job without waiting, so its first step checks for them
+# and stops, pushing nothing. In a private repository on GitHub Free, Pro or Team, an environment
+# cannot have required reviewers, so the push job always stops. There, use GitHub Enterprise (required
+# reviewers in private repositories), a public repository, or the Jenkins or GitLab CI example.
 name: Procure missing files
 
 on:  # yamllint disable-line rule:truthy
@@ -69,7 +69,25 @@ jobs:
     runs-on: [self-hosted, uc-host]
     # The review: required reviewers approve this job after reading the artifacts.
     environment: procurement
+    # Only for the first step, which reads the environment's protection rules.
+    permissions:
+      actions: read
     steps:
+      - name: Check that the procurement environment requires reviewers
+        # Without required reviewers, GitHub runs this job without waiting for an approval, and it creates
+        # a missing environment without them: stop here, before anything is pushed. Needs curl on the runner.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! environment="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/environments/procurement")"; then
+            echo "::error::cannot read the procurement environment, so cannot tell whether anyone approved this push"
+            exit 1
+          fi
+          if ! grep -Eq '"type": *"required_reviewers"' <<<"$environment"; then
+            echo "::error::the procurement environment has no required reviewers, so nobody approved this push: add them under Settings > Environments"
+            exit 1
+          fi
       - uses: actions/download-artifact@v4
         with:
           name: procurement

@@ -217,9 +217,12 @@ once releases are published.
   every Compose command, it needs `.env`.
 - Example pipelines for Jenkins, GitLab CI and GitHub Actions, `examples/pipelines/`, that run
   procurement on the update center's host: check, stage, an approval, push, generate, verify and
-  clean. The push step first checks that `procurement.json` is the one the reviewers approved.
-  docs/how-to/run-procurement-from-a-pipeline.md explains them, and `make test-pipelines` checks
-  each one's stages.
+  clean. The push step first checks that `procurement.json` is the one the reviewers approved. The
+  GitHub Actions example's push job first reads the `procurement` environment through GitHub's API
+  and stops, pushing nothing, unless it has required reviewers: GitHub creates a missing environment
+  unprotected and runs the job without waiting. docs/how-to/run-procurement-from-a-pipeline.md
+  explains them and what to set up for the approval, and `make test-pipelines` checks each one's
+  stages.
 - Third-party notices in the uc image, `/opt/uc/licenses/`: update-center2's MIT license with the
   Jenkins project's governance statement, every bundled Java library with its license (generated
   by the build, which fails on a library with no known license), and the license texts.
