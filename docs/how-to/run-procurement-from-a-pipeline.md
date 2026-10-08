@@ -10,7 +10,9 @@ from Jenkins, GitLab CI or GitHub Actions, with an approval before anything is p
 
 - **An approval before the push.** The pipeline stages the files, then stops until one of the people
   you named has read what was staged and approved it. Only then does it push, and only the list they
-  approved.
+  approved. The GitHub Actions example stops only where GitHub offers required reviewers: in a
+  private repository on GitHub Free, Pro or Team it pushes with no approval
+  ([The approval](#the-approval)).
 - **A record.** Each run keeps who approved it, the stage report and `procurement.json` as it was
   approved, for as long as your CI system keeps runs and their artifacts.
 
@@ -40,7 +42,8 @@ The agent's or runner's user needs:
 - Docker, with Compose v2 (`docker compose`);
 - membership of the `docker` group, or an equivalent way to reach the Docker daemon (which gives that
   user root on the host, so treat the runner accordingly);
-- read access to `UC_DIR`.
+- read access to `UC_DIR`;
+- GNU make, only if it runs the `make procure-*` targets instead (below).
 
 Before the first run, prepare the host once, as for running the stages by hand
 ([Before you start](procure-missing-files.md#before-you-start)): fill in `secrets/repo_push_auth`,
@@ -91,7 +94,7 @@ When a stage fails, the run stops there: the later stages, the push included, do
 |---|---|---|
 | Jenkins | The `review` stage's `input` step, with `submitter: 'uc-approvers'`. It holds no agent while it waits. | Set `submitter` to the users or groups allowed to approve, comma-separated. |
 | GitLab CI | The `review` job: `when: manual` on the `procurement` environment, with `allow_failure: false`, so the later jobs wait for it. | Protect the `procurement` environment (Settings > CI/CD > Protected environments) and allow only the approvers to deploy to it. Protected environments need GitLab Premium or Ultimate; without them, any developer who can run the pipeline can also run the review job. |
-| GitHub Actions | The `procurement` environment on the `push` job, which waits until a reviewer approves it. | Give the `procurement` environment required reviewers (Settings > Environments). In a private repository, GitHub offers required reviewers only with GitHub Enterprise; keep the workflow in a private repository all the same, as GitHub recommends self-hosted runners only for private repositories. |
+| GitHub Actions | The `procurement` environment on the `push` job, which waits until a reviewer approves it. | Give the `procurement` environment required reviewers (Settings > Environments). In a private repository on GitHub Free, Pro or Team, an environment cannot have required reviewers, so the push job does not wait: the example pushes with no approval. Use instead a plan that offers required reviewers in private repositories (GitHub Enterprise), a public repository (where every plan offers them, though GitHub recommends self-hosted runners only for private repositories), or the Jenkins or GitLab CI example. |
 
 Each system records who approved the run: the Jenkins build log, the GitLab review job (it prints
 `approved by <user>`) and the GitHub run's deployment review.
@@ -129,8 +132,8 @@ The staging folder is shared, so the examples keep runs apart:
 ## Triggers
 
 The examples run when you start them: Jenkins' **Build with Parameters**, GitLab's **Build >
-Pipelines > Run pipeline**, or GitHub's **Run workflow** on the workflow's Actions page. Each
-includes a weekly trigger, commented out:
+Pipelines > New pipeline** (**Run pipeline** before GitLab 17.7), or GitHub's **Run workflow** on the
+workflow's Actions page. Each includes a weekly trigger, commented out:
 
 - **Jenkins**: uncomment `triggers { cron('H 6 * * 1') }`.
 - **GitLab CI**: uncomment the `schedule` rule under `workflow:`, then create the schedule in
@@ -164,7 +167,8 @@ A scheduled run still waits for the approval before it pushes.
   environment.
 - [github-actions.yml](../../examples/pipelines/github-actions.yml): a workflow in
   `.github/workflows/` of a private repository whose self-hosted runner sits on the host. Set
-  `UC_DIR` under `env:` and give the `procurement` environment required reviewers.
+  `UC_DIR` under `env:` and give the `procurement` environment required reviewers, which a private
+  repository has only with GitHub Enterprise ([The approval](#the-approval)).
 
-[examples/pipelines/README.md](../../examples/pipelines/README.md) sums them up, with the same stage
+[examples/pipelines/README.md](../../examples/pipelines/README.md) sums them up, with a shorter stage
 table.

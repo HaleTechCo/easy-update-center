@@ -105,8 +105,8 @@ What the repository must contain:
 [Stock an air-gapped repository](../how-to/stock-airgapped-repository.md).
 
 The options that staged, recorded, pushed and cleaned up files moved to [uc procure](#uc-procure).
-Each now exits 2 naming the command that replaces it, such as
-`uc doctor: error: --push moved: run uc procure push`:
+Each now exits 2: after the usage line, the error names the command that replaces it, such as
+`uc: error: --push moved: run uc procure push`:
 
 | Removed `uc doctor` option | Use instead |
 |---|---|
@@ -386,9 +386,9 @@ How to run `rotate` safely: [Rotate the signing certificate](../how-to/rotate-si
 ## The setup service
 
 The `setup` Compose service runs `uc-setup`, not `uc`: first-time setup, and the jobs that write to
-`./secrets` and `./procurement`. It is the only container that runs as root, and it runs only when
-you call it: it sits in its own Compose profile, so `docker compose up` never starts it. It has no
-network and no Compose secrets. It mounts `./secrets` at `/setup/secrets`, `./procurement` at
+`./secrets` and `./procurement`. It is the only Compose service that runs as root, and it runs only
+when you call it: it sits in its own Compose profile, so `docker compose up` never starts it. It has
+no network and no Compose secrets. It mounts `./secrets` at `/setup/secrets`, `./procurement` at
 `/setup/procurement` and `./config` read-only at `/setup/config`, and reads `.env` (or the file
 `UC_ENV_FILE` names) as the other services do, so the file must exist. "You" below is the owner of
 `./config`: `uc-setup` gives `./secrets` and `./procurement` to it when Docker has just created them

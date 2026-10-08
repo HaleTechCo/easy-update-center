@@ -89,7 +89,7 @@ The commands of [Procure missing POMs, dependencies and cores](how-to/procure-mi
 
 | Symptom | Cause and fix |
 |---|---|
-| `uc doctor: error: --push moved: run uc procure push` (or another option) | The options that staged, pushed and cleaned up moved from `uc doctor` to `uc procure`: run the command the message names ([Removed uc doctor options](reference/cli.md#uc-doctor)). |
+| `uc doctor` with a removed option: `uc: error: --push moved: run uc procure push` (or another option) | The options that staged, pushed and cleaned up moved from `uc doctor` to `uc procure`: run the command the message names ([Removed uc doctor options](reference/cli.md#uc-doctor)). |
 | `uc procure stage`: `nothing to stage: choose with --poms, ...` (exit 2) | No POMs, dependencies or cores are selected: add the options, or set `PROCUREMENT_POMS`, `PROCUREMENT_DEPENDENCIES` or `PROCUREMENT_WARS` ([Stage](how-to/procure-missing-files.md#2-stage)). |
 | `uc procure`: `cannot write to /procurement: ... Permission denied` | The uc containers cannot write `./procurement`: run `docker compose run --rm setup procurement` (`make setup`), or, where it fails, the `make procure-*` targets ([Sharing ./procurement](reference/cli.md#sharing-procurement)). |
 | `uc procure record`: `REFUSED ... it belongs at <path>; --fix moves it there` | A file you added is not at the Maven path its manifest or POM declares. Move it there, or run `uc procure record --fix` ([Files you place by hand](how-to/procure-missing-files.md#files-you-place-by-hand)). |

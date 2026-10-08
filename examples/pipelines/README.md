@@ -12,6 +12,11 @@ deployment directory `UC_DIR` (a pipeline variable, default `/opt/jenkins-update
 triggered by hand (a weekly trigger is included, commented out). Jenkins and GitHub allow one run at a
 time; GitLab allows one job at a time, so the checksum below is the guard there.
 
+The GitHub workflow's approval is the `procurement` environment's required reviewers. In a private
+repository on GitHub Free, Pro or Team, an environment cannot have required reviewers, so the push
+job does not wait and the workflow pushes with no approval. There, use GitHub Enterprise (required
+reviewers in private repositories), a public repository, or the Jenkins or GitLab CI example.
+
 The stage step records the checksum of the staged list (`procurement.sha256`) beside the artifacts
 the reviewers read. The push step runs `sha256sum -c` on it in `UC_DIR` and stops if
 `procurement/procurement.json` changed since the review. GitLab's `resource_group` only serializes
