@@ -19,12 +19,14 @@ Plugins go in Maven layout under the group their manifest names, cores as
 
 ## 2. Build the images
 
-If the Docker host has internet access, build there:
+Compose reads `.env` for every command, building included, so copy the air-gapped example first; you
+edit it in step 3. If the Docker host has internet access, build there:
 
 ```bash
 git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
 cd jenkins-update-center
-make build
+cp .env.airgapped.example .env
+docker compose build
 ```
 
 If it has none, build on a machine that does, with the **same CPU architecture** as the Docker host
@@ -34,7 +36,8 @@ If it has none, build on a machine that does, with the **same CPU architecture**
 # on the machine with internet access
 git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
 cd jenkins-update-center
-make build
+cp .env.airgapped.example .env
+docker compose build
 docker save jenkins-uc/uc:local jenkins-uc/web:local | gzip > ../jenkins-uc-images.tar.gz
 git bundle create ../jenkins-uc.bundle master
 
@@ -42,20 +45,21 @@ git bundle create ../jenkins-uc.bundle master
 git clone jenkins-uc.bundle jenkins-update-center
 gunzip -c jenkins-uc-images.tar.gz | docker load
 cd jenkins-update-center
+cp .env.airgapped.example .env
 ```
 
 The image archive is about 200 MB. `docker load` prints `Loaded image: jenkins-uc/uc:local` and
 `Loaded image: jenkins-uc/web:local`. These two images are all the update center runs; nothing else
-is pulled. On that host, skip `make build`; the other `make` targets below use the loaded images and
+is pulled. On that host, skip `docker compose build`; the commands below use the loaded images and
 need no internet.
+
+`make build` is the shortcut: it builds the same images with `docker build`, so it needs no `.env`,
+and also the image the test suites use.
 
 ## 3. Configure
 
-```bash
-cp .env.airgapped.example .env
-```
-
-Edit `.env`. It already sets `MODE=airgapped`; keep that. Then:
+Edit `.env`, copied from `.env.airgapped.example` in step 2. It already sets `MODE=airgapped`; keep
+that. Then:
 
 - `PUBLIC_URL`: the origin controllers will use, decided now, because it is written into the signed
   metadata. Include the port if it is not the scheme's default, for example
@@ -86,11 +90,13 @@ The same settings can go in `config/uc.toml` instead, or as well:
 
 ## 4. Add credentials
 
-`make secrets-placeholders` creates the credential files with the permissions the containers need;
-writing into them keeps those permissions.
+`docker compose run --rm setup` does first-time setup (`make setup` is the shortcut). It creates the
+credential files with the permissions the containers need, creates the signing keys (step 5), and
+shares `./procurement`, the staging folder of [procurement](../how-to/procure-missing-files.md),
+with the uc containers. Writing into the credential files keeps their permissions.
 
 ```bash
-make secrets-placeholders
+docker compose run --rm setup
 printf '%s' 'svc-jenkins-uc' > secrets/repo_username
 printf '%s' 'password-or-token' > secrets/repo_password
 # only with DOWNLOAD_ACCESS=proxy: a read-only account for downloads
@@ -101,17 +107,19 @@ printf '%s' 'svc-read:password-or-token' > secrets/download_proxy_auth
 (Artifact Keeper). Only the repo-adapter container receives these two files. What each file holds:
 [Secrets reference](../reference/secrets.md).
 
-## 5. Create the signing keys
+`setup` is safe to repeat: it creates only what is missing, and never replaces the keys or a
+credential file. Its last step, sharing `./procurement`, can fail on a filesystem without ACLs that
+the uc containers cannot write either; the rest is done by then, and the message says what to use
+instead ([Sharing ./procurement](../reference/cli.md#sharing-procurement)). Each step, and its
+`make` shortcut: [The setup service](../reference/cli.md#the-setup-service).
 
-```bash
-make pki-init
-```
+## 5. Move the root key offline
 
-This creates the root CA and the signing certificate in `secrets/`, and sets the permissions of
-everything there: `secrets/` stays yours, the uc containers read their files through group 10001, and
-the web container reads `download_proxy_auth` through group 33
-([File ownership on Linux](../reference/secrets.md#file-ownership-on-linux)). Then move the root CA's
-key to offline storage right away (it is needed only once a year):
+`setup` created the root CA and the signing certificate in `secrets/` (`uc pki init`), and set the
+permissions of everything there: `secrets/` stays yours, the uc containers read their files through
+group 10001, and the web container reads `download_proxy_auth` through group 33
+([File ownership on Linux](../reference/secrets.md#file-ownership-on-linux)). Now move the root CA's
+key to offline storage (it is needed only once a year):
 
 ```bash
 mv secrets/root /media/offline-usb/jenkins-uc-root      # any offline location

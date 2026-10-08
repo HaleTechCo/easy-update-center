@@ -14,7 +14,9 @@ What a host, a network and a set of accounts need before you deploy the update c
 ## Software
 
 - Docker Engine with Compose v2: `docker compose version` must work.
-- GNU make, for `make build`, `make pki-init` and the other targets.
+- GNU make is optional: it runs the `make` shortcuts, such as `make build` and `make setup`
+  (`make help` lists them). Procurement needs it on a filesystem without ACLs
+  ([Sharing ./procurement](../reference/cli.md#sharing-procurement)).
 - git, to clone this repository.
 
 Nothing else is installed on the host: the generator, Python and Apache all run in the containers.

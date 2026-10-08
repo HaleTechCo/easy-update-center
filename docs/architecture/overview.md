@@ -16,13 +16,14 @@ on a Java runtime, plus the `uc` command in Python) and the **web image** (Apach
   secrets. See [Where web gets its settings](request-routing.md#where-web-gets-its-settings).
 - **setup** runs only when called, never by `docker compose up`: `docker compose run --rm setup`
   for first-time setup, or `setup secrets`, `procurement`, `pki-init` or `pki-rotate`, which
-  `make pki-init`, `pki-rotate`, `secrets-placeholders` and `secrets-permissions` run. Its
-  entrypoint, `uc-setup`, runs `uc pki` and `secrets-permissions.sh` as root against `./secrets`
-  (mounted at `/setup/secrets`; or the directory `make pki-init OUT=<dir>` names), and gives
+  `make setup`, `make secrets`, `make pki-init` and `make pki-rotate` run. Its entrypoint,
+  `uc-setup`, runs `uc pki` and `secrets-permissions.sh` as root against `./secrets` (mounted at
+  `/setup/secrets`; or the directory `make pki-init OUT=<dir>` names, at `/setup/out`), and gives
   `./procurement` (`/setup/procurement`) ACLs that let you and the uc containers both write it. It
-  reads `./config` read-only and the same `.env` as the other services. It has no network and no
-  Compose secrets, but as root it can read and write everything in `./secrets`, the signing key and
-  `root/root-ca.key` included.
+  reads `./config` read-only at `/setup/config` (its owner is the host user it hands files to) and
+  the same `.env` as the other services. It has no network and no Compose secrets, but as root it
+  can read and write everything in `./secrets`, the signing key and `root/root-ca.key` included. See
+  [The setup service](../reference/cli.md#the-setup-service).
 - **scheduler** runs `uc generate` on `GENERATE_SCHEDULE`, and at once when no release is live;
   with `DOCTOR_SCHEDULE` set it also runs a read-only `uc doctor --record`.
   Each run builds a complete new release, validates it, and swaps it in atomically. See

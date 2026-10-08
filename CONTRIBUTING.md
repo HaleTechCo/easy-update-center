@@ -26,6 +26,10 @@ The hooks run tools from the venv (`language: system`), so **activate the venv i
 commit from**: `source .venv/Scripts/activate` (Linux/macOS: `source .venv/bin/activate`). Optional
 tools and the details of each hook: [tools/README.md](tools/README.md).
 
+Plain `make` runs `make help`: every target with one line on what it does, grouped as Setup,
+Running, Procurement and Development. `make build` runs `docker build`, not `docker compose build`:
+Compose refuses to load the project without a `.env`, and `make build` must work on a fresh clone.
+
 ## Repository layout
 
 ```text
@@ -38,6 +42,7 @@ uc/uc/                the uc Python package (standard library only): CLI, genera
 web/                  the web image: Apache configuration, entrypoint, health check
 compose.yaml          the stack; compose.airgapped.yaml is the air-gapped override
 config/overlay/       operator overlay merged into upstream's resources/
+examples/pipelines/   procurement pipelines for Jenkins, GitLab CI and GitHub Actions, to copy
 secrets/              keys and credentials (gitignored except its README)
 tests/unit/           pytest, run in the uc test image
 tests/routing/        the web image's routing against generated fixture sites
@@ -65,15 +70,17 @@ How the pieces fit: [Architecture overview](docs/architecture/overview.md).
 | `make it-full` | The online run with the whole catalog. Takes hours. | as above |
 | `make test-secrets` | The ownership and modes `uc/bin/secrets-permissions.sh` gives `secrets/`, checked with real Linux permissions inside the uc image (part of `make test`). | Docker |
 | `make test-setup` | `uc/bin/uc-setup`, the setup service's entrypoint, checked as root inside the uc image with real Linux ownership and ACLs: first-time setup, sharing `procurement/` with uid 10001, `pki-init` and `pki-rotate` (part of `make test`). | Docker |
+| `make test-pipelines` | The example pipelines in `examples/pipelines/`: each runs the procurement stages in the order of the how-to, with the approval before the push, and checks before pushing that `procurement.json` is the one reviewed (`tests/unit/test_pipeline_examples.py`, so part of `make test-unit`). | Docker |
 | `make it-clean` | Removes the integration suites' containers and volumes. | Docker |
 
-Unit tests read `uc/uc/`, `uc/templates/` and `tools/` straight from the working tree, so they need
-no rebuild. Changing `uc/java/VersionTool.java` or a Dockerfile needs `make build` first.
+Unit tests read `uc/uc/`, `uc/templates/`, `tools/` and `examples/pipelines/` straight from the
+working tree, so they need no rebuild. Changing `uc/java/VersionTool.java` or a Dockerfile needs
+`make build` first.
 
 The example settings files (`config/uc.example.toml`, `.env.online.example`,
 `.env.airgapped.example`) are generated from the settings registry, `uc/uc/settings.py`. After
-changing a setting there, run `make examples`; `make test-unit` fails while a committed copy is out
-of date.
+changing a setting there, run `make examples` and commit what it rewrites; `make test-unit` fails
+while a committed copy is out of date.
 
 ## Lint
 

@@ -14,20 +14,21 @@ A production deployment with internet access that reads plugins from repo.jenkin
 ```bash
 git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
 cd jenkins-update-center
-make build
+cp .env.online.example .env
+docker compose build
 ```
 
-This builds `jenkins-uc/uc:local` (update-center2 from source, with its tests) and
-`jenkins-uc/web:local`. The first build takes several minutes.
+Compose reads `.env` for every command, building included, so copy the example first; you edit it in
+the next step. This builds `jenkins-uc/uc:local` (update-center2 from source, with its tests) and
+`jenkins-uc/web:local`. The first build takes several minutes. `make build` is the shortcut: it
+builds the same images with `docker build`, so it needs no `.env`, and also the image the test
+suites use.
 
 ## 2. Configure
 
-```bash
-cp .env.online.example .env
-```
-
-Edit `.env` and set `PUBLIC_URL` to your update center's origin, for example
-`https://jenkins-updates.example.com`. Other settings worth knowing now:
+Edit `.env`, copied from `.env.online.example` in step 1, and set `PUBLIC_URL` to your update
+center's origin, for example `https://jenkins-updates.example.com`. Other settings worth knowing
+now:
 
 - `GENERATE_SCHEDULE`: when to regenerate (default every six hours);
 - `JAVA_TOOL_OPTIONS`: `-Xmx6g` for the full catalog;
@@ -46,11 +47,13 @@ The same settings can go in `config/uc.toml` instead, or as well:
 
 ## 3. Add credentials
 
-`make secrets-placeholders` creates the credential files with the permissions the containers need;
-writing into them keeps those permissions.
+`docker compose run --rm setup` does first-time setup (`make setup` is the shortcut). It creates the
+credential files with the permissions the containers need, creates the signing keys (step 4), and
+shares `./procurement`, the staging folder of [procurement](../how-to/procure-missing-files.md),
+with the uc containers. Writing into the credential files keeps their permissions.
 
 ```bash
-make secrets-placeholders
+docker compose run --rm setup
 printf '%s' 'your-community-user' > secrets/repo_username
 printf '%s' 'your-community-password' > secrets/repo_password
 # recommended: a GitHub user and a classic token with no scopes, for plugin labels
@@ -62,17 +65,19 @@ Reading your own repository, `repo_username` and `repo_password` hold its accoun
 Artifact Keeper, a user name and an API token). What each file holds:
 [Secrets reference](../reference/secrets.md).
 
-## 4. Create the signing keys
+`setup` is safe to repeat: it creates only what is missing, and never replaces the keys or a
+credential file. Its last step, sharing `./procurement`, can fail on a filesystem without ACLs that
+the uc containers cannot write either; the rest is done by then, and the message says what to use
+instead ([Sharing ./procurement](../reference/cli.md#sharing-procurement)). Each step, and its
+`make` shortcut: [The setup service](../reference/cli.md#the-setup-service).
 
-```bash
-make pki-init
-```
+## 4. Move the root key offline
 
-This creates the root CA and the signing certificate in `secrets/`, and sets the permissions of
-everything there: `secrets/` stays yours, and each container reads its own files through its group
-([File ownership on Linux](../reference/secrets.md#file-ownership-on-linux)). Then **move the root
-CA's key to offline storage** right away: it is needed only once a year, to issue the next signing
-certificate.
+`setup` created the root CA and the signing certificate in `secrets/` (`uc pki init`), and set the
+permissions of everything there: `secrets/` stays yours, and each container reads its own files
+through its group ([File ownership on Linux](../reference/secrets.md#file-ownership-on-linux)).
+Now **move the root CA's key to offline storage**: it is needed only once a year, to issue the next
+signing certificate.
 
 ```bash
 mv secrets/root /media/offline-usb/jenkins-uc-root      # any offline location
