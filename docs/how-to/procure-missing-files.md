@@ -131,7 +131,7 @@ next: review ./procurement (procurement.json lists 12 files), then uc procure pu
 
 Push uploads only what `procurement.json` lists, so a file you copy into `./procurement/` yourself (a
 WAR downloaded elsewhere, a plugin from another source) must be recorded first. Files and folders you
-move or copy into it from elsewhere can keep their own modes and ACLs, so run
+move or copy into it from elsewhere can keep their own modes and ACLs: run
 `docker compose run --rm setup procurement` (or `make setup`) again after bringing them in, so the uc
 containers can move and delete them. Then:
 

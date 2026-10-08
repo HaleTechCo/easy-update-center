@@ -114,8 +114,9 @@ services:
     restart: unless-stopped
 
   # One-shot commands. Only this service stages downloads for review and writes to the repository
-  # (uc procure stage and push, docs/how-to/procure-missing-files.md): it alone mounts
-  # ./procurement and receives repo_push_auth.
+  # (uc procure stage and push, docs/how-to/procure-missing-files.md): it is the only service with a
+  # network that mounts ./procurement (setup mounts it too, with no network, to set its ACLs), and
+  # the only one that receives repo_push_auth.
   # It runs only when an operator calls it.
   uc:
     <<: *uc

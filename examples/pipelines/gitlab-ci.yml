@@ -1,7 +1,8 @@
 ---
 # Procurement with an approval before anything is pushed (docs/how-to/run-procurement-from-a-pipeline.md).
 # Runs on a shell runner on the update center's Docker host (tag uc-host), in the deployment directory
-# UC_DIR, which holds .env, config/uc.toml and secrets/. Run it from Build > Pipelines > Run pipeline.
+# UC_DIR, which holds .env, config/uc.toml and secrets/. Run it from Build > Pipelines > New pipeline
+# (Run pipeline before GitLab 17.7).
 # Protect the "procurement" environment (Settings > CI/CD > Protected environments) so only its
 # approvers can run the review job.
 variables:

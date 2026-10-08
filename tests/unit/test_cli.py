@@ -127,14 +127,14 @@ def test_a_removed_doctor_flag_names_its_command(argv, replacement, capsys):
     with pytest.raises(SystemExit) as exited:
         main(['doctor', *argv])
     assert exited.value.code == 2
-    assert f'{argv[0]} moved: run {replacement}' in capsys.readouterr().err
+    assert capsys.readouterr().err.splitlines()[-1] == f'uc: error: {argv[0]} moved: run {replacement}'  # after argparse's usage line
 
 
 def test_a_moved_flag_beside_a_valid_one_still_exits_2(capsys):
     with pytest.raises(SystemExit) as exited:
         main(['doctor', '--push', '--fetch'])
     assert exited.value.code == 2
-    assert '--push moved: run uc procure push' in capsys.readouterr().err
+    assert capsys.readouterr().err.splitlines()[-1] == 'uc: error: --push moved: run uc procure push'
 
 
 def test_procure_stage_with_nothing_selected_exits_2(monkeypatch, tmp_path, secrets_dir, capsys):

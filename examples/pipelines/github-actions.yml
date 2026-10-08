@@ -2,7 +2,11 @@
 # Procurement with an approval before anything is pushed (docs/how-to/run-procurement-from-a-pipeline.md).
 # Runs on a self-hosted runner on the update center's Docker host (label uc-host), in the deployment
 # directory UC_DIR, which holds .env, config/uc.toml and secrets/; GitHub-hosted runners cannot reach
-# it. Give the "procurement" environment required reviewers (Settings > Environments).
+# it. Give the "procurement" environment required reviewers (Settings > Environments): they are the
+# approval. In a private repository on GitHub Free, Pro or Team, an environment cannot have required
+# reviewers, so the push job does not wait and this workflow pushes with no approval. There, use GitHub
+# Enterprise (required reviewers in private repositories), a public repository, or the Jenkins or
+# GitLab CI example.
 name: Procure missing files
 
 on:  # yamllint disable-line rule:truthy
