@@ -21,8 +21,8 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 | The listing fails with HTTP 403 (online) | Anonymous or wrong credentials: repo.jenkins-ci.org needs a Jenkins community account ([Accounts](getting-started/requirements.md#accounts)). |
 | The listing fails with HTTP 403 (Artifactory) | The account cannot read the repository. Give it read permission on the repository (no admin rights are needed), or use another account. |
 | A stack trace from `GitHubSource`: `java.io.IOException: This endpoint requires you to be authenticated` | Not an error: the warning for a missing GitHub token. The run continues without labels from GitHub topics ([GitHub token](reference/secrets.md#github-token)). |
-| `Permission denied` writing to `secrets/` (Linux) | `secrets/` was set up by an older `make pki-init`, which gave it to uid 10001. Run `make secrets-permissions` to give it back ([File ownership on Linux](reference/secrets.md#file-ownership-on-linux)). |
-| A container logs `Permission denied` reading a file under `/run/secrets/` (Linux) | The file was replaced (copied over, or saved by an editor that writes a new file) and lost its group. Run `make secrets-permissions`, then `docker compose up -d`. |
+| `Permission denied` writing to `secrets/` (Linux) | `secrets/` was set up by an older `make pki-init`, which gave it to uid 10001. Run `docker compose run --rm setup secrets` (`make secrets`) to give it back ([File ownership on Linux](reference/secrets.md#file-ownership-on-linux)). |
+| A container logs `Permission denied` reading a file under `/run/secrets/` (Linux) | The file was replaced (copied over, or saved by an editor that writes a new file) and lost its group. Run `docker compose run --rm setup secrets` (`make secrets`), then `docker compose up -d`. |
 | `PUBLIC_URL must be a bare origin such as https://uc.example.com` | `PUBLIC_URL` has a path, query or fragment. Give the update center its own hostname ([A hostname for PUBLIC_URL](getting-started/requirements.md#a-hostname-for-public_url)). |
 | `PUBLIC_URL points at localhost, which Jenkins controllers cannot reach` | Use a name controllers can resolve. `ALLOW_LOCAL_PUBLIC_URL=true` exists for tests only. |
 | `uc: another generation holds /data/.lock` (exit code 75) | A generation or rollback is already running, often the scheduler's. Wait for it; `docker compose logs -f scheduler` shows it. |
@@ -41,7 +41,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 
 | Symptom | Cause and fix |
 |---|---|
-| `missing signing material: /run/secrets/update-center.key (see 'uc pki init')` | Run `make pki-init`. On Linux, if the files exist, run `make secrets-permissions` ([File ownership on Linux](reference/secrets.md#file-ownership-on-linux)). |
+| `missing signing material: /run/secrets/update-center.key (see 'uc pki init')` | Run `docker compose run --rm setup` (`make setup`): it creates the signing keys when `secrets/update-center.key` is missing. On Linux, if the files exist, run `docker compose run --rm setup secrets` (`make secrets`) ([File ownership on Linux](reference/secrets.md#file-ownership-on-linux)). |
 | `signing certificate expires in N days (minimum 30); run 'uc pki rotate'` | [Rotate the signing certificate](how-to/rotate-signing-certificate.md), then recreate the scheduler. |
 | `... update-center.key does not match ... update-center.cert` | The key and certificate come from different runs of `uc pki`. Restore the matching pair, or rotate. |
 | `... update-center.cert is not issued by ... root-ca.crt` | `root-ca.crt` was replaced without the signing certificate (or the reverse). Restore the matching files. |

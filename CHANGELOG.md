@@ -32,20 +32,21 @@ once releases are published.
   `config/overlay/` before.
 - `DOWNLOAD_PROXY_AUTH_FILE` defaults to `${SECRETS_DIR}/download_proxy_auth`, as the other secret
   files do.
-- `make pki-init`, `make pki-rotate`, `make secrets-placeholders` and `make secrets-permissions` run
-  a new `setup` Compose service instead of `docker run`: root, no network, no Compose secrets, and
-  only when called. Its entrypoint, `uc-setup`, takes `secrets`, `procurement`, `pki-init` or
-  `pki-rotate`; with no argument (`docker compose run --rm setup`) it does first-time setup: the
-  missing credential files, the signing keys unless they exist, then `./procurement`. `pki-init` in
-  `secrets/` and `pki-rotate` end with the `secrets` step. It mounts `./secrets`, `./procurement` and
-  `./config` (read-only) under `/setup/`, and gives `./secrets` and `./procurement` to the owner of
-  `./config` when Docker has just created them as root; when `./config` is empty and root's too, it
-  refuses to run. `setup procurement` shares `./procurement` with the uc containers through ACLs
-  (the uc image gains the `acl` package); on a filesystem without them it succeeds when uid 10001
-  can already write the folder, and otherwise fails naming the make targets that hand the folder
-  over for each run. It reads `.env`, or the file `UC_ENV_FILE` names, as the other services do, so
-  quotes in values are handled the same way and `PKI_*` settings apply to `uc pki`. The file must
-  exist, or Compose stops.
+- First-time setup is one command, `docker compose run --rm setup` (`make setup`), and
+  `make pki-init`, `make pki-rotate` and `make secrets` run the same new `setup` Compose service
+  instead of `docker run`: root, no network, no Compose secrets, and only when called. Its
+  entrypoint, `uc-setup`, takes `secrets`, `procurement`, `pki-init` or `pki-rotate`; with no
+  argument it does first-time setup: the missing credential files, the signing keys unless they
+  exist, then `./procurement`. It runs `secrets-permissions.sh`, which moved from `scripts/` into
+  the uc image (`uc/bin/`). `pki-init` in `secrets/` and `pki-rotate` end with the `secrets` step.
+  It mounts `./secrets`, `./procurement` and `./config` (read-only) under `/setup/`, and gives
+  `./secrets` and `./procurement` to the owner of `./config` when Docker has just created them as
+  root; when `./config` is empty and root's too, it refuses to run. `setup procurement` shares
+  `./procurement` with the uc containers through ACLs (the uc image gains the `acl` package); on a
+  filesystem without them it succeeds when uid 10001 can already write the folder, and otherwise
+  fails naming the make targets that hand the folder over for each run. It reads `.env`, or the
+  file `UC_ENV_FILE` names, as the other services do, so quotes in values are handled the same way
+  and `PKI_*` settings apply to `uc pki`. The file must exist, or Compose stops.
 - `uc pki rotate` (`make pki-rotate`) first checks that the root key and `root-ca.crt` can be read
   and belong together, and that `update-center.key` and `update-center.cert` are both there or both
   missing, then issues the new pair in a temporary directory inside the directory it rotates, and
@@ -63,18 +64,17 @@ once releases are published.
   (`make pki-init`) likewise creates the PKI in a temporary directory and moves it in once complete,
   so a failed run leaves nothing for the next one to refuse. A directory either cannot write in is
   reported as `uc: error: cannot write in <dir>: <reason>` instead of a traceback.
-- `secrets/` stays owned by you on Linux. `make pki-init`, `make secrets-placeholders` and the new
-  `make pki-rotate` and `make secrets-permissions` let each container read its own files through its
-  group (uc 10001, web 33) instead of handing the whole directory to uid 10001, so no step needs
-  `sudo` and credentials can be written before or after the keys. `make secrets-permissions` also
-  repairs a `secrets/` set up the old way.
-- `make reload`, `make pki-init`, `make pki-rotate`, `make secrets-placeholders`,
-  `make secrets-permissions` and the `make procure-*` targets run the images `.env` names in
-  `UC_IMAGE` and `WEB_IMAGE`: they no longer hand Compose make's own `jenkins-uc/*:local` defaults,
-  which beat `.env`. A value given on make's command line or in the shell still wins. They build or
-  pull that uc image only when it is missing, in a step of its own: they build it if it is
-  `jenkins-uc/uc:local` and pull any other, so an offline or air-gapped host that loaded pre-built
-  images builds and pulls nothing.
+- `secrets/` stays owned by you on Linux. The `setup` service (first-time setup, and its `secrets`,
+  `pki-init` and `pki-rotate`) lets each container read its own files through its group (uc 10001,
+  web 33) instead of handing the whole directory to uid 10001, so no step needs `sudo` and
+  credentials can be written before or after the keys. `docker compose run --rm setup secrets`
+  (`make secrets`) also repairs a `secrets/` set up the old way.
+- `make setup`, `make secrets`, `make pki-init`, `make pki-rotate`, `make reload` and the
+  `make procure-*` targets run the images `.env` names in `UC_IMAGE` and `WEB_IMAGE`: they no
+  longer hand Compose make's own `jenkins-uc/*:local` defaults, which beat `.env`. A value given on
+  make's command line or in the shell still wins. They build or pull that uc image only when it is
+  missing, in a step of its own: they build it if it is `jenkins-uc/uc:local` and pull any other,
+  so an offline or air-gapped host that loaded pre-built images builds and pulls nothing.
 - The `docker compose run`s of those targets no longer print Compose's `Container ... Creating` and
   `Created` lines around the command's output (`COMPOSE_PROGRESS=quiet`; older Compose releases
   ignore it).
@@ -82,6 +82,25 @@ once releases are published.
   derived from an archive or ignored as unusable, not only for plugins with no POM at all. In the
   adapter's `report.json` and `uc doctor --json`, `derived_poms` entries are objects (`gav`, `url`)
   instead of strings, and `replaced_poms` entries gain a `url`.
+- `uc doctor` only reports. Its options that staged, recorded, pushed and cleaned moved to
+  `uc procure` (see Added), and each now exits 2 naming the command that replaces it, as in
+  `uc: error: --push moved: run uc procure push`: `--download-poms`, `--download-dependencies` and
+  `--download-war` (`uc procure stage --poms`, `--dependencies`, `--war`), `--stage-local` and
+  `--fix` (`uc procure record`, `--fix`), `--push` (`uc procure push`), `--clean`
+  (`uc procure clean`), `--dry-run` (of `push` or `clean`) and `--staging` (of every `uc procure`
+  command).
+- Plain `make` runs `make help`: the targets you run, each with one line on what it does, grouped as
+  Setup, Running, Procurement and Development. `make setup` does first-time setup, and
+  `make secrets` the `setup secrets` step, with `make secrets-placeholders` and
+  `make secrets-permissions` now its aliases. `make procure-stage` and `make procure-record`
+  replace `make procure-download`; with `make procure-push` and `make procure-clean` they run
+  `uc procure stage`, `record`, `push` and `clean`, passing `ARGS=` through. Stage, record and
+  clean hand `./procurement` to uid 10001 for the run and back to you after, for filesystems where
+  `setup procurement` cannot share it. `make build` still runs `docker build`, so it works before
+  `.env` exists.
+- `uc procure` writes the files it stages, and `procurement.json`, readable by everyone and writable
+  by their group (mode 664; they were 644), so you can edit them under the ACLs `setup procurement`
+  sets.
 
 ### Added
 
@@ -154,26 +173,47 @@ once releases are published.
   new `--display-dir` of `uc pki init` and `uc pki rotate`, the directory `--out` or `--dir` is on
   the host, so their messages name `secrets/...` or `<dir>/...`, not the container's
   `/setup/secrets/...` or `/setup/out/...`.
-- Procurement with `uc doctor`, through a staging folder, `./procurement/`, whose `procurement.json`
-  records each file's source, sha1 and reason for review:
-  - `--download-poms`, `--download-dependencies` and `--download-war VERSION|required` stage the
-    real POMs, the missing required dependencies (transitively, each with its POM) and Jenkins cores
-    from repo.jenkins-ci.org (`PROCUREMENT_SOURCE_URL`). `make procure-download` wraps them.
-  - `--stage-local` records files placed in the folder by hand, after the checks a download gets: a
-    plugin's manifest coordinates and a core's `Jenkins-Version` must match the path. It names the
-    Maven path a misplaced file belongs at, and `--fix` moves it there.
-  - `--push` (`make procure-push`) uploads exactly the listed files with the new
+- Procurement with `uc procure`, one command per stage, through a staging folder, `./procurement/`,
+  whose `procurement.json` records each file's source, sha1 and reason for review
+  (docs/how-to/procure-missing-files.md):
+  - `uc procure stage` (`make procure-stage`) prints `uc doctor`'s report, then stages the real POMs
+    (`--poms`), the missing required dependencies, transitively, each with its POM
+    (`--dependencies`), and Jenkins cores (`--war VERSION|required`) from repo.jenkins-ci.org
+    (`PROCUREMENT_SOURCE_URL`), each checked against the `.sha1` published beside it. The
+    `PROCUREMENT_*` settings choose what it stages on every run; with nothing chosen it exits 2.
+  - `uc procure record` (`make procure-record`) records files placed in the folder by hand, after
+    the checks a download gets: a plugin's manifest coordinates and a core's `Jenkins-Version` must
+    match the path. It names the Maven path a misplaced file belongs at, and `--fix` moves it there.
+  - `uc procure push` (`make procure-push`) uploads exactly the listed files with the new
     `secrets/repo_push_auth`, never overwriting. It reports files in the folder that
     `procurement.json` does not list, and the repository's reason when it refuses an upload (with a
     pointer to Artifact Keeper's storage garbage collection for its 409 on a deleted release). On
     Artifact Keeper, it records a file that an upload cut off by the request timeout left stored but
     unrecorded, when the stored bytes are the staged file's.
-  - `--clean` (`make procure-clean`) deletes the staged files the repository already holds with the
-    same content, with their entries, so the folder keeps only what still needs pushing.
-  - The report lists the cores plugins require that the repository lacks, from the oldest core it
-    holds (or `--since`), and names the oldest one below that floor with the `--since` that stages
-    it.
-  - After upgrading, run `make secrets-placeholders` once so Compose finds `secrets/repo_push_auth`.
+  - `uc procure clean` (`make procure-clean`) deletes the staged files the repository already holds
+    with the same content, with their entries, so the folder keeps only what still needs pushing.
+  - When the uc containers cannot write the folder, the error names
+    `docker compose run --rm setup procurement` and, where that fails, the `make procure-*` targets
+    that hand the folder over for each run.
+  - The `uc doctor` report lists the cores plugins require that the repository lacks, from the
+    oldest core it holds (or `--since`), and names the oldest one below that floor with the
+    `--since` that stages it.
+  - After upgrading, run `docker compose run --rm setup` (`make setup`) once: it creates
+    `secrets/repo_push_auth`, which Compose needs, and shares `./procurement` with the uc
+    containers.
+- `uc doctor` and `uc procure` end with the next step. When the report finds something to procure:
+  `next: uc procure stage --poms --dependencies --war required (or set PROCUREMENT_POMS=true, ...)`,
+  naming the options for what it found. After `stage` or `record`, whenever `procurement.json` lists
+  files: `next: review ./procurement (procurement.json lists N files), then uc procure push`. After
+  a push with no problem: `next: uc generate (or wait for the schedule), then uc procure clean`.
+  With `uc doctor --json` the line goes to standard error.
+- `docker compose build` builds the uc and web images: every service has a `build:` section. Like
+  every Compose command, it needs `.env`.
+- Example pipelines for Jenkins, GitLab CI and GitHub Actions, `examples/pipelines/`, that run
+  procurement on the update center's host: check, stage, an approval, push, generate, verify and
+  clean. The push step first checks that `procurement.json` is the one the reviewers approved.
+  docs/how-to/run-procurement-from-a-pipeline.md explains them, and `make test-pipelines` checks
+  each one's stages.
 - Third-party notices in the uc image, `/opt/uc/licenses/`: update-center2's MIT license with the
   Jenkins project's governance statement, every bundled Java library with its license (generated
   by the build, which fails on a library with no known license), and the license texts.

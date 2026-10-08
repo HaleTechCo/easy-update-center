@@ -21,12 +21,23 @@ at the key file, which is refused), here `/media/offline-usb/jenkins-uc-root`:
 make pki-rotate ROOT=/media/offline-usb/jenkins-uc-root
 ```
 
+Without make, mount that directory read-only at `/setup/secrets/root` for the `setup` service's
+`pki-rotate` (`--root-display-dir` makes its messages name the key where it is on the host), then
+remove the empty mount point Docker leaves in `secrets/` (`make pki-rotate` does both):
+
+```bash
+docker compose run --rm -v /media/offline-usb/jenkins-uc-root:/setup/secrets/root:ro \
+  setup pki-rotate --root-display-dir /media/offline-usb/jenkins-uc-root
+rmdir secrets/root
+```
+
 This writes a new `secrets/update-center.key` and `secrets/update-center.cert`, keeps the previous
-pair as `*.old`, and sets their permissions like the rest of `secrets/`. The root key is mounted
-read-only and only read; nothing on the offline media changes. If `ROOT` does not hold the key of
-`secrets/root-ca.crt` (a typo, or an old root after replacing it), it stops with an error naming the
-file. The new pair is issued in a temporary directory inside `secrets/` and only then renamed into
-place, so when a check, a step or a rename fails, `secrets/` is left as it was.
+pair as `*.old`, and sets the permissions of everything in `secrets/`, as `setup secrets` does. The
+root key is mounted read-only and only read; nothing on the offline media changes. If the directory
+does not hold the key of `secrets/root-ca.crt` (a typo, or an old root after replacing it), it stops
+with an error naming the file. The new pair is issued in a temporary directory inside `secrets/` and
+only then renamed into place, so when a check, a step or a rename fails, `secrets/` is left as it
+was.
 
 Then make the running services use the new files. Compose mounts each secret file as it was when
 the container started, so recreate the scheduler:
@@ -42,10 +53,10 @@ key to offline storage. Once the new release is live, delete `secrets/*.old`.
 
 ### A passphrase-protected root key
 
-`make pki-rotate` never asks for a passphrase. It refuses an encrypted root key with
+`pki-rotate` never asks for a passphrase. It refuses an encrypted root key with
 `uc: error: the root CA key <ROOT>/root-ca.key is encrypted; decrypt it to a temporary file for the
-rotation (...)`. Decrypt it into a new directory only you can read, rotate with that directory as `ROOT`,
-and delete the decrypted copy straight afterwards:
+rotation (...)`. Decrypt it into a new directory only you can read, rotate with that directory as
+`ROOT` (or mounted as above), and delete the decrypted copy straight afterwards:
 
 ```bash
 mkdir -m 700 /tmp/uc-root
@@ -68,9 +79,18 @@ overlap, because controllers reject metadata signed under a root they do not tru
    make pki-init OUT=newpki
    ```
 
-   It works as `make pki-init` does: the `PKI_*` settings come from `.env`, existing files are not
-   overwritten, and the files get the permissions they have in `secrets/`. Another directory name
-   works too, but git does not ignore it.
+   Without make, create the directory and mount it for the `setup` service's `pki-init`
+   (`--display-dir` makes its messages name `newpki/...`):
+
+   ```bash
+   mkdir -p newpki
+   docker compose run --rm -v "$PWD/newpki:/setup/out" \
+     setup pki-init --out /setup/out --display-dir newpki
+   ```
+
+   It works as the signing keys of first-time setup do: the `PKI_*` settings come from `.env`,
+   existing files are not overwritten, and the files get the permissions they have in `secrets/`.
+   Another directory name works too, but git does not ignore it.
 
 2. Add `newpki/root-ca.crt` to `update-center-rootCAs/` on every controller, **keeping the old
    root** there. Jenkins trusts every certificate in that directory.
@@ -79,14 +99,15 @@ overlap, because controllers reject metadata signed under a root they do not tru
 
    ```bash
    mv newpki/update-center.key newpki/update-center.cert newpki/root-ca.crt secrets/
-   make secrets-permissions
+   docker compose run --rm setup secrets      # or: make secrets
    ```
 4. Move `newpki/root/root-ca.key` offline.
 5. Later, remove the old root from every controller.
 
 ## Where the root key lives
 
-`make pki-init` writes the root CA's private key to `secrets/root/root-ca.key`. It is needed only to
-issue signing certificates, once a year. Move `secrets/root/` to offline storage (an encrypted USB
-key, a vault) right after `make pki-init`: anyone holding it can sign metadata your controllers
-accept. Keep a backup of it; losing it means replacing the root CA on every controller.
+First-time setup (`docker compose run --rm setup`, or `make setup`) writes the root CA's private key
+to `secrets/root/root-ca.key`. It is needed only to issue signing certificates, once a year. Move
+`secrets/root/` to offline storage (an encrypted USB key, a vault) right after setup: anyone holding
+it can sign metadata your controllers accept. Keep a backup of it; losing it means replacing the
+root CA on every controller.

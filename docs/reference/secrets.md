@@ -5,18 +5,19 @@ Every secret file, which container receives it, and the ownership and permission
 ## Secret files
 
 Secrets are files in `secrets/`, which is gitignored except for its README. Compose mounts each one
-under `/run/secrets/` in the containers that need it. An empty file means "not set";
-`make secrets-placeholders` creates every optional file empty, so Compose can mount it.
+under `/run/secrets/` in the containers that need it. An empty file means "not set"; first-time
+setup (`docker compose run --rm setup`) and `docker compose run --rm setup secrets` create every
+missing credential file empty, so Compose can mount it.
 
 | File | Required | Content |
 |---|---|---|
-| `update-center.key`, `update-center.cert` | yes | The signing key and certificate, from `make pki-init`. |
-| `root-ca.crt` | yes | The root CA certificate, from `make pki-init`. Not secret: every controller gets a copy. |
+| `update-center.key`, `update-center.cert` | yes | The signing key and certificate, from first-time setup (`uc pki init`). |
+| `root-ca.crt` | yes | The root CA certificate, from first-time setup. Not secret: every controller gets a copy. |
 | `repo_username`, `repo_password` | yes | Online: a Jenkins community account. Air-gapped, Artifactory: an account with read permission on the repository (no admin rights needed; its listing queries return what it can read), with its password or an access token as `repo_password`. Air-gapped, Artifact Keeper: a user name and an API token. |
 | `github_username`, `github_token` | online, recommended | A GitHub user and token; see [GitHub token](#github-token). |
 | `download_proxy_auth` | only with `DOWNLOAD_ACCESS=proxy` | `username:password` of a read-only account on the download backend. |
 | `repo_push_auth` | only for `uc procure push` and `clean` | `user:token` of an account that can write to the repository (push writes with it, clean only reads) (Artifact Keeper: a user name and an API token with `write:artifacts`). See [Procure missing files](../how-to/procure-missing-files.md). |
-| `root/root-ca.key` | no: move it offline | The root CA's private key, from `make pki-init`. Needed only to issue the next signing certificate. See [Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives). |
+| `root/root-ca.key` | no: move it offline | The root CA's private key, from first-time setup. Needed only to issue the next signing certificate. See [Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives). |
 | `repo-ca.crt` | only for a repository behind a private CA | The CA bundle mounted by the `compose.repo-ca.yaml` override ([Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca)). |
 | `proxy-ca.crt` | only for a proxy-mode backend behind a private CA | The CA bundle mounted by the `compose.proxy-ca.yaml` override ([Backend with a private CA](../how-to/proxy-downloads.md#backend-with-a-private-ca)). |
 
@@ -63,28 +64,32 @@ with group 33. `secrets/` stays yours, and each container reads its own files th
 | `repo-ca.crt`, `proxy-ca.crt`, `README.md` | you | yours | unchanged (0644) |
 | `root/`, `root/root-ca.key` | you | yours | 0700, 0600 |
 
-`make pki-init`, `make pki-rotate` and `make secrets-placeholders` set this up (through
-`uc/bin/secrets-permissions.sh`, which the `setup` service's entrypoint, `uc-setup`, runs as root;
-"you" is the owner of `./config`), so no step needs `sudo`, and you can write credentials before or
-after creating the keys. Writing into an existing file, as `printf '%s' '...' > secrets/repo_password`
-does, keeps its permissions. After **replacing** a file (copying a new one over it, or saving it from
-an editor that writes a new file), run:
+The `setup` Compose service sets this up as root, so no step needs `sudo`, and you can write
+credentials before or after creating the keys. Its entrypoint, `uc-setup`, runs
+`uc/bin/secrets-permissions.sh` (in the uc image) in first-time setup
+(`docker compose run --rm setup`) and in its `secrets`, `pki-init` and `pki-rotate` commands. "You"
+is the owner of `./config`: every checkout has that directory, so `setup` takes the host user from
+it. Writing into an existing file, as `printf '%s' '...' > secrets/repo_password` does, keeps its
+permissions. After **replacing** a file (copying a new one over it, or saving it from an editor that
+writes a new file), run:
 
 ```bash
-make secrets-permissions
+docker compose run --rm setup secrets      # or: make secrets
 ```
 
-It is idempotent, and it also hands back a `secrets/` that an older version of `make pki-init` gave
-wholesale to uid 10001. Docker Desktop (macOS, Windows) ignores ownership, so the owners and modes
-above do not matter there.
+It is idempotent: it creates any missing credential file empty and sets the permissions again. It
+also hands back a `secrets/` that an older version of `make pki-init` gave wholesale to uid 10001.
+Docker Desktop (macOS, Windows) ignores ownership, so the owners and modes above do not matter
+there.
 
-These four targets (`pki-init`, `pki-rotate`, `secrets-placeholders`, `secrets-permissions`) run the
-`setup` service from `compose.yaml`: `docker compose run --rm --no-deps setup pki-init`, `pki-rotate`
-or `secrets`, as root, with no network and no Compose secrets, mounting only `./secrets`,
-`./procurement` and `./config` (at `/setup/secrets`, `/setup/procurement` and `/setup/config`), and
-the directory `make pki-rotate ROOT=<dir>` or `make pki-init OUT=<dir>` names. It reads `.env` (or
-the file `UC_ENV_FILE` names) as the other services do, so quotes in it are handled the same way,
-and the file must exist: create it first (`cp .env.online.example .env`), or Compose stops with
+`setup` runs only when you call it, with no network and no Compose secrets, and mounts only
+`./secrets`, `./procurement` and `./config` (at `/setup/secrets`, `/setup/procurement` and
+`/setup/config`), and the directory `make pki-rotate ROOT=<dir>` or `make pki-init OUT=<dir>`
+names. Its commands and their `make` shortcuts (`make setup`, `make secrets`, `make pki-init`,
+`make pki-rotate ROOT=<dir>`; `make secrets-placeholders` and `make secrets-permissions` are
+aliases of `make secrets`): [The setup service](cli.md#the-setup-service). It reads `.env` (or the
+file `UC_ENV_FILE` names) as the other services do, so quotes in it are handled the same way, and
+the file must exist: create it first (`cp .env.online.example .env`), or Compose stops with
 `env file ... not found`.
 
 ## GitHub token

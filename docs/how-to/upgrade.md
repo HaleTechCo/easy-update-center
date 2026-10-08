@@ -12,7 +12,7 @@ the revision you move to first.
 git fetch
 git log --oneline HEAD..origin/master                # what changes
 git pull
-make build
+docker compose build                                 # or: make build
 docker compose run --rm --no-deps uc config --check  # your settings, as the new revision reads them
 docker compose up -d                                 # air-gapped: COMPOSE_FILE in .env selects the override
 docker compose run --rm uc generate                  # publish with the new generator now, instead of at the next schedule
@@ -32,8 +32,9 @@ which checks the settings first and recreates nothing when they are invalid.
 `last_run.result` is `success` and that `update_center2` names the version you expect.
 
 Air-gapped hosts without internet access cannot `git pull`: the clone came from a bundle, so its
-`origin` never changes. On a connected machine, update your clone, `make build`, and create a new
-image archive and bundle as in [Build the images](../getting-started/airgapped.md#2-build-the-images).
+`origin` never changes. On a connected machine, update your clone, run `docker compose build` (or
+`make build`), and create a new image archive and bundle as in
+[Build the images](../getting-started/airgapped.md#2-build-the-images).
 Then, on the air-gapped host:
 
 ```bash
@@ -45,7 +46,8 @@ docker compose run --rm uc generate
 ```
 
 On Linux, if `git pull` cannot update a file under `secrets/` (such as its README), an older
-`make pki-init` gave `secrets/` to uid 10001: run `make secrets-permissions` first.
+`make pki-init` gave `secrets/` to uid 10001: run `docker compose run --rm setup secrets`
+(`make secrets`) first.
 
 ## Go back to the previous revision
 
@@ -54,9 +56,13 @@ first, or the services start without them.
 
 ```bash
 git checkout <previous commit or tag>
-make build
+docker compose build      # or: make build
 docker compose up -d
 ```
+
+A revision from before `docker compose build` could build the images (see `CHANGELOG.md`) has no
+`build:` sections, so there `docker compose build` only warns `No services to build` and
+`docker compose up -d` would run the newer images: use `make build`.
 
 If the problem is the release the new revision published, not the software, roll the site back
 too: `docker compose run --rm uc rollback`. See [Generate and roll back](generate-and-roll-back.md).

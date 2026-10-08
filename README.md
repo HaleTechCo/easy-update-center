@@ -105,8 +105,8 @@ flowchart LR
 
 ## Quick start
 
-You need a Linux host with Docker (Compose v2), GNU make and git, a hostname for the update center,
-and a Jenkins community account (online) or an account on your repository (air-gapped). Details:
+You need a Linux host with Docker (Compose v2) and git, a hostname for the update center, and a
+Jenkins community account (online) or an account on your repository (air-gapped). Details:
 [Requirements](docs/getting-started/requirements.md).
 
 ### Online
@@ -114,17 +114,21 @@ and a Jenkins community account (online) or an account on your repository (air-g
 ```bash
 git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
 cd jenkins-update-center
-make build
 cp .env.online.example .env          # set PUBLIC_URL to your update center's origin
-make secrets-placeholders
+docker compose build
+docker compose run --rm setup        # credential placeholders, ./procurement, signing keys
 printf '%s' 'community-user' > secrets/repo_username        # free: https://accounts.jenkins.io
 printf '%s' 'community-password' > secrets/repo_password
-make pki-init                        # signing keys; move secrets/root/ offline afterwards
 docker compose up -d
 ```
 
-`secrets/` stays yours, with no `sudo`: the `make` targets let each container read its own files
-through its group ([File ownership on Linux](docs/reference/secrets.md#file-ownership-on-linux)).
+With GNU make, the build and setup steps have shortcuts, `make build` and `make setup`; `make help`
+lists the targets you run.
+
+`secrets/` stays yours, with no `sudo`: `setup` lets each container read its own files through its
+group ([File ownership on Linux](docs/reference/secrets.md#file-ownership-on-linux)). Move
+`secrets/root/`, which holds the root CA's key, offline afterwards
+([After the quick start](#after-the-quick-start)).
 
 The first run reads the whole plugin catalog and **takes hours**; follow it with
 `docker compose logs -f scheduler`. When `docker compose run --rm uc status` shows a `live_release`,
@@ -137,22 +141,24 @@ Full walkthrough: [Deploy online](docs/getting-started/online.md).
 ```bash
 git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
 cd jenkins-update-center
-make build                            # needs internet once; see below for hosts without it
 cp .env.airgapped.example .env        # set PUBLIC_URL, REPO_URL, REPO_KEY; uncomment COMPOSE_FILE
-make secrets-placeholders
+docker compose build                  # needs internet once; see below for hosts without it
+docker compose run --rm setup         # credential placeholders, ./procurement, signing keys
 printf '%s' 'svc-jenkins-uc' > secrets/repo_username
 printf '%s' 'password-or-token' > secrets/repo_password
-make pki-init                         # signing keys; move secrets/root/ offline afterwards
 docker compose run --rm uc doctor --fetch       # what the generator will see in your repository
 docker compose up -d
 ```
 
+With GNU make, the build and setup steps have shortcuts, `make build` and `make setup`; `make help`
+lists the targets you run.
+
 Your repository holds the plugins and cores to offer, in Maven layout:
 [Stock an air-gapped repository](docs/how-to/stock-airgapped-repository.md). No internet on the
 Docker host? Build on a connected machine and carry the images and a `git bundle` of this repository
-across; the `make` targets above then run without internet:
-[Build the images](docs/getting-started/airgapped.md#2-build-the-images). When a release is live,
-[configure Jenkins controllers](docs/how-to/configure-jenkins.md).
+across; on the Docker host, skip `docker compose build`, and the commands after it run without
+internet: [Build the images](docs/getting-started/airgapped.md#2-build-the-images). When a release
+is live, [configure Jenkins controllers](docs/how-to/configure-jenkins.md).
 
 Full walkthrough: [Deploy air-gapped](docs/getting-started/airgapped.md).
 
