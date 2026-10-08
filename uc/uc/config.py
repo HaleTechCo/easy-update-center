@@ -415,7 +415,7 @@ def settings_from(r: Resolver) -> Settings:
         download_proxy_ca_file=r.raw('DOWNLOAD_PROXY_CA_FILE'),
         procurement_source_url=with_trailing_slash(procurement_source or PUBLIC_RELEASES_URL),
         procurement_source_set=bool(procurement_source),
-        procurement_staging_dir=Path(r.raw('PROCUREMENT_STAGING_DIR')),
+        procurement_staging_dir=_staging_dir(r, data_dir),
         procurement_fetch=_bool(r, 'PROCUREMENT_FETCH'),
         procurement_poms=_bool(r, 'PROCUREMENT_POMS'),
         procurement_dependencies=_bool(r, 'PROCUREMENT_DEPENDENCIES'),
@@ -681,6 +681,19 @@ def _wars(r: Resolver, name: str) -> tuple[str, ...]:
             msg = f'{r.label(name)} takes Jenkins versions such as 2.479.1, or required (got {item!r})'
             raise ConfigError(msg)
     return wars
+
+
+def _staging_dir(r: Resolver, data_dir: Path) -> Path:
+    """Return PROCUREMENT_STAGING_DIR, refusing UC_DATA_DIR or a folder in it: the scheduler, the repo-adapter and web mount the data volume, and only the uc service may hold the staging folder.
+
+    Both are taken as the commands would use them, '..' and a relative path resolved against the working directory; no symlink is followed.
+    """
+    raw = r.raw('PROCUREMENT_STAGING_DIR')
+    here = Path.cwd()
+    if Path(os.path.normpath(here / raw)).is_relative_to(os.path.normpath(here / data_dir)):
+        msg = f'{r.label("PROCUREMENT_STAGING_DIR")} must be outside UC_DATA_DIR ({data_dir}), which the other services mount too: keep it on the ./procurement mount, /procurement by default (got {raw!r})'
+        raise ConfigError(msg)
+    return Path(raw)
 
 
 def _int(r: Resolver, name: str) -> int:

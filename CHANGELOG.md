@@ -110,6 +110,8 @@ once releases are published.
 - Settings for `uc procure`: `PROCUREMENT_STAGING_DIR`, `PROCUREMENT_FETCH`, `PROCUREMENT_POMS`,
   `PROCUREMENT_DEPENDENCIES`, `PROCUREMENT_WARS` and `PROCUREMENT_FIX`. `PROCUREMENT_WARS` is the
   first list setting: spaces or commas in `.env`, an array of strings in `config/uc.toml`.
+  `PROCUREMENT_STAGING_DIR` must stay on the `./procurement` mount: `UC_DATA_DIR`, or a folder in
+  it, is refused when the settings load, since the other services mount the data volume.
 - `uc config` shows each setting's value and where it came from; `--check` validates, `--example`
   prints an example file, `--web-env` the web container's settings. Credentials inside a URL setting
   (everything before its last `@`, such as a proxy URL's user:password) show as `***`, in text and

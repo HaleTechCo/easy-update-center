@@ -270,6 +270,24 @@ def test_procurement_staging_defaults():
     assert settings.procurement_wars == ()
 
 
+@pytest.mark.parametrize(('data', 'staging'), [('/data', '/data'), ('/data', '/data/'), ('/data', '/data/procurement'), ('/data', '/data/../data/stage'), ('/srv/uc', '/srv/uc/stage')])
+def test_a_staging_folder_in_the_data_volume_fails_when_the_settings_load(data, staging):
+    with pytest.raises(ConfigError, match=rf"^PROCUREMENT_STAGING_DIR must be outside UC_DATA_DIR \({data}\), which the other services mount too: keep it on the \./procurement mount, /procurement by default \(got '{staging}'\)$"):
+        load_settings({**AIRGAPPED, 'UC_DATA_DIR': data, 'PROCUREMENT_STAGING_DIR': staging}, config_file=Path('/nonexistent/uc.toml'))
+
+
+def test_a_staging_folder_in_the_data_volume_from_uc_toml_names_its_key(tmp_path):
+    path = tmp_path / 'uc.toml'
+    path.write_text('[procurement]\nstaging_dir = "/data/stage"\n', encoding='utf-8')
+    with pytest.raises(ConfigError, match=r'^PROCUREMENT_STAGING_DIR \(\[procurement\] staging_dir in .*uc\.toml\) must be outside UC_DATA_DIR \(/data\)'):
+        load_settings(AIRGAPPED, config_file=path)
+
+
+@pytest.mark.parametrize('staging', ['/procurement', '/procurement/batch', '/database', '/srv/data', '/data2/stage'])
+def test_a_staging_folder_outside_the_data_volume_loads(staging):
+    assert load_settings({**AIRGAPPED, 'PROCUREMENT_STAGING_DIR': staging}, config_file=Path('/nonexistent/uc.toml')).procurement_staging_dir == Path(staging)
+
+
 @pytest.mark.parametrize(('raw', 'wars'), [('required', ('required',)), ('required 2.479.1', ('required', '2.479.1')), ('2.462.3,2.479.1', ('2.462.3', '2.479.1')), (' required , 2.479.1 ', ('required', '2.479.1'))])
 def test_procurement_wars_from_the_environment(raw, wars):
     assert load_settings({**AIRGAPPED, 'PROCUREMENT_WARS': raw}).procurement_wars == wars

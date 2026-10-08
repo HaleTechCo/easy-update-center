@@ -265,7 +265,7 @@ SETTINGS: tuple[Setting, ...] = (
         'Where uc procure stage fetches files from, by Maven path; https://repo.jenkins-ci.org/releases/ by default. Air-gapped, downloads are refused unless it is set.',
         derived=True,
     ),
-    Setting('PROCUREMENT_STAGING_DIR', 'path', 'Procurement', 'The staging folder uc procure stage fills and the other uc procure commands read (--staging), inside the uc container; compose.yaml mounts ./procurement there.', default='/procurement'),
+    Setting('PROCUREMENT_STAGING_DIR', 'path', 'Procurement', 'The staging folder uc procure stage fills and the other uc procure commands read (--staging), inside the uc container; compose.yaml mounts ./procurement there. It must stay on that mount: UC_DATA_DIR or a folder in it is refused.', default='/procurement'),
     Setting('PROCUREMENT_FETCH', 'bool', 'Procurement', 'uc procure stage first downloads the POMs and manifests missing from the cache, so it finds every missing dependency and required core (--fetch).', default='true'),
     Setting('PROCUREMENT_POMS', 'bool', 'Procurement', 'uc procure stage stages the real .pom of every plugin whose POM is missing, derived or unusable (--poms).', default='false'),
     Setting('PROCUREMENT_DEPENDENCIES', 'bool', 'Procurement', 'uc procure stage stages the missing required dependencies, transitively, each with its .pom (--dependencies).', default='false'),
