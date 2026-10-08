@@ -84,7 +84,7 @@ chown -R 10001:10001 "${dir}"
 fix
 expect_usable "repaired"
 
-# 4. Placeholders created by root inside a container, as the secrets-placeholders recipe does.
+# 4. Placeholders created by root inside a container, as the setup service's secrets step does.
 fresh
 rm -f "${dir}/github_token" && : > "${dir}/github_token"
 fix

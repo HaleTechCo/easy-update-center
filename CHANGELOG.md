@@ -200,9 +200,11 @@ once releases are published.
   - The `uc doctor` report lists the cores plugins require that the repository lacks, from the
     oldest core it holds (or `--since`), and names the oldest one below that floor with the
     `--since` that stages it.
-  - After upgrading, run `docker compose run --rm setup` (`make setup`) once: it creates
-    `secrets/repo_push_auth`, which Compose needs, and shares `./procurement` with the uc
-    containers.
+  - After upgrading, rebuild the images (`docker compose build`, or `make build`), then run
+    `docker compose run --rm setup` (`make setup`) once: it creates `secrets/repo_push_auth`, which
+    Compose needs, and shares `./procurement` with the uc containers. Rebuild first: `make setup`
+    builds the uc image only when it is missing, and an older revision's image has no `uc-setup`.
+    Plain `make` now prints the help instead of building: run `make build`.
 - `uc doctor` and `uc procure` end with the next step. When the report finds something to procure:
   `next: uc procure stage --poms --dependencies --war required (or set PROCUREMENT_POMS=true, ...)`,
   naming the options for what it found, with `uc doctor`'s `--since` after `--war required`.

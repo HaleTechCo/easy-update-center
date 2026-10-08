@@ -59,7 +59,7 @@ stack-uc-image:
 # secrets/ stays yours; the containers read their files through their group (uc 10001, web 33).
 # The setup service (compose.yaml) sets that up, as root, in every target that writes to secrets/:
 # its entrypoint, uc-setup (uc/bin/), runs uc/bin/secrets-permissions.sh for the owner of ./config.
-# Run `make secrets-permissions` yourself after replacing a file in secrets/. The setup service reads
+# Run `make secrets` yourself after replacing a file in secrets/. The setup service reads
 # .env, or UC_ENV_FILE, and config/ as the other services do, so uc pki sees the PKI_* settings they
 # see. It mounts ./secrets at /setup/secrets; uc pki's --display-dir makes its messages name the
 # files where they are on the host.

@@ -33,6 +33,12 @@ def mounts(service: dict) -> set[str]:
     return {volume.get('target') for volume in service.get('volumes') or []}
 
 
+def procurement_binds(service: dict) -> list[str]:
+    # The targets at which a service bind-mounts a host folder named procurement, wherever it mounts it.
+    # Compose gives the absolute host path, with backslashes on Windows.
+    return [str(volume.get('target')) for volume in service.get('volumes') or [] if volume.get('type') == 'bind' and str(volume.get('source', '')).replace('\\', '/').rstrip('/').endswith('/procurement')]
+
+
 def context_dir(build: dict) -> str:
     # Compose gives the absolute build context, with backslashes on Windows.
     return str(build.get('context', '')).replace('\\', '/').rsplit('/', 1)[-1]
@@ -83,6 +89,8 @@ def main() -> None:
             problems.append(f'{name} receives {PUSH_SECRET}, the repository write credential')
         if STAGING in mounts(service):
             problems.append(f'{name} mounts the staging folder {STAGING}')
+        if name != 'setup' and procurement_binds(service):
+            problems.append(f'{name} mounts ./procurement at {", ".join(procurement_binds(service))}')
     if 'uc' in services and (PUSH_SECRET not in secrets(services['uc']) or STAGING not in mounts(services['uc'])):
         problems.append(f'uc must receive {PUSH_SECRET} and mount {STAGING}')
     setup = services.get('setup')
@@ -106,14 +114,13 @@ def main() -> None:
             problems.append(f'web-config receives secrets {sorted(secrets(web_config))}')
         if web_config.get('network_mode') != 'none':
             problems.append('web-config must have no network')
+    # docker compose config folds an env_file into environment, so this also catches web given .env.
     if web.get('environment'):
         problems.append(f'web reads settings from its own environment ({sorted(web["environment"])}); web-config writes them')
     if (web.get('depends_on') or {}).get('web-config', {}).get('condition') != 'service_completed_successfully':
         problems.append('web must start after web-config has written its settings')
     if not any(volume.get('target') == '/run/uc-web' and volume.get('read_only') for volume in web.get('volumes') or []):
         problems.append('web must mount the web-config volume read-only at /run/uc-web')
-    if web.get('env_file'):
-        problems.append('web must have no env_file: .env holds settings and credentials web does not need')
     if secrets(web) != WEB_SECRETS:
         problems.append(f'web secrets are {sorted(secrets(web))}, not {sorted(WEB_SECRETS)}')
     for name in UC_SERVICES:

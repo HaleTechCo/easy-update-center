@@ -22,10 +22,13 @@ Only the latest commit on `master` is supported until versioned releases exist.
 
 ## Security design
 
-- The signing key is mounted only into the `uc` and `scheduler` containers; the internet-facing
-  `web` container never receives it. The root CA key is meant to live offline.
-- Every container runs as a non-root user with a read-only root filesystem; `web` mounts the data
-  volume read-only.
+- The signing key is mounted only into the `uc` and `scheduler` containers, and into the on-demand
+  `setup` service, which mounts `./secrets` while it runs; the internet-facing `web` container never
+  receives it. The root CA key is meant to live offline.
+- Every container runs as a non-root user with a read-only root filesystem, except the setup steps
+  an operator starts, which run as root and receive no Compose secrets: the `setup` service (with no
+  network) and the containers `make procure-stage`, `procure-record` and `procure-clean` use to hand
+  `./procurement` over. `web` mounts the data volume read-only.
 - The repo-adapter's unauthenticated file reads are reachable only on an internal network that
   `web` is not attached to; its listing requires a token `web` cannot read. Air-gapped, only the
   repo-adapter receives repository credentials.
