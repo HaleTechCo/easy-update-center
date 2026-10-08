@@ -89,14 +89,15 @@ once releases are published.
   `--fix` (`uc procure record`, `--fix`), `--push` (`uc procure push`), `--clean`
   (`uc procure clean`), `--dry-run` (of `push` or `clean`) and `--staging` (of every `uc procure`
   command).
-- Plain `make` runs `make help`: every target with one line on what it does, grouped as Setup,
-  Running, Procurement and Development. `make setup` does first-time setup, and `make secrets` the
-  `setup secrets` step, with `make secrets-placeholders` and `make secrets-permissions` now its
-  aliases. `make procure-stage` and `make procure-record` replace `make procure-download`; with
-  `make procure-push` and `make procure-clean` they run `uc procure stage`, `record`, `push` and
-  `clean`, passing `ARGS=` through. Stage, record and clean hand `./procurement` to uid 10001 for
-  the run and back to you after, for filesystems where `setup procurement` cannot share it.
-  `make build` still runs `docker build`, so it works before `.env` exists.
+- Plain `make` runs `make help`: the targets you run, each with one line on what it does, grouped as
+  Setup, Running, Procurement and Development. `make setup` does first-time setup, and
+  `make secrets` the `setup secrets` step, with `make secrets-placeholders` and
+  `make secrets-permissions` now its aliases. `make procure-stage` and `make procure-record`
+  replace `make procure-download`; with `make procure-push` and `make procure-clean` they run
+  `uc procure stage`, `record`, `push` and `clean`, passing `ARGS=` through. Stage, record and
+  clean hand `./procurement` to uid 10001 for the run and back to you after, for filesystems where
+  `setup procurement` cannot share it. `make build` still runs `docker build`, so it works before
+  `.env` exists.
 - `uc procure` writes the files it stages, and `procurement.json`, readable by everyone and writable
   by their group (mode 664; they were 644), so you can edit them under the ACLs `setup procurement`
   sets.
@@ -197,8 +198,9 @@ once releases are published.
   - The `uc doctor` report lists the cores plugins require that the repository lacks, from the
     oldest core it holds (or `--since`), and names the oldest one below that floor with the
     `--since` that stages it.
-  - After upgrading, run `docker compose run --rm setup secrets` (`make secrets`) once so Compose
-    finds `secrets/repo_push_auth`.
+  - After upgrading, run `docker compose run --rm setup` (`make setup`) once: it creates
+    `secrets/repo_push_auth`, which Compose needs, and shares `./procurement` with the uc
+    containers.
 - `uc doctor` and `uc procure` end with the next step. When the report finds something to procure:
   `next: uc procure stage --poms --dependencies --war required (or set PROCUREMENT_POMS=true, ...)`,
   naming the options for what it found. After `stage` or `record`, whenever `procurement.json` lists

@@ -5,8 +5,8 @@ How the update center signs its metadata and how Jenkins controllers come to tru
 ## The PKI
 
 Jenkins only accepts update center metadata signed by a certificate that chains to a root it
-trusts. The update center uses its own two-level PKI, created by `make pki-init` (which runs
-`uc pki init` with openssl):
+trusts. The update center uses its own two-level PKI, created by first-time setup,
+`docker compose run --rm setup` (or `make setup`), which runs `uc pki init` with openssl:
 
 | File | What it is |
 |---|---|
@@ -15,8 +15,9 @@ trusts. The update center uses its own two-level PKI, created by `make pki-init`
 | `secrets/update-center.key` | The signing key: RSA 4096. Mounted only into `scheduler` and `uc`. |
 | `secrets/update-center.cert` | The signing certificate, issued by the root: 365 days by default, key usage `digitalSignature`. |
 
-The subjects name the organization "Jenkins Update Center" unless `--org` is given. `make pki-init`
-refuses to overwrite existing files.
+The subjects name the organization "Jenkins Update Center" unless `--org` (`PKI_ORG`) is given.
+`uc pki init` refuses to overwrite existing files, and first-time setup runs it only when
+`secrets/update-center.key` does not exist.
 
 ## Trust chain
 

@@ -8,7 +8,7 @@ on 2026-09-24 produced. Pins are enforced at build time.
 ## uc image
 
 The image behind the `uc`, `scheduler`, `repo-adapter`, `web-config` and `setup` services. Built by
-`make build` from [`uc/Dockerfile`](../../uc/Dockerfile).
+`docker compose build` (or `make build`) from [`uc/Dockerfile`](../../uc/Dockerfile).
 
 | Component | Version or pin | Pinned in | License | Why |
 |---|---|---|---|---|
@@ -40,7 +40,7 @@ The image behind the `web` service. Built from [`web/Dockerfile`](../../web/Dock
 
 ## Build time
 
-Used by `make build`, not shipped in the runtime images.
+Used while building the images, not shipped in the runtime images.
 
 | Component | Version or pin | License | Why |
 |---|---|---|---|
@@ -84,7 +84,8 @@ delivered artifact, and an unpinned one picks up checker fixes without a bump co
 - **Floating:** the base image tags (`eclipse-temurin:21-jre`, `httpd:2.4`,
   `maven:3.9-eclipse-temurin-21`) and every distribution package. The distributions drop superseded
   package versions from their archives, so a pinned package version breaks the build as soon as the
-  base image moves on. Rebuilding (`make build`) picks up their security fixes.
+  base image moves on. Rebuilding (`docker compose build`, or `make build`) picks up their security
+  fixes.
 - Upgrading update-center2 is a deliberate step: [Upgrading update-center2](../development/upgrading-upstream.md).
 
 ## List the generator's Java libraries
@@ -114,8 +115,8 @@ The uc image carries the notices for everything it ships that is not this projec
 To read them: `docker run --rm --entrypoint cat jenkins-uc/uc:local /opt/uc/licenses/NOTICE.txt`.
 
 The build keeps them complete. Maven's license plugin lists each runtime library with the license
-its POM declares, and `make build` fails when a library has no known license, or when a jar the
-image ships is not in the list. A library whose POM declares no license is recorded, with the
+its POM declares, and the build fails when a library has no known license, or when a jar the image
+ships is not in the list. A library whose POM declares no license is recorded, with the
 evidence, in `uc/licenses/THIRD-PARTY.properties`; the committed texts live in `uc/licenses/`. See
 [Upgrading update-center2](../development/upgrading-upstream.md#3-update-the-docs) for what to do when
 the check fails.

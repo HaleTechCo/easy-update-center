@@ -21,12 +21,13 @@ at the key file, which is refused), here `/media/offline-usb/jenkins-uc-root`:
 make pki-rotate ROOT=/media/offline-usb/jenkins-uc-root
 ```
 
-Without make, run the `setup` service's `pki-rotate` with that directory mounted read-only at
-`/setup/secrets/root` (`--root-display-dir` makes its messages name the key where it is on the
-host), then remove the empty mount point Docker leaves in `secrets/`. `make pki-rotate` does both:
+Without make, mount that directory read-only at `/setup/secrets/root` for the `setup` service's
+`pki-rotate` (`--root-display-dir` makes its messages name the key where it is on the host), then
+remove the empty mount point Docker leaves in `secrets/` (`make pki-rotate` does both):
 
 ```bash
-docker compose run --rm -v /media/offline-usb/jenkins-uc-root:/setup/secrets/root:ro setup pki-rotate --root-display-dir /media/offline-usb/jenkins-uc-root
+docker compose run --rm -v /media/offline-usb/jenkins-uc-root:/setup/secrets/root:ro \
+  setup pki-rotate --root-display-dir /media/offline-usb/jenkins-uc-root
 rmdir secrets/root
 ```
 
@@ -52,10 +53,10 @@ key to offline storage. Once the new release is live, delete `secrets/*.old`.
 
 ### A passphrase-protected root key
 
-`make pki-rotate` never asks for a passphrase. It refuses an encrypted root key with
+`pki-rotate` never asks for a passphrase. It refuses an encrypted root key with
 `uc: error: the root CA key <ROOT>/root-ca.key is encrypted; decrypt it to a temporary file for the
-rotation (...)`. Decrypt it into a new directory only you can read, rotate with that directory as `ROOT`,
-and delete the decrypted copy straight afterwards:
+rotation (...)`. Decrypt it into a new directory only you can read, rotate with that directory as
+`ROOT` (or mounted as above), and delete the decrypted copy straight afterwards:
 
 ```bash
 mkdir -m 700 /tmp/uc-root
@@ -78,9 +79,18 @@ overlap, because controllers reject metadata signed under a root they do not tru
    make pki-init OUT=newpki
    ```
 
-   It works as `make pki-init` does: the `PKI_*` settings come from `.env`, existing files are not
-   overwritten, and the files get the permissions they have in `secrets/`. Another directory name
-   works too, but git does not ignore it.
+   Without make, create the directory and mount it for the `setup` service's `pki-init`
+   (`--display-dir` makes its messages name `newpki/...`):
+
+   ```bash
+   mkdir -p newpki
+   docker compose run --rm -v "$PWD/newpki:/setup/out" \
+     setup pki-init --out /setup/out --display-dir newpki
+   ```
+
+   It works as the signing keys of first-time setup do: the `PKI_*` settings come from `.env`,
+   existing files are not overwritten, and the files get the permissions they have in `secrets/`.
+   Another directory name works too, but git does not ignore it.
 
 2. Add `newpki/root-ca.crt` to `update-center-rootCAs/` on every controller, **keeping the old
    root** there. Jenkins trusts every certificate in that directory.

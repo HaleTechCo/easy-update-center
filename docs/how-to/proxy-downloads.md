@@ -22,10 +22,10 @@ repository.
 
    ```bash
    printf '%s' 'svc-read:password-or-token' > secrets/download_proxy_auth
-   make secrets-permissions
+   docker compose run --rm setup secrets      # or: make secrets
    ```
 
-   `make secrets-permissions` lets the web container (group 33) read the file, and nobody else
+   `setup secrets` lets the web container (group 33) read the file, and nobody else
    ([File ownership on Linux](../reference/secrets.md#file-ownership-on-linux)).
 
 2. Set `DOWNLOAD_ACCESS=proxy` in `.env`.
@@ -58,9 +58,9 @@ services:
       DOWNLOAD_PROXY_CA_FILE: /etc/ssl/uc-proxy-ca.crt
 ```
 
-Copy the CA's PEM file to `secrets/proxy-ca.crt` and run `make secrets-permissions` (it keeps the
-file readable, mode 0644, for the web container), add the override to `COMPOSE_FILE` in `.env`, and
-recreate the web container:
+Copy the CA's PEM file to `secrets/proxy-ca.crt` and run `docker compose run --rm setup secrets`
+(`make secrets`; it keeps the file readable, mode 0644, for the web container), add the override to
+`COMPOSE_FILE` in `.env`, and recreate the web container:
 
 ```bash
 COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.proxy-ca.yaml    # in .env (Windows: ; between files)

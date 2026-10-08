@@ -123,7 +123,7 @@ docker compose up -d
 ```
 
 With GNU make, the build and setup steps have shortcuts, `make build` and `make setup`; `make help`
-lists every target.
+lists the targets you run.
 
 `secrets/` stays yours, with no `sudo`: `setup` lets each container read its own files through its
 group ([File ownership on Linux](docs/reference/secrets.md#file-ownership-on-linux)). Move
@@ -151,12 +151,12 @@ docker compose up -d
 ```
 
 With GNU make, the build and setup steps have shortcuts, `make build` and `make setup`; `make help`
-lists every target.
+lists the targets you run.
 
 Your repository holds the plugins and cores to offer, in Maven layout:
 [Stock an air-gapped repository](docs/how-to/stock-airgapped-repository.md). No internet on the
 Docker host? Build on a connected machine and carry the images and a `git bundle` of this repository
-across; on the Docker host, skip `docker compose build`, and the other commands above run without
+across; on the Docker host, skip `docker compose build`, and the commands after it run without
 internet: [Build the images](docs/getting-started/airgapped.md#2-build-the-images). When a release
 is live, [configure Jenkins controllers](docs/how-to/configure-jenkins.md).
 

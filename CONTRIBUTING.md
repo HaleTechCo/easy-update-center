@@ -26,9 +26,10 @@ The hooks run tools from the venv (`language: system`), so **activate the venv i
 commit from**: `source .venv/Scripts/activate` (Linux/macOS: `source .venv/bin/activate`). Optional
 tools and the details of each hook: [tools/README.md](tools/README.md).
 
-Plain `make` runs `make help`: every target with one line on what it does, grouped as Setup,
-Running, Procurement and Development. `make build` runs `docker build`, not `docker compose build`:
-Compose refuses to load the project without a `.env`, and `make build` must work on a fresh clone.
+Plain `make` runs `make help`: the targets you run, each with one line on what it does, grouped as
+Setup, Running, Procurement and Development. `make build` runs `docker build`, not
+`docker compose build`: Compose refuses to load the project without a `.env`, and `make build` must
+work on a fresh clone.
 
 ## Repository layout
 
