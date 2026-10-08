@@ -13,11 +13,17 @@ git fetch
 git log --oneline HEAD..origin/master                # what changes
 git pull
 docker compose build                                 # or: make build
+docker compose run --rm setup                        # or: make setup; safe to repeat
 docker compose run --rm --no-deps uc config --check  # your settings, as the new revision reads them
 docker compose up -d                                 # air-gapped: COMPOSE_FILE in .env selects the override
 docker compose run --rm uc generate                  # publish with the new generator now, instead of at the next schedule
 docker compose run --rm uc status
 ```
+
+Run `setup` after the images are rebuilt: it creates what a newer revision needs, such as
+`secrets/repo_push_auth`, and leaves what exists. `make setup` builds the uc image only when it is
+missing, so it does not replace an older one, which may lack the newer `setup`. Plain `make` prints
+the help and builds nothing; `make build` builds.
 
 Check the settings before `docker compose up -d`: a newer revision can refuse a value an older one
 loaded, and a service whose settings do not load exits with an error instead of running.
@@ -40,14 +46,15 @@ Then, on the air-gapped host:
 ```bash
 git pull ../jenkins-uc.bundle master            # the Compose files and docs change too
 gunzip -c ../jenkins-uc-images.tar.gz | docker load
+docker compose run --rm setup
 docker compose run --rm --no-deps uc config --check
 docker compose up -d
 docker compose run --rm uc generate
 ```
 
 On Linux, if `git pull` cannot update a file under `secrets/` (such as its README), an older
-`make pki-init` gave `secrets/` to uid 10001: run `docker compose run --rm setup secrets`
-(`make secrets`) first.
+`make pki-init` gave `secrets/` to uid 10001: run `make secrets-permissions` first. Until the pull,
+you are on the older revision, which may not have the `setup` service yet.
 
 ## Go back to the previous revision
 
