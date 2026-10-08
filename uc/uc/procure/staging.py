@@ -23,11 +23,15 @@ DEFAULT_STAGING = Path('/procurement')
 """PROCUREMENT_STAGING_DIR's default: where compose.yaml mounts ./procurement in the uc container."""
 
 
+def shown_staging(staging_dir: Path) -> str:
+    """Return how a next: line names the staging folder: ./procurement, where it is on the host, for the default."""
+    return './procurement' if staging_dir == DEFAULT_STAGING else str(staging_dir)
+
+
 def review_line(staging_dir: Path, listed: int) -> str:
     """Return the next: line after staging or recording: review the folder, then push."""
-    shown = './procurement' if staging_dir == DEFAULT_STAGING else str(staging_dir)
     files = '1 file' if listed == 1 else f'{listed} files'
-    return f'next: review {shown} (procurement.json lists {files}), then uc procure push'
+    return f'next: review {shown_staging(staging_dir)} (procurement.json lists {files}), then uc procure push'
 
 
 @dataclass(frozen=True)

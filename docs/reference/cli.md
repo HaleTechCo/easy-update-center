@@ -101,6 +101,15 @@ run:
 next: uc procure stage --poms --dependencies --war required (or set PROCUREMENT_POMS=true, PROCUREMENT_DEPENDENCIES=true, PROCUREMENT_WARS=required)
 ```
 
+Given `--since`, the line carries it to the required cores: `--war required --since 2.462.1`, or
+`DOCTOR_SINCE=2.462.1` among the settings. Air-gapped without `PROCUREMENT_SOURCE_URL`, where
+`uc procure stage` refuses to download, the line names the other ways in instead: place the files in
+the staging folder and record them, or set the source, then stage:
+
+```text
+next: place the files the report lists in ./procurement and run uc procure record, or set PROCUREMENT_SOURCE_URL to a copy of repo.jenkins-ci.org the update center can reach, then uc procure stage --poms --dependencies --war required
+```
+
 What the repository must contain:
 [Stock an air-gapped repository](../how-to/stock-airgapped-repository.md).
 

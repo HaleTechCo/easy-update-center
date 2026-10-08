@@ -230,6 +230,7 @@ def test_staging_on_push_and_clean_reaches_the_command(monkeypatch, tmp_path, se
 
 def test_doctor_json_prints_the_next_line_on_stderr_and_keeps_stdout_valid(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'https://mirror.corp/releases/')
     report = DoctorReport(missing_dependencies=['a 1.0 requires b 2.0'])
     monkeypatch.setattr('uc.cli.inspect_repository', lambda *_, **__: Inspection(report, classify([]), None))
     main(['doctor', '--json', '--no-fetch'])
@@ -237,6 +238,26 @@ def test_doctor_json_prints_the_next_line_on_stderr_and_keeps_stdout_valid(monke
     assert json.loads(captured.out)['plugins'] == 0
     assert captured.err.splitlines()[-1] == 'next: uc procure stage --dependencies (or set PROCUREMENT_DEPENDENCIES=true)'
     assert 'next:' not in captured.out
+
+
+def test_doctor_air_gapped_without_a_source_suggests_placing_and_recording_the_files(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)  # air-gapped, no PROCUREMENT_SOURCE_URL: uc procure stage would refuse to download
+    report = DoctorReport(missing_dependencies=['a 1.0 requires b 2.0'])
+    monkeypatch.setattr('uc.cli.inspect_repository', lambda *_, **__: Inspection(report, classify([]), None))
+    main(['doctor', '--no-fetch'])
+    expected = 'next: place the files the report lists in ./procurement and run uc procure record, or set PROCUREMENT_SOURCE_URL to a copy of repo.jenkins-ci.org the update center can reach, then uc procure stage --dependencies'
+    assert capsys.readouterr().out.splitlines()[-1] == expected
+
+
+def test_doctor_carries_its_since_into_the_next_line_when_it_suggests_cores(monkeypatch, tmp_path, secrets_dir, capsys):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'https://mirror.corp/releases/')
+    report = DoctorReport(missing_cores=[{'version': '2.479.1', 'url': 'u', 'required_by': 1, 'example': 'a:b:1'}])
+    seen = {}
+    monkeypatch.setattr('uc.cli.inspect_repository', lambda *_, since, **__: seen.update(since=since) or Inspection(report, classify([]), None))
+    main(['doctor', '--no-fetch', '--since', '2.462.1'])
+    assert seen == {'since': '2.462.1'}
+    assert capsys.readouterr().out.splitlines()[-1] == 'next: uc procure stage --war required --since 2.462.1 (or set PROCUREMENT_WARS=required, DOCTOR_SINCE=2.462.1)'
 
 
 def test_doctor_record_keeps_json_output_valid_and_reports_the_saved_path_on_stderr(artifactory, monkeypatch, tmp_path, secrets_dir, capsys):
