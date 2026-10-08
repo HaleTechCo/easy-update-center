@@ -203,7 +203,11 @@ once releases are published.
     containers.
 - `uc doctor` and `uc procure` end with the next step. When the report finds something to procure:
   `next: uc procure stage --poms --dependencies --war required (or set PROCUREMENT_POMS=true, ...)`,
-  naming the options for what it found. After `stage` or `record`, whenever `procurement.json` lists
+  naming the options for what it found, with `uc doctor`'s `--since` after `--war required`.
+  Air-gapped without `PROCUREMENT_SOURCE_URL`, where the stage would refuse to download, it says
+  instead `next: place the files the report lists in ./procurement and run uc procure record, or set
+  PROCUREMENT_SOURCE_URL to a copy of repo.jenkins-ci.org the update center can reach, then
+  uc procure stage ...`. After `stage` or `record`, whenever `procurement.json` lists
   files: `next: review ./procurement (procurement.json lists N files), then uc procure push`. After
   a push with no problem: `next: uc generate (or wait for the schedule), then uc procure clean`.
   With `uc doctor --json` the line goes to standard error.

@@ -19,7 +19,7 @@ from .generate import generate
 from .pki import ROOT_CERT, ROOT_KEY, SIGNING_CERT, SIGNING_KEY, cert_info, init_pki, rotate_signing
 from .preflight import load_credentials
 from .procure.clean import clean
-from .procure.download import check_download_allowed, download
+from .procure.download import check_download_allowed, download, downloads_allowed
 from .procure.local import stage_local
 from .procure.plan import check_war_args, suggest_stage
 from .procure.push import push
@@ -214,7 +214,7 @@ def _doctor(args: argparse.Namespace, settings: Settings) -> int:
     out = sys.stderr if as_json else sys.stdout  # keep stdout valid JSON
     if args.record:
         print(f'saved the report as {record(report, settings.data_dir, utcnow())}', file=out)
-    if (line := suggest_stage(report)) is not None:
+    if (line := suggest_stage(report, downloads=downloads_allowed(settings), since=args.since, staging=settings.procurement_staging_dir)) is not None:
         print(line, file=out)
     return report.exit_code()
 

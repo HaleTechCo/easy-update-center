@@ -75,6 +75,14 @@ what it found:
 next: uc procure stage --poms --dependencies --war required (or set PROCUREMENT_POMS=true, PROCUREMENT_DEPENDENCIES=true, PROCUREMENT_WARS=required)
 ```
 
+Given `--since`, it adds it after `--war required`. Air-gapped without `PROCUREMENT_SOURCE_URL`,
+where `uc procure stage` refuses to download, the line says instead to bring the files in by hand
+([Files you place by hand](#files-you-place-by-hand)) or to set the source:
+
+```text
+next: place the files the report lists in ./procurement and run uc procure record, or set PROCUREMENT_SOURCE_URL to a copy of repo.jenkins-ci.org the update center can reach, then uc procure stage --poms --dependencies --war required
+```
+
 It exits 1 when anything will be dropped or a dependency is missing; that is the reason to procure,
 not an error.
 

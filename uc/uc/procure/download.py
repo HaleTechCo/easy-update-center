@@ -23,9 +23,14 @@ if TYPE_CHECKING:
     from uc.versions import VersionTool
 
 
+def downloads_allowed(settings: Settings) -> bool:
+    """Return whether uc procure stage may download: online, or air-gapped with PROCUREMENT_SOURCE_URL set."""
+    return settings.mode != 'airgapped' or settings.procurement_source_set
+
+
 def check_download_allowed(settings: Settings) -> None:
     """Refuse downloads in air-gapped mode unless PROCUREMENT_SOURCE_URL names a source the update center can reach."""
-    if settings.mode == 'airgapped' and not settings.procurement_source_set:
+    if not downloads_allowed(settings):
         msg = 'downloads need repo.jenkins-ci.org, which air-gapped mode cannot reach: run them where the update center is online, or set PROCUREMENT_SOURCE_URL to a copy it can reach'
         raise ProcureError(msg)
 

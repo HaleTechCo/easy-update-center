@@ -10,9 +10,11 @@ from uc.doctor import CORE_VERSION
 
 from . import ProcureError
 from .stager import Wanted
+from .staging import DEFAULT_STAGING, shown_staging
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from uc.doctor import DoctorReport
 
@@ -45,16 +47,24 @@ def plan_poms(report: DoctorReport) -> list[Wanted]:
     return [wanted[path] for path in sorted(wanted)]
 
 
-def suggest_stage(report: DoctorReport) -> str | None:
-    """Return uc doctor's next: line when the report finds something uc procure stage can fetch, else None."""
+def suggest_stage(report: DoctorReport, *, downloads: bool = True, since: str | None = None, staging: Path = DEFAULT_STAGING) -> str | None:
+    """Return uc doctor's next: line when the report finds something uc procure stage can fetch, else None.
+
+    downloads is False where uc procure stage would refuse to download (check_download_allowed): the line then says to
+    place the files in the staging folder and record them, or to set PROCUREMENT_SOURCE_URL. since is uc doctor's
+    --since, carried over with the required cores, which need it when the repository holds no core.
+    """
     found = [
         ('--poms', 'PROCUREMENT_POMS=true', bool(plan_poms(report))),
         ('--dependencies', 'PROCUREMENT_DEPENDENCIES=true', bool(report.missing_dependencies)),
         ('--war required', 'PROCUREMENT_WARS=required', bool(report.missing_cores)),
+        (f'--since {since}', f'DOCTOR_SINCE={since}', since is not None and bool(report.missing_cores)),
     ]
     flags = [flag for flag, _, present in found if present]
     if not flags:
         return None
+    if not downloads:
+        return f'next: place the files the report lists in {shown_staging(staging)} and run uc procure record, or set PROCUREMENT_SOURCE_URL to a copy of repo.jenkins-ci.org the update center can reach, then uc procure stage {" ".join(flags)}'
     settings = [setting for _, setting, present in found if present]
     return f'next: uc procure stage {" ".join(flags)} (or set {", ".join(settings)})'
 
