@@ -245,6 +245,13 @@ def test_staging_flag_inside_the_data_volume_is_refused_before_anything_runs(mon
     assert not (data / 'x').exists()
 
 
+def test_staging_flag_inside_the_data_volume_is_refused_before_the_nothing_selected_check(monkeypatch, tmp_path, secrets_dir, capsys):
+    data = use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
+    assert main(['procure', 'stage', '--staging', str(data / 'x')]) == 1  # not 2, nothing selected
+    assert capsys.readouterr().err.splitlines()[-1].startswith('uc: error: --staging must be outside UC_DATA_DIR')
+
+
 @pytest.mark.parametrize('command', ['stage', 'record', 'push', 'clean'])
 def test_staging_flag_outside_the_data_volume_is_accepted(monkeypatch, tmp_path, secrets_dir, command):
     use_env(monkeypatch, tmp_path, secrets_dir)
@@ -600,7 +607,6 @@ def test_pki_rotate_never_asks_for_a_passphrase(tmp_path, pki_material, form):
 CHECK_SIGNING_KEY = """
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 from uc.pki import PkiError, key_matches_cert
 try:
     key_matches_cert(Path(sys.argv[1]), Path(sys.argv[2]))
