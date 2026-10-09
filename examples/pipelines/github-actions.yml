@@ -7,6 +7,7 @@
 # and stops, pushing nothing. In a private repository on GitHub Free, Pro or Team, an environment
 # cannot have required reviewers, so the push job always stops. There, use GitHub Enterprise (required
 # reviewers in private repositories), a public repository, or the Jenkins or GitLab CI example.
+# A run that stages nothing skips the push job and every job after it, so no one is asked to approve.
 name: Procure missing files
 
 on:  # yamllint disable-line rule:truthy
@@ -43,8 +44,12 @@ jobs:
   stage:
     needs: check
     runs-on: [self-hosted, uc-host]
+    # Whether anything was staged: uc procure stage prints its "next: review" line only when procurement.json lists files.
+    outputs:
+      staged: ${{ steps.stage.outputs.staged }}
     steps:
       - name: Stage the missing files for review
+        id: stage
         working-directory: ${{ env.UC_DIR }}
         # A failed stage still copies what it staged, so the reviewers can read why; the job then fails.
         run: |
@@ -53,6 +58,12 @@ jobs:
           if [ -e procurement/procurement.json ]; then
             cp procurement/procurement.json "$RUNNER_TEMP/"
             sha256sum procurement/procurement.json > "$RUNNER_TEMP/procurement.sha256"
+          fi
+          if grep -q '^next: review' "$RUNNER_TEMP/stage-report.txt"; then
+            echo "staged=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "staged=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Nothing staged::nothing was staged, so there is nothing to review or push"
           fi
           exit "$rc"
       - uses: actions/upload-artifact@v4
@@ -66,6 +77,9 @@ jobs:
 
   push:
     needs: stage
+    # Only when something was staged: a job that does not run asks no one to approve it, and generate, verify
+    # and clean, which need it in turn, are skipped with it. GitHub adds success(), so a failed stage stops it too.
+    if: needs.stage.outputs.staged == 'true'
     runs-on: [self-hosted, uc-host]
     # The review: required reviewers approve this job after reading the artifacts.
     environment: procurement
@@ -76,6 +90,7 @@ jobs:
       - name: Check that the procurement environment requires reviewers
         # Without required reviewers, GitHub runs this job without waiting for an approval, and it creates
         # a missing environment without them: stop here, before anything is pushed. Needs curl on the runner.
+        # Where administrators can bypass the protection rules, it warns and carries on.
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -87,6 +102,10 @@ jobs:
           if ! grep -Eq '"type": *"required_reviewers"' <<<"$environment"; then
             echo "::error::the procurement environment has no required reviewers, so nobody approved this push: add them under Settings > Environments"
             exit 1
+          fi
+          if grep -Eq '"can_admins_bypass": *true' <<<"$environment"; then
+            setting="Allow administrators to bypass configured protection rules"
+            echo "::warning title=Approval can be bypassed::administrators can push without an approval: turn off '$setting' in the procurement environment"
           fi
       - uses: actions/download-artifact@v4
         with:
