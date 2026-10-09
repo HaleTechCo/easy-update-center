@@ -14,6 +14,7 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -226,6 +227,46 @@ def test_staging_on_push_and_clean_reaches_the_command(monkeypatch, tmp_path, se
     monkeypatch.setattr(f'uc.cli.{command}', lambda _settings, staging, **__: seen.update(staging=staging) or 0)
     assert main(['procure', command, '--staging', str(tmp_path / 'elsewhere')]) == 0
     assert seen == {'staging': tmp_path / 'elsewhere'}
+
+
+@pytest.mark.parametrize('case', [(command, inside) for command in ('stage', 'record', 'push', 'clean') for inside in ('', 'x', 'a/../x')])
+def test_staging_flag_inside_the_data_volume_is_refused_before_anything_runs(monkeypatch, tmp_path, secrets_dir, capsys, case):
+    command, inside = case
+    data = use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
+    for name in ('stage_local', 'push', 'clean', 'inspect_repository', 'download'):
+        monkeypatch.setattr(f'uc.cli.{name}', lambda *_, **__: pytest.fail('ran'))
+    staging = data / inside
+    argv = ['procure', command, '--staging', str(staging)]
+    if command == 'stage':
+        argv.append('--poms')
+    assert main(argv) == 1
+    assert capsys.readouterr().err.splitlines()[-1] == f'uc: error: --staging must be outside UC_DATA_DIR ({data}), which the other services mount too: keep it on the ./procurement mount, /procurement by default (got {str(staging)!r})'
+    assert not (data / 'x').exists()
+
+
+def test_staging_flag_inside_the_data_volume_is_refused_before_the_nothing_selected_check(monkeypatch, tmp_path, secrets_dir, capsys):
+    data = use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
+    assert main(['procure', 'stage', '--staging', str(data / 'x')]) == 1  # not 2, nothing selected
+    assert capsys.readouterr().err.splitlines()[-1].startswith('uc: error: --staging must be outside UC_DATA_DIR')
+
+
+@pytest.mark.parametrize('command', ['stage', 'record', 'push', 'clean'])
+def test_staging_flag_outside_the_data_volume_is_accepted(monkeypatch, tmp_path, secrets_dir, command):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
+    seen = []
+    for name in ('stage_local', 'push', 'clean'):
+        monkeypatch.setattr(f'uc.cli.{name}', lambda *_, **__: seen.append(1) or 0)
+    monkeypatch.setattr('uc.cli.inspect_repository', lambda *_, **__: SimpleNamespace(report=None))
+    monkeypatch.setattr('uc.cli.format_report', lambda *_: 'report')
+    monkeypatch.setattr('uc.cli.download', lambda *_, **__: seen.append(1) or 0)
+    argv = ['procure', command, '--staging', str(tmp_path / 'elsewhere')]
+    if command == 'stage':
+        argv.append('--poms')
+    assert main(argv) == 0
+    assert seen
 
 
 def test_doctor_json_prints_the_next_line_on_stderr_and_keeps_stdout_valid(monkeypatch, tmp_path, secrets_dir, capsys):

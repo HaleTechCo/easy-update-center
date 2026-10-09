@@ -683,16 +683,21 @@ def _wars(r: Resolver, name: str) -> tuple[str, ...]:
     return wars
 
 
-def _staging_dir(r: Resolver, data_dir: Path) -> Path:
-    """Return PROCUREMENT_STAGING_DIR, refusing UC_DATA_DIR or a folder in it: the scheduler, the repo-adapter and web mount the data volume, and only the uc service may hold the staging folder.
+def check_staging_outside_data_dir(raw: str | Path, data_dir: Path, label: str) -> None:
+    """Refuse UC_DATA_DIR or a folder in it as the staging folder: the scheduler, the repo-adapter and web mount the data volume, and only the uc service may hold the staging folder.
 
-    Both are taken as the commands would use them, '..' and a relative path resolved against the working directory; no symlink is followed.
+    Both are taken as the commands would use them, '..' and a relative path resolved against the working directory; no symlink is followed and the filesystem is not touched.
     """
-    raw = r.raw('PROCUREMENT_STAGING_DIR')
     here = Path.cwd()
     if Path(os.path.normpath(here / raw)).is_relative_to(os.path.normpath(here / data_dir)):
-        msg = f'{r.label("PROCUREMENT_STAGING_DIR")} must be outside UC_DATA_DIR ({data_dir}), which the other services mount too: keep it on the ./procurement mount, /procurement by default (got {raw!r})'
+        msg = f'{label} must be outside UC_DATA_DIR ({data_dir}), which the other services mount too: keep it on the ./procurement mount, /procurement by default (got {str(raw)!r})'
         raise ConfigError(msg)
+
+
+def _staging_dir(r: Resolver, data_dir: Path) -> Path:
+    """Return PROCUREMENT_STAGING_DIR, refusing UC_DATA_DIR or a folder in it."""
+    raw = r.raw('PROCUREMENT_STAGING_DIR')
+    check_staging_outside_data_dir(raw, data_dir, r.label('PROCUREMENT_STAGING_DIR'))
     return Path(raw)
 
 

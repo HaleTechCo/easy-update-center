@@ -27,8 +27,7 @@ Set up the approval before the first run:
   administrator can approve, and the run waits at the review until it is aborted.
 
 The examples assume the default staging folder (`PROCUREMENT_STAGING_DIR` unset): they read
-`procurement/procurement.json` in `UC_DIR`. With another folder, change that path in the stage and
-push steps.
+`procurement/procurement.json` in `UC_DIR`. With another folder, change that path in the stage step.
 
 The stage step records the checksum of the staged list (`procurement.sha256`) beside the artifacts
 the reviewers read. The push step runs `sha256sum -c` on it in `UC_DIR` and stops if

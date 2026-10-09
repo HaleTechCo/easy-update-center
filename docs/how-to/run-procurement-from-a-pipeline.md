@@ -85,7 +85,7 @@ one stages: [2. Stage](procure-missing-files.md#2-stage).
 
 The examples assume the default staging folder: they read the staged list as
 `procurement/procurement.json` in `UC_DIR`, where `PROCUREMENT_STAGING_DIR`'s default,
-`/procurement`, is mounted. If you set another folder, change that path in the stage and push steps.
+`/procurement`, is mounted. If you set another folder, change that path in the stage step.
 
 ## The stages
 
