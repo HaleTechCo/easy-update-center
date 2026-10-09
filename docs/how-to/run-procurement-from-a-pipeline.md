@@ -10,15 +10,16 @@ from Jenkins, GitLab CI or GitHub Actions, with an approval before anything is p
 
 - **An approval before the push.** The pipeline stages the files, then stops until one of the people
   you named has read what was staged and approved it. Only then does it push, and only the list they
-  approved. The GitHub Actions example pushes only where the `procurement` environment has
-  required reviewers, which a private repository on GitHub Free, Pro or Team cannot have
-  ([The approval](#the-approval)).
+  approved; a run that stages nothing asks no one. The GitHub Actions example pushes only where the
+  `procurement` environment has required reviewers, which a private repository on GitHub Free, Pro
+  or Team cannot have ([The approval](#the-approval)).
 - **A record.** Each run keeps who approved it, the stage report and `procurement.json` as it was
   approved, for as long as your CI system keeps runs and their artifacts.
 
 `examples/pipelines/` holds one example for each system: a
-[Jenkinsfile](../../examples/pipelines/Jenkinsfile), a
-[GitLab CI file](../../examples/pipelines/gitlab-ci.yml) and a
+[Jenkinsfile](../../examples/pipelines/Jenkinsfile), two GitLab CI files
+([gitlab-ci.yml](../../examples/pipelines/gitlab-ci.yml) and
+[gitlab-ci-procure.yml](../../examples/pipelines/gitlab-ci-procure.yml)) and a
 [GitHub Actions workflow](../../examples/pipelines/github-actions.yml). Copy one into your own
 pipeline repository and adapt it ([The examples](#the-examples)); nothing in this repository runs
 them.
@@ -58,7 +59,9 @@ Before the first run:
 - **Set up the approval** ([The approval](#the-approval)):
   - GitHub Actions: create the `procurement` environment with required reviewers. Without them,
     GitHub creates the environment on the first run, unprotected, and runs the push job without
-    waiting; the example's push job then stops at its first step, pushing nothing.
+    waiting; the example's push job then stops at its first step, pushing nothing. Also turn off
+    **Allow administrators to bypass configured protection rules** (the push job warns while it is
+    on), and tick **Prevent self-review** if the person who starts a run must not approve it.
   - GitLab CI: protect the `procurement` environment and allow only the approvers to deploy to it
     (GitLab Premium or Ultimate). Without that, any developer who can run the pipeline can run the
     review job too, and so approve their own run.
@@ -104,13 +107,30 @@ Each `uc ...` command runs as `docker compose run --rm uc ...` in `UC_DIR` (`uc 
 
 When a stage fails, the run stops there: the later stages, the push included, do not run.
 
+When nothing was staged, the run ends after the stage step, without asking anyone to approve, and
+succeeds. The examples key on one line of `stage-report.txt`, which `uc procure stage` prints only
+when `procurement.json` lists files:
+
+```text
+next: review ./procurement (procurement.json lists N files), then uc procure push
+```
+
+Without it:
+
+- **Jenkins** skips the review and every later stage (a `when` on each, decided before the stage
+  takes an agent).
+- **GitHub Actions** skips the push job (its `if:` reads the stage job's `staged` output), and with
+  it generate, verify and clean, which need it in turn.
+- **GitLab CI** runs, as the child pipeline, one job that says nothing was staged, in place of
+  `gitlab-ci-procure.yml`.
+
 ## The approval
 
 | System | How the example asks | What to set up |
 |---|---|---|
 | Jenkins | The `review` stage's `input` step, with `submitter: 'uc-approvers'`. It holds no agent while it waits. | Set `submitter` to the users or groups allowed to approve, comma-separated. |
-| GitLab CI | The `review` job: `when: manual` on the `procurement` environment, with `allow_failure: false`, so the later jobs wait for it. | Protect the `procurement` environment (Settings > CI/CD > Protected environments) and allow only the approvers to deploy to it. Protected environments need GitLab Premium or Ultimate; without them, any developer who can run the pipeline can also run the review job. |
-| GitHub Actions | The `procurement` environment on the `push` job, which waits until a reviewer approves it. Without required reviewers GitHub would run the job without waiting, so its first step reads the environment through GitHub's API, with the job's token, and stops the job, pushing nothing, unless it has them. | Give the `procurement` environment required reviewers (Settings > Environments). In a private repository on GitHub Free, Pro or Team, an environment cannot have required reviewers, so the push job always stops. Use instead a plan that offers required reviewers in private repositories (GitHub Enterprise), a public repository (where every plan offers them, though GitHub recommends self-hosted runners only for private repositories), or the Jenkins or GitLab CI example. |
+| GitLab CI | The `review` job of the child pipeline: `when: manual` on the `procurement` environment, with `allow_failure: false`, so the later jobs wait for it; the `push` job lists it in `needs` for the same reason. | Protect the `procurement` environment (Settings > CI/CD > Protected environments) and allow only the approvers to deploy to it. Protected environments need GitLab Premium or Ultimate; without them, any developer who can run the pipeline can also run the review job. |
+| GitHub Actions | The `procurement` environment on the `push` job, which waits until a reviewer approves it. Without required reviewers GitHub would run the job without waiting, so its first step reads the environment through GitHub's API, with the job's token, and stops the job, pushing nothing, unless it has them. It warns, and carries on, where administrators can bypass the environment's protection rules. | Give the `procurement` environment required reviewers (Settings > Environments). In a private repository on GitHub Free, Pro or Team, an environment cannot have required reviewers, so the push job always stops. Use instead a plan that offers required reviewers in private repositories (GitHub Enterprise), a public repository (where every plan offers them, though GitHub recommends self-hosted runners only for private repositories), or the Jenkins or GitLab CI example. |
 
 Each system records who approved the run: the Jenkins build log, the GitLab review job (it prints
 `approved by <user>`) and the GitHub run's deployment review.
@@ -141,9 +161,15 @@ The staging folder is shared, so the examples keep runs apart:
 - **Jenkins**: `disableConcurrentBuilds()`: a second run waits until the first ends.
 - **GitHub Actions**: a `concurrency` group: a second run waits too, but GitHub keeps only one
   pending run and cancels older pending ones, so a run queued behind another may be dropped.
-- **GitLab CI**: a `resource_group` on each job. It serializes jobs, not whole pipelines: a second
-  pipeline can stage into the folder while the first waits at its review. The checksum is the guard
-  there: the first pipeline's push then stops, because the list changed after its review.
+- **GitLab CI**: the `jenkins-update-center` resource group on each job of `gitlab-ci.yml`. The
+  `procure` job starts the child pipeline with `strategy: depend`, so it runs, and holds the
+  resource group, until that pipeline ends, the review included: a second pipeline's check and
+  stage wait for it. Cancel a pipeline whose review no one will run, or the next one waits forever.
+  A resource group serializes jobs, not whole pipelines, though: between the first pipeline's stage
+  job and its `procure` job, a second pipeline can still check and stage into the folder. The
+  checksum is the guard there: the first pipeline's push then stops, because the list changed after
+  it was staged. The child pipeline's jobs take no resource group: the `procure` job holds it until
+  they end, so one waiting for it would wait forever.
 
 ## Triggers
 
@@ -180,7 +206,11 @@ A scheduled run still waits for the approval before it pushes.
   pipeline repository). Set `UC_DIR` as the job's parameter default and `submitter` to your
   approvers.
 - [gitlab-ci.yml](../../examples/pipelines/gitlab-ci.yml): the `.gitlab-ci.yml` of a project whose
-  shell runner sits on the host. Set `UC_DIR` under `variables:` and protect the `procurement`
+  shell runner sits on the host, with
+  [gitlab-ci-procure.yml](../../examples/pipelines/gitlab-ci-procure.yml) beside it at the root of
+  the repository: copy both. The first checks and stages; its `procure` job then starts the second,
+  the review and what follows it, as a child pipeline. Set `UC_DIR` under `variables:` of
+  `gitlab-ci.yml` (the child pipeline gets it from there) and protect the `procurement`
   environment.
 - [github-actions.yml](../../examples/pipelines/github-actions.yml): a workflow in
   `.github/workflows/` of a private repository whose self-hosted runner sits on the host. Set

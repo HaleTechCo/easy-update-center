@@ -1,7 +1,7 @@
 // Procurement with an approval before anything is pushed (docs/how-to/run-procurement-from-a-pipeline.md).
 // Runs on an agent on the update center's Docker host (label uc-host), in the deployment directory
 // UC_DIR, which holds .env, config/uc.toml and secrets/. Triggered by hand; one run at a time, as the
-// staging folder is shared.
+// staging folder is shared. A run that stages nothing skips the review and every stage after it.
 pipeline {
     agent none
     options {
@@ -46,6 +46,13 @@ pipeline {
                     """
                 }
                 stash name: 'reviewed', includes: 'procurement.sha256'
+                script {
+                    // uc procure stage prints its "next: review" line only when procurement.json lists files.
+                    env.UC_STAGED = sh(script: "grep -q '^next: review' stage-report.txt && echo true || echo false", returnStdout: true).trim()
+                    if (env.UC_STAGED != 'true') {
+                        echo 'Nothing was staged, so there is nothing to review or push: the later stages are skipped.'
+                    }
+                }
             }
             post {
                 always {
@@ -54,6 +61,10 @@ pipeline {
             }
         }
         stage('review') {
+            // Without anything staged, no one is asked to approve.
+            when {
+                expression { env.UC_STAGED == 'true' }
+            }
             steps {
                 // Reviewers read the archived stage-report.txt and procurement.json first;
                 // the push stage checks procurement.sha256 against the staged list.
@@ -62,6 +73,10 @@ pipeline {
         }
         stage('push') {
             agent { label 'uc-host' }
+            when {
+                beforeAgent true
+                expression { env.UC_STAGED == 'true' }
+            }
             steps {
                 unstash 'reviewed'
                 dir(params.UC_DIR) {
@@ -76,6 +91,10 @@ pipeline {
         }
         stage('generate') {
             agent { label 'uc-host' }
+            when {
+                beforeAgent true
+                expression { env.UC_STAGED == 'true' }
+            }
             steps {
                 dir(params.UC_DIR) {
                     sh 'docker compose run --rm uc generate'
@@ -84,6 +103,10 @@ pipeline {
         }
         stage('verify') {
             agent { label 'uc-host' }
+            when {
+                beforeAgent true
+                expression { env.UC_STAGED == 'true' }
+            }
             steps {
                 dir(params.UC_DIR) {
                     sh 'docker compose run --rm uc status'
@@ -98,6 +121,10 @@ pipeline {
         }
         stage('clean') {
             agent { label 'uc-host' }
+            when {
+                beforeAgent true
+                expression { env.UC_STAGED == 'true' }
+            }
             steps {
                 dir(params.UC_DIR) {
                     sh 'docker compose run --rm uc procure clean'

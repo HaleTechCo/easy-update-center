@@ -71,7 +71,7 @@ How the pieces fit: [Architecture overview](docs/architecture/overview.md).
 | `make it-full` | The online run with the whole catalog. Takes hours. | as above |
 | `make test-secrets` | The ownership and modes `uc/bin/secrets-permissions.sh` gives `secrets/`, checked with real Linux permissions inside the uc image (part of `make test`). | Docker |
 | `make test-setup` | `uc/bin/uc-setup`, the setup service's entrypoint, checked as root inside the uc image with real Linux ownership and ACLs: first-time setup, sharing `procurement/` with uid 10001, `pki-init` and `pki-rotate` (part of `make test`). | Docker |
-| `make test-pipelines` | The example pipelines in `examples/pipelines/`: each runs the procurement stages in the order of the how-to, with the approval before the push, and checks before pushing that `procurement.json` is the one reviewed (`tests/unit/test_pipeline_examples.py`, so part of `make test-unit`). | Docker |
+| `make test-pipelines` | The example pipelines in `examples/pipelines/`: each runs the procurement stages in the order of the how-to, with the approval before the push and none when nothing was staged, and checks before pushing that `procurement.json` is the one reviewed (`tests/unit/test_pipeline_examples.py`, so part of `make test-unit`). | Docker |
 | `make it-clean` | Removes the integration suites' containers and volumes. | Docker |
 
 Unit tests read `uc/uc/`, `uc/templates/`, `tools/` and `examples/pipelines/` straight from the
