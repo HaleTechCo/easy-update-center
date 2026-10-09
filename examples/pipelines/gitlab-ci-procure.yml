@@ -2,8 +2,9 @@
 # The review and what follows it, for gitlab-ci.yml (docs/how-to/run-procurement-from-a-pipeline.md).
 # Keep this file at the root of the pipeline repository: when something was staged, gitlab-ci.yml's
 # stage job copies it as the configuration of the child pipeline that the procure job starts. UC_DIR
-# comes from gitlab-ci.yml's variables. Protect the "procurement" environment (Settings > CI/CD >
-# Protected environments) so only its approvers can run the review job.
+# is the directory gitlab-ci.yml's stage job worked in, passed on by the procure job. Protect the
+# "procurement" environment (Settings > CI/CD > Protected environments) so only its approvers can run
+# the review job.
 # No job here takes the jenkins-update-center resource group: the procure job holds it until this
 # pipeline ends, so a job here waiting for it would wait forever.
 stages: [review, push, generate, verify, clean]

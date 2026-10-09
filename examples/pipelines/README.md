@@ -5,7 +5,9 @@ to copy into your own pipeline repository; nothing in this repository runs them.
 `github-actions.yml` to `.github/workflows/` of the repository whose runner sits on the update
 center's host. The GitLab CI example is two files: copy `gitlab-ci.yml` as `.gitlab-ci.yml` and
 `gitlab-ci-procure.yml` beside it, at the root of the repository. The first checks and stages; the
-second, the review and what follows it, runs as a child pipeline.
+second, the review and what follows it, runs as a child pipeline. Set `UC_DIR` in `gitlab-ci.yml` or
+as a CI/CD variable of the project, group or instance: the stage job passes the directory it worked
+in to the child pipeline.
 
 Each one runs where the update center runs: a Jenkins agent labelled `uc-host`, a GitLab shell runner
 tagged `uc-host`, or a GitHub self-hosted runner labelled `uc-host`. Every command runs in the
@@ -13,7 +15,9 @@ deployment directory `UC_DIR` (a pipeline variable, default `/opt/jenkins-update
 `.env`, `config/uc.toml` and `secrets/` and is not a checkout of the pipeline's repository. They are
 triggered by hand (a weekly trigger is included, commented out). Jenkins and GitHub allow one run at a
 time. GitLab's resource group holds from the job that starts the child pipeline until that pipeline
-ends; before that it is taken one job at a time, so the checksum below is the guard there.
+ends; before that it is taken one job at a time, so the checksum below is the guard there. A GitLab
+pipeline left waiting at its review keeps the resource group, so later pipelines wait until someone
+approves or cancels it.
 
 Set up the approval before the first run:
 

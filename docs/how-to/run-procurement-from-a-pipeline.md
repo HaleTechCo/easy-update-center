@@ -107,9 +107,9 @@ Each `uc ...` command runs as `docker compose run --rm uc ...` in `UC_DIR` (`uc 
 
 When a stage fails, the run stops there: the later stages, the push included, do not run.
 
-When nothing was staged, the run ends after the stage step, without asking anyone to approve, and
-succeeds. The examples key on one line of `stage-report.txt`, which `uc procure stage` prints only
-when `procurement.json` lists files:
+When nothing was staged, the run skips the review and every stage after it, so no one is asked to
+approve, and it succeeds. The examples key on one line of `stage-report.txt`, which
+`uc procure stage` prints only when `procurement.json` lists files:
 
 ```text
 next: review ./procurement (procurement.json lists N files), then uc procure push
@@ -118,7 +118,9 @@ next: review ./procurement (procurement.json lists N files), then uc procure pus
 Without it:
 
 - **Jenkins** skips the review and every later stage (a `when` on each, decided before the stage
-  takes an agent).
+  takes an agent). A **Restart from Stage** at `review` or later skips them too, and pushes
+  nothing: the restarted run lacks the `UC_STAGED` flag the stage stage sets. Restart from `stage`
+  instead.
 - **GitHub Actions** skips the push job (its `if:` reads the stage job's `staged` output), and with
   it generate, verify and clean, which need it in turn.
 - **GitLab CI** runs, as the child pipeline, one job that says nothing was staged, in place of
@@ -210,8 +212,9 @@ A scheduled run still waits for the approval before it pushes.
   [gitlab-ci-procure.yml](../../examples/pipelines/gitlab-ci-procure.yml) beside it at the root of
   the repository: copy both. The first checks and stages; its `procure` job then starts the second,
   the review and what follows it, as a child pipeline. Set `UC_DIR` under `variables:` of
-  `gitlab-ci.yml` (the child pipeline gets it from there) and protect the `procurement`
-  environment.
+  `gitlab-ci.yml`, or as a CI/CD variable of the project, group or instance: the stage job passes
+  the directory it worked in to the child pipeline, so both work in the same one. Protect the
+  `procurement` environment.
 - [github-actions.yml](../../examples/pipelines/github-actions.yml): a workflow in
   `.github/workflows/` of a private repository whose self-hosted runner sits on the host. Set
   `UC_DIR` under `env:` and give the `procurement` environment required reviewers, which a private

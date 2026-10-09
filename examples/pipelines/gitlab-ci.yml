@@ -41,6 +41,9 @@ stage:
   stage: stage
   resource_group: jenkins-update-center
   script:
+    # The directory this job works in, wherever UC_DIR was set (variables: above, the project, group or
+    # instance, or the run): the procure job passes it on, so the child pipeline works there too.
+    - echo "UC_DIR=$UC_DIR" > "$CI_PROJECT_DIR/uc-dir.env"
     # A failed stage still copies what it staged (artifacts are kept below), so the reviewers can read why.
     - rc=0; docker compose run --rm uc procure stage 2>&1 | tee "$CI_PROJECT_DIR/stage-report.txt" || rc=$?
     - |
@@ -61,15 +64,18 @@ stage:
     - exit "$rc"
   artifacts:
     paths: [stage-report.txt, procurement.json, procurement.sha256, procure-pipeline.yml]
+    reports:
+      dotenv: uc-dir.env
     when: always
 
 procure:
   stage: procure
   resource_group: jenkins-update-center
   # strategy: depend keeps this job running, and so holding the resource group, until the child pipeline
-  # ends: while it waits at the review too, so cancel a pipeline whose review no one will run. UC_DIR
-  # reaches the child from variables: above; forwarding the pipeline variables also passes a UC_DIR set
-  # when running the pipeline or in its schedule.
+  # ends: while it waits at the review too, so cancel a pipeline whose review no one will run.
+  # needs: [stage] gives this job the stage job's dotenv report, and forwarding the pipeline variables
+  # passes its UC_DIR to the child pipeline, where it outranks the UC_DIR of variables: above.
+  needs: [stage]
   trigger:
     include:
       - artifact: procure-pipeline.yml

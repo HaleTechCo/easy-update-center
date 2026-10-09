@@ -69,6 +69,8 @@ exit "$(cat "$STUB_DIR/rc")"
 """Stands in for docker in the stage step: records its arguments, prints the stage report it is given and exits with the code it is given."""
 JENKINS_STAGED = re.compile(r'env\.UC_STAGED = sh\(script: "([^"$\\]*)", returnStdout: true\)\.trim\(\)')
 """How the Jenkinsfile's stage stage records whether anything was staged; a script without $ or \\ is the same in Groovy and in the shell."""
+GITLAB_DOTENV = re.compile(r'^  artifacts:\n(?:    .*\n)*?    reports:\n      dotenv: ([\w.-]+\.env)$', re.MULTILINE)
+"""The dotenv report of a GitLab job: the file whose variables later jobs, and through the procure job the child pipeline, receive."""
 JENKINS_WHEN = re.compile(r"\bwhen \{\n\s*(?:(beforeAgent true)\n\s*)?expression \{ env\.UC_STAGED == 'true' \}\n\s*\}")
 NOTHING_STAGED = 'Inspecting the repository...\nnext: uc procure stage --poms (or set PROCUREMENT_POMS)\n\nStaging into /procurement from http://source.example/:\n0 staged, 0 kept, 0 problem(s)\n'
 """A stage report with nothing staged, so without the review line; its other next: line, the kind uc doctor prints, must not count."""
@@ -89,17 +91,19 @@ def example(name: str) -> str:
     return '\n'.join(code(file) for file in FILES[name])
 
 
+def block_end(text: str, start: int) -> int:
+    """Return where the brace block whose body starts at start ends, just after its closing brace."""
+    depth = 1
+    end = start
+    while depth:
+        depth += {'{': 1, '}': -1}.get(text[end], 0)
+        end += 1
+    return end
+
+
 def jenkins_stages(text: str) -> dict[str, str]:
     """Return each `stage('name') { ... }` block of a Jenkinsfile, found by matching braces."""
-    found = {}
-    for start in re.finditer(r"stage\('(\w+)'\) \{", text):
-        depth = 1
-        end = start.end()
-        while depth:
-            depth += {'{': 1, '}': -1}.get(text[end], 0)
-            end += 1
-        found[start.group(1)] = text[start.end() : end]
-    return found
+    return {start.group(1): text[start.end() : block_end(text, start.end())] for start in re.finditer(r"stage\('(\w+)'\) \{", text)}
 
 
 def split_blocks(text: str, header: re.Pattern[str]) -> dict[str, str]:
@@ -360,6 +364,16 @@ def test_jenkins_records_whether_anything_was_staged_from_the_review_line(tmp_pa
     assert (result.returncode, result.stdout) == (0, f'{staged}\n')
 
 
+def test_jenkins_reads_the_stage_report_in_the_workspace():
+    stage = blocks('Jenkinsfile')['stage']
+    assert "tee '${env.WORKSPACE}/stage-report.txt'" in stage
+    flag = JENKINS_STAGED.search(stage)
+    assert flag is not None
+    # Inside dir(params.UC_DIR) the relative stage-report.txt would be looked for in the deployment directory, which has none: nothing would ever count as staged.
+    for opening in re.finditer(r'\bdir\([^)]*\) \{', stage):
+        assert not opening.end() <= flag.start() < block_end(stage, opening.end())
+
+
 def test_jenkins_skips_the_review_and_what_follows_when_nothing_was_staged():
     found = blocks('Jenkinsfile')
     for stage, block in found.items():
@@ -418,6 +432,24 @@ def test_the_gitlab_stage_job_chooses_the_child_pipeline(tmp_path, report, rc, s
     assert 'nothing was staged' in ' '.join(job['script'])
 
 
+def test_the_gitlab_stage_job_passes_on_the_directory_it_used(tmp_path):
+    # UC_DIR may be set under variables:, for the project, group or instance, or for the run: the stage job records the one it used.
+    dotenv = GITLAB_DOTENV.search(gitlab_jobs('gitlab-ci.yml')['stage'])
+    assert dotenv is not None
+    result, project = run_gitlab_stage_job(tmp_path, STAGED, 0)
+    assert result.returncode == 0, result.stdout
+    assert (project / dotenv.group(1)).read_text(encoding='utf-8') == f'UC_DIR={tmp_path / "uc"}\n'
+
+
+def test_every_gitlab_job_works_in_uc_dir_on_the_uc_host_runner():
+    for file in FILES['gitlab-ci.yml']:
+        default = gitlab_default(file)
+        assert default.startswith('  tags: [uc-host]\n'), file
+        assert gitlab_script(default, 'before_script') == ['set -o pipefail', 'cd "$UC_DIR"'], file
+        for job, block in gitlab_jobs(file).items():
+            assert re.search(r'^  (?:tags|before_script):', block, re.MULTILINE) is None, job
+
+
 def test_the_gitlab_procure_job_starts_the_chosen_child_pipeline_and_holds_the_lock_until_it_ends():
     stage = gitlab_jobs('gitlab-ci.yml')['stage']
     assert re.search(r'^    paths: \[.*\bprocure-pipeline\.yml\b.*\]$', stage, re.MULTILINE) is not None
@@ -427,8 +459,12 @@ def test_the_gitlab_procure_job_starts_the_chosen_child_pipeline_and_holds_the_l
     assert '\n    strategy: depend\n' in procure
     assert '\n  resource_group: jenkins-update-center\n' in procure
     assert re.search(r'^  variables:\n    PARENT_PIPELINE_ID: \$CI_PIPELINE_ID$', procure, re.MULTILINE) is not None
-    # The child gets gitlab-ci.yml's variables:, and with the pipeline variables also a UC_DIR set when running the pipeline or in its schedule.
+    # needs: [stage] hands this job the stage job's dotenv report, and forwarding the pipeline variables passes its UC_DIR on to the child pipeline,
+    # where it outranks the UC_DIR of variables: that the YAML variables carry: the child works in the directory the stage job used.
+    assert '\n  needs: [stage]\n' in procure
     assert '\n    forward:\n      pipeline_variables: true\n' in procure
+    # The YAML variables carry PARENT_PIPELINE_ID, which push needs to fetch the stage job's artifacts.
+    assert 'yaml_variables: false' not in procure
     assert 'script:' not in procure
     # A child pipeline runs with CI_PIPELINE_SOURCE parent_pipeline: workflow rules copied from gitlab-ci.yml would stop it.
     assert 'workflow:' not in code(GITLAB_CHILD)
