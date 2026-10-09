@@ -148,7 +148,8 @@ approval before the push:
 
 The staging folder is `./procurement` on the host, which the `uc` service mounts at `/procurement`
 (`PROCUREMENT_STAGING_DIR`). Every command takes `--staging DIR` to use another folder inside the
-`uc` container for one run. On Linux, the uc containers (uid 10001) can write `./procurement` once
+`uc` container for one run; like the setting, it must not be `UC_DATA_DIR` or a folder in it.
+On Linux, the uc containers (uid 10001) can write `./procurement` once
 [the setup service](#the-setup-service) has shared it with them
 (`docker compose run --rm setup procurement`, part of `make setup`). Each command has a `make`
 shortcut, which passes options through `ARGS=`. For `stage`, `record` and `clean`, it also hands the

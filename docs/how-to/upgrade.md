@@ -22,8 +22,14 @@ docker compose run --rm uc status
 
 Run `setup` after the images are rebuilt: it creates what a newer revision needs, such as
 `secrets/repo_push_auth`, and leaves what exists. `make setup` builds the uc image only when it is
-missing, so it does not replace an older one, which may lack the newer `setup`. Plain `make` prints
-the help and builds nothing; `make build` builds.
+missing, so it does not replace an older one, which may lack `uc-setup`, the `setup` service's
+entrypoint. Plain `make` prints the help and builds nothing; `make build` builds.
+
+The last step of `setup` shares `./procurement` with the uc containers. On a filesystem without
+ACLs, where uid 10001 cannot write the folder, that step can fail. The secrets and keys steps have
+already run by then, and the error names the fallback: `make procure-stage`, `procure-record` and
+`procure-clean`, which hand the folder over for each run. See
+[Sharing ./procurement](../reference/cli.md#sharing-procurement).
 
 Check the settings before `docker compose up -d`: a newer revision can refuse a value an older one
 loaded, and a service whose settings do not load exits with an error instead of running.
