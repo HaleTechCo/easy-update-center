@@ -98,7 +98,7 @@ Each `uc ...` command runs as `docker compose run --rm uc ...` in `UC_DIR` (`uc 
 | Stage | Runs | Notes |
 |---|---|---|
 | check | `uc config --check`, `uc doctor` | `uc doctor`'s exit 1 (something to procure) does not fail the stage; above 1 does. |
-| stage | `uc procure stage` | Its output and `procurement.json` become pipeline artifacts for the reviewers, with the checksum of `procurement.json`. |
+| stage | `uc procure stage` | Its output and `procurement.json` become pipeline artifacts for the reviewers, with the checksum of `procurement.json`. In GitLab CI the review and every stage after it run as a child pipeline that the stage job prepares. |
 | review | none | The approval ([below](#the-approval)). |
 | push | `sha256sum -c`, then `uc procure push` | Stops, pushing nothing, if `procurement.json` changed since the review. On GitHub it first checks that the `procurement` environment has required reviewers. |
 | generate | `uc generate` | Publishes now instead of at the next schedule. |
@@ -119,7 +119,7 @@ Without it:
 
 - **Jenkins** skips the review and every later stage (a `when` on each, decided before the stage
   takes an agent). A **Restart from Stage** at `review` or later skips them too, and pushes
-  nothing: the restarted run lacks the `UC_STAGED` flag the stage stage sets. Restart from `stage`
+  nothing: the restarted run lacks the `UC_STAGED` flag the `stage` stage sets. Restart from `stage`
   instead.
 - **GitHub Actions** skips the push job (its `if:` reads the stage job's `staged` output), and with
   it generate, verify and clean, which need it in turn.
@@ -140,7 +140,8 @@ Each system records who approved the run: the Jenkins build log, the GitLab revi
 ## What reviewers read
 
 The stage step saves three files as artifacts of the run, also when it fails, so the reviewers can
-read why:
+read why (GitLab's also saves the child pipeline's configuration, `procure-pipeline.yml`, and
+`uc-dir.env`, which records the `UC_DIR` it ran in):
 
 - `stage-report.txt`: the output of `uc procure stage`, the doctor report and then one line per
   file, with why it was staged or why it failed;
