@@ -87,6 +87,22 @@ def test_the_staged_flag_follows_the_review_line(tmp_path, report, staged):
     assert (result.returncode, result.stdout) == (0, f'{staged}\n')
 
 
-def test_the_stage_step_chooses_what_to_stage_from_a_parameter():
-    assert "string(name: 'STAGE_OPTIONS', defaultValue: '--poms --dependencies --war required'" in code()
-    assert 'uc procure stage ${params.STAGE_OPTIONS}' in stages()['stage']
+WAR_CHECK = re.compile(r'war ==~ /([^/]+)/')
+"""The pattern the stage stage checks each WARS entry against; Groovy's ==~ matches the whole string, as re.fullmatch does."""
+
+
+def test_the_stage_step_builds_its_options_from_checked_parameters():
+    text = code()
+    for parameter in ("booleanParam(name: 'POMS', defaultValue: true", "booleanParam(name: 'DEPENDENCIES', defaultValue: true", "string(name: 'WARS', defaultValue: 'required'"):
+        assert parameter in text, parameter
+    stage = stages()['stage']
+    assert 'uc procure stage \\$UC_STAGE_OPTIONS ' in stage  # the shell reads the options from the environment
+    assert '${params.' not in stage  # Groovy splices no parameter into the shell script
+    assert WAR_CHECK.search(stage) is not None
+
+
+@pytest.mark.parametrize(('war', 'accepted'), [('required', True), ('2.479.1', True), ('2.479', True), ('2.479.1;id', False), ('$(id)', False), ('--poms', False), ('2.x', False), ('', False)])
+def test_the_wars_check_accepts_only_versions_and_required(war, accepted):
+    found = WAR_CHECK.search(stages()['stage'])
+    assert found is not None
+    assert (re.fullmatch(found.group(1), war) is not None) is accepted

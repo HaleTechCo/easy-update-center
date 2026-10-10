@@ -9,7 +9,9 @@ pipeline {
     }
     parameters {
         string(name: 'UC_DIR', defaultValue: '/opt/easy-update-center', description: 'The update center deployment directory on the uc-host agent')
-        string(name: 'STAGE_OPTIONS', defaultValue: '--poms --dependencies --war required', description: 'What uc procure stage stages (docs/how-to/procure-missing-files.md#2-stage)')
+        booleanParam(name: 'POMS', defaultValue: true, description: 'Stage the real .pom of every plugin whose POM is missing, derived or unusable (uc procure stage --poms)')
+        booleanParam(name: 'DEPENDENCIES', defaultValue: true, description: 'Stage the missing required dependencies, each with its .pom (--dependencies)')
+        string(name: 'WARS', defaultValue: 'required', description: 'Jenkins cores to stage, separated by spaces: versions such as 2.479.1, or required (--war); empty for none')
     }
     // triggers { cron('H 6 * * 1') } // weekly, on Monday morning
     stages {
@@ -31,6 +33,19 @@ pipeline {
         stage('stage') {
             agent { label 'uc-host' }
             steps {
+                script {
+                    // Built from fixed options and checked versions only, so no parameter reaches the shell as code.
+                    def options = []
+                    if (params.POMS) { options << '--poms' }
+                    if (params.DEPENDENCIES) { options << '--dependencies' }
+                    for (war in params.WARS.tokenize()) {
+                        if (!(war ==~ /required|[0-9]+\.[0-9]+(\.[0-9]+)?/)) {
+                            error("WARS takes Jenkins versions such as 2.479.1, or required (got '${war}')")
+                        }
+                        options << "--war ${war}"
+                    }
+                    env.UC_STAGE_OPTIONS = options.join(' ')
+                }
                 dir(params.UC_DIR) {
                     // The checksum of the staged list is what the reviewers approve: the push stage refuses a changed list.
                     // A failed stage still copies what it staged, so the reviewers can read why.
@@ -38,7 +53,7 @@ pipeline {
                         set -eo pipefail
                         rm -f '${env.WORKSPACE}/stage-report.txt' '${env.WORKSPACE}/procurement.json' '${env.WORKSPACE}/procurement.sha256'
                         rc=0
-                        docker compose run --rm uc procure stage ${params.STAGE_OPTIONS} 2>&1 | tee '${env.WORKSPACE}/stage-report.txt' || rc=\$?
+                        docker compose run --rm uc procure stage \$UC_STAGE_OPTIONS 2>&1 | tee '${env.WORKSPACE}/stage-report.txt' || rc=\$?
                         if [ -e procurement/procurement.json ]; then
                             cp procurement/procurement.json '${env.WORKSPACE}/'
                             sha256sum procurement/procurement.json > '${env.WORKSPACE}/procurement.sha256'
