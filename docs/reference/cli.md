@@ -257,7 +257,6 @@ Prints `status.json`, the same document served at `$PUBLIC_URL/status.json`. Fie
 ```bash
 docker compose run --rm --no-deps uc config [--json | --check]
 docker compose run --rm --no-deps uc config --example [--mode online|airgapped]
-docker compose run --rm --no-deps uc config --web-env [--out FILE]
 ```
 
 `uc config` needs no other service, so run it with `--no-deps`. Without it, Compose first starts the
@@ -284,8 +283,6 @@ there even when they are set up.
 | `--check` | Only check the settings: prints `configuration ok`, or the error. |
 | `--example` | Print an example `.env` that lists every setting, with the settings the mode needs set and the rest commented out at their defaults. It reads no settings, so it works before any exist. |
 | `--mode` | With `--example`: the mode the example is for, `online` (the default) or `airgapped`. |
-| `--web-env` | Print the web container's settings as `NAME=value` lines, worked out from the settings and the mode: what the `web-config` service writes for the web container. |
-| `--out FILE` | With `--web-env`: write them to `FILE` instead, atomically. |
 
 An invalid configuration exits 1; without options, after printing every value it could work out.
 How settings combine: [How settings are read](configuration.md#how-settings-are-read).

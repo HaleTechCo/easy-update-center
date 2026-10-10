@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import configview, publish, status
-from .config import check_staging_outside_data_dir, load_pki_settings, load_settings, load_web_settings
+from .config import check_staging_outside_data_dir, load_pki_settings, load_settings
 from .doctor import check_since, format_report, inspect_repository, record
 from .errors import UcError, UsageError
 from .examples import example_env
@@ -29,7 +29,6 @@ from .timeutil import iso, utcnow
 from .validate import count_plugins
 from .version import uc_version
 from .versions import VersionTool
-from .webenv import web_env, write_web_env
 
 if TYPE_CHECKING:
     from .config import Settings
@@ -84,8 +83,6 @@ def build_parser() -> argparse.ArgumentParser:
     shows.add_argument('--json', action='store_true', help='print the settings as JSON')
     shows.add_argument('--check', action='store_true', help='only check the settings')
     shows.add_argument('--example', action='store_true', help='print an example .env that lists every setting')
-    shows.add_argument('--web-env', action='store_true', help="print the web container's settings, as the web-config service writes them")
-    config_cmd.add_argument('--out', type=Path, help='with --web-env: write them to this file, atomically')
     config_cmd.add_argument('--mode', choices=MODES, help='with --example: the mode the example is for (default: online)')
     sub.add_parser('schedule', help='run generate on GENERATE_SCHEDULE (the scheduler service)')
 
@@ -131,8 +128,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _check_config_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
-    if args.out is not None and not args.web_env:
-        parser.error('--out only applies to --web-env')
     if args.mode is not None and not args.example:
         parser.error('--mode only applies to --example')
 
@@ -245,13 +240,6 @@ def _procure(args: argparse.Namespace, settings: Settings) -> int:
 def _config(args: argparse.Namespace) -> int:
     if args.example:
         print(example_env(args.mode or 'online'), end='')
-        return 0
-    if args.web_env:
-        text = web_env(load_web_settings())
-        if args.out is not None:
-            write_web_env(text, args.out)
-            print(f'wrote {args.out}:')
-        print(text, end='')
         return 0
     return configview.run(as_json=args.json, check=args.check)
 

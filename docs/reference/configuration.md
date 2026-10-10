@@ -6,11 +6,10 @@ Every setting the update center reads, its default in each mode, and which servi
 
 Every setting is an environment variable, set in `.env` in the project directory: the file Compose
 loads as each service's `env_file` (`UC_ENV_FILE` names another). Every service that runs the uc
-image (`uc`, `scheduler`, `repo-adapter`, `web-config` and the on-demand `setup`) reads the same
+image (`uc`, `scheduler`, `repo-adapter` and the on-demand `setup`) reads the same
 file. `.env.online.example` and `.env.airgapped.example` list every setting.
 
-The web container does not read it: the one-shot `web-config` service works out its settings and
-writes them to a volume `web` reads at start, and a variable set in `web`'s own environment wins
+The web container gets only its own variables from it, through Compose
 ([Where web gets its settings](../architecture/request-routing.md#where-web-gets-its-settings)).
 
 A setting's value is the first of: a command-line option (where the command has one), the
@@ -52,8 +51,8 @@ settings are written into each release: after changing them, also publish a new 
 
 | Setting | Default | Read by | Notes |
 |---|---|---|---|
-| `MODE` | none | every uc-image service (`web-config` resolves it for web) | `online` or `airgapped`. It only sets defaults; every setting below can still be set explicitly. |
-| `PUBLIC_URL` | none | every uc-image service (`web-config` resolves it for web) | The exact origin Jenkins uses, with no path, for example `https://jenkins-updates.example.com`. Must not contain credentials or any `@`. See [A hostname for PUBLIC_URL](../getting-started/requirements.md#a-hostname-for-public_url). |
+| `MODE` | none | every uc-image service, and web | `online` or `airgapped`. It only sets defaults; every setting below can still be set explicitly. |
+| `PUBLIC_URL` | none | every uc-image service, and web | The exact origin Jenkins uses, with no path, for example `https://jenkins-updates.example.com`. Must not contain credentials or any `@`. See [A hostname for PUBLIC_URL](../getting-started/requirements.md#a-hostname-for-public_url). |
 
 ## Mode defaults
 
@@ -65,7 +64,7 @@ settings are written into each release: after changing them, also publish a new 
 | `REPO_ADAPTER` | `off` (always `on` for `artifact-keeper`) | `on` |
 | `CORE_AGE_DAYS` | `400` | `0` |
 | `DOWNLOAD_BACKEND` | `mirror` | `artifactory` |
-| `DOWNLOAD_BACKEND_URL` | `https://get.jenkins.io` | `${REPO_URL}${REPO_KEY}`; Artifact Keeper: `${REPO_URL}maven/${REPO_KEY}` |
+| `DOWNLOAD_BACKEND_URL` | `https://get.jenkins.io` | required |
 | `RESOURCES_SOURCE` | `github` | `bundled` |
 | `POPULARITY_JSON_URL` | upstream's `latestNumbers.json` on raw.githubusercontent.com | empty (skipped) |
 | `TOOL_INSTALLERS_URL` | `https://updates.jenkins.io/updates/` | empty (skipped) |
@@ -73,16 +72,18 @@ settings are written into each release: after changing them, also publish a new 
 A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` always has one between them.
 `REPO_URL` and `REPO_KEY` default to repo.jenkins-ci.org only in online mode with
 `REPO_TYPE=artifactory`; otherwise both are required. `DOWNLOAD_BACKEND_URL` follows
-`DOWNLOAD_BACKEND`, not the mode: `mirror` means get.jenkins.io, `artifactory` means your repository.
+`DOWNLOAD_BACKEND`, not the mode: it defaults to get.jenkins.io for `mirror`, and is required for
+`artifactory`: your repository by Maven path, `${REPO_URL}${REPO_KEY}/` for Artifactory or
+`${REPO_URL}maven/${REPO_KEY}/` for Artifact Keeper.
 
 ## Source repository
 
 | Setting | Default | Read by | Notes |
 |---|---|---|---|
-| `REPO_TYPE` | `artifactory` | generate, doctor, procure, repo-adapter, web-config | `artifactory` or `artifact-keeper`. Artifact Keeper is read only through the repo-adapter. |
-| `REPO_URL` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter, web-config | Artifactory: the `/artifactory/` base URL. Artifact Keeper: the server's base URL. A trailing slash is optional. Must not contain credentials or any `@`. |
+| `REPO_TYPE` | `artifactory` | generate, doctor, procure, repo-adapter | `artifactory` or `artifact-keeper`. Artifact Keeper is read only through the repo-adapter. |
+| `REPO_URL` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter | Artifactory: the `/artifactory/` base URL. Artifact Keeper: the server's base URL. A trailing slash is optional. Must not contain credentials or any `@`. |
 | `REPO_API_URL` | `${REPO_URL}api/` | generate, doctor, procure, repo-adapter | Artifactory's API base, for the listing query. Set it only when the API is served elsewhere. |
-| `REPO_KEY` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter, web-config | The repository key (for Artifact Keeper, the key, not the display name). Letters, digits, `.`, `_` and `-` only. |
+| `REPO_KEY` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter | The repository key (for Artifact Keeper, the key, not the display name). Letters, digits, `.`, `_` and `-` only. |
 
 ## repo-adapter
 
@@ -99,11 +100,11 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 
 | Setting | Default | Read by | Notes |
 |---|---|---|---|
-| `DOWNLOAD_BACKEND` | see [Mode defaults](#mode-defaults) | generate, web-config | `mirror` (get.jenkins.io layout) or `artifactory` (any Maven-layout repository, looked up through the release's download map). |
-| `DOWNLOAD_BACKEND_URL` | see [Mode defaults](#mode-defaults) | web-config | Where `/download/...` requests are sent. It must not contain credentials or any `@` (uc and web refuse them; for `DOWNLOAD_ACCESS=proxy` put them in `secrets/download_proxy_auth`). Controllers must be able to read it without credentials unless `DOWNLOAD_ACCESS=proxy`. |
-| `DOWNLOAD_ACCESS` | `redirect` | web-config | `redirect` sends controllers to the backend; `proxy` streams the file through the web container. See [Proxy plugin downloads](../how-to/proxy-downloads.md). |
-| `DOWNLOAD_PROXY_CA_FILE` | `/etc/ssl/certs/ca-certificates.crt` | web-config | Proxy mode only: the CA bundle the backend's certificate must verify against. |
-| `DOWNLOAD_PROXY_AUTH_FILE` | `${SECRETS_DIR}/download_proxy_auth` | web-config | Proxy mode only: the file holding `username:password` for the backend. |
+| `DOWNLOAD_BACKEND` | see [Mode defaults](#mode-defaults) | generate, web | `mirror` (get.jenkins.io layout) or `artifactory` (any Maven-layout repository, looked up through the release's download map). |
+| `DOWNLOAD_BACKEND_URL` | see [Mode defaults](#mode-defaults) | web (every uc-image service checks it) | Where `/download/...` requests are sent. It must not contain credentials or any `@` (uc and web refuse them; for `DOWNLOAD_ACCESS=proxy` put them in `secrets/download_proxy_auth`). Controllers must be able to read it without credentials unless `DOWNLOAD_ACCESS=proxy`. |
+| `DOWNLOAD_ACCESS` | `redirect` | web | `redirect` sends controllers to the backend; `proxy` streams the file through the web container. See [Proxy plugin downloads](../how-to/proxy-downloads.md). |
+| `DOWNLOAD_PROXY_CA_FILE` | `/etc/ssl/certs/ca-certificates.crt` | web | Proxy mode only: the CA bundle the backend's certificate must verify against. |
+| `DOWNLOAD_PROXY_AUTH_FILE` | `${SECRETS_DIR}/download_proxy_auth` | web | Proxy mode only: the file holding `username:password` for the backend. |
 
 ## Upstream data
 
@@ -152,8 +153,8 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 
 | Setting | Default | Read by | Notes |
 |---|---|---|---|
-| `TLS_CERT_FILE` | none | web-config | With `TLS_KEY_FILE`, enables HTTPS on port 8443. Both must be readable. See [Enable TLS](../how-to/enable-tls.md). |
-| `TLS_KEY_FILE` | none | web-config | The private key for `TLS_CERT_FILE`. |
+| `TLS_CERT_FILE` | none | web | With `TLS_KEY_FILE`, enables HTTPS on port 8443. Both must be readable. See [Enable TLS](../how-to/enable-tls.md). |
+| `TLS_KEY_FILE` | none | web | The private key for `TLS_CERT_FILE`. |
 
 ## Compose
 
@@ -168,7 +169,7 @@ to it.
 | Setting | Default | Notes |
 |---|---|---|
 | `UC_ENV_FILE` | `.env` | The file every uc-image service loads as `env_file`; web takes its variables from Compose's own `.env` (or `--env-file`). Lets several configurations sit side by side. |
-| `UC_IMAGE` | `easy-update-center/uc:local` | The image for `uc`, `scheduler`, `repo-adapter`, `web-config` and `setup`. |
+| `UC_IMAGE` | `easy-update-center/uc:local` | The image for `uc`, `scheduler`, `repo-adapter` and `setup`. |
 | `WEB_IMAGE` | `easy-update-center/web:local` | The image for `web`. |
 | `HTTP_PORT` | `8080` | Host port published for the web container's HTTP listener. |
 | `HTTPS_PORT` | `8443` | Host port published for the web container's TLS listener. |

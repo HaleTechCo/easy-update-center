@@ -6,7 +6,7 @@ from urllib.parse import unquote
 
 import pytest
 
-from uc.config import PkiSettings, _proxy_hostport, load_pki_settings, load_settings, load_web_settings, read_secret, split_userinfo, with_explicit_port
+from uc.config import PkiSettings, _proxy_hostport, load_pki_settings, load_settings, read_secret, split_userinfo, with_explicit_port
 from uc.errors import ConfigError
 from uc.settings import SETTINGS
 
@@ -15,8 +15,9 @@ AIRGAPPED = {
     'PUBLIC_URL': 'https://uc.example.com',
     'REPO_URL': 'https://artifactory.corp/artifactory',
     'REPO_KEY': 'jenkins-local',
+    'DOWNLOAD_BACKEND_URL': 'https://artifactory.corp/artifactory/jenkins-local',
 }
-KEEPER = {**AIRGAPPED, 'REPO_TYPE': 'artifact-keeper', 'REPO_URL': 'https://ak.corp', 'REPO_KEY': 'jenkins-prod-local'}
+KEEPER = {**AIRGAPPED, 'REPO_TYPE': 'artifact-keeper', 'REPO_URL': 'https://ak.corp', 'REPO_KEY': 'jenkins-prod-local', 'DOWNLOAD_BACKEND_URL': 'https://ak.corp/maven/jenkins-prod-local'}
 ONLINE = {'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com'}
 
 
@@ -500,7 +501,6 @@ def test_the_proxy_host_and_port_follow_urllibs_own_parser(value):
 
 
 ALL_URL_SETTINGS = [setting.env for setting in SETTINGS if setting.type == 'url']
-WEB_URL_SETTINGS = ['PUBLIC_URL', 'REPO_URL', 'DOWNLOAD_BACKEND_URL']
 NO_AT_SETTINGS = ('PUBLIC_URL', 'REPO_URL', 'DOWNLOAD_BACKEND_URL', 'PROCUREMENT_SOURCE_URL')
 """The URL settings that never carry credentials, so any @ in them is refused."""
 
@@ -510,10 +510,10 @@ def refused(name):
     return f'^{name} must not contain credentials or an @' if name in NO_AT_SETTINGS else f'^{name} is not a valid URL: '
 
 
-@pytest.mark.parametrize(('load', 'name'), [*((load_settings, name) for name in ALL_URL_SETTINGS), *((load_web_settings, name) for name in WEB_URL_SETTINGS)])
-def test_a_malformed_url_message_does_not_quote_the_value(load, name):
+@pytest.mark.parametrize('name', ALL_URL_SETTINGS)
+def test_a_malformed_url_message_does_not_quote_the_value(name):
     with pytest.raises(ConfigError, match=refused(name)) as error:
-        load({**AIRGAPPED, name: 'https://admin:S3cretPW@host.corp:wxyz/'})  # pragma: allowlist secret
+        load_settings({**AIRGAPPED, name: 'https://admin:S3cretPW@host.corp:wxyz/'})  # pragma: allowlist secret
     for part in ('admin', 'S3cretPW', 'wxyz'):
         assert part not in str(error.value)
 
@@ -537,15 +537,14 @@ AT_VALUES = {
     'path': f'https://host.corp/{TOKEN}@b',
     'query': f'https://host.corp?x={TOKEN}@b',
 }
-NO_AT_LOADS = [*((load_settings, name) for name in NO_AT_SETTINGS), *((load_web_settings, name) for name in WEB_URL_SETTINGS)]
 
 
 @pytest.mark.parametrize('value', AT_VALUES.values(), ids=AT_VALUES.keys())
-@pytest.mark.parametrize(('load', 'name'), NO_AT_LOADS)
-def test_any_at_is_refused_in_a_url_setting_that_never_carries_credentials(load, name, value):
+@pytest.mark.parametrize('name', NO_AT_SETTINGS)
+def test_any_at_is_refused_in_a_url_setting_that_never_carries_credentials(name, value):
     # urlsplit ends the user info at a # ? or /, and would read a token before one as the host.
     with pytest.raises(ConfigError, match=f'^{name} must not contain credentials or an @') as error:
-        load({**AIRGAPPED, name: value})
+        load_settings({**AIRGAPPED, name: value})
     assert TOKEN not in str(error.value)
 
 
@@ -559,32 +558,21 @@ ENCODED_AT = 'https://host.corp/jenkins%40corp'  # an encoded @ is not one
         (load_settings, 'REPO_URL', 'repo_url', ENCODED_AT + '/'),
         (load_settings, 'DOWNLOAD_BACKEND_URL', 'download_backend_url', ENCODED_AT),
         (load_settings, 'PROCUREMENT_SOURCE_URL', 'procurement_source_url', ENCODED_AT + '/'),
-        (load_web_settings, 'PUBLIC_URL', 'public_url', ENCODED_AT),
-        (load_web_settings, 'REPO_URL', 'download_backend_url', ENCODED_AT + '/jenkins-local'),  # web reads the repository only for the default backend URL
-        (load_web_settings, 'DOWNLOAD_BACKEND_URL', 'download_backend_url', ENCODED_AT),
     ],
 )
 def test_a_url_setting_that_never_carries_credentials_loads_without_an_at(load, name, field, expected):
     assert getattr(load({**AIRGAPPED, name: ENCODED_AT}), field) == expected
 
 
-def test_web_settings_refuse_a_malformed_repository_url():
-    env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'REPO_URL': 'http://[bad/', 'REPO_KEY': 'jenkins'}
-    with pytest.raises(ConfigError, match='REPO_URL is not a valid URL: '):
-        load_web_settings(env)
-
-
-@pytest.mark.parametrize('load', [load_settings, load_web_settings])
 @pytest.mark.parametrize('value', ['https://[uc.example.com', 'https://uc:abc'], ids=['bracket', 'port'])
-def test_a_malformed_public_url_is_a_configuration_error(load, value):
+def test_a_malformed_public_url_is_a_configuration_error(value):
     with pytest.raises(ConfigError, match=r'^PUBLIC_URL is not a valid URL: '):
-        load({**AIRGAPPED, 'PUBLIC_URL': value})
+        load_settings({**AIRGAPPED, 'PUBLIC_URL': value})
 
 
-@pytest.mark.parametrize('load', [load_settings, load_web_settings])
-def test_an_unset_public_url_is_still_reported_as_unset(load):
+def test_an_unset_public_url_is_still_reported_as_unset():
     with pytest.raises(ConfigError, match=r'^PUBLIC_URL must be set$'):
-        load({'MODE': 'online', 'PUBLIC_URL': ' '})
+        load_settings({'MODE': 'online', 'PUBLIC_URL': ' '})
 
 
 def test_every_setting_has_a_settings_field():
@@ -617,3 +605,18 @@ def test_pki_settings_need_no_mode():
 def test_pki_days_must_be_positive():
     with pytest.raises(ConfigError, match='PKI_SIGNING_DAYS must be >= 1'):
         load_pki_settings({'PKI_SIGNING_DAYS': '0'})
+
+
+def test_artifactory_downloads_need_a_url():
+    with pytest.raises(ConfigError, match=r'^DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL$'):
+        load_settings({'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc.example.com', 'REPO_URL': 'https://repo.corp/artifactory/', 'REPO_KEY': 'jenkins'})
+
+
+@pytest.mark.parametrize('mode', ['online', 'airgapped'])
+def test_the_download_url_is_taken_as_set_without_its_trailing_slash(mode):
+    env = {'MODE': mode, 'PUBLIC_URL': 'https://uc.example.com', 'REPO_URL': 'https://repo.corp/artifactory/', 'REPO_KEY': 'jenkins', 'DOWNLOAD_BACKEND': 'artifactory', 'DOWNLOAD_BACKEND_URL': 'https://repo.corp/artifactory/jenkins/'}
+    assert load_settings(env).download_backend_url == 'https://repo.corp/artifactory/jenkins'
+
+
+def test_the_mirror_defaults_to_get_jenkins_io():
+    assert load_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com'}).download_backend_url == 'https://get.jenkins.io'

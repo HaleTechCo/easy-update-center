@@ -83,8 +83,8 @@ COPY bin/uc-setup bin/secrets-permissions.sh /usr/local/bin/
 RUN chmod 0755 /usr/local/bin/uc /usr/local/bin/uc-setup /usr/local/bin/secrets-permissions.sh /opt/uc/site/generate-htaccess.sh \
  && groupadd --system --gid 10001 uc \
  && useradd --system --uid 10001 --gid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin uc \
- && mkdir -p /data /config/overlay /run/uc-web \
- && chown 10001:10001 /data /run/uc-web
+ && mkdir -p /data /config/overlay \
+ && chown 10001:10001 /data
 ENV PYTHONPATH=/opt/uc/python \
     PYTHONDONTWRITEBYTECODE=1 \
     UC_APP_DIR=/opt/uc \

@@ -230,45 +230,8 @@ def load_pki_settings(env: Mapping[str, str] | None = None) -> PkiSettings:
     return PkiSettings(org=r.raw('PKI_ORG'), root_days=_int(r, 'PKI_ROOT_DAYS'), signing_days=_int(r, 'PKI_SIGNING_DAYS'))
 
 
-@dataclass(frozen=True)
-class WebSettings:
-    """The settings the web container reads: what web.env lists (uc/uc/webenv.py)."""
-
-    public_url: str
-    download_backend: str
-    download_backend_url: str
-    download_access: str
-    download_proxy_auth_file: Path
-    download_proxy_ca_file: str
-    tls_cert_file: str
-    tls_key_file: str
-
-
-def load_web_settings(env: Mapping[str, str] | None = None) -> WebSettings:
-    """Resolve and validate only what the web container uses, so a bad generator-only setting cannot stop web; the same values and messages as load_settings."""
-    r = make_resolver(env)
-    r.mode = _choice(r, 'MODE')
-    public_url = r.raw('PUBLIC_URL').rstrip('/')
-    if not public_url:
-        msg = 'PUBLIC_URL must be set'
-        raise ConfigError(msg)
-    _check_credential_free_url('PUBLIC_URL', public_url)
-    backend = _choice(r, 'DOWNLOAD_BACKEND')
-    backend_url = _explicit_backend_url(r) or _default_backend_url(r, backend)
-    return WebSettings(
-        public_url=public_url,
-        download_backend=backend,
-        download_backend_url=backend_url.rstrip('/'),
-        download_access=_choice(r, 'DOWNLOAD_ACCESS'),
-        download_proxy_auth_file=_secret_path(r, 'DOWNLOAD_PROXY_AUTH_FILE', 'download_proxy_auth'),
-        download_proxy_ca_file=r.raw('DOWNLOAD_PROXY_CA_FILE'),
-        tls_cert_file=r.raw('TLS_CERT_FILE'),
-        tls_key_file=r.raw('TLS_KEY_FILE'),
-    )
-
-
 def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
-    """Return the validated (REPO_TYPE, REPO_URL with a trailing slash, REPO_KEY), for load_settings and load_web_settings alike."""
+    """Return the validated (REPO_TYPE, REPO_URL with a trailing slash, REPO_KEY)."""
     repo_type = _choice(r, 'REPO_TYPE')
     public_repo = online and repo_type == 'artifactory'
     repo_url = r.raw('REPO_URL') or (PUBLIC_ARTIFACTORY_URL if public_repo else '')
@@ -286,20 +249,6 @@ def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
 def _secret_path(r: Resolver, name: str, default_file: str) -> Path:
     """Return the secret file name points at, else default_file in SECRETS_DIR."""
     return Path(r.raw(name) or str(Path(r.raw('SECRETS_DIR')) / default_file))
-
-
-def _default_backend_url(r: Resolver, backend: str, repository: tuple[str, str, str] | None = None) -> str:
-    """Return where /download/ requests go when DOWNLOAD_BACKEND_URL is not set.
-
-    repository is the (REPO_TYPE, REPO_URL, REPO_KEY) _repository already validated; without it the repository is
-    read here, and only when the backend needs it (the mirror does not).
-    """
-    if backend == 'mirror':
-        return UPSTREAM_MIRROR_URL
-    repo_type, repo_url, repo_key = repository or _repository(r, online=r.mode == 'online')
-    if repo_type == 'artifact-keeper':
-        return f'{repo_url.rstrip("/")}/maven/{repo_key}'
-    return repo_url + repo_key
 
 
 def settings_from(r: Resolver) -> Settings:
@@ -325,7 +274,11 @@ def settings_from(r: Resolver) -> Settings:
     repo_ca = r.raw('REPO_CA_FILE')
 
     backend = _choice(r, 'DOWNLOAD_BACKEND')
-    backend_url = (_explicit_backend_url(r) or _default_backend_url(r, backend, (repo_type, repo_url, repo_key))).rstrip('/')
+    backend_url = _explicit_backend_url(r) or (UPSTREAM_MIRROR_URL if backend == 'mirror' else '')
+    if not backend_url:
+        msg = 'DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL'
+        raise ConfigError(msg)
+    backend_url = backend_url.rstrip('/')
     data_dir = Path(r.raw('UC_DATA_DIR'))
 
     resources_source = _choice(r, 'RESOURCES_SOURCE')

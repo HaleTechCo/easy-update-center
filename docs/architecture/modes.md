@@ -29,6 +29,7 @@ REPO_TYPE=artifact-keeper            # Artifact Keeper only; artifactory is the 
 REPO_URL=https://artifacts.corp.example/
 REPO_KEY=jenkins-plugins-local
 DOWNLOAD_BACKEND=artifactory         # controllers download from your repository, not get.jenkins.io
+DOWNLOAD_BACKEND_URL=https://artifacts.corp.example/maven/jenkins-plugins-local/   # that repository by Maven path
 DOWNLOAD_ACCESS=proxy                # only if controllers cannot read it without credentials
 CORE_AGE_DAYS=0                      # a tier for every stored core, as air-gapped
 ```

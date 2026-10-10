@@ -11,9 +11,6 @@ on a Java runtime, plus the `uc` command in Python) and the **web image** (Apach
   `?version=` routing to tiered sites, and `/download/` routes that redirect (or proxy) to where the
   binaries are. It mounts the data volume read-only and never sees the signing key. See
   [Request routing](request-routing.md).
-- **web-config** runs once before `web` starts: it works out web's settings from `.env` and
-  writes them to a small volume web reads, then exits. It has no network and no
-  secrets. See [Where web gets its settings](request-routing.md#where-web-gets-its-settings).
 - **setup** runs only when called, never by `docker compose up`: `docker compose run --rm setup`
   for first-time setup, or `setup secrets`, `procurement`, `pki-init` or `pki-rotate`, which
   `make setup`, `make secrets`, `make pki-init` and `make pki-rotate` run. Its entrypoint,

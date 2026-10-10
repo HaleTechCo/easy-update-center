@@ -9,7 +9,9 @@ import sys
 REPO_SECRETS = {'repo_username', 'repo_password'}
 PUSH_SECRET = 'repo_push_auth'
 WEB_SECRETS = {'download_proxy_auth'}
-UC_SERVICES = ('uc', 'scheduler', 'repo-adapter', 'web-config')
+UC_SERVICES = ('uc', 'scheduler', 'repo-adapter')
+WEB_ENVIRONMENT = {'PUBLIC_URL', 'MODE', 'DOWNLOAD_BACKEND', 'DOWNLOAD_BACKEND_URL', 'DOWNLOAD_ACCESS', 'DOWNLOAD_PROXY_CA_FILE', 'TLS_CERT_FILE', 'TLS_KEY_FILE'}
+"""web's variables, interpolated by Compose from .env; with no env_file, proxy credentials and the rest of .env never reach it."""
 UC_IMAGE_SERVICES = (*UC_SERVICES, 'setup')
 STAGING = '/procurement'
 # What compose.yaml mounts into setup: target -> (source, relative to the project directory; read-only).
@@ -106,21 +108,11 @@ def main() -> None:
         if setup.get('entrypoint') != SETUP_ENTRYPOINT:
             problems.append(f'setup must run uc-setup as its entrypoint, not {setup.get("entrypoint")!r}')
         problems += setup_mount_problems(setup)
-    web_config = services.get('web-config')
-    if web_config is None:
-        problems.append('web-config is missing: web reads its settings from it')
-    else:
-        if secrets(web_config):
-            problems.append(f'web-config receives secrets {sorted(secrets(web_config))}')
-        if web_config.get('network_mode') != 'none':
-            problems.append('web-config must have no network')
-    # docker compose config folds an env_file into environment, so this also catches web given .env.
-    if web.get('environment'):
-        problems.append(f'web reads settings from its own environment ({sorted(web["environment"])}); web-config writes them')
-    if (web.get('depends_on') or {}).get('web-config', {}).get('condition') != 'service_completed_successfully':
-        problems.append('web must start after web-config has written its settings')
-    if not any(volume.get('target') == '/run/uc-web' and volume.get('read_only') for volume in web.get('volumes') or []):
-        problems.append('web must mount the web-config volume read-only at /run/uc-web')
+    # docker compose config folds an env_file into environment, so an env_file on web shows here as extra names.
+    if set(web.get('environment') or {}) != WEB_ENVIRONMENT:
+        problems.append(f'web environment is {sorted(web.get("environment") or {})}, not {sorted(WEB_ENVIRONMENT)}')
+    if 'web-config' in services:
+        problems.append('web-config is back: web takes its variables from Compose')
     if secrets(web) != WEB_SECRETS:
         problems.append(f'web secrets are {sorted(secrets(web))}, not {sorted(WEB_SECRETS)}')
     for name in UC_SERVICES:

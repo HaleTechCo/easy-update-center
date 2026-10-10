@@ -198,7 +198,7 @@ IT_DIR = tests/integration
 IT_AIR = docker compose -f $(IT_DIR)/airgapped.yaml --env-file $(IT_DIR)/.versions.env
 # Each repository type gets a fresh update center (its data volumes) against the same seeded repository.
 IT_TYPES ?= artifactory artifact-keeper
-IT_STATE = uc-it-airgapped_uc-data uc-it-airgapped_uc-data-proxy uc-it-airgapped_uc-data-age uc-it-airgapped_uc-data-push uc-it-airgapped_push-repo uc-it-airgapped_web-config
+IT_STATE = uc-it-airgapped_uc-data uc-it-airgapped_uc-data-proxy uc-it-airgapped_uc-data-age uc-it-airgapped_uc-data-push uc-it-airgapped_push-repo
 
 it-airgapped: build ## Run the air-gapped integration test against a seeded repository (IT_TYPES=, ARGS=)
 	docker compose -f $(IT_DIR)/airgapped.yaml --profile seed run --rm -T seed-versions > $(IT_DIR)/.versions.env

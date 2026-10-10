@@ -103,6 +103,8 @@ that. Then:
   optional) and the repository key.
 - For Artifact Keeper instead: `REPO_TYPE=artifact-keeper`, `REPO_URL` the server's base URL, and
   `REPO_KEY` the repository key (not its display name).
+- `DOWNLOAD_BACKEND_URL`: where controllers download from, the same repository by Maven path:
+  `${REPO_URL}${REPO_KEY}/` for Artifactory, `${REPO_URL}maven/${REPO_KEY}/` for Artifact Keeper.
 - `DOWNLOAD_ACCESS=proxy` if controllers cannot read the repository without credentials
   ([Proxy plugin downloads](../how-to/proxy-downloads.md)).
 - Uncomment `COMPOSE_FILE=compose.yaml:compose.airgapped.yaml` (on Windows, separate the files with

@@ -17,13 +17,11 @@ Jenkins controllers need to reach only the web container, at `PUBLIC_URL`.
 | Service | `default` | `repo` (internal) | `repo-egress` |
 |---|---|---|---|
 | `web` | yes | no | no |
-| `web-config` | no | no | no |
 | `setup` | no | no | no |
 | `scheduler`, `uc` | yes | yes | no |
 | `repo-adapter` | no | yes | yes |
 
-`web-config` has no network at all (`network_mode: none`): it only reads settings and writes a file.
-`setup` has none either: `docker compose run --rm setup` and its `secrets`, `procurement`,
+`setup` has no network at all: `docker compose run --rm setup` and its `secrets`, `procurement`,
 `pki-init` and `pki-rotate` commands (`make setup`, `make secrets`, `make pki-init`,
 `make pki-rotate`) only set up files on the host, in `./secrets`, `./procurement` and a directory
 you mount.

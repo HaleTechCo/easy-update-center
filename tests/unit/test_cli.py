@@ -37,6 +37,7 @@ def use_env(monkeypatch, tmp_path, secrets_dir):
         'PUBLIC_URL': 'https://uc.example.com',
         'REPO_URL': 'http://artifactory:8081/artifactory/',
         'REPO_KEY': 'jenkins',
+        'DOWNLOAD_BACKEND_URL': 'http://artifactory:8081/artifactory/jenkins',
         'REPO_ADAPTER': 'off',
         'SECRETS_DIR': str(secrets_dir),
         'UC_DATA_DIR': str(tmp_path / 'data'),
@@ -311,11 +312,10 @@ def test_config_check(monkeypatch, tmp_path, secrets_dir, capsys):
 def test_config_reports_a_malformed_public_url(monkeypatch, tmp_path, secrets_dir, capsys, value):
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('PUBLIC_URL', value)
-    for argv in (['config', '--check'], ['config', '--web-env']):  # every setting, and only the web container's
-        assert main(argv) == 1, argv
-        captured = capsys.readouterr()
-        assert captured.out == '', argv
-        assert captured.err.startswith('uc: error: PUBLIC_URL is not a valid URL: '), argv
+    assert main(['config', '--check']) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ''
+    assert captured.err.startswith('uc: error: PUBLIC_URL is not a valid URL: ')
 
 
 def test_config_json_and_check_are_exclusive(capsys):
@@ -325,15 +325,7 @@ def test_config_json_and_check_are_exclusive(capsys):
     assert 'not allowed with argument' in capsys.readouterr().err
 
 
-def test_config_web_env_writes_the_file(monkeypatch, tmp_path, secrets_dir, capsys):
-    use_env(monkeypatch, tmp_path, secrets_dir)
-    out = tmp_path / 'uc-web' / 'web.env'
-    assert main(['config', '--web-env', '--out', str(out)]) == 0
-    assert out.read_text(encoding='utf-8').startswith('PUBLIC_URL=https://uc.example.com\nDOWNLOAD_BACKEND=artifactory\n')
-    assert capsys.readouterr().out.startswith(f'wrote {out}:\nPUBLIC_URL=')
-
-
-@pytest.mark.parametrize(('argv', 'message'), [(['config', '--out', 'web.env'], '--out only applies to --web-env'), (['config', '--mode', 'online'], '--mode only applies to --example')])
+@pytest.mark.parametrize(('argv', 'message'), [(['config', '--mode', 'online'], '--mode only applies to --example')])
 def test_config_options_that_need_another(argv, message, capsys):
     with pytest.raises(SystemExit):
         main(argv)
@@ -997,4 +989,10 @@ def test_config_example_prints_the_env_example(capsys):
 def test_config_example_takes_no_format():
     with pytest.raises(SystemExit) as exited:
         main(['config', '--example', 'toml'])
+    assert exited.value.code == 2
+
+
+def test_config_has_no_web_env():
+    with pytest.raises(SystemExit) as exited:
+        main(['config', '--web-env'])
     assert exited.value.code == 2

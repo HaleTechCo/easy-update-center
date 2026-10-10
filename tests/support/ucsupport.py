@@ -21,6 +21,7 @@ def make_settings(tmp_path: Path, secrets: Path, **env: str) -> Settings:
         'PUBLIC_URL': 'https://uc.example.com',
         'REPO_URL': 'http://artifactory:8081/artifactory/',
         'REPO_KEY': 'jenkins',
+        'DOWNLOAD_BACKEND_URL': 'http://artifactory:8081/artifactory/jenkins',
         'REPO_ADAPTER': 'off',
         'SECRETS_DIR': str(secrets),
         'UC_DATA_DIR': str(tmp_path / 'data'),

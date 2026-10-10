@@ -26,27 +26,19 @@ expect_exit() {
     report "${code}" "${message}" "${rc}" "${output}"
 }
 
-# expect_exit_with_web_env CODE MESSAGE WEB_ENV [docker run args...]: WEB_ENV is written to
-# /run/uc-web/web.env first, as the web-config service writes it; under timeout, as expect_exit.
-expect_exit_with_web_env() {
-    local code="$1" message="$2" web_env="$3"
-    shift 3
+# expect_serves MESSAGE [docker run args...]: the entrypoint accepts the settings and goes on to wait
+# for the first release, where timeout stops it (exit 124).
+expect_serves() {
+    local message="$1"
+    shift
     local output rc
-    # shellcheck disable=SC2016 # expanded by the bash inside the container
-    output="$(docker run --rm --tmpfs /run/uc-web:uid=33,gid=33 -e "TEST_WEB_ENV=${web_env}" --entrypoint bash "$@" "${image}" \
-        -c 'printf "%s" "${TEST_WEB_ENV}" > /run/uc-web/web.env && exec timeout 10 /usr/local/bin/entrypoint.sh' 2>&1)"
+    output="$(docker run --rm "$@" --entrypoint timeout "${image}" 2 /usr/local/bin/entrypoint.sh 2>&1)"
     rc=$?
-    report "${code}" "${message}" "${rc}" "${output}"
+    report 124 "${message}" "${rc}" "${output}"
 }
 
-# expect_serving DOWNLOAD_BACKEND_URL: the entrypoint accepts the URL and goes on to wait for the
-# first release, where timeout stops it (exit 124).
-expect_serving() {
-    local url="$1" output rc
-    output="$(docker run --rm -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e "DOWNLOAD_BACKEND_URL=${url}" \
-        --entrypoint timeout "${image}" 2 /usr/local/bin/entrypoint.sh 2>&1)"
-    rc=$?
-    report 124 "entrypoint: serving http://uc; downloads: artifactory ${url} (redirect)" "${rc}" "${output}"
+expect_serving() { # expect_serving DOWNLOAD_BACKEND_URL
+    expect_serves "entrypoint: serving http://uc; downloads: artifactory $1 (redirect)" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e "DOWNLOAD_BACKEND_URL=$1"
 }
 
 # expect_log CONTAINER TEXT MESSAGE: polls the container's logs for TEXT for up to 30 seconds; on
@@ -86,20 +78,21 @@ expect_exit 64 "${no_credentials}" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=a
 expect_serving "http://backend.example?x=a#b"
 expect_serving "https://repo.corp/artifactory/jenkins"
 
-# web.env is read; empty values are ignored; the environment wins.
-s3_env=$'PUBLIC_URL=http://uc\nTLS_CERT_FILE=\nDOWNLOAD_BACKEND=s3\n'
-expect_exit_with_web_env 64 "${no_credentials}" $'PUBLIC_URL=http://uc\nDOWNLOAD_BACKEND=artifactory\nDOWNLOAD_BACKEND_URL=https://u:pw@art/repo\n' # pragma: allowlist secret
-expect_exit_with_web_env 64 "DOWNLOAD_BACKEND must be mirror or artifactory (got 's3')" "${s3_env}"
-expect_exit_with_web_env 64 "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL" "${s3_env}" -e DOWNLOAD_BACKEND=artifactory
-expect_exit_with_web_env 64 "needs username:password" $'PUBLIC_URL=http://uc\nDOWNLOAD_ACCESS=proxy\nDOWNLOAD_PROXY_AUTH_FILE=/nope\n'
+# Compose passes an unset variable as empty: MODE then chooses the backend, as uc does; an explicit
+# DOWNLOAD_BACKEND wins over MODE.
+mirror="downloads: mirror https://get.jenkins.io (redirect)"
+expect_serves "${mirror}" -e PUBLIC_URL=http://uc -e MODE=online -e DOWNLOAD_BACKEND=
+expect_serves "${mirror}" -e PUBLIC_URL=http://uc -e MODE= -e DOWNLOAD_BACKEND=
+expect_serves "${mirror}" -e PUBLIC_URL=http://uc
+expect_serves "downloads: artifactory http://backend/repo (redirect)" -e PUBLIC_URL=http://uc -e MODE=airgapped -e DOWNLOAD_BACKEND= -e DOWNLOAD_BACKEND_URL=http://backend/repo
+expect_exit 64 "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL" -e PUBLIC_URL=http://uc -e MODE=airgapped -e DOWNLOAD_BACKEND= -e DOWNLOAD_BACKEND_URL=
+expect_serves "${mirror}" -e PUBLIC_URL=http://uc -e MODE=airgapped -e DOWNLOAD_BACKEND=mirror
 
 name="uc-web-wait-$$"
 # Removed on every way out of this script, a failed check or an interrupt included.
 trap 'docker rm -f "${name}" "${name}-env" > /dev/null 2>&1' EXIT
 docker run -d --name "${name}" -e PUBLIC_URL=http://uc "${image}" > /dev/null
-# shellcheck disable=SC2016 # expanded by the bash inside the container
-docker run -d --name "${name}-env" --tmpfs /run/uc-web:uid=33,gid=33 --entrypoint bash "${image}" \
-    -c 'printf "%s\n" PUBLIC_URL=http://uc DOWNLOAD_BACKEND=artifactory "DOWNLOAD_BACKEND_URL=http://backend/repo?a=b=c" > /run/uc-web/web.env && exec /usr/local/bin/entrypoint.sh' > /dev/null
+docker run -d --name "${name}-env" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e "DOWNLOAD_BACKEND_URL=http://backend/repo?a=b=c" "${image}" > /dev/null
 expect_log "${name}" "waiting for the first published release" "waits for the first release"
 expect_log "${name}-env" "entrypoint: serving http://uc; downloads: artifactory http://backend/repo?a=b=c (redirect)" "logs what it serves, with the backend URL intact"
 exit "${failures}"

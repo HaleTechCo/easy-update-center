@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Take the settings uc worked out for this container (the web-config service writes /run/uc-web/web.env:
-# docs/architecture/request-routing.md#where-web-gets-its-settings), wait for the first release, run httpd.
-# A variable already set in this container's environment wins over web.env, so a Compose override can
-# still set one. Without web.env, every setting comes from the environment, with the defaults below.
+# Check web's settings, which Compose passes from .env (compose.yaml), wait for the first release,
+# then run httpd (docs/architecture/request-routing.md#where-web-gets-its-settings). Compose passes
+# an unset variable as empty, so empty means unset throughout.
 set -euo pipefail
 
 die() {
@@ -10,22 +9,12 @@ die() {
     exit 64
 }
 
-web_env=/run/uc-web/web.env
-if [[ -f "${web_env}" ]]; then
-    while IFS= read -r line || [[ -n "${line}" ]]; do
-        name="${line%%=*}"
-        case "${name}" in
-            PUBLIC_URL | DOWNLOAD_BACKEND | DOWNLOAD_BACKEND_URL | DOWNLOAD_ACCESS | DOWNLOAD_PROXY_AUTH_FILE | DOWNLOAD_PROXY_CA_FILE | TLS_CERT_FILE | TLS_KEY_FILE)
-                [[ -n "${!name:-}" ]] || export "${name}=${line#*=}"
-                ;;
-            *) ;; # names web does not read
-        esac
-    done < "${web_env}"
-fi
-
-[[ -n "${PUBLIC_URL:-}" ]] || die "PUBLIC_URL must be set (the web-config service writes it to ${web_env})"
+[[ -n "${PUBLIC_URL:-}" ]] || die "PUBLIC_URL must be set"
 export PUBLIC_URL="${PUBLIC_URL%/}"
-DOWNLOAD_BACKEND="${DOWNLOAD_BACKEND:-mirror}"
+# The mode's default backend, the rule uc's settings registry has (uc/uc/settings.py: DOWNLOAD_BACKEND).
+if [[ -z "${DOWNLOAD_BACKEND:-}" ]]; then
+    if [[ "${MODE:-}" == airgapped ]]; then DOWNLOAD_BACKEND=artifactory; else DOWNLOAD_BACKEND=mirror; fi
+fi
 DOWNLOAD_ACCESS="${DOWNLOAD_ACCESS:-redirect}"
 defines=()
 

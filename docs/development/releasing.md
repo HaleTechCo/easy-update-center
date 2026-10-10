@@ -76,7 +76,7 @@ Only GitHub can show that the workflows work, so the first release is a rehearsa
       ```
 
 - [ ] Run the released generator end to end, which `make it-airgapped` does not (it runs only `pki`
-      from `UC_IMAGE`; the generator, repo-adapter and web-config run from the test image built from
+      from `UC_IMAGE`; the generator and repo-adapter run from the test image built from
       your checkout). Follow [Deploy online](../getting-started/online.md), or
       [Deploy air-gapped](../getting-started/airgapped.md) with the bundle against your test
       repository, with the 0.1.0 images, then check that `docker compose run --rm uc status` shows a

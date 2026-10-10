@@ -141,8 +141,11 @@ SETTINGS: tuple[Setting, ...] = (
         'DOWNLOAD_BACKEND_URL',
         'url',
         'Downloads',
-        'Where /download/ requests go: https://get.jenkins.io for mirror, the repository (${REPO_URL}${REPO_KEY}; Artifact Keeper ${REPO_URL}maven/${REPO_KEY}) for artifactory.',
+        'Where /download/ requests go: https://get.jenkins.io by default for mirror; required for artifactory: the repository by Maven path (Artifactory ${REPO_URL}${REPO_KEY}/, Artifact Keeper ${REPO_URL}maven/${REPO_KEY}/).',
         derived=True,
+        sample='https://artifactory.corp.example/artifactory/jenkins-plugins-local/',
+        active=('airgapped',),
+        online_hint=('With your own repository and DOWNLOAD_BACKEND=artifactory, set it to that repository by Maven path.',),
     ),
     Setting(
         'DOWNLOAD_ACCESS',
@@ -284,7 +287,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('REPO_PUSH_AUTH_FILE', 'path', 'Internal', 'The account that can write to the repository, ${SECRETS_DIR}/repo_push_auth by default.', derived=True, secret_file=True),
     # Compose
     Setting('UC_ENV_FILE', 'path', 'Compose', "The file every uc-image service loads as env_file; web takes its variables from Compose's own .env (or --env-file).", default='.env', env_only=True),
-    Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler, repo-adapter, web-config and setup.', default='easy-update-center/uc:local', env_only=True),
+    Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler, repo-adapter and setup.', default='easy-update-center/uc:local', env_only=True),
     Setting('WEB_IMAGE', 'str', 'Compose', 'The image for web.', default='easy-update-center/web:local', env_only=True),
     Setting('HTTP_PORT', 'int', 'Compose', "Host port published for the web container's HTTP listener.", default='8080', env_only=True),
     Setting('HTTPS_PORT', 'int', 'Compose', "Host port published for the web container's TLS listener.", default='8443', env_only=True),

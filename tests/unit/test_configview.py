@@ -15,6 +15,7 @@ def env_for(tmp_path, secrets_dir, **extra):
         'PUBLIC_URL': 'https://uc.example.com',
         'REPO_URL': 'http://artifactory:8081/artifactory/',
         'REPO_KEY': 'jenkins',
+        'DOWNLOAD_BACKEND_URL': 'http://artifactory:8081/artifactory/jenkins',
         'SECRETS_DIR': str(secrets_dir),
         'UC_DATA_DIR': str(tmp_path / 'data'),
         **extra,
@@ -149,3 +150,11 @@ def test_an_unreadable_secret_file_is_noted(tmp_path, secrets_dir):
     finally:
         secret.chmod(0o600)
     assert f'  REPO_PASSWORD_FILE = {secret}  (derived; unreadable)\n' in out
+
+
+def test_check_reports_a_missing_download_url(tmp_path, secrets_dir):
+    env = env_for(tmp_path, secrets_dir)
+    del env['DOWNLOAD_BACKEND_URL']
+    code, out, err = show(env, check=True)
+    assert (code, out) == (1, '')
+    assert err == 'uc: error: DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL\n'

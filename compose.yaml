@@ -39,27 +39,20 @@ services:
       - "${HTTPS_PORT:-8443}:8443"
     volumes:
       - uc-data:/data:ro
-      - web-config:/run/uc-web:ro
     secrets:
       - download_proxy_auth
-    # Its settings come from web-config (docs/architecture/request-routing.md#where-web-gets-its-settings).
-    # restart: when `docker compose up -d` recreates web-config after a settings change, web restarts too.
-    depends_on:
-      web-config: {condition: service_completed_successfully, restart: true}
+    # Only its own variables, from .env (docs/architecture/request-routing.md#where-web-gets-its-settings);
+    # no env_file, so the rest of .env, proxy credentials included, never reaches it.
+    environment:
+      PUBLIC_URL: ${PUBLIC_URL:-}
+      MODE: ${MODE:-}
+      DOWNLOAD_BACKEND: ${DOWNLOAD_BACKEND:-}
+      DOWNLOAD_BACKEND_URL: ${DOWNLOAD_BACKEND_URL:-}
+      DOWNLOAD_ACCESS: ${DOWNLOAD_ACCESS:-}
+      DOWNLOAD_PROXY_CA_FILE: ${DOWNLOAD_PROXY_CA_FILE:-}
+      TLS_CERT_FILE: ${TLS_CERT_FILE:-}
+      TLS_KEY_FILE: ${TLS_KEY_FILE:-}
     restart: unless-stopped
-
-  # One-shot, before web: works out web's settings from .env (uc config --web-env)
-  # and writes them to the web-config volume. No network, no secrets.
-  web-config:
-    image: ${UC_IMAGE:-easy-update-center/uc:local}
-    build: {context: uc, target: runtime}
-    env_file: ${UC_ENV_FILE:-.env}
-    command: ["config", "--web-env", "--out", "/run/uc-web/web.env"]
-    read_only: true
-    network_mode: none
-    volumes:
-      - ./config:/config:ro
-      - web-config:/run/uc-web
 
   # One-shot, only when called: `docker compose run --rm setup` (first-time setup, safe to repeat), or
   # `setup secrets | procurement | pki-init | pki-rotate` (docs/reference/cli.md#the-setup-service).
@@ -143,7 +136,6 @@ networks:
 
 volumes:
   uc-data:
-  web-config:
 
 secrets:
   update-center.key:

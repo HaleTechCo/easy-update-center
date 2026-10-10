@@ -106,26 +106,20 @@ published release" once a minute until then.
 
 ## Where web gets its settings
 
-The web container has no Python, so it cannot work out the mode defaults.
-The one-shot `web-config` service, from the uc image, does it: it runs
-`uc config --web-env --out /run/uc-web/web.env` with the same `.env` as the other services, writes
-the result to the small `web-config` volume and exits. `web` starts after it and
-reads `PUBLIC_URL`, `DOWNLOAD_BACKEND`, `DOWNLOAD_BACKEND_URL`, `DOWNLOAD_ACCESS`,
-`DOWNLOAD_PROXY_AUTH_FILE`, `DOWNLOAD_PROXY_CA_FILE`, `TLS_CERT_FILE` and `TLS_KEY_FILE` from that
-file, nothing else.
+The web container gets only its own variables, which Compose takes from `.env` (`compose.yaml`
+lists them under `web`'s `environment:`): `PUBLIC_URL`, `MODE`, `DOWNLOAD_BACKEND`,
+`DOWNLOAD_BACKEND_URL`, `DOWNLOAD_ACCESS`, `DOWNLOAD_PROXY_CA_FILE`, `TLS_CERT_FILE` and
+`TLS_KEY_FILE`. Nothing else in `.env`, proxy credentials included, reaches it.
 
-- A variable set in `web`'s own environment wins over the file, so a Compose override such as
-  `compose.tls.yaml` ([Enable TLS](../how-to/enable-tls.md)) still works.
-- Without the file (the web image run on its own), every value comes from `web`'s environment,
-  with plain defaults: `DOWNLOAD_BACKEND=mirror` (get.jenkins.io) and `DOWNLOAD_ACCESS=redirect`.
-- When `docker compose up -d` recreates `web-config` after a change to `.env`, Compose restarts
-  `web` too.
-- `web-config` checks only the settings `web` uses. If one of them is invalid, `web-config` fails
-  and, since `web` waits for it, `web` stays stopped after
-  `docker compose up -d`. Run `docker compose logs web-config`, fix the setting and run
-  `docker compose up -d` again. `docker compose run --rm --no-deps uc config --check` before
-  applying a change catches it.
+- With `DOWNLOAD_BACKEND` unset, web uses `artifactory` in air-gapped mode and `mirror` otherwise,
+  the same rule as uc. `mirror` sends downloads to get.jenkins.io unless `DOWNLOAD_BACKEND_URL`
+  says otherwise; `artifactory` needs `DOWNLOAD_BACKEND_URL`.
+- `docker compose run --rm --no-deps uc config --check` checks web's settings too, so run it before
+  `docker compose up -d`. When one of them is invalid, web exits with `entrypoint: ...` naming it:
+  `docker compose logs web` shows the message.
+- A Compose override can set any of them on `web` itself, as `compose.tls.yaml` does
+  ([Enable TLS](../how-to/enable-tls.md)).
 - Before it waits for the first release, `web` logs one line, `entrypoint: serving <PUBLIC_URL>;
-  downloads: <DOWNLOAD_BACKEND> <DOWNLOAD_BACKEND_URL> (<DOWNLOAD_ACCESS>)`, so `docker compose logs web`
-  shows what it is serving. It holds no secret: a `DOWNLOAD_BACKEND_URL` with credentials in it is refused, by `web-config` and by the entrypoint.
-- To see what `web` will get: `docker compose run --rm --no-deps uc config --web-env`.
+  downloads: <DOWNLOAD_BACKEND> <DOWNLOAD_BACKEND_URL> (<DOWNLOAD_ACCESS>)`, so
+  `docker compose logs web` shows what it is serving. It holds no secret: a `DOWNLOAD_BACKEND_URL`
+  with credentials in it is refused, by uc and by the entrypoint.
