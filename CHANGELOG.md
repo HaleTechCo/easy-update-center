@@ -42,8 +42,8 @@ the interface.
   push exactly what was reviewed, and clean up after
   ([Procure missing files](docs/how-to/procure-missing-files.md)). `uc doctor` and each
   `uc procure` command end with the next step.
-- Example pipelines for Jenkins, GitLab CI and GitHub Actions that run procurement with an approval
-  before the push ([Run procurement from a pipeline](docs/how-to/run-procurement-from-a-pipeline.md)).
+- An example Jenkins pipeline that runs procurement with an approval before the push
+  ([Run procurement from a pipeline](docs/how-to/run-procurement-from-a-pipeline.md)).
 - A public `status.json` to monitor ([Monitor](docs/how-to/monitor.md)); `uc --version` and its
   `uc_version` name the release the uc image was built as.
 - Releases: uc and web images on GHCR for linux/amd64 and linux/arm64, signed with cosign, with

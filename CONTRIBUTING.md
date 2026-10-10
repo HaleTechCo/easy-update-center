@@ -43,7 +43,7 @@ uc/uc/                the uc Python package (standard library only): CLI, genera
 web/                  the web image: Apache configuration, entrypoint, health check
 compose.yaml          the stack; compose.airgapped.yaml is the air-gapped override
 config/overlay/       operator overlay merged into upstream's resources/
-examples/pipelines/   procurement pipelines for Jenkins, GitLab CI and GitHub Actions, to copy
+examples/pipelines/   an example Jenkins pipeline for procurement, to copy
 secrets/              keys and credentials (gitignored except its README)
 tests/unit/           pytest, run in the uc test image
 tests/routing/        the web image's routing against generated fixture sites

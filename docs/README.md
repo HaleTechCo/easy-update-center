@@ -14,7 +14,7 @@ Which page to read for which job. New here? Start with the [README](../README.md
 - [Configure with uc.toml](how-to/configure-with-uc-toml.md) - settings in a file, and what each one ends up as
 - [Stock an air-gapped repository](how-to/stock-airgapped-repository.md)
 - [Procure missing POMs, dependencies and cores](how-to/procure-missing-files.md) - stage, review, push and clean up with `uc procure`
-- [Run procurement from a pipeline](how-to/run-procurement-from-a-pipeline.md) - Jenkins, GitLab CI or GitHub Actions, with an approval before the push
+- [Run procurement from a pipeline](how-to/run-procurement-from-a-pipeline.md) - from Jenkins, with an approval before the push
 - [Keep upstream data fresh](how-to/keep-upstream-data-fresh.md)
 - [Enable TLS](how-to/enable-tls.md)
 - [Proxy plugin downloads](how-to/proxy-downloads.md)
