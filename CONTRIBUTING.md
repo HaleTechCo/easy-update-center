@@ -123,7 +123,7 @@ By contributing you agree that your contribution is licensed under the project's
 ## Maintainer tasks
 
 - Moving to a new update-center2 release: [Upgrading update-center2](docs/development/upgrading-upstream.md).
-- Setting up the GitHub repository: [GitHub setup](docs/development/github-setup.md).
+- The GitHub repository's settings: [GitHub setup](docs/development/github-setup.md).
 - Cutting a release: [Releasing](docs/development/releasing.md).
 - Keep [Dependencies](docs/reference/dependencies.md) in step with the Dockerfiles, and
   `uc/licenses/` in step with what the uc image ships (the build checks the Java libraries:

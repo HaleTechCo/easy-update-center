@@ -1,7 +1,7 @@
-# Set up the GitHub repository
+# GitHub repository settings
 
-The owner's one-time steps for the GitHub repository of Easy Update Center for Jenkins, in order.
-Everything here is free for a public repository in an organization on GitHub Free: Actions
+The settings of Easy Update Center for Jenkins's GitHub repository that the workflows rely on, in the
+order to apply them. Everything here is free for a public repository in an organization on GitHub Free: Actions
 (including the `ubuntu-24.04-arm` runners, free for public repositories only), public packages on
 GHCR, build provenance and SBOM attestations, rulesets, Dependabot, and private vulnerability
 reporting. Nothing in the workflows needs a paid plan, larger runners or an organization-wide feature.
@@ -14,35 +14,19 @@ reporting. Nothing in the workflows needs a paid plan, larger runners or an orga
   "Allow GitHub Actions to create and approve pull requests" off.
 - Packages: package creation allows public packages.
 
-## 2. Create the repository
+## 2. The repository
 
-`easy-update-center` in HaleTechCo, **public**, empty: no README, license or .gitignore. It must be
-public before the first release: the `ubuntu-24.04-arm` runners the release builds on are free only
-for public repositories.
+`easy-update-center` in HaleTechCo, **public**. It must stay public: the `ubuntu-24.04-arm` runners
+the release builds on are free only for public repositories.
 
-## 3. Push
-
-In your checkout:
-
-```bash
-git branch -m master main
-git remote rename origin gitlab
-git remote add origin https://github.com/HaleTechCo/easy-update-center.git
-git push -u origin main
-git push origin <tag>        # for each tag you keep
-```
-
-Do this before the tag ruleset (step 7) exists. The push runs CI once, which makes the `ci` check
-selectable in step 6.
-
-## 4. Repository settings
+## 3. Repository settings
 
 - The same Actions settings as in step 1, if the organization's do not already apply.
 - Features: Issues on, Wikis off.
 - Leave "Immutable releases" off. A re-run with publish-only replaces the Release's assets
   (`gh release upload --clobber`), which immutable releases forbid.
 
-## 5. The release App
+## 4. The release App
 
 The Release workflow's `prepare` job pushes the release commit and its tag to `main` as a GitHub App
 of your own, the rulesets' only bypass actor. GitHub does not accept its built-in GitHub Actions app
@@ -76,25 +60,25 @@ other workflow token leaves `main` alone: the rulesets below bypass only the App
 so keep write access to people you would let merge to `main` (today one maintainer, with members' base
 permission Read).
 
-## 6. Branch ruleset
+## 5. Branch ruleset
 
 Settings > Rules > Rulesets > New branch ruleset.
 
 - Name `main`, enforcement Active, target the default branch.
-- Bypass list: the release App from step 5 (Add bypass > Apps; it appears once it is installed on the
+- Bypass list: the release App from step 4 (Add bypass > Apps; it appears once it is installed on the
   repository), bypass mode **Always**, and nothing else. Always covers both the required `ci` check and
   the pull-request rule below, which the release commit skips.
 - Rules: restrict deletions; require a pull request before merging, with 0 required approvals
   (GitHub does not let the one maintainer approve their own pull request); require status checks to
   pass, with `ci` (source GitHub Actions); block force pushes.
 
-## 7. Tag ruleset
+## 6. Tag ruleset
 
 Name `release tags`, target `v*`, rules: restrict creations, restrict updates, restrict deletions.
-The same bypass list as step 6. Only the Release workflow's `prepare` job, as the release App, creates
+The same bypass list as step 5. Only the Release workflow's `prepare` job, as the release App, creates
 release tags; the `release` job creates the GitHub Release on the tag that already exists.
 
-## 8. Security and moderation
+## 7. Security and moderation
 
 - Settings > Advanced Security: enable private vulnerability reporting
   ([SECURITY.md](../../SECURITY.md) points reporters to it) and Dependabot alerts. Secret scanning and
@@ -107,21 +91,15 @@ release tags; the `release` job creates the GitHub Release on the tag that alrea
 Dependabot's version updates need no setting: `.github/dependabot.yml` opens one weekly pull request
 each for the actions, the base images and the lint tools.
 
-## 9. Secrets
+## 8. Secrets
 
 Settings > Secrets and variables > Actions: `JENKINS_COMMUNITY_USERNAME` and
 `JENKINS_COMMUNITY_PASSWORD`, a free Jenkins community account, for the weekly `it-online` run.
 Without them the run is skipped with a notice.
 
-## 10. After the first release
+## 9. After the first release
 
 New GHCR packages start private, and anonymous pulls fail until they are public. For
 `easy-update-center-uc` and `easy-update-center-web` (the organization's Packages): Package settings >
 Change visibility > Public. Check that each is linked to the repository (the images'
 `org.opencontainers.image.source` label does that; otherwise Connect repository).
-
-## 11. Archive GitLab
-
-Set the GitLab project's description to "Moved to https://github.com/HaleTechCo/easy-update-center",
-replace its README on GitLab with one line pointing there (GitLab's web editor), then Settings >
-General > Advanced > Archive project.

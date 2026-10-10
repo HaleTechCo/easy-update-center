@@ -17,7 +17,7 @@ def test_heading_slug_keeps_hyphen_runs_like_github():
     assert links.heading_slug('Outbound: air-gapped') == 'outbound-air-gapped'
 
 
-def test_heading_slug_keeps_accented_letters_where_gitlab_strips_their_accents():
+def test_heading_slug_keeps_accented_letters():
     assert links.heading_slug('Café ünits') == 'café-ünits'
     assert links.heading_slug('Ⅻ → © ½') == 'ⅻ---½'
 

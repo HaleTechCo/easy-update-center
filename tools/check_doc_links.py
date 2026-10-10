@@ -68,8 +68,7 @@ def heading_slug(text: str) -> str:
     Inline code, links and raw HTML are reduced to their text, and the result is lowercased. Every
     character that is not a letter, mark, number, connector punctuation (`_`), hyphen or space is
     dropped, and each space becomes one hyphen. Runs are NOT collapsed: `uc.env / web.env` is
-    `ucenv--webenv`. Accented letters stay as they are (`Café` is `café`), where GitLab strips the
-    accent.
+    `ucenv--webenv`. Accented letters stay as they are (`Café` is `café`).
     """
     text = re.sub(r'`([^`]*)`', r'\1', text)
     text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)
