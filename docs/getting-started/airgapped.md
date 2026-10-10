@@ -8,8 +8,9 @@ A production deployment that reads plugins from your own Artifactory or Artifact
   an account that can read your repository.
 - Your repository holds the plugins and Jenkins cores to offer (step 1). Controllers download from
   it too, directly or through the update center.
-- Building the images needs internet access, once, on any machine with the same CPU architecture as
-  the Docker host. Running them needs none.
+- A release needs no build. Download it once on any machine with internet access, then carry it
+  across; the Docker host needs none. Building from source instead needs internet access once, on
+  a machine with the same CPU architecture as the Docker host.
 
 ## 1. Stock the repository
 
@@ -17,10 +18,45 @@ Plugins go in Maven layout under the group their manifest names, cores as
 `org/jenkins-ci/main/jenkins-war/<version>/jenkins-war-<version>.war`. POMs are optional. Details:
 [Stock an air-gapped repository](../how-to/stock-airgapped-repository.md).
 
-## 2. Build the images
+## 2. Get the images
 
-Compose reads `.env` for every command, building included, so copy the air-gapped example first; you
-edit it in step 3. If the Docker host has internet access, build there:
+On a machine with internet access, open the
+[Releases page](https://github.com/HaleTechCo/easy-update-center/releases) and download, for the
+Docker host's architecture (x86-64 or arm64), `easy-update-center-<version>-airgapped-amd64.tar` or
+`easy-update-center-<version>-airgapped-arm64.tar`, with `SHA256SUMS` and `SHA256SUMS.sigstore.json`.
+Verify them there ([Verify a release](../how-to/verify-a-release.md#the-air-gapped-bundle-and-other-assets)),
+then carry the bundle across. On the Docker host:
+
+```bash
+tar -xf easy-update-center-<version>-airgapped-amd64.tar          # or -arm64
+cd easy-update-center-<version>-airgapped-amd64
+docker load -i images.tar
+tar -xzf easy-update-center-<version>.tar.gz
+cd easy-update-center-<version>
+cp .env.airgapped.example .env
+```
+
+The bundle holds `images.tar` (the uc and web images), the source as
+`easy-update-center-<version>.tar.gz` (Compose files, setting examples and docs), and a `README.txt`
+with these steps. `docker load` prints
+`Loaded image: ghcr.io/haletechco/easy-update-center-uc:<version>` and
+`Loaded image: ghcr.io/haletechco/easy-update-center-web:<version>`. These two images are all the
+update center runs; nothing else is pulled. In the new `.env`, set them:
+
+```bash
+UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<version>
+WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<version>
+```
+
+Do not run `docker compose build`; the commands below use the loaded images and need no internet.
+
+### Or build from source
+
+To run the current `main`, or a change of your own, build on a machine with internet access and the
+**same CPU architecture** as the Docker host (x86-64 or arm64), and carry two files across: the
+images and the repository itself. Leave `UC_IMAGE` and `WEB_IMAGE` unset.
+
+If the Docker host has internet access, build there:
 
 ```bash
 git clone https://github.com/HaleTechCo/easy-update-center.git
@@ -29,8 +65,8 @@ cp .env.airgapped.example .env
 docker compose build
 ```
 
-If it has none, build on a machine that does, with the **same CPU architecture** as the Docker host
-(x86-64 or arm64), and carry two files across: the images and the repository itself.
+Compose reads `.env` for every command, building included, so copy the air-gapped example first;
+you edit it in step 3. If the Docker host has none, build elsewhere and carry the files:
 
 ```bash
 # on the machine with internet access
@@ -38,7 +74,8 @@ git clone https://github.com/HaleTechCo/easy-update-center.git
 cd easy-update-center
 cp .env.airgapped.example .env
 docker compose build
-docker save easy-update-center/uc:local easy-update-center/web:local | gzip > ../easy-update-center-images.tar.gz
+docker save easy-update-center/uc:local easy-update-center/web:local \
+  | gzip > ../easy-update-center-images.tar.gz
 git bundle create ../easy-update-center.bundle main
 
 # on the air-gapped Docker host, with both files in the current directory
@@ -48,13 +85,10 @@ cd easy-update-center
 cp .env.airgapped.example .env
 ```
 
-The image archive is about 200 MB. `docker load` prints `Loaded image: easy-update-center/uc:local` and
-`Loaded image: easy-update-center/web:local`. These two images are all the update center runs; nothing else
-is pulled. On that host, skip `docker compose build`; the commands below use the loaded images and
-need no internet.
-
-`make build` is the shortcut: it builds the same images with `docker build`, so it needs no `.env`,
-and also the image the test suites use.
+The image archive is about 200 MB. `docker load` prints
+`Loaded image: easy-update-center/uc:local` and `Loaded image: easy-update-center/web:local`. On that
+host, skip `docker compose build`. `make build` is the shortcut: it builds the same images with
+`docker build`, so it needs no `.env`, and also the image the test suites use.
 
 ## 3. Configure
 
@@ -85,8 +119,8 @@ that up now, before step 6: [Repository behind a private CA](#repository-behind-
 Every setting: [Configuration reference](../reference/configuration.md).
 
 The same settings can go in `config/uc.toml` instead, or as well:
-[Configure with uc.toml](../how-to/configure-with-uc-toml.md). Once the images are built,
-`docker compose run --rm --no-deps uc config` shows what each setting ends up as.
+[Configure with uc.toml](../how-to/configure-with-uc-toml.md). Once the images are
+loaded or built, `docker compose run --rm --no-deps uc config` shows what each setting ends up as.
 
 ## 4. Add credentials
 

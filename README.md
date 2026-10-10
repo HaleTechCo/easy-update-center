@@ -1,5 +1,7 @@
 # Easy Update Center for Jenkins
 
+[![CI](https://github.com/HaleTechCo/easy-update-center/actions/workflows/ci.yml/badge.svg)](https://github.com/HaleTechCo/easy-update-center/actions/workflows/ci.yml)
+
 **The upstream Jenkins update-center2, containerized and extended, with support for Artifact Keeper
 and air-gapped networks.**
 
@@ -111,19 +113,26 @@ Jenkins community account (online) or an account on your repository (air-gapped)
 
 ### Online
 
+Take the latest version from the
+[Releases page](https://github.com/HaleTechCo/easy-update-center/releases):
+
 ```bash
-git clone https://github.com/HaleTechCo/easy-update-center.git
+git clone --branch v<version> https://github.com/HaleTechCo/easy-update-center.git
 cd easy-update-center
-cp .env.online.example .env          # set PUBLIC_URL to your update center's origin
-docker compose build
+cp .env.online.example .env
+# in .env: set PUBLIC_URL to your update center's origin, and
+#   UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<version>
+#   WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<version>
 docker compose run --rm setup        # credential placeholders, ./procurement, signing keys
 printf '%s' 'community-user' > secrets/repo_username        # free: https://accounts.jenkins.io
 printf '%s' 'community-password' > secrets/repo_password
 docker compose up -d
 ```
 
-With GNU make, the build and setup steps have shortcuts, `make build` and `make setup`; `make help`
-lists the targets you run.
+To build from source instead, clone `main`, leave `UC_IMAGE` and `WEB_IMAGE` unset and run
+`docker compose build` (or `make build`) before `setup`. With GNU make, `make setup` is a shortcut
+for the setup step; `make help` lists the targets you run. To check a release's signatures before
+you run it: [Verify a release](docs/how-to/verify-a-release.md).
 
 `secrets/` stays yours, with no `sudo`: `setup` lets each container read its own files through its
 group ([File ownership on Linux](docs/reference/secrets.md#file-ownership-on-linux)). Move
@@ -138,11 +147,23 @@ Full walkthrough: [Deploy online](docs/getting-started/online.md).
 
 ### Air-gapped
 
+On a machine with internet access, download the release's air-gapped bundle for the Docker host's
+architecture (`easy-update-center-<version>-airgapped-amd64.tar` or `-arm64.tar`) with `SHA256SUMS`
+and `SHA256SUMS.sigstore.json` from the
+[Releases page](https://github.com/HaleTechCo/easy-update-center/releases), and
+[verify them](docs/how-to/verify-a-release.md#the-air-gapped-bundle-and-other-assets). On the Docker
+host:
+
 ```bash
-git clone https://github.com/HaleTechCo/easy-update-center.git
-cd easy-update-center
-cp .env.airgapped.example .env        # set PUBLIC_URL, REPO_URL, REPO_KEY; uncomment COMPOSE_FILE
-docker compose build                  # needs internet once; see below for hosts without it
+tar -xf easy-update-center-<version>-airgapped-amd64.tar     # or -arm64
+cd easy-update-center-<version>-airgapped-amd64
+docker load -i images.tar
+tar -xzf easy-update-center-<version>.tar.gz
+cd easy-update-center-<version>
+cp .env.airgapped.example .env
+# in .env: set PUBLIC_URL, REPO_URL, REPO_KEY; uncomment COMPOSE_FILE; and set
+#   UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<version>
+#   WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<version>
 docker compose run --rm setup         # credential placeholders, ./procurement, signing keys
 printf '%s' 'svc-easy-update-center' > secrets/repo_username
 printf '%s' 'password-or-token' > secrets/repo_password
@@ -150,15 +171,15 @@ docker compose run --rm uc doctor --fetch       # what the generator will see in
 docker compose up -d
 ```
 
-With GNU make, the build and setup steps have shortcuts, `make build` and `make setup`; `make help`
-lists the targets you run.
+To build from source instead, leave `UC_IMAGE` and `WEB_IMAGE` unset and run `docker compose build`
+(or `make build`) on a machine with internet access; to carry a source build across, see
+[Or build from source](docs/getting-started/airgapped.md#or-build-from-source). With GNU make,
+`make setup` is a shortcut for the setup step.
 
 Your repository holds the plugins and cores to offer, in Maven layout:
-[Stock an air-gapped repository](docs/how-to/stock-airgapped-repository.md). No internet on the
-Docker host? Build on a connected machine and carry the images and a `git bundle` of this repository
-across; on the Docker host, skip `docker compose build`, and the commands after it run without
-internet: [Build the images](docs/getting-started/airgapped.md#2-build-the-images). When a release
-is live, [configure Jenkins controllers](docs/how-to/configure-jenkins.md).
+[Stock an air-gapped repository](docs/how-to/stock-airgapped-repository.md). The commands above run
+without internet on the Docker host. When a release is live,
+[configure Jenkins controllers](docs/how-to/configure-jenkins.md).
 
 Full walkthrough: [Deploy air-gapped](docs/getting-started/airgapped.md).
 
@@ -179,7 +200,7 @@ The [documentation index](docs/README.md) has everything:
 
 - **Getting started:** requirements, and a production deployment per mode.
 - **How-to guides:** configuring controllers, stocking a repository, TLS, proxied downloads, key
-  rotation, blocking plugins, rollback, monitoring, upgrades.
+  rotation, blocking plugins, rollback, monitoring, upgrades, verifying a release.
 - **Reference:** every setting, `uc` command, secret, `status.json` field, URL, network host and
   dependency.
 - **Architecture:** how the pieces fit, with diagrams.

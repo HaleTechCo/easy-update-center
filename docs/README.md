@@ -23,6 +23,7 @@ Which page to read for which job. New here? Start with the [README](../README.md
 - [Generate and roll back](how-to/generate-and-roll-back.md)
 - [Monitor](how-to/monitor.md)
 - [Upgrade](how-to/upgrade.md)
+- [Verify a release](how-to/verify-a-release.md) - the images' signatures and attestations, and the bundle's checksums
 
 ## Reference
 

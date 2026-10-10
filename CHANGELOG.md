@@ -8,6 +8,10 @@ once releases are published.
 
 ### Changed
 
+- Getting started, the README's quick start and the upgrade guide use a release's images (or its
+  air-gapped bundle) by default; building from source stays as the alternative.
+  [Verify a release](docs/how-to/verify-a-release.md) shows how to check the signatures,
+  attestations and checksums.
 - The project lives on GitHub, https://github.com/HaleTechCo/easy-update-center (default branch
   `main`); security reports go through GitHub's private vulnerability reporting (SECURITY.md).
 - The project is now **Easy Update Center for Jenkins** (`easy-update-center`), named in the
