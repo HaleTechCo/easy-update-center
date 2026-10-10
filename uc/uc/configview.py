@@ -5,10 +5,9 @@ from __future__ import annotations
 import json
 import sys
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from .config import make_resolver, read_secret, settings_from, split_userinfo
+from .config import make_resolver, settings_from, split_userinfo
 from .errors import ConfigError
 from .settings import GROUPS, REGISTRY, SETTINGS
 
@@ -28,7 +27,6 @@ class Row:
     env: str
     value: str
     source: str  # env, mode, derived or default
-    note: str = ''  # for secret files: present, empty, missing or unreadable
 
 
 def rows(r: Resolver, settings: Settings | None) -> list[Row]:
@@ -46,8 +44,7 @@ def _row(setting: Setting, r: Resolver, settings: Settings | None) -> Row:
     elif source == 'default' and (setting.online is not None or setting.airgapped is not None):
         source = 'mode'
     value = _show(getattr(settings, setting.attribute)) if settings is not None and setting.attribute else r.raw(setting.env)
-    note = _presence(Path(value)) if setting.secret_file and value else ''
-    return Row(setting.env, _redact(setting, value), source, note)
+    return Row(setting.env, _redact(setting, value), source)
 
 
 def _redact(setting: Setting, value: str) -> str:
@@ -66,15 +63,6 @@ def _show(value: object) -> str:
     return '' if value is None else str(value)
 
 
-def _presence(path: Path) -> str:
-    try:
-        if not path.exists():
-            return 'missing'
-        return 'present' if read_secret(path) else 'empty'
-    except OSError:
-        return 'unreadable'
-
-
 def format_rows(shown: list[Row]) -> str:
     """Return the text uc config prints: each group of settings with its value and source."""
     lines: list[str] = []
@@ -85,8 +73,7 @@ def format_rows(shown: list[Row]) -> str:
         lines += ['', group]
         for row in members:
             where = SOURCE_NAMES.get(row.source, row.source)
-            notes = f'; {row.note}' if row.note else ''
-            lines.append(f'  {row.env} = {row.value}  ({where}{notes})')
+            lines.append(f'  {row.env} = {row.value}  ({where})')
     return '\n'.join(lines).lstrip('\n') + '\n'
 
 

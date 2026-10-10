@@ -54,9 +54,8 @@ The stage step runs `uc procure stage` with the job's `STAGE_OPTIONS` parameter,
 Parameters**. Empty, the stage step exits 2 and the run stops before the review. What each option
 stages: [2. Stage](procure-missing-files.md#2-stage).
 
-The example assumes the default staging folder: it reads the staged list as
-`procurement/procurement.json` in `UC_DIR`, where `PROCUREMENT_STAGING_DIR`'s default,
-`/procurement`, is mounted. If you set another folder, change that path in the stage step.
+The example reads the staged list as `procurement/procurement.json` in `UC_DIR`: the staging folder,
+which Compose mounts at `/procurement` in the `uc` container.
 
 ## The stages
 

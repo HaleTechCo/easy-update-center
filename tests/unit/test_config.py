@@ -8,7 +8,7 @@ import pytest
 
 from uc.config import _proxy_hostport, load_settings, read_secret, split_userinfo, with_explicit_port
 from uc.errors import ConfigError
-from uc.settings import SETTINGS
+from uc.settings import REGISTRY, SETTINGS
 
 AIRGAPPED = {
     'MODE': 'airgapped',
@@ -105,19 +105,8 @@ def test_the_generator_cache_is_separate_with_the_adapter():
     assert load_settings({**AIRGAPPED, 'REPO_ADAPTER': 'off'}).cache_dir == Path('/data/cache/artifactory')
 
 
-def test_adapter_settings_can_be_overridden():
-    s = load_settings(
-        {
-            **AIRGAPPED,
-            'REPO_ADAPTER_URL': 'http://127.0.0.1:9999/artifactory',
-            'REPO_ADAPTER_DIR': '/state',
-            'REPO_CA_FILE': '/ca/corp.pem',
-            'REPO_MAX_ARCHIVE_MB': '64',
-            'CORE_AGE_DAYS': '400',
-        }
-    )
-    assert s.source_url == 'http://127.0.0.1:9999/artifactory/'
-    assert s.repo_adapter_token_file == Path('/state/token')
+def test_repository_settings_can_be_set():
+    s = load_settings({**AIRGAPPED, 'REPO_CA_FILE': '/ca/corp.pem', 'REPO_MAX_ARCHIVE_MB': '64', 'CORE_AGE_DAYS': '400'})
     assert s.repo_ca_file == Path('/ca/corp.pem')
     assert (s.repo_max_archive_mb, s.core_age_days) == (64, 400)
 
@@ -183,13 +172,6 @@ def test_backend_url_override_and_extra_args():
     assert s.extra_args == ('--max-plugins', '20')
 
 
-def test_secret_paths_follow_secrets_dir_and_overrides():
-    s = load_settings({**AIRGAPPED, 'SECRETS_DIR': '/pki', 'GITHUB_TOKEN_FILE': '/other/token'})
-    assert s.signing_cert_file == Path('/pki/update-center.cert')
-    assert s.repo_password_file == Path('/pki/repo_password')
-    assert s.github_token_file == Path('/other/token')
-
-
 @pytest.mark.parametrize(
     ('url', 'expected'),
     [
@@ -234,32 +216,6 @@ def test_the_public_repository_is_recognised_by_its_host():
     assert load_settings(AIRGAPPED).public_repository is False
 
 
-def test_the_adapter_url_follows_the_adapter_port():
-    s = load_settings({**AIRGAPPED, 'REPO_ADAPTER_PORT': '9091'})
-    assert s.repo_adapter_url == 'http://repo-adapter:9091/artifactory/'
-    assert s.source_api_url == 'http://repo-adapter:9091/artifactory/api/'
-
-
-def test_an_explicit_adapter_url_wins_over_the_port():
-    s = load_settings({**AIRGAPPED, 'REPO_ADAPTER_PORT': '9091', 'REPO_ADAPTER_URL': 'http://adapter.corp:8081/artifactory'})
-    assert s.repo_adapter_url == 'http://adapter.corp:8081/artifactory/'
-
-
-def test_procurement_staging_defaults():
-    assert load_settings(AIRGAPPED).procurement_staging_dir == Path('/procurement')
-
-
-@pytest.mark.parametrize(('data', 'staging'), [('/data', '/data'), ('/data', '/data/'), ('/data', '/data/procurement'), ('/data', '/data/../data/stage'), ('/srv/uc', '/srv/uc/stage')])
-def test_a_staging_folder_in_the_data_volume_fails_when_the_settings_load(data, staging):
-    with pytest.raises(ConfigError, match=rf"^PROCUREMENT_STAGING_DIR must be outside UC_DATA_DIR \({data}\), which the other services mount too: keep it on the \./procurement mount, /procurement by default \(got '{staging}'\)$"):
-        load_settings({**AIRGAPPED, 'UC_DATA_DIR': data, 'PROCUREMENT_STAGING_DIR': staging})
-
-
-@pytest.mark.parametrize('staging', ['/procurement', '/procurement/batch', '/database', '/srv/data', '/data2/stage'])
-def test_a_staging_folder_outside_the_data_volume_loads(staging):
-    assert load_settings({**AIRGAPPED, 'PROCUREMENT_STAGING_DIR': staging}).procurement_staging_dir == Path(staging)
-
-
 @pytest.mark.parametrize('value', ['2.462', '2.462.1', '2.440'])
 def test_doctor_since_accepts_jenkins_versions(value):
     assert load_settings({**AIRGAPPED, 'DOCTOR_SINCE': value}).doctor_since == value
@@ -290,7 +246,7 @@ def test_a_malformed_url_is_a_configuration_error(name, extra):
         load_settings(env)
 
 
-URL_SETTINGS = ['REPO_API_URL', 'REPO_ADAPTER_URL', 'RESOURCES_URL', 'POPULARITY_JSON_URL', 'TOOL_INSTALLERS_URL', 'HTTPS_PROXY', 'HTTP_PROXY']
+URL_SETTINGS = ['REPO_API_URL', 'RESOURCES_URL', 'POPULARITY_JSON_URL', 'TOOL_INSTALLERS_URL', 'HTTPS_PROXY', 'HTTP_PROXY']
 
 
 @pytest.mark.parametrize('bad', ['https://[bad', 'http://host:abc'])
@@ -596,3 +552,22 @@ def test_the_download_url_is_taken_as_set_without_its_trailing_slash(mode):
 
 def test_the_mirror_defaults_to_get_jenkins_io():
     assert load_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com'}).download_backend_url == 'https://get.jenkins.io'
+
+
+def test_internal_paths_are_fixed_unless_a_test_overrides_them(tmp_path):
+    s = load_settings(ONLINE)
+    assert (s.data_dir, s.overlay_dir, s.app_dir, s.secrets_dir) == (Path('/data'), Path('/config/overlay'), Path('/opt/uc'), Path('/run/secrets'))
+    assert (s.repo_adapter_url, s.repo_adapter_dir, s.procurement_staging_dir) == ('http://repo-adapter:8081/artifactory/', Path('/data/repo-adapter'), Path('/procurement'))
+    assert s.signing_key_file == Path('/run/secrets/update-center.key')
+    moved = load_settings({**ONLINE, 'UC_DATA_DIR': str(tmp_path / 'd'), 'SECRETS_DIR': str(tmp_path / 's'), 'REPO_ADAPTER_URL': 'http://a:9/artifactory', 'REPO_ADAPTER_DIR': str(tmp_path / 'a')})
+    assert (moved.data_dir, moved.repo_adapter_dir, moved.repo_adapter_url) == (tmp_path / 'd', tmp_path / 'a', 'http://a:9/artifactory/')
+    assert moved.repo_push_auth_file == tmp_path / 's' / 'repo_push_auth'
+
+
+def test_the_adapter_directory_follows_the_data_directory(tmp_path):
+    assert load_settings({**ONLINE, 'UC_DATA_DIR': str(tmp_path)}).repo_adapter_dir == tmp_path / 'repo-adapter'
+
+
+def test_internal_paths_are_not_settings():
+    for name in ('UC_DATA_DIR', 'UC_OVERLAY_DIR', 'UC_APP_DIR', 'SECRETS_DIR', 'REPO_ADAPTER_URL', 'REPO_ADAPTER_DIR', 'REPO_ADAPTER_PORT', 'PROCUREMENT_STAGING_DIR', 'DOWNLOAD_PROXY_AUTH_FILE', 'SIGNING_KEY_FILE', 'REPO_PUSH_AUTH_FILE'):
+        assert name not in REGISTRY, name

@@ -223,10 +223,9 @@ services:
       PUBLIC_URL: "http://web-proxy:8080"
       DOWNLOAD_ACCESS: proxy
       DOWNLOAD_BACKEND_URL: ${IT_PROXY_BACKEND_URL:-http://artifactory-private:8081/artifactory/jenkins}
-      DOWNLOAD_PROXY_AUTH_FILE: /pki/download_proxy_auth
     volumes:
       - uc-data-proxy:/data:ro
-      - pki:/pki:ro
+      - pki:/run/secrets:ro  # its download_proxy_auth, where web reads it
 
   jenkins-lts-old:
     <<: *jenkins

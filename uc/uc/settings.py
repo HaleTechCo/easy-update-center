@@ -23,7 +23,6 @@ GROUPS = (
     'Procurement',
     'Testing and evaluation',
     'Read by bundled software',
-    'Internal',
     'Compose',
 )
 """The tables of docs/reference/configuration.md, in page order; uc config and the example files group settings the same way."""
@@ -58,7 +57,6 @@ class Setting:
     minimum: int | None = None
     empty_means_off: bool = False  # an explicitly empty value turns the feature off instead of meaning "not set"
     env_only: bool = False  # read by Compose or the shell, not by uc: it has no Settings field
-    secret_file: bool = False  # the path of a secret file; uc config shows whether it exists, never its contents
     derived: bool = False
     attr: str | None = None  # the Settings field, when it is not env in lower case
     hint: tuple[str, ...] = ()  # extra comment lines in the example files, each a sentence ending in a period
@@ -123,9 +121,6 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('REPO_KEY', 'str', 'Source repository', 'The repository key (for Artifact Keeper, the key, not the display name). It defaults to releases only online with REPO_TYPE=artifactory.', derived=True, sample='jenkins-plugins-local', active=('airgapped',)),
     # repo-adapter
     Setting('REPO_ADAPTER', 'bool', 'repo-adapter', 'Read the repository through the repo-adapter: on by default air-gapped and always with Artifact Keeper, off otherwise.', derived=True, sample='true'),
-    Setting('REPO_ADAPTER_URL', 'url', 'repo-adapter', 'Where uc finds the repo-adapter, http://repo-adapter:${REPO_ADAPTER_PORT}/artifactory/ by default. Change it only with a non-default Compose layout.', derived=True),
-    Setting('REPO_ADAPTER_DIR', 'path', 'repo-adapter', "The repo-adapter's token, cache and report.json, ${UC_DATA_DIR}/repo-adapter by default.", derived=True),
-    Setting('REPO_ADAPTER_PORT', 'int', 'repo-adapter', 'The port the repo-adapter listens on; its healthcheck and the default REPO_ADAPTER_URL follow it.', default='8081', minimum=1),
     Setting(
         'REPO_CA_FILE',
         'path',
@@ -164,7 +159,6 @@ SETTINGS: tuple[Setting, ...] = (
         default='/etc/ssl/certs/ca-certificates.crt',
         hint=('Mount the bundle into web and point this at it. See docs/how-to/proxy-downloads.md#backend-with-a-private-ca.',),
     ),
-    Setting('DOWNLOAD_PROXY_AUTH_FILE', 'path', 'Downloads', 'Proxy mode only: the file holding username:password for the backend, ${SECRETS_DIR}/download_proxy_auth by default.', derived=True, secret_file=True),
     # Upstream data
     Setting(
         'RESOURCES_SOURCE',
@@ -232,7 +226,6 @@ SETTINGS: tuple[Setting, ...] = (
         'Where uc procure stage fetches files from, by Maven path; https://repo.jenkins-ci.org/releases/ by default. Air-gapped, downloads are refused unless it is set.',
         derived=True,
     ),
-    Setting('PROCUREMENT_STAGING_DIR', 'path', 'Procurement', 'The staging folder uc procure stage fills and the other uc procure commands read (--staging), inside the uc container; compose.yaml mounts ./procurement there. It must stay on that mount: UC_DATA_DIR or a folder in it is refused.', default='/procurement'),
     # Testing and evaluation
     Setting('ALLOW_LOCAL_PUBLIC_URL', 'bool', 'Testing and evaluation', 'Allows a localhost or loopback PUBLIC_URL, which controllers on other hosts cannot reach. Not for production.', default='false'),
     Setting('UC_EXTRA_ARGS', 'str', 'Testing and evaluation', 'Extra update-center2 arguments appended to every run, for example --max-plugins 25 to cap a trial run.', attr='extra_args'),
@@ -262,19 +255,6 @@ SETTINGS: tuple[Setting, ...] = (
         airgapped_sample='compose.yaml:compose.airgapped.yaml',
         airgapped_hint=('Its default is compose.yaml alone: uncomment this so plain docker compose uses the air-gapped override.',),
     ),
-    # Internal
-    Setting('UC_DATA_DIR', 'path', 'Internal', 'The data volume.', default='/data', attr='data_dir'),
-    Setting('UC_OVERLAY_DIR', 'path', 'Internal', 'The overlay directory, config/overlay/ on the host.', default='/config/overlay', attr='overlay_dir'),
-    Setting('UC_APP_DIR', 'path', 'Internal', 'The generator, templates and bundled resources in the image.', default='/opt/uc', attr='app_dir'),
-    Setting('SECRETS_DIR', 'path', 'Internal', 'Where the secret files are read from.', default='/run/secrets'),
-    Setting('SIGNING_KEY_FILE', 'path', 'Internal', 'The signing key, ${SECRETS_DIR}/update-center.key by default.', derived=True, secret_file=True),
-    Setting('SIGNING_CERT_FILE', 'path', 'Internal', 'The signing certificate, ${SECRETS_DIR}/update-center.cert by default.', derived=True, secret_file=True),
-    Setting('ROOT_CA_FILE', 'path', 'Internal', 'The root CA certificate, ${SECRETS_DIR}/root-ca.crt by default.', derived=True, secret_file=True),
-    Setting('REPO_USERNAME_FILE', 'path', 'Internal', 'The repository account, ${SECRETS_DIR}/repo_username by default.', derived=True, secret_file=True),
-    Setting('REPO_PASSWORD_FILE', 'path', 'Internal', "The repository account's password or token, ${SECRETS_DIR}/repo_password by default.", derived=True, secret_file=True),
-    Setting('GITHUB_USERNAME_FILE', 'path', 'Internal', 'The GitHub user, ${SECRETS_DIR}/github_username by default.', derived=True, secret_file=True),
-    Setting('GITHUB_TOKEN_FILE', 'path', 'Internal', 'The GitHub token, ${SECRETS_DIR}/github_token by default.', derived=True, secret_file=True),
-    Setting('REPO_PUSH_AUTH_FILE', 'path', 'Internal', 'The account that can write to the repository, ${SECRETS_DIR}/repo_push_auth by default.', derived=True, secret_file=True),
     # Compose
     Setting('UC_ENV_FILE', 'path', 'Compose', "The file every uc-image service loads as env_file; web takes its variables from Compose's own .env (or --env-file).", default='.env', env_only=True),
     Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler, repo-adapter and setup.', default='easy-update-center/uc:local', env_only=True),

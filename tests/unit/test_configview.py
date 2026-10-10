@@ -2,7 +2,6 @@
 
 import io
 import json
-import os
 
 import pytest
 
@@ -32,14 +31,12 @@ def test_json_rows_give_each_value_and_its_source(tmp_path, secrets_dir):
     code, out, _ = show(env_for(tmp_path, secrets_dir, RETAIN_RELEASES='7'), as_json=True)
     assert code == 0
     rows = {row['env']: row for row in json.loads(out)}
-    assert rows['MODE'] == {'env': 'MODE', 'value': 'airgapped', 'source': 'env', 'note': ''}
-    assert rows['RETAIN_RELEASES'] == {'env': 'RETAIN_RELEASES', 'value': '7', 'source': 'env', 'note': ''}
+    assert rows['MODE'] == {'env': 'MODE', 'value': 'airgapped', 'source': 'env'}
+    assert rows['RETAIN_RELEASES'] == {'env': 'RETAIN_RELEASES', 'value': '7', 'source': 'env'}
     assert (rows['CORE_AGE_DAYS']['value'], rows['CORE_AGE_DAYS']['source']) == ('0', 'mode')
     assert (rows['REPO_ADAPTER']['value'], rows['REPO_ADAPTER']['source']) == ('true', 'derived')
     assert (rows['UC_ID']['value'], rows['UC_ID']['source']) == ('default', 'default')
-    assert (rows['SIGNING_KEY_FILE']['source'], rows['SIGNING_KEY_FILE']['note']) == ('derived', 'present')
-    assert rows['GITHUB_TOKEN_FILE']['note'] == 'missing'
-    assert rows['UC_IMAGE'] == {'env': 'UC_IMAGE', 'value': 'easy-update-center/uc:local', 'source': 'default', 'note': ''}
+    assert rows['UC_IMAGE'] == {'env': 'UC_IMAGE', 'value': 'easy-update-center/uc:local', 'source': 'default'}
 
 
 def test_text_groups_the_settings(tmp_path, secrets_dir):
@@ -49,7 +46,6 @@ def test_text_groups_the_settings(tmp_path, secrets_dir):
     assert '\nGeneration\n' in out
     assert '  RETAIN_RELEASES = 7  (environment' in out
     assert '  MODE = airgapped  (environment)\n' in out
-    assert f'  SIGNING_KEY_FILE = {secrets_dir}/update-center.key  (derived; present)\n' in out
 
 
 def test_secret_contents_are_never_shown(tmp_path, secrets_dir):
@@ -132,24 +128,6 @@ def test_an_invalid_configuration_prints_nothing_on_stdout_with_json_or_check(tm
     code, out, err = show(env_for(tmp_path, secrets_dir, RETAIN_RELEASES='0'), **options)
     assert (code, out) == (1, '')
     assert 'uc: error: RETAIN_RELEASES must be >= 1 (got 0)' in err
-
-
-def test_an_empty_secret_file_is_noted(tmp_path, secrets_dir):
-    (secrets_dir / 'repo_password').write_text('\n')
-    _, out, _ = show(env_for(tmp_path, secrets_dir))
-    assert f'  REPO_PASSWORD_FILE = {secrets_dir / "repo_password"}  (derived; empty)\n' in out
-
-
-def test_an_unreadable_secret_file_is_noted(tmp_path, secrets_dir):
-    if os.geteuid() == 0:
-        pytest.skip('root reads any file')
-    secret = secrets_dir / 'repo_password'
-    secret.chmod(0)
-    try:
-        _, out, _ = show(env_for(tmp_path, secrets_dir))
-    finally:
-        secret.chmod(0o600)
-    assert f'  REPO_PASSWORD_FILE = {secret}  (derived; unreadable)\n' in out
 
 
 def test_check_reports_a_missing_download_url(tmp_path, secrets_dir):

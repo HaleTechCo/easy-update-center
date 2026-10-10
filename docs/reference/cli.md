@@ -132,9 +132,9 @@ repository then holds. Nothing reaches the repository without `push`. How to use
 approval before the push:
 [Run procurement from a pipeline](../how-to/run-procurement-from-a-pipeline.md).
 
-The staging folder is `./procurement` on the host, which the `uc` service mounts at `/procurement`
-(`PROCUREMENT_STAGING_DIR`). Every command takes `--staging DIR` to use another folder inside the
-`uc` container for one run; like the setting, it must not be `UC_DATA_DIR` or a folder in it.
+The staging folder is `./procurement` on the host, which the `uc` service mounts at `/procurement`.
+Every command takes `--staging DIR` to use another folder inside the `uc` container for one run; it
+must not be the data volume, `/data`, or a folder in it.
 On Linux, the uc containers (uid 10001) can write `./procurement` once
 [the setup service](#the-setup-service) has shared it with them
 (`docker compose run --rm setup procurement`, part of `make setup`). Each command has a `make`
@@ -167,7 +167,7 @@ Air-gapped, it is refused unless `PROCUREMENT_SOURCE_URL` names a copy the updat
 | `--war VERSION`, `--war required` | Stage that core's `.war` and `.pom`; `required` stages every core plugins require that the repository lacks, at or above the floor. Repeatable. |
 | `--since VERSION` | The floor for `required`, instead of the oldest core in the repository. The default is `DOCTOR_SINCE`. |
 | `--fetch`, `--no-fetch` | First download the POMs and manifests missing from the generator's cache, so the run finds every missing dependency and required core. On by default. |
-| `--staging DIR` | The staging folder. The default is `PROCUREMENT_STAGING_DIR` (`/procurement`). |
+| `--staging DIR` | The staging folder (default `/procurement`). |
 
 Exits 0 when everything planned is staged; 1 when a file could not be staged, or when the run is
 refused as `uc: error: ...` (air-gapped without `PROCUREMENT_SOURCE_URL`, a `--war` that is neither a
@@ -191,7 +191,7 @@ declares. It needs no network.
 | Option | Meaning |
 |---|---|
 | `--fix` | First move each misplaced file to the Maven path it declares, never onto another file, a listed path or out of the folder. |
-| `--staging DIR` | The staging folder. The default is `PROCUREMENT_STAGING_DIR` (`/procurement`). |
+| `--staging DIR` | The staging folder (default `/procurement`). |
 
 Exits 0 unless it refused a file, else 1. It ends with the same `next:` line as `stage`.
 
@@ -206,7 +206,7 @@ folder with no `procurement.json`.
 | Option | Meaning |
 |---|---|
 | `--dry-run` | Check each file, upload nothing. |
-| `--staging DIR` | The staging folder. The default is `PROCUREMENT_STAGING_DIR` (`/procurement`). |
+| `--staging DIR` | The staging folder (default `/procurement`). |
 
 Exits 0 when every listed file ends up in the repository with the recorded content, else 1;
 unlisted files do not change it. After a real push with no problem, it ends with:
@@ -225,7 +225,7 @@ and likewise refuses the public repo.jenkins-ci.org.
 | Option | Meaning |
 |---|---|
 | `--dry-run` | Check each file, delete nothing. |
-| `--staging DIR` | The staging folder. The default is `PROCUREMENT_STAGING_DIR` (`/procurement`). |
+| `--staging DIR` | The staging folder (default `/procurement`). |
 
 Exits 0 unless a file differs from the repository's or could not be checked or deleted, else 1. It
 prints no `next:` line: procurement is done.
@@ -264,16 +264,12 @@ setting the new revision refuses would show as Compose's `dependency failed to s
 `uc: error: ...`.
 
 Shows every setting with its value and where it came from: `environment`, `mode`
-(the default for the mode), `derived` (worked out from other settings, as `REPO_URL` and the secret
-paths are) or `default`. For a secret file it shows the path and whether the file is `present`,
-`empty` or `missing`, never its contents. How a change in `.env` takes effect:
+(the default for the mode), `derived` (worked out from other settings, as `REPO_URL` is) or
+`default`. Secret files are not settings: `uc config` never reads them. How a change in `.env` takes effect:
 [When changes apply](configuration.md#when-changes-apply).
 Credentials inside a URL setting are shown as `***`, taken as everything before the URL's last `@`
 (after any `scheme://`), so an `@` in a path also hides the part before it:
 `https://cdn.example/gh/repo@1.0/data.json` shows as `https://***@1.0/data.json`.
-It runs in the `uc` container, which by design does not receive `download_proxy_auth` (web's) nor,
-air-gapped, `repo_username` and `repo_password` (the repo-adapter's), so those show as `missing`
-there even when they are set up.
 
 | Option | Meaning |
 |---|---|
@@ -317,7 +313,7 @@ generator on the internal `repo` network, and stays idle when `REPO_ADAPTER` is 
 
 | Option | Meaning |
 |---|---|
-| `--port` | Port to listen on (default `REPO_ADAPTER_PORT`, 8081). |
+| `--port` | Port to listen on (default 8081). |
 | `--healthcheck` | Do not serve: ask the running adapter on `127.0.0.1` for `/healthz` (3 seconds, proxy settings ignored), on `--port` or else the port the adapter recorded in `/tmp/uc-repo-adapter.port` when it started listening. It reads no settings, so a settings change cannot make a running adapter unhealthy. Exit 0 when it answers 200; otherwise print `uc: error: repo-adapter is not healthy ...` (also when no port is recorded yet) and exit 1. The `repo-adapter` service's Compose healthcheck runs it. |
 
 ## uc pki

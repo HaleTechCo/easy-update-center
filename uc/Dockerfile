@@ -87,7 +87,6 @@ RUN chmod 0755 /usr/local/bin/uc /usr/local/bin/uc-setup /usr/local/bin/secrets-
  && chown 10001:10001 /data
 ENV PYTHONPATH=/opt/uc/python \
     PYTHONDONTWRITEBYTECODE=1 \
-    UC_APP_DIR=/opt/uc \
     UC2_VERSION=${UC2_VERSION}+patches \
     UC_VERSION=${UC_VERSION}
 USER 10001:10001

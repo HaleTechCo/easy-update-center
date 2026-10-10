@@ -76,5 +76,4 @@ replaces the system bundle for this purpose, it is not added to it.
 ## Credentials file location
 
 The web container reads the credentials from `/run/secrets/download_proxy_auth`, which Compose mounts
-from `secrets/download_proxy_auth`. To read them from elsewhere, mount the file and set
-`DOWNLOAD_PROXY_AUTH_FILE` to its path inside the container.
+from `secrets/download_proxy_auth`.

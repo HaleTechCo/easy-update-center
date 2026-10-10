@@ -22,7 +22,7 @@ from .procure.download import check_download_allowed, download, downloads_allowe
 from .procure.local import stage_local
 from .procure.plan import check_war_args, suggest_stage
 from .procure.push import push
-from .repo_adapter.server import healthcheck, serve
+from .repo_adapter.server import PORT, healthcheck, serve
 from .schedule import run_schedule
 from .settings import MODES
 from .timeutil import iso, utcnow
@@ -61,16 +61,16 @@ def build_parser() -> argparse.ArgumentParser:
     stage.add_argument('--war', action='append', default=[], metavar='VERSION', help='stage jenkins-war VERSION, or with "required" every required core the repository lacks; repeatable')
     stage.add_argument('--since', metavar='VERSION', help='floor for required cores (default: DOCTOR_SINCE, else the oldest core in the repository)')
     stage.add_argument('--fetch', action=argparse.BooleanOptionalAction, default=True, help='download POMs and manifests missing from the cache first (default: on)')
-    stage.add_argument('--staging', type=Path, help='the staging folder (default: PROCUREMENT_STAGING_DIR, /procurement)')
+    stage.add_argument('--staging', type=Path, help='the staging folder (default: /procurement)')
     record_cmd = procure.add_parser('record', help='record the files placed in the staging folder by hand, after the checks a download gets')
     record_cmd.add_argument('--fix', action='store_true', help='first move each file to the Maven path it declares')
-    record_cmd.add_argument('--staging', type=Path, help='the staging folder (default: PROCUREMENT_STAGING_DIR, /procurement)')
+    record_cmd.add_argument('--staging', type=Path, help='the staging folder (default: /procurement)')
     push_cmd = procure.add_parser('push', help='upload the files procurement.json lists to the repository, never overwriting')
     push_cmd.add_argument('--dry-run', action='store_true', help='check each file, change nothing')
-    push_cmd.add_argument('--staging', type=Path, help='the staging folder (default: PROCUREMENT_STAGING_DIR, /procurement)')
+    push_cmd.add_argument('--staging', type=Path, help='the staging folder (default: /procurement)')
     clean_cmd = procure.add_parser('clean', help='delete the staged files the repository already holds with the same content')
     clean_cmd.add_argument('--dry-run', action='store_true', help='check each file, change nothing')
-    clean_cmd.add_argument('--staging', type=Path, help='the staging folder (default: PROCUREMENT_STAGING_DIR, /procurement)')
+    clean_cmd.add_argument('--staging', type=Path, help='the staging folder (default: /procurement)')
 
     rollback = sub.add_parser('rollback', help='point live at an earlier release')
     rollback.add_argument('release', nargs='?', help='release id (default: the one before live)')
@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser('schedule', help='run generate on GENERATE_SCHEDULE (the scheduler service)')
 
     adapter = sub.add_parser('repo-adapter', help='serve the repository to the generator (the repo-adapter service)')
-    adapter.add_argument('--port', type=int, help='port to listen on (default: REPO_ADAPTER_PORT, 8081)')
+    adapter.add_argument('--port', type=int, help=f'port to listen on (default: {PORT})')
     adapter.add_argument('--healthcheck', action='store_true', help='do not serve: exit 0 when the running adapter answers (on --port, else the port it bound), 1 otherwise; reads no settings (the compose healthcheck)')
 
     pki = sub.add_parser('pki', help='manage the signing PKI').add_subparsers(dest='pki_command', required=True)
@@ -160,7 +160,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         run_schedule(settings)
         return 0
     if args.command == 'repo-adapter':
-        serve(settings, port=settings.repo_adapter_port if args.port is None else args.port)
+        serve(settings, port=PORT if args.port is None else args.port)
         return 0
     msg = f'unhandled command {args.command}'
     raise AssertionError(msg)

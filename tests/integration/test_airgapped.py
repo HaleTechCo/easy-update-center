@@ -234,7 +234,6 @@ PUSH = {
     'REPO_ADAPTER_DIR': '/data-push/repo-adapter',
     'UC_DATA_DIR': '/data-push',
     'PROCUREMENT_SOURCE_URL': 'http://upstream:8081/maven/releases/',
-    'REPO_PUSH_AUTH_FILE': '/pki/repo_push_auth',
 }
 PROCURED = {
     'io/jenkins/uctest/uc-test-needs-dep/1.0/uc-test-needs-dep-1.0.pom',

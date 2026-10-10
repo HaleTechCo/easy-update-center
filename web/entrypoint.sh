@@ -38,7 +38,7 @@ export DOWNLOAD_BACKEND_URL="${backend_url%/}"
 case "${DOWNLOAD_ACCESS}" in
     redirect) ;;
     proxy)
-        auth_file="${DOWNLOAD_PROXY_AUTH_FILE:-/run/secrets/download_proxy_auth}"
+        auth_file=/run/secrets/download_proxy_auth
         credentials="$(tr -d '\r\n' < "${auth_file}" 2> /dev/null || true)"
         [[ "${credentials}" == *:* ]] || die "DOWNLOAD_ACCESS=proxy needs username:password in ${auth_file}"
         DOWNLOAD_PROXY_AUTH_HEADER="Basic $(printf '%s' "${credentials}" | base64 -w0)"

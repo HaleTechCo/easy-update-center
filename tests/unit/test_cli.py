@@ -751,14 +751,14 @@ def test_pki_rotate_names_the_root_files_where_they_are_on_the_host(tmp_path, ca
     assert capsys.readouterr().err == 'uc: error: cannot read the root CA certificate secrets/root-ca.crt: No such file or directory\n'
 
 
-def test_repo_adapter_listens_on_the_configured_port(monkeypatch, tmp_path, secrets_dir):
+def test_repo_adapter_listens_on_8081_unless_given_a_port(monkeypatch, tmp_path, secrets_dir):
     use_env(monkeypatch, tmp_path, secrets_dir)
-    monkeypatch.setenv('REPO_ADAPTER_PORT', '9090')
+    monkeypatch.setenv('REPO_ADAPTER_PORT', '9090')  # not a setting: ignored
     ports = []
     monkeypatch.setattr('uc.cli.serve', lambda _settings, port: ports.append(port))
     assert main(['repo-adapter']) == 0
     assert main(['repo-adapter', '--port', '7000']) == 0
-    assert ports == [9090, 7000]
+    assert ports == [8081, 7000]
 
 
 def test_a_malformed_url_prints_an_error_not_a_traceback(monkeypatch, tmp_path, secrets_dir, capsys):
@@ -766,13 +766,6 @@ def test_a_malformed_url_prints_an_error_not_a_traceback(monkeypatch, tmp_path, 
     monkeypatch.setenv('REPO_URL', 'http://[bad/')
     assert main(['status']) == 1
     assert 'uc: error: REPO_URL is not a valid URL: ' in capsys.readouterr().err
-
-
-def test_config_check_refuses_a_staging_folder_in_the_data_volume(monkeypatch, tmp_path, secrets_dir, capsys):
-    data = use_env(monkeypatch, tmp_path, secrets_dir)
-    monkeypatch.setenv('PROCUREMENT_STAGING_DIR', str(data / 'procurement'))
-    assert main(['config', '--check']) == 1
-    assert capsys.readouterr().err.startswith(f'uc: error: PROCUREMENT_STAGING_DIR must be outside UC_DATA_DIR ({data})')
 
 
 def test_config_check_reports_a_malformed_url_setting(monkeypatch, tmp_path, secrets_dir, capsys):

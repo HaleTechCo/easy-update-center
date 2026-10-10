@@ -54,7 +54,6 @@ def test_derived_settings_have_no_registry_default():
 def test_settings_field_names():
     assert REGISTRY['UC_IMAGE'].attribute is None
     assert REGISTRY['UC_EXTRA_ARGS'].attribute == 'extra_args'
-    assert REGISTRY['UC_DATA_DIR'].attribute == 'data_dir'
     assert REGISTRY['REPO_URL'].attribute == 'repo_url'
 
 
@@ -63,12 +62,6 @@ def _samples():
         for sample in (setting.sample, setting.online_sample, setting.airgapped_sample):
             if sample:
                 yield setting, sample
-
-
-def test_secret_files_are_derived():
-    for setting in SETTINGS:
-        if setting.secret_file:
-            assert setting.derived, setting.env
 
 
 def test_active_modes_are_modes():

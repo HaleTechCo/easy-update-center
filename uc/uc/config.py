@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import unquote, urlsplit, urlunsplit
 
 from .errors import ConfigError
+from .procure.staging import DEFAULT_STAGING
 from .settings import CORE_VERSION, REGISTRY
 
 if TYPE_CHECKING:
@@ -26,6 +27,16 @@ PUBLIC_ARTIFACTORY_URL = 'https://repo.jenkins-ci.org/'
 # Where public plugins' and cores' real files live: the default download source, and the URLs uc doctor prints.
 PUBLIC_RELEASES_URL = PUBLIC_ARTIFACTORY_URL + 'releases/'
 UPSTREAM_MIRROR_URL = 'https://get.jenkins.io'
+APP_DIR = Path('/opt/uc')
+"""The generator, templates and bundled resources in the uc image."""
+INTERNAL = {
+    'UC_DATA_DIR': '/data',
+    'UC_OVERLAY_DIR': '/config/overlay',
+    'SECRETS_DIR': '/run/secrets',
+    'REPO_ADAPTER_URL': 'http://repo-adapter:8081/artifactory/',
+    'REPO_ADAPTER_DIR': '',
+}
+"""Container paths that the unit and integration tests point at their own: read from the environment, but not settings (not documented, not in uc config or the example files). An empty REPO_ADAPTER_DIR means repo-adapter/ in the data directory."""
 _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 _SCHEME = re.compile(r'[^/:]+://')  # the scheme split_userinfo keeps in front of the user info uc config masks
 _PROXY_SCHEME = re.compile(r'[^/:]+:')  # how urllib's proxy handler finds a scheme: up to the first ':', if anything precedes one
@@ -59,14 +70,12 @@ class Settings:
     repo_adapter: bool
     repo_adapter_url: str
     repo_adapter_dir: Path
-    repo_adapter_port: int
     repo_ca_file: Path | None
     repo_max_archive_mb: int
     core_age_days: int
     download_backend: str
     download_backend_url: str
     download_access: str
-    download_proxy_auth_file: Path
     download_proxy_ca_file: str
     procurement_source_url: str
     procurement_source_set: bool
@@ -195,6 +204,10 @@ class Resolver:
         return REGISTRY[name].default_for(self.mode)
 
 
+def _internal(r: Resolver, name: str) -> str:
+    return r.env.get(name, '').strip() or INTERNAL[name]
+
+
 def make_resolver(env: Mapping[str, str] | None = None) -> Resolver:
     """Return a Resolver over env (default: os.environ)."""
     return Resolver(os.environ if env is None else env)
@@ -219,11 +232,6 @@ def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
         raise ConfigError(msg)
     _check_credential_free_url('REPO_URL', repo_url, advice='; use the secret files instead')
     return repo_type, with_trailing_slash(repo_url), repo_key
-
-
-def _secret_path(r: Resolver, name: str, default_file: str) -> Path:
-    """Return the secret file name points at, else default_file in SECRETS_DIR."""
-    return Path(r.raw(name) or str(Path(r.raw('SECRETS_DIR')) / default_file))
 
 
 def settings_from(r: Resolver) -> Settings:
@@ -254,7 +262,7 @@ def settings_from(r: Resolver) -> Settings:
         msg = 'DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL'
         raise ConfigError(msg)
     backend_url = backend_url.rstrip('/')
-    data_dir = Path(r.raw('UC_DATA_DIR'))
+    data_dir = Path(_internal(r, 'UC_DATA_DIR'))
 
     resources_source = _choice(r, 'RESOURCES_SOURCE')
     resources_url = r.raw('RESOURCES_URL')
@@ -266,7 +274,7 @@ def settings_from(r: Resolver) -> Settings:
     procurement_source = r.raw('PROCUREMENT_SOURCE_URL')
     _check_credential_free_url('PROCUREMENT_SOURCE_URL', procurement_source)
 
-    secrets_dir = Path(r.raw('SECRETS_DIR'))
+    secrets_dir = Path(_internal(r, 'SECRETS_DIR'))
 
     return Settings(
         mode=mode,
@@ -288,20 +296,18 @@ def settings_from(r: Resolver) -> Settings:
         repo_api_url=api_url,
         repo_key=repo_key,
         repo_adapter=repo_adapter,
-        repo_adapter_url=with_trailing_slash(_checked_url(r, 'REPO_ADAPTER_URL') or f'http://repo-adapter:{_int(r, "REPO_ADAPTER_PORT")}/artifactory/'),
-        repo_adapter_dir=Path(r.raw('REPO_ADAPTER_DIR') or str(data_dir / 'repo-adapter')),
-        repo_adapter_port=_int(r, 'REPO_ADAPTER_PORT'),
+        repo_adapter_url=with_trailing_slash(_internal(r, 'REPO_ADAPTER_URL')),
+        repo_adapter_dir=Path(_internal(r, 'REPO_ADAPTER_DIR') or str(data_dir / 'repo-adapter')),
         repo_ca_file=Path(repo_ca) if repo_ca else None,
         repo_max_archive_mb=_int(r, 'REPO_MAX_ARCHIVE_MB'),
         core_age_days=_int(r, 'CORE_AGE_DAYS'),
         download_backend=backend,
         download_backend_url=backend_url,
         download_access=_choice(r, 'DOWNLOAD_ACCESS'),
-        download_proxy_auth_file=_secret_path(r, 'DOWNLOAD_PROXY_AUTH_FILE', 'download_proxy_auth'),
         download_proxy_ca_file=r.raw('DOWNLOAD_PROXY_CA_FILE'),
         procurement_source_url=with_trailing_slash(procurement_source or PUBLIC_RELEASES_URL),
         procurement_source_set=bool(procurement_source),
-        procurement_staging_dir=_staging_dir(r, data_dir),
+        procurement_staging_dir=DEFAULT_STAGING,
         retain_releases=_int(r, 'RETAIN_RELEASES'),
         min_plugin_ratio=_ratio(r, 'MIN_PLUGIN_RATIO'),
         certificate_minimum_valid_days=_int(r, 'CERTIFICATE_MINIMUM_VALID_DAYS'),
@@ -315,17 +321,17 @@ def settings_from(r: Resolver) -> Settings:
         http_proxy=_checked_proxy(r, 'HTTP_PROXY'),
         no_proxy=r.raw('NO_PROXY'),
         data_dir=data_dir,
-        overlay_dir=Path(r.raw('UC_OVERLAY_DIR')),
-        app_dir=Path(r.raw('UC_APP_DIR')),
+        overlay_dir=Path(_internal(r, 'UC_OVERLAY_DIR')),
+        app_dir=APP_DIR,
         secrets_dir=secrets_dir,
-        signing_key_file=_secret_path(r, 'SIGNING_KEY_FILE', 'update-center.key'),
-        signing_cert_file=_secret_path(r, 'SIGNING_CERT_FILE', 'update-center.cert'),
-        root_ca_file=_secret_path(r, 'ROOT_CA_FILE', 'root-ca.crt'),
-        repo_username_file=_secret_path(r, 'REPO_USERNAME_FILE', 'repo_username'),
-        repo_password_file=_secret_path(r, 'REPO_PASSWORD_FILE', 'repo_password'),
-        github_username_file=_secret_path(r, 'GITHUB_USERNAME_FILE', 'github_username'),
-        github_token_file=_secret_path(r, 'GITHUB_TOKEN_FILE', 'github_token'),
-        repo_push_auth_file=_secret_path(r, 'REPO_PUSH_AUTH_FILE', 'repo_push_auth'),
+        signing_key_file=secrets_dir / 'update-center.key',
+        signing_cert_file=secrets_dir / 'update-center.cert',
+        root_ca_file=secrets_dir / 'root-ca.crt',
+        repo_username_file=secrets_dir / 'repo_username',
+        repo_password_file=secrets_dir / 'repo_password',
+        github_username_file=secrets_dir / 'github_username',
+        github_token_file=secrets_dir / 'github_token',
+        repo_push_auth_file=secrets_dir / 'repo_push_auth',
     )
 
 
@@ -470,13 +476,6 @@ def check_staging_outside_data_dir(raw: str | Path, data_dir: Path, label: str) 
     if Path(os.path.normpath(here / raw)).is_relative_to(os.path.normpath(here / data_dir)):
         msg = f'{label} must be outside UC_DATA_DIR ({data_dir}), which the other services mount too: keep it on the ./procurement mount, /procurement by default (got {str(raw)!r})'
         raise ConfigError(msg)
-
-
-def _staging_dir(r: Resolver, data_dir: Path) -> Path:
-    """Return PROCUREMENT_STAGING_DIR, refusing UC_DATA_DIR or a folder in it."""
-    raw = r.raw('PROCUREMENT_STAGING_DIR')
-    check_staging_outside_data_dir(raw, data_dir, 'PROCUREMENT_STAGING_DIR')
-    return Path(raw)
 
 
 def _int(r: Resolver, name: str) -> int:

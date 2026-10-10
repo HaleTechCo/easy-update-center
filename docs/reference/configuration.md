@@ -89,9 +89,6 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 | Setting | Default | Read by | Notes |
 |---|---|---|---|
 | `REPO_ADAPTER` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter | Whether the generator reads the repository through the [repo-adapter](../architecture/repo-adapter.md). `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is refused. The service stays idle when off. |
-| `REPO_ADAPTER_URL` | `http://repo-adapter:${REPO_ADAPTER_PORT}/artifactory/` | generate, doctor, procure | Where `uc` finds the adapter; it follows `REPO_ADAPTER_PORT`. Change it only with a non-default Compose layout. |
-| `REPO_ADAPTER_DIR` | `/data/repo-adapter` | generate, doctor, procure, repo-adapter | The adapter's token, cache and `report.json`. |
-| `REPO_ADAPTER_PORT` | `8081` | generate, doctor, procure, repo-adapter | The port the repo-adapter listens on; `--port` overrides it. The default `REPO_ADAPTER_URL`, which generate and doctor use, follows it, and the `repo-adapter` healthcheck (`uc repo-adapter --healthcheck`) probes the port the running adapter bound; a change applies after `docker compose up -d`. Nothing else needs to change with it. Minimum 1. |
 | `REPO_CA_FILE` | none | repo-adapter, procure | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca): set it in `.env`, and mount the file with `compose.repo-ca.yaml`. `uc procure push` and `clean`, and the downloads of `uc procure stage`, verify against it too. |
 | `REPO_MAX_ARCHIVE_MB` | `512` | repo-adapter, procure | Archives larger than this are skipped and reported. `uc procure stage --dependencies` and `--war` download none larger either. Minimum 1. |
 
@@ -103,7 +100,6 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 | `DOWNLOAD_BACKEND_URL` | see [Mode defaults](#mode-defaults) | web (every uc-image service checks it) | Where `/download/...` requests are sent. It must not contain credentials or any `@` (uc and web refuse them; for `DOWNLOAD_ACCESS=proxy` put them in `secrets/download_proxy_auth`). Controllers must be able to read it without credentials unless `DOWNLOAD_ACCESS=proxy`. |
 | `DOWNLOAD_ACCESS` | `redirect` | web | `redirect` sends controllers to the backend; `proxy` streams the file through the web container. See [Proxy plugin downloads](../how-to/proxy-downloads.md). |
 | `DOWNLOAD_PROXY_CA_FILE` | `/etc/ssl/certs/ca-certificates.crt` | web | Proxy mode only: the CA bundle the backend's certificate must verify against. |
-| `DOWNLOAD_PROXY_AUTH_FILE` | `${SECRETS_DIR}/download_proxy_auth` | web | Proxy mode only: the file holding `username:password` for the backend. |
 
 ## Upstream data
 
@@ -193,24 +189,3 @@ These are read from the process environment by the JVM and by Python.
 | Setting | Default | Read by | Notes |
 |---|---|---|---|
 | `PROCUREMENT_SOURCE_URL` | `https://repo.jenkins-ci.org/releases/` | procure | Where `uc procure stage` fetches files from, by Maven path, each checked against the `.sha1` beside it. Set it to reach repo.jenkins-ci.org through your own proxy repository. Air-gapped, downloads are refused unless it is set. Must not contain credentials or any `@`. See [Procure missing files](../how-to/procure-missing-files.md). |
-| `PROCUREMENT_STAGING_DIR` | `/procurement` | procure | The staging folder `uc procure stage` fills and the other `uc procure` commands read (`--staging`), inside the `uc` container. `compose.yaml` mounts `./procurement` there, and the folder must stay on that mount: `/procurement` or a folder in it. `UC_DATA_DIR`, or a folder in it, is refused: the other services mount the data volume. `--staging` is held to the same rule. |
-
-## Internal
-
-Set by the image or derived from `SECRETS_DIR`; change them only to run `uc` outside the containers
-or with a non-default layout.
-
-| Setting | Default | Notes |
-|---|---|---|
-| `UC_DATA_DIR` | `/data` | The data volume. |
-| `UC_OVERLAY_DIR` | `/config/overlay` | The [overlay](../how-to/block-plugins-and-add-warnings.md) directory. |
-| `UC_APP_DIR` | `/opt/uc` | The generator, templates and bundled resources in the image. |
-| `SECRETS_DIR` | `/run/secrets` | Where the secret files below are read from. |
-| `SIGNING_KEY_FILE` | `${SECRETS_DIR}/update-center.key` | |
-| `SIGNING_CERT_FILE` | `${SECRETS_DIR}/update-center.cert` | |
-| `ROOT_CA_FILE` | `${SECRETS_DIR}/root-ca.crt` | |
-| `REPO_USERNAME_FILE` | `${SECRETS_DIR}/repo_username` | |
-| `REPO_PASSWORD_FILE` | `${SECRETS_DIR}/repo_password` | |
-| `GITHUB_USERNAME_FILE` | `${SECRETS_DIR}/github_username` | |
-| `GITHUB_TOKEN_FILE` | `${SECRETS_DIR}/github_token` | |
-| `REPO_PUSH_AUTH_FILE` | `${SECRETS_DIR}/repo_push_auth` | |

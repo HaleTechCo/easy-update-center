@@ -45,15 +45,6 @@ def test_the_active_lines_of_each_example_are_a_working_configuration(mode):
     assert load_settings(active).mode == mode
 
 
-@pytest.mark.parametrize('mode', MODES)
-def test_uncommenting_the_adapter_url_keeps_it_following_the_port(mode):
-    lines = example_env(mode).splitlines()
-    active = dict(line.split('=', 1) for line in lines if line and not line.startswith('#'))
-    name, value = next(line[2:] for line in lines if line.startswith('# REPO_ADAPTER_URL=')).split('=', 1)
-    s = load_settings({**active, name: value, 'REPO_ADAPTER_PORT': '9091'})
-    assert s.repo_adapter_url == 'http://repo-adapter:9091/artifactory/'
-
-
 def test_the_online_example_says_how_to_use_your_own_repository():
     online, airgapped = example_env('online'), example_env('airgapped')
     hint = '# Your own Artifactory or Artifact Keeper instead of repo.jenkins-ci.org? Set REPO_TYPE, REPO_URL and REPO_KEY here.\n# Also set DOWNLOAD_BACKEND=artifactory, and usually CORE_AGE_DAYS=0. See docs/architecture/modes.md#your-own-repository.\n# REPO_TYPE=artifactory\n'
