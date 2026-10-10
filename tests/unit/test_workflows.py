@@ -18,7 +18,6 @@ PINNED = re.compile(r'^[\w.-]+/[\w.-]+(?:/[\w./-]+)?@[0-9a-f]{40}$')
 USES = re.compile(r'^\s*(?:-\s+)?uses:\s*(\S+)(.*)$', re.MULTILINE)
 EXTRA_PERMISSIONS: dict[tuple[str, str], dict[str, str]] = {
     ('scheduled.yml', 'upstream-watch'): {'contents': 'read', 'issues': 'write'},
-    ('release.yml', 'prepare'): {'contents': 'write'},
     ('release.yml', 'images'): {'contents': 'read', 'packages': 'write'},
     ('release.yml', 'manifests'): {'contents': 'read', 'packages': 'write'},
     ('release.yml', 'sign'): {'contents': 'read', 'packages': 'write', 'id-token': 'write', 'attestations': 'write'},
@@ -26,10 +25,10 @@ EXTRA_PERMISSIONS: dict[tuple[str, str], dict[str, str]] = {
     ('release.yml', 'release'): {'contents': 'write', 'id-token': 'write'},
 }
 """Every job that declares permissions, with exactly the ones it needs; any other job inherits contents: read."""
-WRITES_CONTENTS = {('release.yml', 'prepare'), ('release.yml', 'release')}
-"""The only jobs that may hold contents: write: the rulesets let the GitHub Actions app bypass them, so any such job could push to main. This keeps these workflows honest; a branch can carry its own workflow, so the real limit is who has write access."""
+WRITES_CONTENTS = {('release.yml', 'release')}
+"""The only job whose workflow token may write contents (it creates the GitHub Release). prepare pushes with the release App's token instead: the App is the rulesets' only bypass actor, and its key lives in the release environment, which only main can use."""
 CHECKOUT_WITH_CREDENTIALS = {('release.yml', 'prepare')}
-"""The only jobs whose checkout keeps the token, for a git push."""
+"""The only jobs whose checkout keeps a token, for a git push."""
 TEST_TARGETS = ['test-unit', 'test-web', 'test-routing', 'test-secrets', 'test-setup', 'compose-check']
 """make test's suites and make compose-check, one CI job each."""
 PATH = '/usr/bin:/bin'
@@ -355,16 +354,36 @@ def release_repository(tmp_path: Path) -> tuple[Path, Path, Path]:
     return origin, other, work
 
 
+APP_SLUG = 'easy-update-center-release'
+GH_USER_STUB = """#!/bin/sh
+echo "$*" >> "$STUB_DIR/gh.log"
+[ "$*" = 'api /users/easy-update-center-release[bot] --jq .id' ] && echo 4242
+"""
+
+
+def test_prepare_pushes_with_the_release_apps_token_from_the_release_environment():
+    prepare = release_job('prepare')
+    assert prepare['environment'] == 'release'
+    app = step(prepare, 'Get the release App token')
+    assert app['uses'].startswith('actions/create-github-app-token@')
+    assert app['with'] == {'client-id': '${{ vars.RELEASE_APP_CLIENT_ID }}', 'private-key': '${{ secrets.RELEASE_APP_PRIVATE_KEY }}', 'permission-contents': 'write'}
+    checkout = next(each for each in prepare['steps'] if each.get('uses', '').startswith('actions/checkout@'))
+    assert checkout['with'] == {'token': '${{ steps.app.outputs.token }}'}
+    assert step(prepare, 'Commit the release and tag it')['env'] == {'APP_SLUG': '${{ steps.app.outputs.app-slug }}', 'GH_TOKEN': '${{ steps.app.outputs.token }}'}
+
+
 def run_prepare(tmp_path: Path, work: Path) -> subprocess.CompletedProcess[str]:
+    stubs = stub(tmp_path, 'gh', GH_USER_STUB)
     script = step(release_job('prepare'), 'Commit the release and tag it')['run']
-    return run_bash(tmp_path, script, {'VERSION': '0.1.0', 'PATH': PATH, 'HOME': str(tmp_path)}, work)
+    env = {'VERSION': '0.1.0', 'APP_SLUG': APP_SLUG, 'GH_TOKEN': 'app-token', 'PATH': f'{stubs}:{PATH}', 'STUB_DIR': str(tmp_path), 'HOME': str(tmp_path)}
+    return run_bash(tmp_path, script, env, work)
 
 
 def test_prepare_pushes_the_release_commit_and_its_tag_together(tmp_path):
     origin, _, work = release_repository(tmp_path)
     result = run_prepare(tmp_path, work)
     assert result.returncode == 0, result.stdout
-    assert git('log', '-1', '--format=%s|%an', 'main', cwd=origin) == 'Release 0.1.0|github-actions[bot]\n'
+    assert git('log', '-1', '--format=%s|%an|%ae', 'main', cwd=origin) == f'Release 0.1.0|{APP_SLUG}[bot]|4242+{APP_SLUG}[bot]@users.noreply.github.com\n'
     assert git('rev-parse', 'v0.1.0^{commit}', cwd=origin) == git('rev-parse', 'main', cwd=origin)
     assert '## [0.1.0] - ' in git('show', 'main:CHANGELOG.md', cwd=origin)
 

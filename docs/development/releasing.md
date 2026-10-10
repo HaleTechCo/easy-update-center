@@ -21,7 +21,7 @@ The jobs run in this order; each starts only if the ones before it succeeded.
 |---|---|---|
 | `check` | `tools/release.py check`: refuses a run off `main`, a malformed version, a tag that already exists, a version not above the highest release, and an empty Unreleased section; works out whether this is the highest release overall and in its `X.Y`. | Nothing. |
 | `ci` | Runs the CI workflow on the commit being released. | Nothing. |
-| `prepare` | Moves CHANGELOG's Unreleased entries under the version and pushes the commit and the tag together. | The "Release X.Y.Z" commit and the `vX.Y.Z` tag on `main`. |
+| `prepare` | Moves CHANGELOG's Unreleased entries under the version and pushes the commit and the tag together, as the release App ([GitHub setup](github-setup.md), step 5). | The "Release X.Y.Z" commit and the `vX.Y.Z` tag on `main`. |
 | `images` | Builds the `uc` and `web` images from the tag on a native runner per architecture (`ubuntu-24.04` for amd64, `ubuntu-24.04-arm` for arm64) and pushes each by digest. | Untagged per-architecture images on GHCR. |
 | `manifests` | Joins the two architectures into one manifest list per image. | The images tagged `X.Y.Z`, plus `X.Y` and `latest` when this is the highest release in its `X.Y` and overall. |
 | `sign` | Signs the manifest lists with cosign, attests their build provenance and their SBOMs, and writes the SBOM files. | Signatures and attestations on GHCR. |
@@ -36,8 +36,12 @@ move to it: [Upgrade](../how-to/upgrade.md).
 - **Before `prepare` (`check` or `ci` failed):** nothing has changed. Fix the cause and run again.
 - **`prepare`'s push refused because `main` moved:** run again. The commit and tag are pushed
   atomically, so neither landed.
-- **A push refused naming a ruleset:** the GitHub Actions app is missing from that ruleset's bypass
-  list, or its bypass mode is not Always ([GitHub setup](github-setup.md), steps 5 and 6).
+- **`prepare`'s "Get the release App token" step failed:** the `release` environment lacks
+  `RELEASE_APP_CLIENT_ID` or `RELEASE_APP_PRIVATE_KEY`, the App is not installed on the repository,
+  or the run was not on `main`, which the environment refuses ([GitHub setup](github-setup.md),
+  step 5). Nothing changed: fix it and run again.
+- **A push refused naming a ruleset:** the release App is missing from that ruleset's bypass list, or
+  its bypass mode is not Always ([GitHub setup](github-setup.md), steps 6 and 7).
 - **After `prepare` (the tag exists):** fix the cause and run again with **publish-only** and the
   same version. It rebuilds and republishes the images, bundles and Release from the tag, and
   leaves CHANGELOG alone. `latest` and `X.Y` move only if the version is still the highest.
@@ -58,7 +62,7 @@ Only GitHub can show that the workflows work, so the first release is a rehearsa
 - [ ] Open a pull request and see `ci` pass; merge it.
 - [ ] Run Release with `0.1.0`.
 - [ ] `docker pull --platform linux/amd64` and `--platform linux/arm64` of both images work. New
-      packages start private, so until step 9 of [GitHub setup](github-setup.md) makes them public,
+      packages start private, so until step 10 of [GitHub setup](github-setup.md) makes them public,
       sign in first with `docker login ghcr.io`.
 - [ ] `docker run --rm ghcr.io/haletechco/easy-update-center-uc:0.1.0 --version` prints `uc 0.1.0`.
 - [ ] The commands of [Verify a release](../how-to/verify-a-release.md) pass, with cosign 3 or later
@@ -80,4 +84,4 @@ Only GitHub can show that the workflows work, so the first release is a rehearsa
       `live_release` and `uc_version` 0.1.0.
 - [ ] The Release's notes match CHANGELOG's 0.1.0 section, and their links open (they point at the
       files of the `v0.1.0` tag).
-- [ ] Make the packages public ([GitHub setup](github-setup.md), step 9).
+- [ ] Make the packages public ([GitHub setup](github-setup.md), step 10).

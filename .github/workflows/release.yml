@@ -2,14 +2,14 @@
 # Cuts a release by hand (docs/development/releasing.md): Actions > Release > Run workflow on main,
 # with the version. check refuses a version that must not be published; ci runs the CI workflow on
 # that commit; prepare moves CHANGELOG.md's Unreleased entries under the version and pushes the
-# commit "Release X.Y.Z" and the tag vX.Y.Z to main together (the rulesets let the GitHub Actions
-# app bypass them); images, manifests, sign, bundle and release publish the signed uc and web images
+# commit "Release X.Y.Z" and the tag vX.Y.Z to main together, as the release App (the rulesets'
+# only bypass actor); images, manifests, sign, bundle and release publish the signed uc and web images
 # for linux/amd64 and linux/arm64 on GHCR, an air-gapped bundle per architecture, and the GitHub
 # Release. publish-only republishes an existing tag without touching CHANGELOG.md.
 #
-# Only prepare and release hold contents: write: the rulesets' bypass names the whole GitHub
-# Actions app, so any job holding it could push to main. tests/unit/test_workflows.py keeps these
-# workflows to that, but the real limit is who has write access (a branch can carry its own workflow).
+# The App's key is a secret of the release environment, which only main can use, so a workflow on
+# another branch cannot get the App's token. Only the release job's own token writes contents, to
+# create the GitHub Release (tests/unit/test_workflows.py pins both).
 name: Release
 
 on:
@@ -73,19 +73,34 @@ jobs:
     with:
       ref: ${{ inputs.publish-only && format('refs/tags/v{0}', inputs.version) || github.sha }}
 
+  # Pushes as the release App, the rulesets' only bypass actor. Its key is a secret of the release
+  # environment, which only main can use (docs/development/github-setup.md); this job's own token
+  # stays read-only.
   prepare:
     needs: ci
     if: ${{ !inputs.publish-only }}
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
+    environment: release
     steps:
-      # Keeps the token (persist-credentials defaults to true): this job pushes.
+      - name: Get the release App token
+        id: app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+      # Keeps the App token (persist-credentials defaults to true): this job pushes.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ steps.app.outputs.token }}
       - name: Commit the release and tag it
+        env:
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          user_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${user_id}+${APP_SLUG}[bot]@users.noreply.github.com"
           python3 tools/release.py prepare "${VERSION}"
           git commit --quiet --all --message "Release ${VERSION}"
           git tag --annotate "v${VERSION}" --message "Release ${VERSION}"

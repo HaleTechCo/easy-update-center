@@ -32,8 +32,8 @@ git push -u origin main
 git push origin <tag>        # for each tag you keep
 ```
 
-Do this before the tag ruleset (step 6) exists. The push runs CI once, which makes the `ci` check
-selectable in step 5.
+Do this before the tag ruleset (step 7) exists. The push runs CI once, which makes the `ci` check
+selectable in step 6.
 
 ## 4. Repository settings
 
@@ -42,34 +42,59 @@ selectable in step 5.
 - Leave "Immutable releases" off. A re-run with publish-only replaces the Release's assets
   (`gh release upload --clobber`), which immutable releases forbid.
 
-## 5. Branch ruleset
+## 5. The release App
+
+The Release workflow's `prepare` job pushes the release commit and its tag to `main` as a GitHub App
+of your own, the rulesets' only bypass actor. GitHub does not accept its built-in GitHub Actions app
+as a bypass actor, and an App owned by the organization is free.
+
+1. HaleTechCo > Settings > Developer settings > GitHub Apps > New GitHub App:
+   - GitHub App name: for example `easy-update-center-release`. Release commits show it as
+     `<name>[bot]`.
+   - Homepage URL: `https://github.com/HaleTechCo/easy-update-center`.
+   - Webhook: untick **Active**.
+   - Repository permissions: Contents **Read and write** (Metadata read-only comes with it), nothing
+     else.
+   - Where can this GitHub App be installed: **Only on this account**.
+2. On the App's page, note its **Client ID**, then **Generate a private key** (a `.pem` file
+   downloads).
+3. **Install App** > HaleTechCo > **Only select repositories**: `easy-update-center`.
+4. The repository's Settings > Environments > New environment, named `release`:
+   - Deployment branches and tags: **Selected branches and tags**, add `main`.
+   - Environment secret `RELEASE_APP_PRIVATE_KEY`: the whole contents of the `.pem` file. Then delete
+     the downloaded file; if you ever need the key again, generate a new one and replace the secret.
+   - Environment variable `RELEASE_APP_CLIENT_ID`: the Client ID.
+   - Optional: add yourself as a required reviewer, so each release waits for your approval before
+     it pushes.
+
+Why this holds: only a job that names the `release` environment gets the key, and the environment
+serves only workflows running on `main`, so a workflow on another branch cannot get the App's token.
+The token the job gets can write this repository's contents only, and expires within an hour. Every
+other workflow token leaves `main` alone: the rulesets below bypass only the App, and only
+`release.yml`'s `release` job holds `contents: write`, to create the GitHub Release
+(`tests/unit/test_workflows.py` pins both). Changing a workflow on `main` still takes a pull request,
+so keep write access to people you would let merge to `main` (today one maintainer, with members' base
+permission Read).
+
+## 6. Branch ruleset
 
 Settings > Rules > Rulesets > New branch ruleset.
 
 - Name `main`, enforcement Active, target the default branch.
-- Bypass list: **GitHub Actions** (the app), bypass mode **Always**, and nothing else. Always covers
-  both the required `ci` check and the pull-request rule below, which the release commit skips.
+- Bypass list: the release App from step 5 (Add bypass > Apps; it appears once it is installed on the
+  repository), bypass mode **Always**, and nothing else. Always covers both the required `ci` check and
+  the pull-request rule below, which the release commit skips.
 - Rules: restrict deletions; require a pull request before merging, with 0 required approvals
   (GitHub does not let the one maintainer approve their own pull request); require status checks to
   pass, with `ci` (source GitHub Actions); block force pushes.
 
-Why the GitHub Actions app: the Release workflow's `prepare` job pushes the release commit to
-`main`. GitHub accepts that app as a bypass actor only in an organization's repository. The bypass
-names the whole app, and a workflow job that holds `contents: write` can push to `main` or create a
-`v*` tag as that app. `tests/unit/test_workflows.py` keeps this repository's workflows honest (only
-`release.yml`'s `prepare` and `release` jobs hold `contents: write`), but a test only checks the
-branch it runs on: anyone with write access can push a branch whose own workflow asks for
-`contents: write` and uses it. The real limit is who has write access, so give it only to people you
-would let push to `main` (today one maintainer, with members' base permission Read). Later, a deploy
-key held in a `release` environment restricted to `main` could replace the app as the bypass actor,
-at no cost.
-
-## 6. Tag ruleset
+## 7. Tag ruleset
 
 Name `release tags`, target `v*`, rules: restrict creations, restrict updates, restrict deletions.
-The same bypass list as step 5. Only the Release workflow creates release tags.
+The same bypass list as step 6. Only the Release workflow's `prepare` job, as the release App, creates
+release tags; the `release` job creates the GitHub Release on the tag that already exists.
 
-## 7. Security and moderation
+## 8. Security and moderation
 
 - Settings > Advanced Security: enable private vulnerability reporting
   ([SECURITY.md](../../SECURITY.md) points reporters to it) and Dependabot alerts. Secret scanning and
@@ -82,20 +107,20 @@ The same bypass list as step 5. Only the Release workflow creates release tags.
 Dependabot's version updates need no setting: `.github/dependabot.yml` opens one weekly pull request
 each for the actions, the base images and the lint tools.
 
-## 8. Secrets
+## 9. Secrets
 
 Settings > Secrets and variables > Actions: `JENKINS_COMMUNITY_USERNAME` and
 `JENKINS_COMMUNITY_PASSWORD`, a free Jenkins community account, for the weekly `it-online` run.
 Without them the run is skipped with a notice.
 
-## 9. After the first release
+## 10. After the first release
 
 New GHCR packages start private, and anonymous pulls fail until they are public. For
 `easy-update-center-uc` and `easy-update-center-web` (the organization's Packages): Package settings >
 Change visibility > Public. Check that each is linked to the repository (the images'
 `org.opencontainers.image.source` label does that; otherwise Connect repository).
 
-## 10. Archive GitLab
+## 11. Archive GitLab
 
 Set the GitLab project's description to "Moved to https://github.com/HaleTechCo/easy-update-center",
 replace its README on GitLab with one line pointing there (GitLab's web editor), then Settings >
