@@ -322,12 +322,9 @@ generator on the internal `repo` network, and stays idle when `REPO_ADAPTER` is 
 
 ## uc pki
 
-Manages the signing PKI. It reads only the `PKI_*` settings (from the environment) and needs no
-others, so it runs before anything else is
-configured. `make pki-init` wraps `init`, and `make pki-rotate ROOT=<dir>` wraps `rotate`; both run
+Manages the signing PKI. It reads no settings, so it runs before anything else is configured. `make pki-init` wraps `init`, and `make pki-rotate ROOT=<dir>` wraps `rotate`; both run
 the [`setup` Compose service](#the-setup-service), which reads `.env` (or the file `UC_ENV_FILE`
-names, which must exist) and `config/` as the other services do, so `uc pki` sees the settings they
-see, and then run its `secrets` step: they create any missing credential file empty and set the
+names, which must exist) as the other services do, and then run its `secrets` step: they create any missing credential file empty and set the
 permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)).
 `make pki-init OUT=<dir>` creates the PKI in `<dir>` instead, and only sets the permissions there,
 for [replacing the root CA](../how-to/rotate-signing-certificate.md#replace-the-root-ca).
@@ -358,9 +355,9 @@ aside.
 | `--out`, `--dir` | The directory holding the PKI files (required). |
 | `--display-dir` | `init` and `rotate`: the directory `--out` or `--dir` is on the host. Messages name the files under it (`secrets/root/root-ca.key`, not `/setup/secrets/root/root-ca.key`). `make pki-init` and `make pki-rotate` pass `secrets`, or the `OUT` directory. |
 | `--root-display-dir` | `rotate`: the directory `<dir>/root/` is on the host (default: `root/` under `--display-dir`, or under `--dir` without it). Messages name the root key under it. `make pki-rotate` passes `ROOT`, which it mounts there. |
-| `--root-days` | Lifetime of the root CA (default `PKI_ROOT_DAYS`, 3650). |
-| `--signing-days`, `--days` | Lifetime of the signing certificate (default `PKI_SIGNING_DAYS`, 365). |
-| `--org` | Organization name in the certificates' subjects (default `PKI_ORG`). |
+| `--root-days` | Lifetime of the root CA (default 3650). |
+| `--signing-days`, `--days` | Lifetime of the signing certificate (default 365). |
+| `--org` | Organization name in the certificates' subjects (default `Easy Update Center`). |
 
 How to run `rotate` safely: [Rotate the signing certificate](../how-to/rotate-signing-certificate.md).
 

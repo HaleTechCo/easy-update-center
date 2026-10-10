@@ -88,8 +88,7 @@ overlap, because controllers reject metadata signed under a root they do not tru
      setup pki-init --out /setup/out --display-dir newpki
    ```
 
-   It works as the signing keys of first-time setup do: the `PKI_*` settings come from `.env`,
-   existing files are not overwritten, and the files get the permissions they have in `secrets/`.
+   It works as the signing keys of first-time setup do: existing files are not overwritten, and the files get the permissions they have in `secrets/`.
    Another directory name works too, but git does not ignore it.
 
 2. Add `newpki/root-ca.crt` to `update-center-rootCAs/` on every controller, **keeping the old

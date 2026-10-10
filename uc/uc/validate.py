@@ -102,7 +102,6 @@ def validate_release(
     downloads_root: str,
     signing_cert_b64: str,
     previous_plugin_count: int | None,
-    min_plugins: int,
     min_ratio: float,
     force: bool,
     download_map: Mapping[str, str] | None,
@@ -167,8 +166,8 @@ def validate_release(
         problems.extend(f'.htaccess redirects to an absolute URL: {line}' for line in absolute_targets(htaccess.read_text(encoding='utf-8')))
 
     count = count_plugins(staging / 'current') or 0
-    if count < min_plugins:
-        problems.append(f'plugin count {count} is below MIN_PLUGINS={min_plugins}')
+    if count == 0:
+        problems.append('the release has no plugins')
     if previous_plugin_count and not force and count < min_ratio * previous_plugin_count:
         problems.append(f"plugin count {count} < {min_ratio} × {previous_plugin_count} of the live release (use 'uc generate --force' if the shrinkage is intended)")  # noqa: RUF001 - the multiplication sign is the documented message text (docs/troubleshooting.md#generation)
     if download_map is not None:

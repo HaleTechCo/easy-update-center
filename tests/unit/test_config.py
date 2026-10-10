@@ -6,7 +6,7 @@ from urllib.parse import unquote
 
 import pytest
 
-from uc.config import PkiSettings, _proxy_hostport, load_pki_settings, load_settings, read_secret, split_userinfo, with_explicit_port
+from uc.config import _proxy_hostport, load_settings, read_secret, split_userinfo, with_explicit_port
 from uc.errors import ConfigError
 from uc.settings import SETTINGS
 
@@ -42,8 +42,8 @@ def test_online_defaults():
     assert s.resources_ref == 'master'
     assert s.popularity_json_url.startswith('https://raw.githubusercontent.com/')
     assert s.tool_installers_url == 'https://updates.jenkins.io/updates/'
-    assert (s.retain_releases, s.min_plugins, s.min_plugin_ratio) == (5, 1, 0.9)
-    assert (s.certificate_minimum_valid_days, s.pki_signing_days, s.stale_after_days) == (30, 365, 30)
+    assert (s.retain_releases, s.min_plugin_ratio) == (5, 0.9)
+    assert (s.certificate_minimum_valid_days, s.stale_after_days) == (30, 30)
     assert s.generate_schedule == '0 */6 * * *'
     assert s.uc_id == 'default'
     assert s.extra_args == ()
@@ -581,15 +581,6 @@ def test_the_registry_defaults_are_the_defaults(env):
 def test_the_jvm_and_tls_settings_have_fields():
     s = load_settings({**ONLINE, 'JAVA_TOOL_OPTIONS': '-Xmx6g', 'TLS_CERT_FILE': '/tls/c.pem', 'TLS_KEY_FILE': '/tls/k.pem'})
     assert (s.java_tool_options, s.tls_cert_file, s.tls_key_file) == ('-Xmx6g', '/tls/c.pem', '/tls/k.pem')
-
-
-def test_pki_settings_need_no_mode():
-    assert load_pki_settings({'PKI_ORG': 'Example Corp', 'PKI_ROOT_DAYS': '100'}) == PkiSettings('Example Corp', 100, 365)
-
-
-def test_pki_days_must_be_positive():
-    with pytest.raises(ConfigError, match='PKI_SIGNING_DAYS must be >= 1'):
-        load_pki_settings({'PKI_SIGNING_DAYS': '0'})
 
 
 def test_artifactory_downloads_need_a_url():

@@ -149,7 +149,6 @@ def _build_and_publish(
         downloads_root=settings.downloads_root_url,
         signing_cert_b64=pki.cert_der_b64(settings.signing_cert_file),
         previous_plugin_count=validate.count_plugins(live / 'current') if live else None,
-        min_plugins=settings.min_plugins,
         min_ratio=settings.min_plugin_ratio,
         force=force,
         download_map=mapping,

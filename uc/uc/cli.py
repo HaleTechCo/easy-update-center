@@ -10,12 +10,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import configview, publish, status
-from .config import check_staging_outside_data_dir, load_pki_settings, load_settings
+from .config import check_staging_outside_data_dir, load_settings
 from .doctor import check_since, format_report, inspect_repository, record
 from .errors import UcError, UsageError
 from .examples import example_env
 from .generate import generate
-from .pki import ROOT_CERT, ROOT_KEY, SIGNING_CERT, SIGNING_KEY, cert_info, init_pki, rotate_signing
+from .pki import DEFAULT_ORG, ROOT_CERT, ROOT_DAYS, ROOT_KEY, SIGNING_CERT, SIGNING_DAYS, SIGNING_KEY, cert_info, init_pki, rotate_signing
 from .preflight import load_credentials
 from .procure.clean import clean
 from .procure.download import check_download_allowed, download, downloads_allowed
@@ -92,15 +92,15 @@ def build_parser() -> argparse.ArgumentParser:
     init = pki.add_parser('init', help='create a root CA and a signing certificate')
     init.add_argument('--out', type=Path, required=True)
     init.add_argument('--display-dir', type=Path, metavar='DIR', help='the directory --out is on the host, used in messages')
-    init.add_argument('--root-days', type=int, help='lifetime of the root CA in days (default: PKI_ROOT_DAYS, 3650)')
-    init.add_argument('--signing-days', type=int, help='lifetime of the signing certificate in days (default: PKI_SIGNING_DAYS, 365)')
-    init.add_argument('--org', help='organization in the subjects (default: PKI_ORG)')
+    init.add_argument('--root-days', type=int, default=ROOT_DAYS, help=f'lifetime of the root CA in days (default: {ROOT_DAYS})')
+    init.add_argument('--signing-days', type=int, default=SIGNING_DAYS, help=f'lifetime of the signing certificate in days (default: {SIGNING_DAYS})')
+    init.add_argument('--org', default=DEFAULT_ORG, help=f'organization in the subjects (default: {DEFAULT_ORG})')
     rotate = pki.add_parser('rotate', help='issue a new signing certificate from the root in --dir/root/')
     rotate.add_argument('--dir', type=Path, required=True)
     rotate.add_argument('--display-dir', type=Path, metavar='DIR', help='the directory --dir is on the host, used in messages')
     rotate.add_argument('--root-display-dir', type=Path, metavar='DIR', help='the directory --dir/root/ is on the host, used in messages (default: root/ under --display-dir, or under --dir without it)')
-    rotate.add_argument('--days', type=int, help='lifetime of the new signing certificate in days (default: PKI_SIGNING_DAYS, 365)')
-    rotate.add_argument('--org', help='organization in the subject (default: PKI_ORG)')
+    rotate.add_argument('--days', type=int, default=SIGNING_DAYS, help=f'lifetime of the new signing certificate in days (default: {SIGNING_DAYS})')
+    rotate.add_argument('--org', default=DEFAULT_ORG, help=f'organization in the subject (default: {DEFAULT_ORG})')
     show = pki.add_parser('show', help='print subjects, expiry and fingerprints')
     show.add_argument('--dir', type=Path, required=True)
     return parser
@@ -241,20 +241,14 @@ def _config(args: argparse.Namespace) -> int:
 
 
 def _pki(args: argparse.Namespace) -> int:
-    if args.pki_command in {'init', 'rotate'}:
-        defaults = load_pki_settings()
-        org = args.org or defaults.org
     if args.pki_command == 'init':
-        root_days = defaults.root_days if args.root_days is None else args.root_days
-        signing_days = defaults.signing_days if args.signing_days is None else args.signing_days
-        init_pki(args.out, root_days=root_days, signing_days=signing_days, org=org, display_dir=args.display_dir)
+        init_pki(args.out, root_days=args.root_days, signing_days=args.signing_days, org=args.org, display_dir=args.display_dir)
         shown = args.display_dir or args.out
         print(f'created {shown / ROOT_CERT}: install it in $JENKINS_HOME/update-center-rootCAs/ on every controller')
         print(f'created {shown / SIGNING_KEY} and {shown / SIGNING_CERT}: provide them as secrets')
         print(f"move {shown / 'root' / ROOT_KEY} to offline storage; only 'uc pki rotate' needs it")
     elif args.pki_command == 'rotate':
-        days = defaults.signing_days if args.days is None else args.days
-        rotate_signing(args.dir, days=days, org=org, display_dir=args.display_dir, root_display_dir=args.root_display_dir)
+        rotate_signing(args.dir, days=args.days, org=args.org, display_dir=args.display_dir, root_display_dir=args.root_display_dir)
         print(f'issued a new {(args.display_dir or args.dir) / SIGNING_CERT}; the previous pair is kept as *.old')
     else:
         now = utcnow()

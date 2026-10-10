@@ -127,7 +127,6 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 | `GENERATE_SCHEDULE` | `0 */6 * * *` | scheduler | Cron expression for regular generation. The scheduler also generates at once when no release is live. |
 | `CORE_AGE_DAYS` | see [Mode defaults](#mode-defaults) | generate | Tiers are offered for cores released within this many days; `0` means every core a plugin requires. See [Core age](../architecture/modes.md#core-age). |
 | `RETAIN_RELEASES` | `5` | generate | Releases kept for rollback. Minimum 1. |
-| `MIN_PLUGINS` | `1` | generate | A release with fewer plugins is refused. |
 | `MIN_PLUGIN_RATIO` | `0.9` | generate | A release with fewer than this share of the live release's plugins is refused, unless run with `uc generate --force`. Between 0 and 1. |
 
 ## Doctor
@@ -143,9 +142,6 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 | Setting | Default | Read by | Notes |
 |---|---|---|---|
 | `CERTIFICATE_MINIMUM_VALID_DAYS` | `30` | generate | Generation stops when the signing certificate expires within this many days. Also passed to the generator. |
-| `PKI_ORG` | `Easy Update Center` | pki | The organization in the subjects of the certificates `uc pki init` and `uc pki rotate` create; `--org` overrides it. |
-| `PKI_ROOT_DAYS` | `3650` | pki | Lifetime of the root CA `uc pki init` creates, in days; `--root-days` overrides it. Minimum 1. |
-| `PKI_SIGNING_DAYS` | `365` | pki | Lifetime of the signing certificate `uc pki init` and `uc pki rotate` issue, in days; `--signing-days` and `--days` override it. Minimum 1. |
 
 ## Web and TLS
 

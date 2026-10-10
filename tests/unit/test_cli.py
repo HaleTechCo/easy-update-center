@@ -306,24 +306,6 @@ def test_generate_accepts_wait():
     assert build_parser().parse_args(['generate', '--wait']).wait is True
 
 
-def test_pki_init_uses_the_pki_settings(monkeypatch, tmp_path):
-    monkeypatch.setenv('PKI_ORG', 'Example Corp')
-    monkeypatch.setenv('PKI_SIGNING_DAYS', '30')
-    assert main(['pki', 'init', '--out', str(tmp_path / 'pki')]) == 0
-    signing = cert_info(tmp_path / 'pki' / 'update-center.cert')
-    assert 'Example Corp' in signing.subject
-    assert signing.days_left(utcnow()) <= 30
-    assert main(['pki', 'rotate', '--dir', str(tmp_path / 'pki'), '--days', '20']) == 0
-    assert cert_info(tmp_path / 'pki' / 'update-center.cert').days_left(utcnow()) <= 20
-
-
-def test_pki_init_rejects_an_invalid_setting(monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv('PKI_ROOT_DAYS', '0')
-    assert main(['pki', 'init', '--out', str(tmp_path / 'pki')]) == 1
-    assert 'uc: error: PKI_ROOT_DAYS must be >= 1' in capsys.readouterr().err
-    assert not (tmp_path / 'pki').exists()
-
-
 def test_pki_init_names_the_files_under_the_display_dir(tmp_path, capsys):
     assert main(['pki', 'init', '--out', str(tmp_path / 'pki'), '--display-dir', 'new pki', '--root-days', '30', '--signing-days', '10']) == 0
     assert capsys.readouterr().out.splitlines() == [
@@ -769,20 +751,6 @@ def test_pki_rotate_names_the_root_files_where_they_are_on_the_host(tmp_path, ca
     assert capsys.readouterr().err == 'uc: error: cannot read the root CA certificate secrets/root-ca.crt: No such file or directory\n'
 
 
-def test_pki_init_flags_override_the_settings(monkeypatch, tmp_path):
-    monkeypatch.setenv('PKI_ORG', 'Env Corp')
-    monkeypatch.setenv('PKI_ROOT_DAYS', '900')
-    monkeypatch.setenv('PKI_SIGNING_DAYS', '400')
-    out = tmp_path / 'pki'
-    assert main(['pki', 'init', '--out', str(out), '--org', 'Flag Corp', '--root-days', '50', '--signing-days', '20']) == 0
-    root, signing = cert_info(out / 'root-ca.crt'), cert_info(out / 'update-center.cert')
-    assert 'Flag Corp' in root.subject
-    assert 'Flag Corp' in signing.subject
-    assert 'Env Corp' not in signing.subject
-    assert 49 <= root.days_left(utcnow()) <= 50
-    assert 19 <= signing.days_left(utcnow()) <= 20
-
-
 def test_repo_adapter_listens_on_the_configured_port(monkeypatch, tmp_path, secrets_dir):
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('REPO_ADAPTER_PORT', '9090')
@@ -984,3 +952,29 @@ def test_doctor_options_take_json_from_the_command_line_and_fetch_from_the_setti
     assert doctor_options(parser.parse_args(['doctor']), configured) == (True, False, '2.462.1')
     assert doctor_options(parser.parse_args(['doctor', '--json', '--no-fetch', '--since', '2.479.1']), configured) == (False, True, '2.479.1')
     assert doctor_options(parser.parse_args(['doctor']), make_settings(tmp_path, secrets_dir)) == (False, False, None)
+
+
+def test_pki_init_defaults_and_flags(tmp_path):
+    out = tmp_path / 'pki'
+    assert main(['pki', 'init', '--out', str(out)]) == 0
+    root, signing = cert_info(out / 'root-ca.crt'), cert_info(out / 'update-center.cert')
+    assert 'Easy Update Center' in root.subject
+    assert 3649 <= root.days_left(utcnow()) <= 3650
+    assert 364 <= signing.days_left(utcnow()) <= 365
+    other = tmp_path / 'other'
+    assert main(['pki', 'init', '--out', str(other), '--org', 'Example Corp', '--root-days', '30', '--signing-days', '10']) == 0
+    signing = cert_info(other / 'update-center.cert')
+    assert 'Example Corp' in signing.subject
+    assert 9 <= signing.days_left(utcnow()) <= 10
+    assert main(['pki', 'rotate', '--dir', str(other), '--days', '20']) == 0
+    assert 19 <= cert_info(other / 'update-center.cert').days_left(utcnow()) <= 20
+
+
+def test_pki_takes_no_settings(monkeypatch, tmp_path):
+    monkeypatch.setenv('PKI_ORG', 'Env Corp')
+    monkeypatch.setenv('PKI_SIGNING_DAYS', '30')
+    monkeypatch.setenv('PKI_ROOT_DAYS', '0')
+    assert main(['pki', 'init', '--out', str(tmp_path / 'pki')]) == 0
+    signing = cert_info(tmp_path / 'pki' / 'update-center.cert')
+    assert 'Env Corp' not in signing.subject
+    assert signing.days_left(utcnow()) > 300

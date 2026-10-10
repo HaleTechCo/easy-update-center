@@ -144,7 +144,7 @@ Every check runs, and every failure is listed in the error:
   site offers a core;
 - every download URL in the metadata starts with `${PUBLIC_URL}/download/`;
 - `.htaccess` redirects to no absolute URL;
-- the plugin count is at least `MIN_PLUGINS`, and at least `MIN_PLUGIN_RATIO` of the live
+- the release has plugins, and at least `MIN_PLUGIN_RATIO` of the live
   release's count (`uc generate --force` skips this ratio check once, for a deliberate shrink);
 - with the `artifactory` backend, the download map has an entry for every plugin version and core
   any site offers.

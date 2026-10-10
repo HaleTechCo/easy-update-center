@@ -31,7 +31,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 | Warning `resources fetch failed (...); using last-good copy` | The run published with the previous data. Fix access as above; `status.json` shows the data's age. |
 | `every overlay warning needs an 'id'`, or `duplicate warning id(s) in the overlay` | Fix `config/overlay/warnings.json` ([Add a security warning](how-to/block-plugins-and-add-warnings.md#add-a-security-warning)). |
 | `plugin count N < 0.9 × M of the live release` | The source shrank by more than 10%. Check `uc doctor` and the repository; if the shrink is intended, run `uc generate --force` once ([Accept a smaller catalog](how-to/generate-and-roll-back.md#accept-a-smaller-catalog)). |
-| `plugin count 0 is below MIN_PLUGINS=1` | The generator saw no plugins: wrong `REPO_KEY`, an empty repository, or every plugin dropped. Run `uc doctor --fetch`. |
+| `the release has no plugins` | The generator saw no plugins: wrong `REPO_KEY`, an empty repository, or every plugin dropped. Run `uc doctor --fetch`. |
 | `download map has no entry for ...` | With `DOWNLOAD_BACKEND=artifactory`, a version the metadata offers is not in the repository listing. Run `uc doctor`; usually a file outside Maven layout. |
 | `upstream generate-htaccess.sh changed` | Only after changing the pinned update-center2: its routing script no longer has the shape this project edits. See [Upgrading update-center2](development/upgrading-upstream.md). |
 | The generator dies with `OutOfMemoryError` | Raise the heap: `JAVA_TOOL_OPTIONS=-Xmx6g` ([Host sizing](getting-started/requirements.md#host-sizing)). |

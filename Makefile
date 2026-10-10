@@ -67,8 +67,7 @@ stack-uc-image:
 # The setup service (compose.yaml) sets that up, as root, in every target that writes to secrets/:
 # its entrypoint, uc-setup (uc/bin/), runs uc/bin/secrets-permissions.sh for the owner of ./config.
 # Run `make secrets` yourself after replacing a file in secrets/. The setup service reads
-# .env, or UC_ENV_FILE, and config/ as the other services do, so uc pki sees the PKI_* settings they
-# see. It mounts ./secrets at /setup/secrets; uc pki's --display-dir makes its messages name the
+# .env, or UC_ENV_FILE, and config/ as the other services do. It mounts ./secrets at /setup/secrets; uc pki's --display-dir makes its messages name the
 # files where they are on the host.
 IN_SETUP = $(STACK_RUN) --no-deps
 

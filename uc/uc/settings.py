@@ -214,7 +214,6 @@ SETTINGS: tuple[Setting, ...] = (
         airgapped_hint=('400 behaves like updates.jenkins.io (tiers only for cores released in the last 400 days).',),
     ),
     Setting('RETAIN_RELEASES', 'int', 'Generation', 'Releases kept for rollback.', default='5', minimum=1),
-    Setting('MIN_PLUGINS', 'int', 'Generation', 'A release with fewer plugins is refused.', default='1'),
     Setting('MIN_PLUGIN_RATIO', 'ratio', 'Generation', "A release with fewer than this share of the live release's plugins is refused, unless run with uc generate --force.", default='0.9'),
     # Doctor
     Setting('DOCTOR_SCHEDULE', 'cron', 'Doctor', 'Cron expression for a read-only uc doctor --record run, which saves the report and its counts in status.json; empty means none.', sample='30 5 * * *'),
@@ -222,9 +221,6 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('DOCTOR_SINCE', 'version', 'Doctor', 'The floor for required cores (--since); empty means the oldest core in the repository.', sample='2.462.1'),
     # Signing
     Setting('CERTIFICATE_MINIMUM_VALID_DAYS', 'int', 'Signing', 'Generation stops when the signing certificate expires within this many days.', default='30'),
-    Setting('PKI_ORG', 'str', 'Signing', 'The organization in the subjects of the certificates uc pki init and uc pki rotate create.', default='Easy Update Center'),
-    Setting('PKI_ROOT_DAYS', 'int', 'Signing', 'Lifetime of the root CA uc pki init creates, in days.', default='3650', minimum=1),
-    Setting('PKI_SIGNING_DAYS', 'int', 'Signing', 'Lifetime of the signing certificate uc pki init and uc pki rotate issue, in days.', default='365', minimum=1),
     # Web and TLS
     Setting('TLS_CERT_FILE', 'path', 'Web and TLS', 'With TLS_KEY_FILE, enables HTTPS on port 8443: a path inside the web container.'),
     Setting('TLS_KEY_FILE', 'path', 'Web and TLS', 'The private key for TLS_CERT_FILE.'),

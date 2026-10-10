@@ -28,7 +28,7 @@ def build(staging, tiers=TIERS, public_url=URL, **doc_options):
 
 
 def validate(staging, **overrides):
-    options = {'tiers': TIERS, 'downloads_root': ROOT, 'signing_cert_b64': TEST_CERT_B64, 'previous_plugin_count': None, 'min_plugins': 1, 'min_ratio': 0.9, 'force': False, 'download_map': None}
+    options = {'tiers': TIERS, 'downloads_root': ROOT, 'signing_cert_b64': TEST_CERT_B64, 'previous_plugin_count': None, 'min_ratio': 0.9, 'force': False, 'download_map': None}
     options.update(overrides)
     return validate_release(staging, **options)
 
@@ -93,9 +93,9 @@ def test_plugin_count_ratio_and_force(tmp_path):
     assert validate(staging, previous_plugin_count=10, force=True).plugin_count == 2
 
 
-def test_min_plugins(tmp_path):
-    with pytest.raises(ValidationError, match='below MIN_PLUGINS=5'):
-        validate(build(tmp_path), min_plugins=5)
+def test_a_release_without_plugins_is_refused(tmp_path):
+    with pytest.raises(ValidationError, match='the release has no plugins'):
+        validate(build(tmp_path, plugins={}))
 
 
 def test_download_map_must_cover_offered_versions(tmp_path):

@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .errors import UcError
-from .settings import REGISTRY
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -27,7 +26,9 @@ ROOT_KEY = 'root-ca.key'
 ROOT_CERT = 'root-ca.crt'
 SIGNING_KEY = 'update-center.key'
 SIGNING_CERT = 'update-center.cert'
-DEFAULT_ORG = REGISTRY['PKI_ORG'].default
+DEFAULT_ORG = 'Easy Update Center'
+ROOT_DAYS = 3650
+SIGNING_DAYS = 365
 _NO_PASSPHRASE = ('-passin', 'pass:')  # every openssl call that reads a private key: an encrypted key fails instead of asking
 _ENCRYPTED_PEM = (b' ENCRYPTED PRIVATE KEY-----', b'Proc-Type: 4,ENCRYPTED')  # the PEM label of an encrypted PKCS#8 key, and the traditional format's header
 
@@ -305,7 +306,7 @@ def _issue_signing(root_key: Path, root_cert: Path, out_dir: Path, *, days: int,
     )
 
 
-def init_pki(out_dir: Path, *, root_days: int = 3650, signing_days: int = 365, org: str = DEFAULT_ORG, display_dir: Path | None = None) -> None:
+def init_pki(out_dir: Path, *, root_days: int = ROOT_DAYS, signing_days: int = SIGNING_DAYS, org: str = DEFAULT_ORG, display_dir: Path | None = None) -> None:
     """Create root/root-ca.key, root-ca.crt, update-center.key and update-center.cert in out_dir.
 
     They are created in a temporary directory inside out_dir and moved in only once all four exist; when anything fails,
@@ -364,7 +365,7 @@ def _create_pki(work: Path, out_dir: Path, shown: Path, *, root_days: int, signi
     _move_all([root_move, *((work / name, out_dir / name) for name in (ROOT_CERT, SIGNING_KEY, SIGNING_CERT))], out_dir, shown, work)
 
 
-def rotate_signing(out_dir: Path, *, days: int = 365, org: str = DEFAULT_ORG, display_dir: Path | None = None, root_display_dir: Path | None = None) -> None:
+def rotate_signing(out_dir: Path, *, days: int = SIGNING_DAYS, org: str = DEFAULT_ORG, display_dir: Path | None = None, root_display_dir: Path | None = None) -> None:
     """Issue a fresh signing key and certificate in out_dir from its root CA (root-ca.crt, root/root-ca.key); the previous pair is kept as *.old.
 
     Nothing in out_dir changes until the new pair exists: the root files and the current pair are checked first, the
