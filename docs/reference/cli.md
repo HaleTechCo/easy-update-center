@@ -135,9 +135,7 @@ approval before the push:
 The staging folder is `./procurement` on the host, which the `uc` service mounts at `/procurement`.
 Every command takes `--staging DIR` to use another folder inside the `uc` container for one run; it
 must not be the data volume, `/data`, or a folder in it.
-On Linux, the uc containers (uid 10001) can write `./procurement` once
-[the setup service](#the-setup-service) has shared it with them
-(`docker compose run --rm setup procurement`, part of `make setup`). Each command has a `make`
+On Linux, `./procurement` must be writable by `UC_UID`, the user the containers run as. Each command has a `make`
 shortcut, which passes options through `ARGS=`. For `stage`, `record` and `clean`, it also hands the
 folder to uid 10001 for the run and back to you after, so it works where the folder cannot be
 shared:
@@ -318,12 +316,9 @@ generator on the internal `repo` network, and stays idle when `REPO_ADAPTER` is 
 
 ## uc pki
 
-Manages the signing PKI. It reads no settings, so it runs before anything else is configured. `make pki-init` wraps `init`, and `make pki-rotate ROOT=<dir>` wraps `rotate`; both run
-the [`setup` Compose service](#the-setup-service), which reads `.env` (or the file `UC_ENV_FILE`
-names, which must exist) as the other services do, and then run its `secrets` step: they create any missing credential file empty and set the
-permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)).
-`make pki-init OUT=<dir>` creates the PKI in `<dir>` instead, and only sets the permissions there,
-for [replacing the root CA](../how-to/rotate-signing-certificate.md#replace-the-root-ca).
+Manages the signing PKI. It reads no settings, so it runs before anything else is configured. The
+[`setup` Compose service](#the-setup-service) runs `init` and `rotate` on `secrets/`, and then its
+`secrets` step.
 
 ```bash
 uc pki init --out <dir> [--display-dir <dir>] [--root-days 3650] [--signing-days 365] [--org <name>]
@@ -349,7 +344,7 @@ aside.
 | Option | Meaning |
 |---|---|
 | `--out`, `--dir` | The directory holding the PKI files (required). |
-| `--display-dir` | `init` and `rotate`: the directory `--out` or `--dir` is on the host. Messages name the files under it (`secrets/root/root-ca.key`, not `/setup/secrets/root/root-ca.key`). `make pki-init` and `make pki-rotate` pass `secrets`, or the `OUT` directory. |
+| `--display-dir` | `init` and `rotate`: the directory `--out` or `--dir` is on the host. Messages name the files under it (`secrets/root/root-ca.key`, not `/setup/secrets/root/root-ca.key`). `setup` passes `secrets`. |
 | `--root` | `rotate`: the directory holding `root-ca.key` (default: `root/` under `--dir`). Messages name the root key there. |
 | `--root-days` | Lifetime of the root CA (default 3650). |
 | `--signing-days`, `--days` | Lifetime of the signing certificate (default 365). |
@@ -360,50 +355,25 @@ How to run `rotate` safely: [Rotate the signing certificate](../how-to/rotate-si
 ## The setup service
 
 The `setup` Compose service runs `uc-setup`, not `uc`: first-time setup, and the jobs that write to
-`./secrets` and `./procurement`. It is the only Compose service that runs as root, and it runs only
-when you call it: it sits in its own Compose profile, so `docker compose up` never starts it. It has
-no network and no Compose secrets. It mounts `./secrets` at `/setup/secrets`, `./procurement` at
-`/setup/procurement` and `./config` read-only at `/setup/config`, and reads `.env` (or the file
-`UC_ENV_FILE` names) as the other services do, so the file must exist. "You" below is the owner of
-`./config`: `uc-setup` gives `./secrets` and `./procurement` to it when Docker has just created them
-as root. When `./config` is empty and owned by root, Docker created it too, so this is not a
-checkout: `uc-setup` then exits 1 and changes nothing.
+`./secrets`. It runs only when you call it: it sits in its own Compose profile, so
+`docker compose up` never starts it. Like every other service it runs as `UC_UID`:`UC_GID`; it has
+no network, no Compose secrets and no settings, and it mounts only `./secrets`, at `/setup/secrets`.
 
 ```bash
 docker compose run --rm setup
 docker compose run --rm setup secrets
-docker compose run --rm setup procurement
-docker compose run --rm setup pki-init [--out DIR] [--display-dir NAME]
-docker compose run --rm -v /path/to/root:/setup/secrets/root:ro setup pki-rotate [--root-display-dir NAME]
+docker compose run --rm setup pki-init [--org ORG] [--root-days N] [--signing-days N]
+mkdir -p newpki && docker compose run --rm -v "$PWD/newpki:/setup/out" setup pki-init --out /setup/out
+docker compose run --rm -v "<folder holding root-ca.key>:/setup/root:ro" setup pki-rotate [--days N] [--org ORG]
 ```
 
-| Command | What it does | `make` shortcut |
-|---|---|---|
-| (none) | First-time setup, safe to repeat: `secrets`, then `pki-init` unless `secrets/update-center.key` exists, then `procurement`, last because it is the one step that can fail on some filesystems. | `make setup` |
-| `secrets` | Creates the missing credential files empty and sets the permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)). | `make secrets` |
-| `procurement` | Shares `./procurement` with the uc containers ([below](#sharing-procurement)). | `make setup` runs it, after the other steps |
-| `pki-init` | Runs `uc pki init` in `secrets/`, then the `secrets` step; or in `--out DIR` (a directory you mount for a new PKI), naming the files under `--display-dir NAME` in its messages, then only sets the permissions there. | `make pki-init`, or `make pki-init OUT=<dir>`, which mounts `<dir>` at `/setup/out` |
-| `pki-rotate` | Runs `uc pki rotate` on `secrets/`, with the directory holding the root key mounted read-only at `/setup/secrets/root` (named `--root-display-dir NAME` in messages), then the `secrets` step. Without that directory it exits 1, naming `make pki-rotate ROOT=<dir>`. | `make pki-rotate ROOT=<dir>`, which mounts `<dir>` there |
+| Command | What it does |
+|---|---|
+| (none) | First-time setup, safe to repeat: `secrets`, then `pki-init` unless `secrets/update-center.key` exists. |
+| `secrets` | Creates the missing credential files empty and sets the modes of the files in `secrets/` ([File modes](secrets.md#file-modes)). |
+| `pki-init` | Runs `uc pki init` in `secrets/`, then the `secrets` step; or with `--out DIR` in that directory (one you mount, for a new PKI), then sets only the key and certificate modes there. `--org`, `--root-days` and `--signing-days` pass through. |
+| `pki-rotate` | Runs `uc pki rotate` on `secrets/` with the root key from `/setup/root`, which you mount read-only, then the `secrets` step. Without that mount, or with a file there, it exits 1 and says how to mount the folder. `--days` and `--org` pass through. |
 
+When `secrets/` (or the `--out` directory) is not writable by the user it runs as, `uc-setup` exits 1:
+`secrets/ is not writable by uid N: set UC_UID and UC_GID in .env to the output of id -u and id -g`.
 Any other argument exits 2 with the usage line.
-
-### Sharing ./procurement
-
-`procurement` gives `./procurement` to you and sets ACLs on it and on everything in it: you and uid
-10001, the user the uc containers run as, can both read, write and delete, and a default ACL on
-every directory passes the same on to whatever is created in it later. [uc procure](#uc-procure) can
-then stage into the folder, and you can review, edit, move and delete every file in it as yourself,
-with no change of ownership around each run. It is safe to repeat: run it again after moving or
-copying files in from elsewhere, which can keep their own modes and ACLs.
-
-On a filesystem without ACLs, such as Docker Desktop's bind mounts or some network filesystems, it
-sets nothing:
-
-- When uid 10001 can already write the folder, as on Docker Desktop, which ignores ownership, it says
-  so and exits 0: nothing is needed.
-- Otherwise it exits 1, naming `make procure-stage`, `procure-record` and `procure-clean`. Use those
-  instead of `docker compose run --rm uc procure stage`, `record` and `clean`: they hand the folder
-  to uid 10001 for each run and back to you after. `push` only reads the folder.
-
-When the ACLs take on the folder but not on everything in it, it exits 1 with setfacl's message;
-run it again once that is fixed.

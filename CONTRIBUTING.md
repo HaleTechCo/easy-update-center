@@ -49,8 +49,7 @@ tests/unit/           pytest, run in the uc test image
 tests/routing/        the web image's routing against generated fixture sites
 tests/web/            the web entrypoint's configuration checks
 tests/compose/        network and secret isolation of the Compose files
-tests/secrets/        the permissions uc/bin/secrets-permissions.sh gives secrets/
-tests/setup/          uc-setup: first-time setup, the ACLs on procurement/, pki-init and pki-rotate
+tests/setup/          uc-setup: first-time setup, the modes in secrets/, pki-init and pki-rotate
 tests/integration/    end to end: fake Artifactory and Artifact Keeper, real Jenkins controllers
 tests/support/        helpers shared by the suites
 tools/                pre-commit hook scripts
@@ -64,14 +63,13 @@ How the pieces fit: [Architecture overview](docs/architecture/overview.md).
 
 | Command | What it runs | Needs |
 |---|---|---|
-| `make test` | Unit, web entrypoint, routing, secrets-permission and setup tests. The gate for every change. | Docker |
+| `make test` | Unit, web entrypoint, routing and setup tests. The gate for every change. | Docker |
 | `make test-unit ARGS='-k name'` | A subset of the unit tests. | Docker |
 | `make compose-check` | Both Compose configurations, and the network and secret isolation the repo-adapter relies on. | Docker |
 | `make it-airgapped` | End to end against a fake Artifactory and a fake Artifact Keeper, with real Jenkins controllers installing plugins. | Docker |
 | `make it-online` | End to end against repo.jenkins-ci.org, capped at 25 plugins. | `JENKINS_COMMUNITY_USERNAME` and `JENKINS_COMMUNITY_PASSWORD` exported (a free account); optional `GITHUB_USERNAME`, `GITHUB_TOKEN` |
 | `make it-full` | The online run with the whole catalog. Takes hours. | as above |
-| `make test-secrets` | The ownership and modes `uc/bin/secrets-permissions.sh` gives `secrets/`, checked with real Linux permissions inside the uc image (part of `make test`). | Docker |
-| `make test-setup` | `uc/bin/uc-setup`, the setup service's entrypoint, checked as root inside the uc image with real Linux ownership and ACLs: first-time setup, sharing `procurement/` with uid 10001, `pki-init` and `pki-rotate` (part of `make test`). | Docker |
+| `make test-setup` | `uc/bin/uc-setup`, the setup service's entrypoint, run as uid 1000 inside the uc image with real Linux permissions: first-time setup, the modes, `pki-init` and `pki-rotate` (part of `make test`). | Docker |
 | `make test-pipelines` | The example pipelines in `examples/pipelines/`: each runs the procurement stages in the order of the how-to, with the approval before the push and none when nothing was staged, and checks before pushing that `procurement.json` is the one reviewed (`tests/unit/test_pipeline_examples.py`, so part of `make test-unit`). | Docker |
 | `make it-clean` | Removes the integration suites' containers and volumes. | Docker |
 

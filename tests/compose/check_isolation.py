@@ -17,8 +17,6 @@ STAGING = '/procurement'
 # What compose.yaml mounts into setup: target -> (source, relative to the project directory; read-only).
 SETUP_MOUNTS = {
     '/setup/secrets': ('secrets', False),
-    '/setup/procurement': ('procurement', False),
-    '/setup/config': ('config', True),
 }
 SETUP_ENTRYPOINT = ['uc-setup']
 
@@ -97,12 +95,12 @@ def main() -> None:
         problems.append(f'uc must receive {PUSH_SECRET} and mount {STAGING}')
     setup = services.get('setup')
     if setup is None:
-        problems.append('setup is missing: make pki-init and the secrets targets run it')
+        problems.append('setup is missing: docker compose run --rm setup runs first-time setup')
     else:
         if setup.get('network_mode') != 'none' or networks(setup) - {'none'}:
             problems.append('setup must have no network')
-        if setup.get('user') != '0:0':
-            problems.append(f'setup must run as 0:0, not {setup.get("user")!r}')
+        if setup.get('environment'):
+            problems.append(f'setup reads settings ({sorted(setup["environment"])}); it needs none')
         if secrets(setup):
             problems.append(f'setup receives secrets {sorted(secrets(setup))}')
         if setup.get('entrypoint') != SETUP_ENTRYPOINT:

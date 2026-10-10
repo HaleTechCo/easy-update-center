@@ -37,7 +37,7 @@ To run these stages with an approval before the push, and a record of who approv
   one-shot `uc` service ever receives it.
 
   ```bash
-  docker compose run --rm setup secrets      # creates secrets/repo_push_auth if missing (make secrets)
+  docker compose run --rm setup secrets      # creates secrets/repo_push_auth if missing
   printf '%s' 'svc-upload:token' > secrets/repo_push_auth
   ```
 
@@ -45,18 +45,8 @@ To run these stages with an approval before the push, and a record of who approv
   push only uploads paths that do not exist yet, but Artifactory offers no create-only upload, so an
   account allowed to overwrite could replace a file uploaded by someone else in the moment between
   push's check and its own upload.
-- `./procurement/` must be writable by the uc containers (uid 10001) and by you. Share it once:
-
-  ```bash
-  docker compose run --rm setup procurement  # make setup runs it too, with the rest of first-time setup
-  ```
-
-  It gives the folder to you, with ACLs that let you and the uc containers both read, write and
-  delete everything in it ([Sharing ./procurement](../reference/cli.md#sharing-procurement)). On
-  Docker Desktop it finds nothing to do. On a filesystem without ACLs that the uc containers cannot
-  write either, it fails and says so: then run the stage, record and clean steps with their `make`
-  shortcuts (`make procure-stage`, `make procure-record`, `make procure-clean`), which hand the
-  folder to the uc containers for each run and back to you after.
+- `./procurement/` must be writable by the uc containers and by you: every container runs as
+  `UC_UID`:`UC_GID`, which on Linux you set to your own `id -u` and `id -g` in `.env`.
 
 ## 1. Check
 
@@ -124,9 +114,8 @@ next: review ./procurement (procurement.json lists 12 files), then uc procure pu
 
 Push uploads only what `procurement.json` lists, so a file you copy into `./procurement/` yourself (a
 WAR downloaded elsewhere, a plugin from another source) must be recorded first. Files and folders you
-move or copy into it from elsewhere can keep their own modes and ACLs: run
-`docker compose run --rm setup procurement` (or `make setup`) again after bringing them in, so the uc
-containers can move and delete them. Then:
+move or copy into it must be writable by the uc containers' user, `UC_UID`, so they can move and
+delete them. Then:
 
 ```bash
 docker compose run --rm uc procure record         # check and record; report misplaced files

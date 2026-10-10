@@ -21,8 +21,8 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 | The listing fails with HTTP 403 (online) | Anonymous or wrong credentials: repo.jenkins-ci.org needs a Jenkins community account ([Accounts](getting-started/requirements.md#accounts)). |
 | The listing fails with HTTP 403 (Artifactory) | The account cannot read the repository. Give it read permission on the repository (no admin rights are needed), or use another account. |
 | A stack trace from `GitHubSource`: `java.io.IOException: This endpoint requires you to be authenticated` | Not an error: the warning for a missing GitHub token. The run continues without labels from GitHub topics ([GitHub token](reference/secrets.md#github-token)). |
-| `Permission denied` writing to `secrets/` (Linux) | `secrets/` or a file in it belongs to another user, such as root. Run `docker compose run --rm setup secrets` (`make secrets`) to give it back ([File ownership on Linux](reference/secrets.md#file-ownership-on-linux)). |
-| A container logs `Permission denied` reading a file under `/run/secrets/` (Linux) | The file was replaced (copied over, or saved by an editor that writes a new file) and lost its group. Run `docker compose run --rm setup secrets` (`make secrets`), then `docker compose up -d`. |
+| `Permission denied` writing to `secrets/` (Linux), or `secrets/ is not writable by uid N` | The containers run as another user than the owner of `secrets/`: set `UC_UID` and `UC_GID` in `.env` to your `id -u` and `id -g`, then run `docker compose run --rm setup secrets` ([File modes](reference/secrets.md#file-modes)). |
+| A container logs `Permission denied` reading a file under `/run/secrets/` (Linux) | The file was replaced (copied over, or saved by an editor that writes a new file) and lost its mode, or it belongs to another user than `UC_UID`. Run `docker compose run --rm setup secrets`, then `docker compose up -d`. |
 | `PUBLIC_URL must be a bare origin such as https://uc.example.com` | `PUBLIC_URL` has a path, query or fragment. Give the update center its own hostname ([A hostname for PUBLIC_URL](getting-started/requirements.md#a-hostname-for-public_url)). |
 | `PUBLIC_URL points at localhost, which Jenkins controllers cannot reach` | Use a name controllers can resolve. `ALLOW_LOCAL_PUBLIC_URL=true` exists for tests only. |
 | `uc: another generation holds /data/.lock` (exit code 75) | A generation or rollback is already running, often the scheduler's. Wait for it; `docker compose logs -f scheduler` shows it. |
@@ -41,7 +41,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 
 | Symptom | Cause and fix |
 |---|---|
-| `missing signing material: /run/secrets/update-center.key (see 'uc pki init')` | Run `docker compose run --rm setup` (`make setup`): it creates the signing keys when `secrets/update-center.key` is missing. On Linux, if the files exist, run `docker compose run --rm setup secrets` (`make secrets`) ([File ownership on Linux](reference/secrets.md#file-ownership-on-linux)). |
+| `missing signing material: /run/secrets/update-center.key (see 'uc pki init')` | Run `docker compose run --rm setup`: it creates the signing keys when `secrets/update-center.key` is missing. On Linux, if the files exist, run `docker compose run --rm setup secrets` ([File modes](reference/secrets.md#file-modes)). |
 | `signing certificate expires in N days (minimum 30); run 'uc pki rotate'` | [Rotate the signing certificate](how-to/rotate-signing-certificate.md), then recreate the scheduler. |
 | `... update-center.key does not match ... update-center.cert` | The key and certificate come from different runs of `uc pki`. Restore the matching pair, or rotate. |
 | `... update-center.cert is not issued by ... root-ca.crt` | `root-ca.crt` was replaced without the signing certificate (or the reverse). Restore the matching files. |
@@ -89,7 +89,7 @@ The commands of [Procure missing POMs, dependencies and cores](how-to/procure-mi
 | Symptom | Cause and fix |
 |---|---|
 | `uc procure stage`: `nothing to stage: choose --poms, ...` (exit 2) | No POMs, dependencies or cores are selected: add `--poms`, `--dependencies` or `--war` ([Stage](how-to/procure-missing-files.md#2-stage)). |
-| `uc procure`: `cannot write to /procurement: ... Permission denied` | The uc containers cannot write `./procurement`: run `docker compose run --rm setup procurement` (`make setup`), or, where it fails, the `make procure-*` targets ([Sharing ./procurement](reference/cli.md#sharing-procurement)). |
+| `uc procure`: `cannot write to /procurement: ... Permission denied` | The uc containers cannot write `./procurement`: set `UC_UID` and `UC_GID` in `.env` to the owner of `./procurement` (your `id -u` and `id -g`). |
 | `uc procure record`: `REFUSED ... it belongs at <path>; --fix moves it there` | A file you added is not at the Maven path its manifest or POM declares. Move it there, or run `uc procure record --fix` ([Files you place by hand](how-to/procure-missing-files.md#files-you-place-by-hand)). |
 | `uc procure record`: `REFUSED ... not a Maven path to a .hpi, .jpi, .war or .pom` | The file declares no coordinates to place it by, such as a plugin whose manifest names no group. Find its group and move it to its Maven path by hand. |
 | Push lists files as `unlisted` and skips them | They were added by hand and not recorded: run `docker compose run --rm uc procure record` (`make procure-record`). |

@@ -55,24 +55,19 @@ services:
     restart: unless-stopped
 
   # One-shot, only when called: `docker compose run --rm setup` (first-time setup, safe to repeat), or
-  # `setup secrets | procurement | pki-init | pki-rotate` (docs/reference/cli.md#the-setup-service).
-  # Root, so it can set ownership, ACLs and permissions; no network, no compose secrets; it reads .env
-  # (or UC_ENV_FILE) as the other services do, so .env must exist.
+  # `setup secrets | pki-init | pki-rotate` (docs/reference/cli.md#the-setup-service). No network, no
+  # compose secrets, no settings; it writes only ./secrets.
   setup:
     image: ${UC_IMAGE:-easy-update-center/uc:local}
     build: {context: uc, target: runtime}
     profiles: ["setup"]
-    user: "0:0"
     network_mode: none
-    env_file: ${UC_ENV_FILE:-.env}
     entrypoint: ["uc-setup"]
     read_only: true
     tmpfs:
       - /tmp
     volumes:
       - ./secrets:/setup/secrets
-      - ./procurement:/setup/procurement
-      - ./config:/setup/config:ro
 
   # Answers the generator's Artifactory requests from Artifactory or Artifact Keeper and fills in POMs,
   # descriptions and release dates from the archives. Idle when REPO_ADAPTER is off (the online default).
@@ -106,8 +101,7 @@ services:
 
   # One-shot commands. Only this service stages downloads for review and writes to the repository
   # (uc procure stage and push, docs/how-to/procure-missing-files.md): it is the only service with a
-  # network that mounts ./procurement (setup mounts it too, with no network, to set its ACLs), and
-  # the only one that receives repo_push_auth.
+  # network that mounts ./procurement, and the only one that receives repo_push_auth.
   # It runs only when an operator calls it.
   uc:
     <<: *uc

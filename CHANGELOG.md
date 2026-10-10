@@ -29,9 +29,8 @@ the interface.
 - Settings in `.env`, whose generated examples list every setting. `uc config` shows each value and
   whether it is the default, and `--check` validates them
   ([Configuration](docs/reference/configuration.md)).
-- First-time setup in one command, `docker compose run --rm setup` (`make setup`): the credential
-  files, the signing keys and the `./procurement` staging folder, with `secrets/` kept owned by you
-  on Linux ([Secrets](docs/reference/secrets.md)).
+- First-time setup in one command, `docker compose run --rm setup`: the credential files and the
+  signing keys, all owned by you ([Secrets](docs/reference/secrets.md)).
 - `uc doctor` reports what the generator will see in your repository, including the cores plugins
   require that it lacks; the scheduler can record the report on `DOCTOR_SCHEDULE`
   ([Stock an air-gapped repository](docs/how-to/stock-airgapped-repository.md)).

@@ -29,7 +29,7 @@ WRITES_CONTENTS = {('release.yml', 'release')}
 """The only job whose workflow token may write contents (it creates the GitHub Release). prepare pushes with the release App's token instead: the App is the rulesets' only bypass actor, and its key lives in the release environment, which only main can use."""
 CHECKOUT_WITH_CREDENTIALS = {('release.yml', 'prepare')}
 """The only jobs whose checkout keeps a token, for a git push."""
-TEST_TARGETS = ['test-unit', 'test-web', 'test-routing', 'test-secrets', 'test-setup', 'compose-check']
+TEST_TARGETS = ['test-unit', 'test-web', 'test-routing', 'test-setup', 'compose-check']
 """make test's suites and make compose-check, one CI job each."""
 PATH = '/usr/bin:/bin'
 

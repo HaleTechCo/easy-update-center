@@ -78,9 +78,9 @@ COPY --from=jar-build /out/ /opt/uc/
 COPY templates/ /opt/uc/templates/
 COPY uc/ /opt/uc/python/uc/
 COPY bin/uc /usr/local/bin/uc
-# The setup service's entrypoint and the secrets/ permissions it sets (compose.yaml).
-COPY bin/uc-setup bin/secrets-permissions.sh /usr/local/bin/
-RUN chmod 0755 /usr/local/bin/uc /usr/local/bin/uc-setup /usr/local/bin/secrets-permissions.sh /opt/uc/site/generate-htaccess.sh \
+# The setup service's entrypoint (compose.yaml).
+COPY bin/uc-setup /usr/local/bin/
+RUN chmod 0755 /usr/local/bin/uc /usr/local/bin/uc-setup /opt/uc/site/generate-htaccess.sh \
  && groupadd --system --gid 10001 uc \
  && useradd --system --uid 10001 --gid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin uc \
  && mkdir -p /data /config/overlay \

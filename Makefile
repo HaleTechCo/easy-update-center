@@ -10,7 +10,7 @@ UC_VERSION ?= dev
 
 .DEFAULT_GOAL := help
 
-# The targets that run your own Compose project (setup, secrets, pki-*, procure-*) leave the images
+# The targets that run your own Compose project (procure-*) leave the images
 # to .env and compose.yaml: they unset UC_IMAGE and WEB_IMAGE, unless you gave them on make's command
 # line or in the environment. Their one-shot runs print only the command's output, without Compose's
 # container lines (older Compose releases ignore COMPOSE_PROGRESS).
@@ -32,13 +32,13 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
 
-.PHONY: help build build-uc build-web uc-image stack-uc-image setup secrets pki-init pki-rotate procure-stage procure-record procure-push procure-clean test test-unit test-web test-routing test-secrets test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
+.PHONY: help build build-uc build-web uc-image stack-uc-image procure-stage procure-record procure-push procure-clean test test-unit test-web test-routing test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
 
 # PREBUILT=1 (CI, after `docker load`): build-uc and build-web keep an image that already exists
 # instead of building it again. Without it they always build.
 UNLESS_PREBUILT = $(if $(PREBUILT),docker image inspect $(1) >/dev/null 2>&1 || )
 
-##@ Setup
+##@ Build
 
 build: build-uc build-web ## Build the uc, uc-test and web images; works before .env exists
 
@@ -62,61 +62,6 @@ stack-uc-image:
 	  if docker image inspect "$$image" >/dev/null 2>&1; then :; \
 	  elif [ "$$image" = easy-update-center/uc:local ]; then echo "docker build --target runtime -t $$image uc"; docker build --target runtime -t "$$image" uc; \
 	  else echo "docker pull $$image"; docker pull "$$image"; fi
-
-# secrets/ stays yours; the containers read their files through their group (uc 10001, web 33).
-# The setup service (compose.yaml) sets that up, as root, in every target that writes to secrets/:
-# its entrypoint, uc-setup (uc/bin/), runs uc/bin/secrets-permissions.sh for the owner of ./config.
-# Run `make secrets` yourself after replacing a file in secrets/. The setup service reads
-# .env, or UC_ENV_FILE, and config/ as the other services do. It mounts ./secrets at /setup/secrets; uc pki's --display-dir makes its messages name the
-# files where they are on the host.
-IN_SETUP = $(STACK_RUN) --no-deps
-
-setup: stack-uc-image ## First-time setup, safe to repeat: credential placeholders, ./procurement shared with the uc containers, signing keys if there are none
-	@mkdir -p secrets procurement
-	$(IN_SETUP) setup
-
-secrets: stack-uc-image ## Create the missing credential files and set the permissions of secrets/
-	@mkdir -p secrets
-	$(IN_SETUP) setup secrets
-
-# The host path of a directory to mount: absolute, as Docker wants it (C:/... with make on Windows),
-# and whole when it holds spaces, which $(abspath) splits on, so each goes through it as <space>.
-space := $(subst ,, )
-HOST_PATH = $(subst <space>,$(space),$(abspath $(subst $(space),<space>,$(1))))
-
-# OUT (pki-init) and ROOT (pki-rotate) are taken from make's command line only, so one exported by
-# another tool cannot redirect them. They reach the recipes inside quotes, so they may hold spaces,
-# but not quotes, $ or backticks: those are refused, not escaped. The usage checks below run as make
-# reads this file, before any prerequisite (the image step) runs or anything is created; UNQUOTABLE
-# reads the value unexpanded, before make could expand a $ in it. A ROOT that names a file (such as
-# the key itself) is refused too: Docker would create an empty file as its mount point in secrets/.
-PKI_OUT = $(if $(filter command line,$(origin OUT)),$(OUT))
-PKI_ROOT = $(if $(filter command line,$(origin ROOT)),$(ROOT))
-UNQUOTABLE = $(and $(filter command line,$(origin $(1))),$(or $(findstring ',$(value $(1))),$(findstring ",$(value $(1))),$(findstring $$,$(value $(1))),$(findstring `,$(value $(1)))))
-PKI_INIT_USAGE = usage: make pki-init [OUT=<directory>], where OUT may hold spaces, but not quotes, $$ or backticks
-PKI_ROTATE_USAGE = usage: make pki-rotate ROOT=<directory holding root-ca.key>, where ROOT may hold spaces, but not quotes, $$ or backticks
-ifneq ($(filter pki-init,$(MAKECMDGOALS)),)
-$(if $(call UNQUOTABLE,OUT),$(error $(PKI_INIT_USAGE)))
-endif
-ifneq ($(filter pki-rotate,$(MAKECMDGOALS)),)
-$(if $(call UNQUOTABLE,ROOT),$(error $(PKI_ROTATE_USAGE)),$(if $(PKI_ROOT),,$(error $(PKI_ROTATE_USAGE))))
-$(if $(shell test -e "$(PKI_ROOT)" && test ! -d "$(PKI_ROOT)" && echo file),$(error ROOT names a file: ROOT is the directory holding root-ca.key; $(PKI_ROTATE_USAGE)))
-endif
-
-# Creates the root CA and signing certificate in ./secrets, or with OUT=<directory> in that directory
-# (relative to this one, created if missing, mounted at /setup/out), as when replacing the root CA
-# (docs/how-to/rotate-signing-certificate.md). Refuses to overwrite existing files.
-pki-init: stack-uc-image ## Create the root CA and signing certificate in secrets/, or in OUT=<dir>
-	@mkdir -p secrets$(if $(PKI_OUT), "$(PKI_OUT)")
-	$(IN_SETUP)$(if $(PKI_OUT), -v "$(call HOST_PATH,$(PKI_OUT)):/setup/out") setup pki-init$(if $(PKI_OUT), --out /setup/out --display-dir "$(PKI_OUT)")
-
-# Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
-# signing certificate and keeps the previous pair as *.old; when a check, a step or a rename of
-# uc pki rotate fails, secrets/ is left as it was. The mount point Docker creates, secrets/root, is
-# removed again when it is empty, also when the rotation fails.
-pki-rotate: stack-uc-image ## Issue a new signing certificate from the root key in ROOT=<dir>
-	$(IN_SETUP) -v "$(call HOST_PATH,$(PKI_ROOT)):/setup/secrets/root:ro" setup pki-rotate --root-display-dir "$(PKI_ROOT)"; rc=$$?; \
-	  rmdir secrets/root 2>/dev/null; exit $$rc
 
 ##@ Procurement
 
@@ -144,7 +89,7 @@ procure-clean: stack-uc-image ## Delete the staged files the repository now hold
 
 ##@ Development
 
-test: test-unit test-web test-routing test-secrets test-setup ## Run the unit, web, routing, secrets and setup tests
+test: test-unit test-web test-routing test-setup ## Run the unit, web, routing and setup tests
 
 test-unit: build-uc ## Run the unit tests in the uc-test image (ARGS=pytest options)
 	docker run --rm $(SRC_MOUNTS) $(UC_TEST_IMAGE) -q /tests/unit $(ARGS)
@@ -158,13 +103,8 @@ test-routing: build-uc build-web ## Run the routing tests against the web image,
 	$(ROUTING) run --rm tester $(ARGS); rc=$$?; \
 	  $(ROUTING) down -v --remove-orphans >/dev/null 2>&1; exit $$rc
 
-# Ownership is real only on a Linux filesystem, so the checks run inside the uc image as root.
-test-secrets: uc-image ## Check the permissions of secrets/ as root in the uc image
-	docker run --rm --user 0:0 --entrypoint bash -v "$(CURDIR)/uc/bin:/scripts:ro" \
-	  -v "$(CURDIR)/tests/secrets:/tests:ro" $(UC_IMAGE) /tests/permissions-checks.sh
-
-# uc-setup's checks, as root in the uc image (which needs the acl package: hence build-uc).
-test-setup: build-uc ## Check uc-setup as root in the uc image
+# uc-setup's checks in the uc image: the script runs as root to lay out /setup and runs uc-setup as uid 1000.
+test-setup: build-uc ## Check uc-setup in the uc image
 	docker run --rm --user 0:0 --entrypoint bash -v "$(CURDIR)/uc/bin:/scripts:ro" \
 	  -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" -v "$(CURDIR)/tests/setup:/tests:ro" $(UC_IMAGE) /tests/setup-checks.sh
 

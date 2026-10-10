@@ -6,7 +6,7 @@ How the update center signs its metadata and how Jenkins controllers come to tru
 
 Jenkins only accepts update center metadata signed by a certificate that chains to a root it
 trusts. The update center uses its own two-level PKI, created by first-time setup,
-`docker compose run --rm setup` (or `make setup`), which runs `uc pki init` with openssl:
+`docker compose run --rm setup`, which runs `uc pki init` with openssl:
 
 | File | What it is |
 |---|---|

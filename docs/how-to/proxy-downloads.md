@@ -22,11 +22,11 @@ repository.
 
    ```bash
    printf '%s' 'svc-read:password-or-token' > secrets/download_proxy_auth
-   docker compose run --rm setup secrets      # or: make secrets
+   docker compose run --rm setup secrets
    ```
 
-   `setup secrets` lets the web container (group 33) read the file, and nobody else
-   ([File ownership on Linux](../reference/secrets.md#file-ownership-on-linux)).
+   `setup secrets` makes the file readable by you, the user the containers run as, alone
+   ([File modes](../reference/secrets.md#file-modes)).
 
 2. Set `DOWNLOAD_ACCESS=proxy` in `.env`.
 3. Recreate the web container: `docker compose up -d` (air-gapped, with `COMPOSE_FILE` in `.env`).
@@ -59,7 +59,7 @@ services:
 ```
 
 Copy the CA's PEM file to `secrets/proxy-ca.crt` and run `docker compose run --rm setup secrets`
-(`make secrets`; it keeps the file readable, mode 0644, for the web container), add the override to
+(it keeps the file readable, mode 0644), add the override to
 `COMPOSE_FILE` in `.env`, and recreate the web container:
 
 ```bash

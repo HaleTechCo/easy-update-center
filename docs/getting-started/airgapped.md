@@ -124,10 +124,8 @@ Once the images are loaded or built, `docker compose run --rm --no-deps uc confi
 
 ## 4. Add credentials
 
-`docker compose run --rm setup` does first-time setup (`make setup` is the shortcut). It creates the
-credential files with the permissions the containers need, creates the signing keys (step 5), and
-shares `./procurement`, the staging folder of [procurement](../how-to/procure-missing-files.md),
-with the uc containers. Writing into the credential files keeps their permissions.
+`docker compose run --rm setup` does first-time setup: it creates the credential files, readable by
+you alone, and the signing keys (step 5). Writing into the credential files keeps their permissions.
 
 ```bash
 docker compose run --rm setup
@@ -142,17 +140,12 @@ printf '%s' 'svc-read:password-or-token' > secrets/download_proxy_auth
 [Secrets reference](../reference/secrets.md).
 
 `setup` is safe to repeat: it creates only what is missing, and never replaces the keys or a
-credential file. Its last step, sharing `./procurement`, can fail on a filesystem without ACLs that
-the uc containers cannot write either; the rest is done by then, and the message says what to use
-instead ([Sharing ./procurement](../reference/cli.md#sharing-procurement)). Each step, and its
-`make` shortcut: [The setup service](../reference/cli.md#the-setup-service).
+credential file. Each step: [The setup service](../reference/cli.md#the-setup-service).
 
 ## 5. Move the root key offline
 
 `setup` created the root CA and the signing certificate in `secrets/` (`uc pki init`), and set the
-permissions of everything there: `secrets/` stays yours, the uc containers read their files through
-group 10001, and the web container reads `download_proxy_auth` through group 33
-([File ownership on Linux](../reference/secrets.md#file-ownership-on-linux)). Now move the root CA's
+modes of everything there: `secrets/` stays yours ([File modes](../reference/secrets.md#file-modes)). Now move the root CA's
 key to offline storage (it is needed only once a year):
 
 ```bash

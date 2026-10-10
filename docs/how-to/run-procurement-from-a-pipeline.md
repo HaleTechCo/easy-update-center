@@ -38,11 +38,8 @@ Before the first run:
 
 - **Prepare the host** once, as for running the stages by hand
   ([Before you start](procure-missing-files.md#before-you-start)): fill in
-  `secrets/repo_push_auth`, and run `docker compose run --rm setup procurement` (or `make setup`) so
-  the uc containers can write `./procurement`. Where that step fails (a filesystem without ACLs),
-  the uc containers cannot write the folder: change the pipeline's `uc procure stage` and
-  `uc procure clean` commands to `make procure-stage` and `make procure-clean`, which hand the
-  folder to the uc containers for each run and back to the user running them.
+  `secrets/repo_push_auth`. The agent's user should be `UC_UID`, the user the containers run as, so
+  it can read and clean up what they stage in `./procurement`.
 - **Set up the approval** ([The approval](#the-approval)): the users or groups `submitter` names must
   exist. Without them, no one but a Jenkins administrator can approve, and each run waits at the
   review until it is aborted.

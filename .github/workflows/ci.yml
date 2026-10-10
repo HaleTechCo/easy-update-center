@@ -119,7 +119,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [test-unit, test-web, test-routing, test-secrets, test-setup, compose-check]
+        target: [test-unit, test-web, test-routing, test-setup, compose-check]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

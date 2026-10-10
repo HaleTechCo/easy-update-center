@@ -50,46 +50,29 @@ add `repo_username` and `repo_password` back to the `secrets` lists of `schedule
 
 The web container never receives the signing key.
 
-## File ownership on Linux
+## File modes
 
-Compose mounts secret files with their host ownership and permissions. The uc image's containers
-(`scheduler`, `uc`, `repo-adapter`) run as uid 10001 with group 10001, the web container as uid 33
-with group 33. `secrets/` stays yours, and each container reads its own files through its group:
+Every file in `secrets/` is yours, and every container runs as `UC_UID`:`UC_GID`: on Linux, set them
+to your `id -u` and `id -g` in `.env`, so the containers read the files as you. `setup` sets the
+modes:
 
-| Files | Owner | Group | Mode |
-|---|---|---|---|
-| `update-center.key`, `repo_username`, `repo_password`, `github_username`, `github_token`, `repo_push_auth` | you | 10001 | 0640 |
-| `update-center.cert`, `root-ca.crt` | you | 10001 | 0644 |
-| `download_proxy_auth` | you | 33 | 0640 |
-| `repo-ca.crt`, `proxy-ca.crt`, `README.md` | you | yours | unchanged (0644) |
-| `root/`, `root/root-ca.key` | you | yours | 0700, 0600 |
+| Files | Mode |
+|---|---|
+| `update-center.key`, `repo_username`, `repo_password`, `github_username`, `github_token`, `download_proxy_auth`, `repo_push_auth` | 0600 |
+| `update-center.cert`, `root-ca.crt`, `repo-ca.crt`, `proxy-ca.crt` | 0644 |
+| `root/`, `root/root-ca.key` | 0700, 0600 |
 
-The `setup` Compose service sets this up as root, so no step needs `sudo`, and you can write
-credentials before or after creating the keys. Its entrypoint, `uc-setup`, runs
-`uc/bin/secrets-permissions.sh` (in the uc image) in first-time setup
-(`docker compose run --rm setup`) and in its `secrets`, `pki-init` and `pki-rotate` commands. "You"
-is the owner of `./config`: every checkout has that directory, so `setup` takes the host user from
-it. Writing into an existing file, as `printf '%s' '...' > secrets/repo_password` does, keeps its
-permissions. After **replacing** a file (copying a new one over it, or saving it from an editor that
-writes a new file), run:
+Writing into an existing file, as `printf '%s' '...' > secrets/repo_password` does, keeps its mode.
+After **replacing** a file (copying a new one over it, or saving it from an editor that writes a new
+file), run:
 
 ```bash
-docker compose run --rm setup secrets      # or: make secrets
+docker compose run --rm setup secrets
 ```
 
-It is idempotent: it creates any missing credential file empty and sets the permissions again. It
-also gives back `secrets/` and the files in it when another user, such as root, owns them.
-Docker Desktop (macOS, Windows) ignores ownership, so the owners and modes above do not matter
-there.
-
-`setup` runs only when you call it, with no network and no Compose secrets, and mounts only
-`./secrets`, `./procurement` and `./config` (at `/setup/secrets`, `/setup/procurement` and
-`/setup/config`), and the directory `make pki-rotate ROOT=<dir>` or `make pki-init OUT=<dir>`
-names. Its commands and their `make` shortcuts (`make setup`, `make secrets`, `make pki-init`,
-`make pki-rotate ROOT=<dir>`): [The setup service](cli.md#the-setup-service). It reads `.env` (or the
-file `UC_ENV_FILE` names) as the other services do, so quotes in it are handled the same way, and
-the file must exist: create it first (`cp .env.online.example .env`), or Compose stops with
-`env file ... not found`.
+It is idempotent: it creates any missing credential file empty and sets the modes again. Docker
+Desktop (macOS, Windows) ignores modes and ownership, so they do not matter there. How `setup` runs,
+and its other commands: [The setup service](cli.md#the-setup-service).
 
 ## GitHub token
 

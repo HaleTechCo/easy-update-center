@@ -125,19 +125,19 @@ cp .env.online.example .env
 #   WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<version>
 docker compose pull                  # fails loudly if the images cannot be pulled
 docker compose run --rm --no-deps uc --version      # must print uc <version>
-docker compose run --rm setup        # credential placeholders, ./procurement, signing keys
+docker compose run --rm setup        # credential placeholders, signing keys
 printf '%s' 'community-user' > secrets/repo_username        # free: https://accounts.jenkins.io
 printf '%s' 'community-password' > secrets/repo_password
 docker compose up -d
 ```
 
 To build from source instead, clone `main`, leave `UC_IMAGE` and `WEB_IMAGE` unset and run
-`docker compose build` (or `make build`) before `setup`. With GNU make, `make setup` is a shortcut
-for the setup step; `make help` lists the targets you run. To check a release's signatures before
+`docker compose build` (or `make build`) before `setup`. To check a release's signatures before
 you run it: [Verify a release](docs/how-to/verify-a-release.md).
 
-`secrets/` stays yours, with no `sudo`: `setup` lets each container read its own files through its
-group ([File ownership on Linux](docs/reference/secrets.md#file-ownership-on-linux)). Move
+`secrets/` stays yours, with no `sudo`: every container runs as `UC_UID`:`UC_GID` (on Linux, set them
+to your `id -u` and `id -g` in `.env`), and `setup` makes the keys and credentials readable by you
+alone ([File modes](docs/reference/secrets.md#file-modes)). Move
 `secrets/root/`, which holds the root CA's key, offline afterwards
 ([After the quick start](#after-the-quick-start)).
 
@@ -166,7 +166,7 @@ cp .env.airgapped.example .env
 # in .env: set PUBLIC_URL, REPO_URL, REPO_KEY; uncomment COMPOSE_FILE; and set
 #   UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<version>
 #   WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<version>
-docker compose run --rm setup         # credential placeholders, ./procurement, signing keys
+docker compose run --rm setup         # credential placeholders, signing keys
 printf '%s' 'svc-easy-update-center' > secrets/repo_username
 printf '%s' 'password-or-token' > secrets/repo_password
 docker compose run --rm uc doctor --fetch       # what the generator will see in your repository
@@ -175,8 +175,7 @@ docker compose up -d
 
 To build from source instead, leave `UC_IMAGE` and `WEB_IMAGE` unset and run `docker compose build`
 (or `make build`) on a machine with internet access; to carry a source build across, see
-[Or build from source](docs/getting-started/airgapped.md#or-build-from-source). With GNU make,
-`make setup` is a shortcut for the setup step.
+[Or build from source](docs/getting-started/airgapped.md#or-build-from-source).
 
 Your repository holds the plugins and cores to offer, in Maven layout:
 [Stock an air-gapped repository](docs/how-to/stock-airgapped-repository.md). The commands above run

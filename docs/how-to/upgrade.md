@@ -52,7 +52,7 @@ git checkout main
 git log --oneline HEAD..origin/main                # what changes
 git pull
 docker compose build                                 # or: make build
-docker compose run --rm setup                        # or: make setup; safe to repeat
+docker compose run --rm setup                        # safe to repeat
 docker compose run --rm --no-deps uc config --check  # your settings, as the new revision reads them
 docker compose up -d                                 # air-gapped: COMPOSE_FILE in .env selects the override
 docker compose run --rm uc generate                  # publish with the new generator now, instead of at the next schedule
@@ -60,15 +60,7 @@ docker compose run --rm uc status
 ```
 
 Run `setup` after the images are rebuilt: it creates what a newer revision needs, such as a
-credential file it added, and leaves what exists. `make setup` builds the uc image only when it is
-missing, so it does not replace an older one. Plain `make` prints the help and builds nothing;
-`make build` builds.
-
-The last step of `setup` shares `./procurement` with the uc containers. On a filesystem without
-ACLs, where uid 10001 cannot write the folder, that step can fail. The secrets and keys steps have
-already run by then, and the error names the fallback: `make procure-stage`, `procure-record` and
-`procure-clean`, which hand the folder over for each run. See
-[Sharing ./procurement](../reference/cli.md#sharing-procurement).
+credential file it added, and leaves what exists.
 
 Check the settings before `docker compose up -d`: a newer revision can refuse a value an older one
 loaded, and a service whose settings do not load exits with an error instead of running.

@@ -1,25 +1,22 @@
 #!/bin/sh
 # The setup service's entrypoint (compose.yaml; docs/reference/cli.md#the-setup-service): first-time
-# setup and the jobs that write to ./secrets and ./procurement, as root, with no network.
-#   (no argument)   secrets, pki-init unless a signing key exists, then procurement (the one step
-#                   that can fail on some filesystems, so it comes last)
-#   secrets         create the missing credential files empty; set the permissions
-#   procurement     share ./procurement between you and the uc containers (ACLs)
-#   pki-init [--out DIR] [--display-dir NAME]   a new root CA and signing certificate; in secrets/,
-#                                               then the secrets step
-#   pki-rotate [--root-display-dir NAME]        a new signing certificate, then the secrets step;
-#                                               the root key mounted read-only at /setup/secrets/root
+# setup and the jobs that write to ./secrets, run as UC_UID:UC_GID like every other service, with no
+# network.
+#   (no argument)   secrets, then pki-init unless a signing key exists
+#   secrets         create the missing credential files empty; set the modes
+#   pki-init [--out DIR] [--org ORG] [--root-days N] [--signing-days N]
+#                   a new root CA and signing certificate in secrets/ (then the secrets step), or in DIR
+#   pki-rotate [--days N] [--org ORG]
+#                   a new signing certificate from the root key mounted read-only at /setup/root, then the
+#                   secrets step
 set -eu
 
-here=$(dirname "$0")
 secrets=/setup/secrets
-procurement=/setup/procurement
-config=/setup/config
-uc_uid=10001
+root=/setup/root
 credential_files="repo_username repo_password github_username github_token download_proxy_auth repo_push_auth"
 
 usage() {
-    echo "usage: uc-setup [secrets | procurement | pki-init [--out DIR] [--display-dir NAME] | pki-rotate [--root-display-dir NAME]]" >&2
+    echo "usage: uc-setup [secrets | pki-init [--out DIR] [--org ORG] [--root-days N] [--signing-days N] | pki-rotate [--days N] [--org ORG]]" >&2
     exit 2
 }
 die() {
@@ -27,97 +24,79 @@ die() {
     exit 1
 }
 
-# The host user owns ./config in every checkout. ./secrets and ./procurement cannot tell: Docker
-# creates a missing bind-mount directory as root.
-owner() { stat -c %u:%g "${config}"; }
+writable() { # writable DIR LABEL - stop unless this uid can create files in DIR
+    if ! (: > "$1/.uc-setup-check") 2> /dev/null; then
+        uid=$(id -u)
+        die "$2 is not writable by uid ${uid}: set UC_UID and UC_GID in .env to the output of id -u and id -g"
+    fi
+    rm -f "$1/.uc-setup-check"
+}
 
-checkout() { # refuse to run when Docker created ./config too: then it is no checkout, and nobody owns it
-    uid=$(stat -c %u "${config}")
-    entries=$(ls -A "${config}")
-    if [ "${uid}" = 0 ] && [ -z "${entries}" ]; then
-        die "config/ is empty and owned by root, so Docker just created it: this is not a checkout of Easy Update Center, and setup cannot tell whose secrets/ and procurement/ are. Run it in your checkout (where config/ holds overlay/), or create config/ as yourself first"
+set_modes() { # set_modes DIR - keys and credentials 0600, certificates 0644, root/ 0700 and its files 0600
+    for name in update-center.key update-center.key.old ${credential_files}; do
+        if [ -f "$1/${name}" ]; then chmod 0600 "$1/${name}"; fi
+    done
+    for name in update-center.cert update-center.cert.old root-ca.crt repo-ca.crt proxy-ca.crt; do
+        if [ -f "$1/${name}" ]; then chmod 0644 "$1/${name}"; fi
+    done
+    if [ -d "$1/root" ] && [ -w "$1/root" ]; then
+        chmod 0700 "$1/root"
+        find "$1/root" -type f -exec chmod 0600 {} +
     fi
 }
 
-claim() { # claim DIR - give DIR to the host user when Docker just created it (owned by root, empty)
-    uid=$(stat -c %u "$1")
-    entries=$(ls -A "$1")
-    if [ "${uid}" = 0 ] && [ -z "${entries}" ]; then
-        ids=$(owner)
-        chown "${ids}" "$1"
-    fi
+check_options() { # check_options "ALLOWED..." ARG... - every ARG is an allowed option followed by a value
+    allowed=" $1 "
+    shift
+    while [ $# -gt 0 ]; do
+        [ $# -ge 2 ] || usage
+        case ${allowed} in *" $1 "*) ;; *) usage ;; esac
+        shift 2
+    done
 }
 
-fix_secrets() { # fix_secrets DIR
-    ids=$(owner)
-    sh "${here}/secrets-permissions.sh" "$1" "${ids%%:*}" "${ids##*:}"
+out_dir() { # out_dir ARG... - print the value of --out, if given
+    while [ $# -ge 2 ]; do
+        if [ "$1" = --out ]; then
+            echo "$2"
+            return
+        fi
+        shift 2
+    done
 }
 
 do_secrets() {
+    writable "${secrets}" secrets/
     for file in ${credential_files}; do
         [ -e "${secrets}/${file}" ] || : > "${secrets}/${file}"
     done
-    fix_secrets "${secrets}"
-    echo "secrets/: created any missing credential files (empty means 'not set'); the containers read their files through their group"
-}
-
-do_procurement() {
-    ids=$(owner)
-    chown "${ids}" "${procurement}"
-    acl="u:${ids%%:*}:rwX,u:${uc_uid}:rwX,m::rwX"
-    # ACLs on procurement/ itself first: when that fails, the filesystem has none, and nothing is set.
-    # shellcheck disable=SC2016 # $1 is expanded by the sh that setpriv runs
-    if setfacl -m "${acl}" "${procurement}" 2> /dev/null; then
-        # Then the whole tree, and defaults on every directory in it (-P: symbolic links are skipped).
-        if ! failed=$(setfacl -R -P -m "${acl}" -d -m "${acl}" "${procurement}" 2>&1); then
-            die "procurement/ is only partly shared with the uc containers (run setup procurement again once this is fixed): ${failed}"
-        fi
-        echo "procurement/: shared with the uc containers; you can review, edit, move and delete every file in it"
-    elif setpriv --reuid="${uc_uid}" --regid="${uc_uid}" --clear-groups \
-        sh -c 'touch "$1/.uc-setup-check" && rm "$1/.uc-setup-check"' sh "${procurement}" 2> /dev/null; then
-        echo "procurement/: uid 10001 (the uc containers) can already write it; nothing to do"
-    else
-        die "this filesystem does not support ACLs, so procurement/ cannot be shared with the uc containers: use make procure-stage, procure-record and procure-clean, which hand it over for each run"
-    fi
+    set_modes "${secrets}"
+    echo "secrets/: created any missing credential files (empty means 'not set') and set the modes"
 }
 
 do_pki_init() {
-    out=${secrets}
-    shown=secrets
-    while [ $# -gt 0 ]; do
-        [ $# -ge 2 ] || usage
-        case $1 in
-            --out) out=$2 ;;
-            --display-dir) shown=$2 ;;
-            *) usage ;;
-        esac
-        shift 2
-    done
-    uc pki init --out "${out}" --display-dir "${shown}"
-    if [ "${out}" = "${secrets}" ]; then
+    check_options "--out --org --root-days --signing-days" "$@"
+    out=$(out_dir "$@")
+    if [ -z "${out}" ]; then
+        writable "${secrets}" secrets/
+        uc pki init --out "${secrets}" --display-dir secrets "$@"
         do_secrets
     else
-        fix_secrets "${out}" # a new PKI elsewhere: no credential files there
+        writable "${out}" "${out}"
+        uc pki init "$@"
+        set_modes "${out}" # a new PKI elsewhere: no credential files there
     fi
 }
 
 do_pki_rotate() {
-    while [ $# -gt 0 ]; do
-        [ $# -ge 2 ] || usage
-        case $1 in
-            --root-display-dir) : ;; # make pki-rotate passes it; uc names the root key under secrets/root
-            *) usage ;;
-        esac
-        shift 2
-    done
-    [ -d "${secrets}/root" ] || die "the root key is not mounted: run make pki-rotate ROOT=<directory holding root-ca.key>, or mount that directory read-only at /setup/secrets/root yourself: docker compose run --rm -v /path/to/root:/setup/secrets/root:ro setup pki-rotate"
-    uc pki rotate --dir "${secrets}" --display-dir secrets
+    check_options "--days --org" "$@"
+    [ -e "${root}" ] || die "the root key is not mounted: docker compose run --rm -v <folder holding root-ca.key>:/setup/root:ro setup pki-rotate"
+    [ -d "${root}" ] || die "/setup/root is a file: mount the folder that holds root-ca.key, not the key itself"
+    writable "${secrets}" secrets/
+    uc pki rotate --dir "${secrets}" --root "${root}" --display-dir secrets "$@"
     do_secrets
 }
 
-checkout
-claim "${secrets}"
-claim "${procurement}"
 command=${1:-}
 [ $# -eq 0 ] || shift
 case ${command} in
@@ -128,17 +107,12 @@ case ${command} in
             echo "secrets/: the signing keys exist; left as they are (pki-rotate issues a new certificate)"
         else
             uc pki init --out "${secrets}" --display-dir secrets
-            fix_secrets "${secrets}" # the secrets step just ran: only the new files need their permissions
+            set_modes "${secrets}"
         fi
-        do_procurement
         ;;
     secrets)
         [ $# -eq 0 ] || usage
         do_secrets
-        ;;
-    procurement)
-        [ $# -eq 0 ] || usage
-        do_procurement
         ;;
     pki-init) do_pki_init "$@" ;;
     pki-rotate) do_pki_rotate "$@" ;;
