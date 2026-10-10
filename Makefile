@@ -19,7 +19,8 @@ STACK_RUN = $(STACK_ENV) COMPOSE_PROGRESS=quiet docker compose run --rm
 # A command that prints the uc image those targets run, as Compose resolves it for the stack.
 STACK_UC_IMAGE = $(STACK_ENV) docker compose config --images setup
 
-# Unit tests read the Python, templates and lint tools straight from the working tree
+# Unit tests read the Python, templates and lint tools straight from the working tree, and the
+# workflows in .github/
 # (VersionTool.java is compiled into the image, so changing it needs `make build-uc`).
 SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" \
@@ -27,22 +28,27 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/tools:/tools:ro" \
              -v "$(CURDIR)/web:/web:ro" \
              $(if $(wildcard examples/pipelines),-v "$(CURDIR)/examples/pipelines:/examples/pipelines:ro") \
+             $(if $(wildcard .github),-v "$(CURDIR)/.github:/github:ro") \
              -v "$(CURDIR)/config/uc.example.toml:/examples/uc.example.toml:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
 
 .PHONY: help build build-uc build-web uc-image stack-uc-image setup secrets secrets-placeholders secrets-permissions pki-init pki-rotate reload procure-stage procure-record procure-push procure-clean test test-unit test-web test-routing test-secrets test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
 
+# PREBUILT=1 (CI, after `docker load`): build-uc and build-web keep an image that already exists
+# instead of building it again. Without it they always build.
+UNLESS_PREBUILT = $(if $(PREBUILT),docker image inspect $(1) >/dev/null 2>&1 || )
+
 ##@ Setup
 
 build: build-uc build-web ## Build the uc, uc-test and web images; works before .env exists
 
 build-uc:
-	docker build --target runtime --build-arg UC_VERSION=$(UC_VERSION) -t $(UC_IMAGE) uc
-	docker build --target test --build-arg UC_VERSION=$(UC_VERSION) -t $(UC_TEST_IMAGE) uc
+	$(call UNLESS_PREBUILT,$(UC_IMAGE))docker build --target runtime --build-arg UC_VERSION=$(UC_VERSION) -t $(UC_IMAGE) uc
+	$(call UNLESS_PREBUILT,$(UC_TEST_IMAGE))docker build --target test --build-arg UC_VERSION=$(UC_VERSION) -t $(UC_TEST_IMAGE) uc
 
 build-web:
-	docker build -t $(WEB_IMAGE) web
+	$(call UNLESS_PREBUILT,$(WEB_IMAGE))docker build -t $(WEB_IMAGE) web
 
 # The uc image, built only when it is missing: the targets that merely run it must also work on a
 # host that loaded pre-built images and has no internet access.
