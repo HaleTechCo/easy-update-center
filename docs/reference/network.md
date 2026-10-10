@@ -83,7 +83,7 @@ Tool installers in `/updates/` still point at the internet for their downloads.
 
 Building the images (`docker compose build`, or `make build`) needs internet access. Without it,
 build elsewhere and move the images:
-[Build the images](../getting-started/airgapped.md#2-build-the-images).
+[Or build from source](../getting-started/airgapped.md#or-build-from-source).
 
 | Host | Why |
 |---|---|

@@ -9,7 +9,32 @@ A production deployment with internet access that reads plugins from repo.jenkin
 - The first run reads the whole plugin catalog and **takes hours**. Controllers can be pointed at
   the update center only after it finishes.
 
-## 1. Build the images
+## 1. Get a release
+
+Clone the release's tag (the latest is on the
+[Releases page](https://github.com/HaleTechCo/easy-update-center/releases)) and copy the example
+settings:
+
+```bash
+git clone --branch v<version> https://github.com/HaleTechCo/easy-update-center.git
+cd easy-update-center
+cp .env.online.example .env
+```
+
+In `.env`, set the release's images, with the same `<version>` as the tag but without the `v`:
+
+```bash
+UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<version>
+WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<version>
+```
+
+Compose pulls them when `setup` or `up` first needs them. You can check their signatures first:
+[Verify a release](../how-to/verify-a-release.md). You edit the rest of `.env` in the next step.
+
+### Or build from source
+
+To run the current `main` instead, or a change of your own, clone it and build the images. Leave
+`UC_IMAGE` and `WEB_IMAGE` unset.
 
 ```bash
 git clone https://github.com/HaleTechCo/easy-update-center.git
@@ -18,11 +43,11 @@ cp .env.online.example .env
 docker compose build
 ```
 
-Compose reads `.env` for every command, building included, so copy the example first; you edit it in
-the next step. This builds `easy-update-center/uc:local` (update-center2 from source, with its tests) and
-`easy-update-center/web:local`. The first build takes several minutes. `make build` is the shortcut: it
-builds the same images with `docker build`, so it needs no `.env`, and also the image the test
-suites use.
+Compose reads `.env` for every command, building included, so copy the example first; you edit it
+in the next step. This builds `easy-update-center/uc:local` (update-center2 from source, with its
+tests) and `easy-update-center/web:local`. The first build takes several minutes. `make build` is
+the shortcut: it builds the same images with `docker build`, so it needs no `.env`, and also the
+image the test suites use.
 
 ## 2. Configure
 
@@ -42,8 +67,8 @@ now:
 Every setting: [Configuration reference](../reference/configuration.md).
 
 The same settings can go in `config/uc.toml` instead, or as well:
-[Configure with uc.toml](../how-to/configure-with-uc-toml.md). Once the images are built,
-`docker compose run --rm --no-deps uc config` shows what each setting ends up as.
+[Configure with uc.toml](../how-to/configure-with-uc-toml.md). Once the images are
+pulled or built, `docker compose run --rm --no-deps uc config` shows what each setting ends up as.
 
 ## 3. Add credentials
 

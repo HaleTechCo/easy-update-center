@@ -5,7 +5,7 @@ What a host, a network and a set of accounts need before you deploy the update c
 ## Host
 
 - A Linux host running Docker Engine, on x86-64 (amd64) or arm64. Those are the two architectures
-  the images build for.
+  the images are published and built for.
 - Docker Desktop on macOS or Windows works for evaluation. On Windows, run the commands from WSL, or
   from Git Bash with `export MSYS_NO_PATHCONV=1` first; otherwise Git Bash rewrites the
   `-v "$PWD/...:/..."` arguments some commands use.
@@ -17,7 +17,7 @@ What a host, a network and a set of accounts need before you deploy the update c
 - GNU make is optional: it runs the `make` shortcuts, such as `make build` and `make setup`
   (`make help` lists them). Procurement needs it on a filesystem without ACLs
   ([Sharing ./procurement](../reference/cli.md#sharing-procurement)).
-- git, to clone this repository.
+- git, to clone this repository (not needed to deploy an air-gapped bundle).
 
 Nothing else is installed on the host: the generator, Python and Apache all run in the containers.
 
@@ -56,8 +56,10 @@ Nothing else is installed on the host: the generator, Python and Apache all run 
 
 Every host each service reaches, by mode, is in the [Network reference](../reference/network.md):
 
-- the host needs internet access to **build** the images ([Outbound: image builds](../reference/network.md#outbound-image-builds)),
-  or you build elsewhere and move them;
+- a release's images need no build: Compose pulls them from ghcr.io, or you load them from the
+  air-gapped bundle. Only building from source needs internet access
+  ([Outbound: image builds](../reference/network.md#outbound-image-builds)), on the host or
+  elsewhere, moving the images afterwards;
 - online, the generator needs the hosts in [Outbound: online](../reference/network.md#outbound-online);
 - air-gapped, only your repository ([Outbound: air-gapped](../reference/network.md#outbound-air-gapped));
 - controllers need `PUBLIC_URL` and the download location ([Outbound: controllers](../reference/network.md#outbound-controllers)).
