@@ -1,0 +1,26 @@
+---
+# Weekly dependency updates, one pull request per ecosystem. update-center2's pin is not a package
+# Dependabot can see: the Scheduled workflow's upstream-watch covers it.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+  - package-ecosystem: docker
+    directories: [/uc, /web]
+    schedule:
+      interval: weekly
+    groups:
+      images:
+        patterns: ['*']
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      lint-tools:
+        patterns: ['*']
