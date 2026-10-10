@@ -108,8 +108,23 @@ def load_credentials(settings: Settings) -> Credentials:
     return Credentials(user, password, GITHUB_PLACEHOLDER, GITHUB_PLACEHOLDER, github_placeholder=True)
 
 
+DATA_ENTRIES = ('.lock', '.status.lock', 'status.json', 'live', 'releases', 'work', 'cache', 'resources', 'repo-adapter', 'doctor')
+"""What uc keeps at the top of the data volume. On a volume this release creates, /data itself is world-writable and sticky, so these are what another uid owns."""
+
+
+def _owner(path: Path) -> int | None:
+    try:
+        return path.lstat().st_uid
+    except FileNotFoundError:
+        return None
+
+
 def check_data_dir(data_dir: Path) -> None:
-    """Raise PreflightError unless this process can create files in data_dir, the data volume (a missing one is created later)."""
-    if data_dir.is_dir() and not os.access(data_dir, os.W_OK | os.X_OK):
-        msg = f'{data_dir} is not writable by uid {os.getuid()}: the data volume belongs to another user; set UC_UID and UC_GID in .env to its owner, or give it to yours (docs/reference/configuration.md#compose)'
+    """Raise PreflightError unless this process can write the data volume: create files in data_dir, and own what uc keeps there (a missing one is created later)."""
+    if not data_dir.is_dir():
+        return
+    uid = os.getuid()
+    others = {owner for name in DATA_ENTRIES if (owner := _owner(data_dir / name)) not in (None, uid)}
+    if others or not os.access(data_dir, os.W_OK | os.X_OK):
+        msg = f'{data_dir} is not writable by uid {uid}: the data volume belongs to another user; set UC_UID and UC_GID in .env to its owner, or give it to yours (docs/reference/configuration.md#compose)'
         raise PreflightError(msg)

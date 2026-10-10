@@ -144,3 +144,23 @@ def test_a_data_directory_this_uid_cannot_write_is_refused_naming_uc_uid(tmp_pat
 def test_a_writable_or_missing_data_directory_passes(tmp_path):
     check_data_dir(tmp_path)
     check_data_dir(tmp_path / 'not-yet')
+
+
+def test_a_data_volume_whose_contents_belong_to_another_uid_is_refused(tmp_path, monkeypatch):
+    # A volume this release creates has a world-writable, sticky /data, so what the first UC_UID owns is its contents.
+    data = tmp_path / 'data'
+    (data / 'releases').mkdir(parents=True)
+    (data / 'status.json').write_text('{}')
+    other = os.getuid() + 1
+    monkeypatch.setattr(os, 'getuid', lambda: other)
+    with pytest.raises(PreflightError, match=rf'^{re.escape(str(data))} is not writable by uid {other}: .*UC_UID and UC_GID'):
+        check_data_dir(data)
+
+
+def test_entries_uc_never_writes_do_not_count(tmp_path, monkeypatch):
+    # Such as the lost+found of a filesystem mounted at /data.
+    data = tmp_path / 'data'
+    (data / 'lost+found').mkdir(parents=True)
+    other = os.getuid() + 1
+    monkeypatch.setattr(os, 'getuid', lambda: other)
+    check_data_dir(data)
