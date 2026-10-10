@@ -1,4 +1,4 @@
-"""Release helper for the Release workflow.
+"""Release helper for the Release workflow (docs/development/releasing.md).
 
     python3 tools/release.py prepare VERSION
         Move CHANGELOG.md's Unreleased entries under "## [VERSION] - <UTC date>", below an empty
@@ -134,7 +134,7 @@ def git_tags() -> list[str]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run one release.py command; return its exit status."""
-    parser = argparse.ArgumentParser(prog='release.py', description='Release helper for the Release workflow.')
+    parser = argparse.ArgumentParser(prog='release.py', description='Release helper for the Release workflow (docs/development/releasing.md).')
     commands = parser.add_subparsers(dest='command', required=True)
     commands.add_parser('prepare', help="move CHANGELOG.md's Unreleased entries under the version").add_argument('version')
     check_command = commands.add_parser('check', help='refuse a version the workflow must not publish; print latest= and minor_latest=')

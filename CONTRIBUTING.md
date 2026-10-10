@@ -54,6 +54,7 @@ tests/setup/          uc-setup: first-time setup, the ACLs on procurement/, pki-
 tests/integration/    end to end: fake Artifactory and Artifact Keeper, real Jenkins controllers
 tests/support/        helpers shared by the suites
 tools/                pre-commit hook scripts
+.github/              workflows, their scripts, Dependabot, issue and pull request templates
 docs/                 the documentation
 ```
 
@@ -74,9 +75,15 @@ How the pieces fit: [Architecture overview](docs/architecture/overview.md).
 | `make test-pipelines` | The example pipelines in `examples/pipelines/`: each runs the procurement stages in the order of the how-to, with the approval before the push and none when nothing was staged, and checks before pushing that `procurement.json` is the one reviewed (`tests/unit/test_pipeline_examples.py`, so part of `make test-unit`). | Docker |
 | `make it-clean` | Removes the integration suites' containers and volumes. | Docker |
 
-Unit tests read `uc/uc/`, `uc/templates/`, `tools/` and `examples/pipelines/` straight from the
-working tree, so they need no rebuild. Changing `uc/java/VersionTool.java` or a Dockerfile needs
-`make build` first.
+**CI** (`.github/workflows/ci.yml`) runs on every pull request and push to `main`: the pre-commit
+hooks, the suites of `make test`, `make compose-check` and `make it-airgapped` for both repository
+types, with the images built once and loaded by each job (`make <target> PREBUILT=1` keeps an image
+that exists instead of building it). The `ci` check must pass before a pull request can merge.
+`it-online` runs weekly (`.github/workflows/scheduled.yml`).
+
+Unit tests read `uc/uc/`, `uc/templates/`, `tools/`, `examples/pipelines/` and `.github/` straight
+from the working tree, so they need no rebuild. Changing `uc/java/VersionTool.java` or a Dockerfile
+needs `make build` first.
 
 The example settings files (`config/uc.example.toml`, `.env.online.example`,
 `.env.airgapped.example`) are generated from the settings registry, `uc/uc/settings.py`. After
@@ -90,8 +97,8 @@ pre-commit run --all-files
 ```
 
 Fixer hooks (formatting, whitespace, typographic characters) rewrite files and report `Failed` on the
-run that changes something; run again, and a second clean run is the real signal. Two hooks guard the
-documentation:
+run that changes something; run again, and a second clean run is the real signal. Actionlint checks
+the workflows (installed in the venv as `actionlint-py`). Two hooks guard the documentation:
 
 - `check-doc-links`: every relative link and every `docs/<page>.md#anchor` reference in a comment
   resolves, with GitHub's heading anchors;
@@ -116,6 +123,8 @@ By contributing you agree that your contribution is licensed under the project's
 ## Maintainer tasks
 
 - Moving to a new update-center2 release: [Upgrading update-center2](docs/development/upgrading-upstream.md).
+- Setting up the GitHub repository: [GitHub setup](docs/development/github-setup.md).
+- Cutting a release: [Releasing](docs/development/releasing.md).
 - Keep [Dependencies](docs/reference/dependencies.md) in step with the Dockerfiles, and
   `uc/licenses/` in step with what the uc image ships (the build checks the Java libraries:
   [Third-party notices](docs/reference/dependencies.md#third-party-notices)).
