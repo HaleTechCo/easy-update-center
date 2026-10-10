@@ -979,3 +979,16 @@ def test_pki_rotate_has_no_root_display_dir():
     with pytest.raises(SystemExit) as exited:
         main(['pki', 'rotate', '--dir', 'x', '--root-display-dir', 'y'])
     assert exited.value.code == 2
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason='root can write anywhere')
+@pytest.mark.parametrize('argv', [['generate'], ['rollback'], ['doctor', '--record']])
+def test_commands_that_write_the_data_volume_stop_when_they_cannot(monkeypatch, tmp_path, secrets_dir, capsys, argv):
+    data = use_env(monkeypatch, tmp_path, secrets_dir)
+    data.mkdir()
+    data.chmod(0o555)
+    try:
+        assert main(argv) == 1
+    finally:
+        data.chmod(0o755)
+    assert f'uc: error: {data} is not writable by uid {os.getuid()}' in capsys.readouterr().err

@@ -89,15 +89,17 @@ The boundaries they and the images draw:
   as a Compose secret, and it is the only service with a network that mounts the staging folder
   `./procurement` (`setup` can read the file in `./secrets`, but has no network). The scheduler, the repo-adapter and the web container never do, and
   `make compose-check` asserts it.
-- Every container runs as a non-root user (uid 10001 for the uc image, 33 for web) with a read-only
-  root filesystem, except the containers `make procure-stage`, `procure-record` and `procure-clean`
-  start before and after each run to hand `./procurement` to uid 10001 and back (they mount only that
-  folder and only change its owner). Only `/data` and `/tmp` are writable (`setup`: `/setup/secrets`,
-  and a directory you mount at `/setup/out` for a new PKI), and `web` mounts `/data` read-only.
+- Every container runs as the operator's own user, `UC_UID`:`UC_GID`, none as root, with a
+  read-only root filesystem, except the containers `make procure-stage`, `procure-record` and
+  `procure-clean` start before and after each run to hand `./procurement` to uid 10001 and back.
+  Only `/data` and `/tmp` are writable (`setup`: `/setup/secrets`, and a directory you mount at
+  `/setup/out` for a new PKI), and `web` mounts `/data` read-only. Apache serves only the live
+  release, never the rest of `/data`.
 - The repo-adapter's file reads need no credentials, because the generator cannot answer an
   authentication challenge on them. They are reachable only on the internal `repo` network, which
   `web` is not attached to, and they serve only POMs, manifests and descriptions, never archives.
-  The listing needs a token from `/data/repo-adapter/token`, which only uid 10001 can read.
+  The listing needs a token from `/data/repo-adapter/token` (mode 0600). `web` runs as the same user
+  and could read the file, but it is not on the `repo` network, where the token is accepted.
 - Air-gapped, of the services that run, only the repo-adapter receives the repository credentials;
   `setup` is the exception described above, and only while it runs.
 - Archives and POMs from the repository are treated as untrusted input: reads are size-capped,

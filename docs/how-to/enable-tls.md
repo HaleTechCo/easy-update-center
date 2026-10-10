@@ -41,7 +41,7 @@ services:
       - ./tls:/tls:ro
 ```
 
-Put the PEM certificate (with its chain) and key in `./tls/`, readable by uid 33 on Linux. Then add
+Put the PEM certificate (with its chain) and key in `./tls/`, readable by `UC_UID` on Linux. Then add
 the override to `COMPOSE_FILE` in `.env`, so that every later `docker compose up -d` (upgrades, setting
 changes) keeps it; a one-off `-f compose.tls.yaml` would be dropped by the next plain command:
 

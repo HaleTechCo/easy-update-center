@@ -59,7 +59,7 @@ ARG TARGETARCH
 ARG UC_VERSION
 # hadolint ignore=DL3008
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3 openssl tini ca-certificates curl acl \
+ && apt-get install -y --no-install-recommends python3 openssl tini ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
 # pipefail, so a failed download cannot hide behind the checksum pipe below.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -84,8 +84,11 @@ RUN chmod 0755 /usr/local/bin/uc /usr/local/bin/uc-setup /opt/uc/site/generate-h
  && groupadd --system --gid 10001 uc \
  && useradd --system --uid 10001 --gid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin uc \
  && mkdir -p /data /config/overlay \
- && chown 10001:10001 /data
+ && chmod 1777 /data
+# Any UC_UID can write a new data volume (Docker copies /data's mode into it), and HOME is writable
+# for a uid with no entry in /etc/passwd.
 ENV PYTHONPATH=/opt/uc/python \
+    HOME=/tmp \
     PYTHONDONTWRITEBYTECODE=1 \
     UC2_VERSION=${UC2_VERSION}+patches \
     UC_VERSION=${UC_VERSION}

@@ -149,8 +149,7 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 ## Compose
 
 These are read by `docker compose` itself, from the shell environment or from `.env` in the project
-directory, not by the containers. The `make` targets that run your stack (`setup`, `secrets` and
-its aliases, `pki-*`, `procure-*`) leave `UC_IMAGE` and `WEB_IMAGE` to `.env` too, unless
+directory, not by the containers. The `make` targets that run your stack (`procure-*`) leave `UC_IMAGE` and `WEB_IMAGE` to `.env` too, unless
 you set them on make's command line or in the shell. When the uc image they resolve is missing, they
 build it if it is `easy-update-center/uc:local` and pull it otherwise. `make build` does not read `.env`,
 and tags the images it builds with these defaults unless you pass `UC_IMAGE=...` or `WEB_IMAGE=...`
@@ -159,10 +158,15 @@ to it.
 | Setting | Default | Notes |
 |---|---|---|
 | `UC_ENV_FILE` | `.env` | The file every uc-image service loads as `env_file`; web takes its variables from Compose's own `.env` (or `--env-file`). Lets several configurations sit side by side. |
+| `UC_UID` | `10001` | The user id every container runs as. On Linux, set it to the output of `id -u`, so the files in `secrets/` and `procurement/` stay yours. |
+| `UC_GID` | `10001` | The group id every container runs as. On Linux, the output of `id -g`. |
 | `UC_IMAGE` | `easy-update-center/uc:local` | The image for `uc`, `scheduler`, `repo-adapter` and `setup`. |
 | `WEB_IMAGE` | `easy-update-center/web:local` | The image for `web`. |
 | `HTTP_PORT` | `8080` | Host port published for the web container's HTTP listener. |
 | `HTTPS_PORT` | `8443` | Host port published for the web container's TLS listener. |
+
+Changing `UC_UID` later: give the data volume to the new user once:
+`docker compose run --rm --no-deps --user 0:0 --entrypoint chown uc -R <uid>:<gid> /data`.
 
 ## Testing and evaluation
 

@@ -1,6 +1,8 @@
 """Unit tests for uc.preflight: PUBLIC_URL checks, signing material checks and credential loading."""
 
 import datetime as dt
+import os
+import re
 import shutil
 
 import pytest
@@ -8,6 +10,7 @@ import pytest
 from uc.pki import init_pki
 from uc.preflight import (
     PreflightError,
+    check_data_dir,
     check_public_url,
     check_signing,
     load_credentials,
@@ -124,3 +127,20 @@ def test_load_credentials_explains_a_missing_adapter_token(tmp_path, secrets_dir
 
 def test_load_repository_credentials(tmp_path, secrets_dir):
     assert load_repository_credentials(make_settings(tmp_path, secrets_dir)) == ('uc', 'secret')
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason='root can write anywhere')
+def test_a_data_directory_this_uid_cannot_write_is_refused_naming_uc_uid(tmp_path):
+    data = tmp_path / 'data'
+    data.mkdir()
+    data.chmod(0o555)
+    try:
+        with pytest.raises(PreflightError, match=rf'^{re.escape(str(data))} is not writable by uid {os.getuid()}: .*UC_UID and UC_GID'):
+            check_data_dir(data)
+    finally:
+        data.chmod(0o755)
+
+
+def test_a_writable_or_missing_data_directory_passes(tmp_path):
+    check_data_dir(tmp_path)
+    check_data_dir(tmp_path / 'not-yet')

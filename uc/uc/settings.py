@@ -257,6 +257,8 @@ SETTINGS: tuple[Setting, ...] = (
     ),
     # Compose
     Setting('UC_ENV_FILE', 'path', 'Compose', "The file every uc-image service loads as env_file; web takes its variables from Compose's own .env (or --env-file).", default='.env', env_only=True),
+    Setting('UC_UID', 'int', 'Compose', 'The user id every container runs as. On Linux, set it to the output of id -u, so the files in secrets/ and procurement/ stay yours.', default='10001', env_only=True),
+    Setting('UC_GID', 'int', 'Compose', 'The group id every container runs as. On Linux, the output of id -g.', default='10001', env_only=True),
     Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler, repo-adapter and setup.', default='easy-update-center/uc:local', env_only=True),
     Setting('WEB_IMAGE', 'str', 'Compose', 'The image for web.', default='easy-update-center/web:local', env_only=True),
     Setting('HTTP_PORT', 'int', 'Compose', "Host port published for the web container's HTTP listener.", default='8080', env_only=True),

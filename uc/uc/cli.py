@@ -16,7 +16,7 @@ from .errors import UcError, UsageError
 from .examples import example_env
 from .generate import generate
 from .pki import DEFAULT_ORG, ROOT_CERT, ROOT_DAYS, ROOT_KEY, SIGNING_CERT, SIGNING_DAYS, SIGNING_KEY, cert_info, init_pki, rotate_signing
-from .preflight import load_credentials
+from .preflight import check_data_dir, load_credentials
 from .procure.clean import clean
 from .procure.download import check_download_allowed, download, downloads_allowed
 from .procure.local import stage_local
@@ -34,6 +34,8 @@ if TYPE_CHECKING:
     from .config import Settings
 
 EXIT_LOCKED = 75
+WRITES_DATA = frozenset({'generate', 'rollback', 'schedule', 'repo-adapter'})
+"""The commands that write to the data volume, which uc checks it can write first (preflight.check_data_dir)."""
 
 NOTHING_TO_STAGE = 'nothing to stage: choose --poms, --dependencies or --war VERSION|required'
 
@@ -139,6 +141,8 @@ def _dispatch(args: argparse.Namespace) -> int:
         healthcheck(args.port)  # reads no settings: health is the running server's, not the files'
         return 0
     settings = load_settings()
+    if args.command in WRITES_DATA or (args.command == 'doctor' and args.record):
+        check_data_dir(settings.data_dir)
     if args.command == 'generate':
         print(f'published release {generate(settings, force=args.force, wait=args.wait)}')
         return 0

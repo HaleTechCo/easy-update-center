@@ -27,9 +27,9 @@ RUN chmod 0755 /usr/local/bin/entrypoint.sh /usr/local/bin/healthcheck.sh \
       echo "httpd -t ${defines}"; httpd -t ${defines} || exit 1; \
     done \
  && rm -rf /data/live /tmp/tls \
- && chown 10001:10001 /data
-# www-data, numerically, so a runAsNonRoot check can verify it without the image's /etc/passwd.
-USER 33:33
+ && chmod 1777 /data
+# The uc image's default user, numerically; compose.yaml runs it as UC_UID:UC_GID.
+USER 10001:10001
 EXPOSE 8080 8443
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s CMD ["/usr/local/bin/healthcheck.sh"]
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

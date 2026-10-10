@@ -95,6 +95,8 @@ host, skip `docker compose build`. `make build` is the shortcut: it builds the s
 Edit `.env`, copied from `.env.airgapped.example` in step 2. It already sets `MODE=airgapped`; keep
 that. Then:
 
+- On Linux, `UC_UID` and `UC_GID`: your `id -u` and `id -g`. Every container runs as that user, so
+  the files in `secrets/` and `procurement/` stay yours; Docker Desktop needs neither.
 - `PUBLIC_URL`: the origin controllers will use, decided now, because it is written into the signed
   metadata. Include the port if it is not the scheme's default, for example
   `http://uc.corp.example:8080`, or `https://jenkins-updates.corp.example` behind your TLS proxy

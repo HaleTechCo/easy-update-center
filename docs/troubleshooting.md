@@ -64,8 +64,8 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 |---|---|
 | It keeps logging `waiting for the first published release in /data/live` | No release is live yet. Watch `docker compose logs -f scheduler`: the first run may still be going (online, it takes hours), or it failed. |
 | It exits with `entrypoint: PUBLIC_URL must be set` or `MODE must be online or airgapped` | `.env` is missing or not the file Compose loads (`UC_ENV_FILE`). |
-| It exits with `DOWNLOAD_ACCESS=proxy needs username:password in /run/secrets/download_proxy_auth` | Write `secrets/download_proxy_auth` as `username:password`; on Linux make it readable by uid 33. |
-| It exits with `TLS_CERT_FILE and TLS_KEY_FILE must both be readable` | Set both, and mount both files readable by uid 33 ([Enable TLS](how-to/enable-tls.md)). |
+| It exits with `DOWNLOAD_ACCESS=proxy needs username:password in /run/secrets/download_proxy_auth` | Write `secrets/download_proxy_auth` as `username:password`, then run `docker compose run --rm setup secrets`. |
+| It exits with `TLS_CERT_FILE and TLS_KEY_FILE must both be readable` | Set both, and mount both files readable by `UC_UID` ([Enable TLS](how-to/enable-tls.md)). |
 | It exits with `DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL` | Set `DOWNLOAD_BACKEND_URL` in `.env` to your repository by Maven path ([Downloads](reference/configuration.md#downloads)), then `docker compose up -d`. Air-gapped mode uses the artifactory backend unless `DOWNLOAD_BACKEND` says otherwise. |
 | Redirects name the wrong host or port | `PUBLIC_URL` is not the origin clients use. Redirects always use `PUBLIC_URL`. |
 | The browser gets an empty response (`NS_ERROR_NET_EMPTY_RESPONSE`; curl: `Empty reply from server`) while the container is healthy and its log shows no request | Docker Desktop's forwarding of the published port went stale, often after sleep or a network change. Run `docker compose up -d --force-recreate web`; if that does not help, restart Docker Desktop. |

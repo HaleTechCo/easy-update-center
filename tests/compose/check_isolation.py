@@ -113,10 +113,11 @@ def main() -> None:
         problems.append('web-config is back: web takes its variables from Compose')
     if secrets(web) != WEB_SECRETS:
         problems.append(f'web secrets are {sorted(secrets(web))}, not {sorted(WEB_SECRETS)}')
-    for name in UC_SERVICES:
-        # The image's own user is non-root; only setup overrides it.
-        if name in services and services[name].get('user'):
-            problems.append(f"{name} sets user {services[name]['user']!r}; it must run as the image's non-root user")
+    users = {name: service.get('user') for name, service in services.items()}
+    if None in users.values() or len(set(users.values())) != 1:
+        problems.append(f'every service must run as the one UC_UID:UC_GID user: {users}')
+    elif next(iter(users.values())).split(':')[0] == '0':
+        problems.append('the services must not run as root (UC_UID=0)')
     for name in UC_IMAGE_SERVICES:
         build = services.get(name, {}).get('build') or {}
         if (context_dir(build), build.get('target')) != ('uc', 'runtime'):

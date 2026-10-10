@@ -66,6 +66,8 @@ Edit `.env`, copied from `.env.online.example` in step 1, and set `PUBLIC_URL` t
 center's origin, for example `https://jenkins-updates.example.com`. Other settings worth knowing
 now:
 
+- On Linux, `UC_UID` and `UC_GID`: your `id -u` and `id -g`. Every container runs as that user, so
+  the files in `secrets/` and `procurement/` stay yours; Docker Desktop needs neither.
 - `GENERATE_SCHEDULE`: when to regenerate (default every six hours);
 - `JAVA_TOOL_OPTIONS`: `-Xmx6g` for the full catalog;
 - behind an outbound proxy, set it twice, once for the generator and once for the `uc` code:

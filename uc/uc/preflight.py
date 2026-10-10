@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import os
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
@@ -13,6 +14,7 @@ from .pki import CertInfo, cert_info, key_matches_cert, verify_chain
 
 if TYPE_CHECKING:
     import datetime as dt
+    from pathlib import Path
 
 GITHUB_PLACEHOLDER = 'uc'
 ADAPTER_USERNAME = 'uc'
@@ -104,3 +106,10 @@ def load_credentials(settings: Settings) -> Credentials:
     if gh_user and gh_token:
         return Credentials(user, password, gh_user, gh_token, github_placeholder=False)
     return Credentials(user, password, GITHUB_PLACEHOLDER, GITHUB_PLACEHOLDER, github_placeholder=True)
+
+
+def check_data_dir(data_dir: Path) -> None:
+    """Raise PreflightError unless this process can create files in data_dir, the data volume (a missing one is created later)."""
+    if data_dir.is_dir() and not os.access(data_dir, os.W_OK | os.X_OK):
+        msg = f'{data_dir} is not writable by uid {os.getuid()}: the data volume belongs to another user; set UC_UID and UC_GID in .env to its owner, or give it to yours (docs/reference/configuration.md#compose)'
+        raise PreflightError(msg)

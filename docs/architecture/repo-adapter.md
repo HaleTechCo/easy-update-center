@@ -136,9 +136,9 @@ and pass its own check, so an error page is never cached as content.
   password is an API token, sent as a bearer token to its API and as basic authentication to its
   Maven endpoint. Air-gapped, no other container receives them.
 - **The token.** On first start the adapter writes a random 32-byte token to
-  `/data/repo-adapter/token` (mode 0600, uid 10001). `uc` passes it to the generator as the
-  repository password, and the listing is refused without it (HTTP 401). The web container runs as
-  another user and cannot read it.
+  `/data/repo-adapter/token` (mode 0600). `uc` passes it to the generator as the repository
+  password, and the listing is refused without it (HTTP 401). Only services on the internal `repo`
+  network can reach the listing; the web container is not on it.
 - **File reads need no token**, because the generator cannot answer a challenge on them. They serve
   only POMs, manifests and descriptions, never archives, and only on the internal `repo` network,
   which the web container is not on.

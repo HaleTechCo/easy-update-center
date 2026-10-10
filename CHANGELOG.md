@@ -31,6 +31,8 @@ the interface.
   ([Configuration](docs/reference/configuration.md)).
 - First-time setup in one command, `docker compose run --rm setup`: the credential files and the
   signing keys, all owned by you ([Secrets](docs/reference/secrets.md)).
+- Every container runs as your user (`UC_UID`/`UC_GID`), none as root
+  ([Configuration](docs/reference/configuration.md#compose)).
 - `uc doctor` reports what the generator will see in your repository, including the cores plugins
   require that it lacks; the scheduler can record the report on `DOCTOR_SCHEDULE`
   ([Stock an air-gapped repository](docs/how-to/stock-airgapped-repository.md)).
