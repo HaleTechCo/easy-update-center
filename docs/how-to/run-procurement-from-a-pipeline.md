@@ -31,8 +31,7 @@ The agent's user needs:
 - Docker, with Compose v2 (`docker compose`);
 - membership of the `docker` group, or an equivalent way to reach the Docker daemon (which gives that
   user root on the host, so treat the agent accordingly);
-- read access to `UC_DIR`;
-- GNU make, only if it runs the `make procure-*` targets instead (below).
+- read access to `UC_DIR`.
 
 Before the first run:
 

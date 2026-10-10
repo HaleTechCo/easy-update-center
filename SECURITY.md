@@ -27,8 +27,7 @@ The latest release. Fixes ship in a new release; earlier releases get no backpor
   `setup` service, which mounts `./secrets` while it runs; the internet-facing `web` container never
   receives it. The root CA key is meant to live offline.
 - Every container runs as the operator's own user (`UC_UID`:`UC_GID`), none as root, with a
-  read-only root filesystem, except the containers `make procure-stage`, `procure-record` and
-  `procure-clean` use to hand `./procurement` over. `web` mounts the data volume read-only.
+  read-only root filesystem. `web` mounts the data volume read-only.
 - The repo-adapter's unauthenticated file reads, and its listing, which needs a token, are reachable
   only on an internal network that `web` is not attached to. Air-gapped, only the repo-adapter
   receives repository credentials.

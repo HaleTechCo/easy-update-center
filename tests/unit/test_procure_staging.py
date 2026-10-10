@@ -54,13 +54,13 @@ def test_review_line_shows_the_host_folder_for_the_default_staging_dir():
     assert review_line(Path('/srv/stage'), 2) == 'next: review /srv/stage (procurement.json lists 2 files), then uc procure push'
 
 
-def test_staged_files_and_procurement_json_are_group_writable(tmp_path):
-    # Under the default ACLs uc-setup sets, a file's mode caps what the named users (the host user, uid 10001) may do: 0o664 lets the host user edit what uc staged.
+def test_staged_files_and_procurement_json_are_readable_by_everyone(tmp_path):
+    # The containers run as the operator (UC_UID), who owns what uc stages; mkstemp alone would leave it 0600.
     staging = Staging.open(tmp_path / 'stage', SOURCE)
     stage(staging, POM, b'<project/>')
     staging.save()
-    assert stat.S_IMODE((tmp_path / 'stage' / MANIFEST).stat().st_mode) == 0o664
-    assert stat.S_IMODE((tmp_path / 'stage' / POM).stat().st_mode) == 0o664
+    assert stat.S_IMODE((tmp_path / 'stage' / MANIFEST).stat().st_mode) == 0o644
+    assert stat.S_IMODE((tmp_path / 'stage' / POM).stat().st_mode) == 0o644
 
 
 def test_intact_means_recorded_and_unchanged(tmp_path):
@@ -111,5 +111,5 @@ def test_an_unwritable_folder_says_how_to_fix_it(tmp_path):
     root = tmp_path / 'stage'
     root.mkdir()
     root.chmod(0o555)
-    with pytest.raises(ProcureError, match=r'docker compose run --rm setup procurement \(make setup\).* make procure-stage, procure-record and procure-clean'):
+    with pytest.raises(ProcureError, match=r'^cannot write to .*: .*\. Check that UC_UID and UC_GID in \.env are the owner of \./procurement \(id -u, id -g\)$'):
         Staging.open(root, SOURCE).temporary()

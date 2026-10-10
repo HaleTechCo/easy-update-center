@@ -139,17 +139,17 @@ class Staging:
             self.root.mkdir(parents=True, exist_ok=True)
             fd, name = tempfile.mkstemp(dir=self.root, prefix='.part-')
         except OSError as exc:
-            msg = f'cannot write to {self.root}: {exc}. On Linux, share the folder with the uc containers once with docker compose run --rm setup procurement (make setup), or, where that fails, use make procure-stage, procure-record and procure-clean, which hand it over for each run'
+            msg = f'cannot write to {self.root}: {exc}. Check that UC_UID and UC_GID in .env are the owner of ./procurement (id -u, id -g)'
             raise ProcureError(msg) from exc
         os.close(fd)
         return Path(name)
 
     def commit(self, staged: StagedFile, part: Path) -> None:
-        """Move a downloaded file into place, readable by everyone and writable by the group, and record it."""
+        """Move a downloaded file into place, readable by everyone, and record it."""
         target = self.file(staged.path)
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
-            part.chmod(0o664)  # group-writable: under the ACLs uc-setup procurement sets, the mode caps the named users, and the host user must be able to edit what uc staged
+            part.chmod(0o644)  # readable by everyone, as a downloaded file would be; mkstemp creates 0600
             part.replace(target)
         except OSError as exc:
             msg = f'cannot write {target}: {exc}'
@@ -180,5 +180,5 @@ class Staging:
         body = {'format': FORMAT, 'source': self.source, 'files': {path: {k: v for k, v in asdict(staged).items() if k != 'path'} for path, staged in sorted(self.files.items())}}
         part = self.temporary()
         part.write_text(json.dumps(body, indent=2) + '\n', encoding='utf-8')
-        part.chmod(0o664)  # group-writable: under the ACLs uc-setup procurement sets, the mode caps the named users, and the host user must be able to edit what uc staged
+        part.chmod(0o644)  # readable by everyone, as a downloaded file would be; mkstemp creates 0600
         part.replace(self.root / MANIFEST)

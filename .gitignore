@@ -12,7 +12,8 @@ secrets/*
 newpki/
 
 # Files staged for review by uc procure stage and record (docs/how-to/procure-missing-files.md)
-procurement/
+procurement/*
+!procurement/README.md
 
 # Integration-test scratch (make it-airgapped, make it-online)
 tests/integration/.versions.env

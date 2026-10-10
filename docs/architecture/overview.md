@@ -90,9 +90,7 @@ The boundaries they and the images draw:
   `./procurement` (`setup` can read the file in `./secrets`, but has no network). The scheduler, the repo-adapter and the web container never do, and
   `make compose-check` asserts it.
 - Every container runs as the operator's own user, `UC_UID`:`UC_GID`, none as root, with a
-  read-only root filesystem, except the containers `make procure-stage`, `procure-record` and
-  `procure-clean` start before and after each run to hand `./procurement` to uid 10001 and back.
-  Only `/data` and `/tmp` are writable (`setup`: `/setup/secrets`, and a directory you mount at
+  read-only root filesystem. Only `/data` and `/tmp` are writable (`setup`: `/setup/secrets`, and a directory you mount at
   `/setup/out` for a new PKI), and `web` mounts `/data` read-only. Apache serves only the live
   release, never the rest of `/data`.
 - The repo-adapter's file reads need no credentials, because the generator cannot answer an

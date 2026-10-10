@@ -135,25 +135,15 @@ approval before the push:
 The staging folder is `./procurement` on the host, which the `uc` service mounts at `/procurement`.
 Every command takes `--staging DIR` to use another folder inside the `uc` container for one run; it
 must not be the data volume, `/data`, or a folder in it.
-On Linux, `./procurement` must be writable by `UC_UID`, the user the containers run as. Each command has a `make`
-shortcut, which passes options through `ARGS=`. For `stage`, `record` and `clean`, it also hands the
-folder to uid 10001 for the run and back to you after, so it works where the folder cannot be
-shared:
-
-| Command | `make` shortcut |
-|---|---|
-| `uc procure stage` | `make procure-stage ARGS="--poms --dependencies"` |
-| `uc procure record` | `make procure-record ARGS=--fix` |
-| `uc procure push` | `make procure-push ARGS=--dry-run` |
-| `uc procure clean` | `make procure-clean ARGS=--dry-run` |
+On Linux, `./procurement` must be writable by `UC_UID`, the user the containers run as.
 
 ### uc procure stage
 
 Prints `uc doctor`'s report, then stages the missing files you chose with the options below: each is
 downloaded from `PROCUREMENT_SOURCE_URL` (repo.jenkins-ci.org by default), checked against the
 `.sha1` published beside it, saved in the folder at its Maven path and listed in `procurement.json`
-with its source URL, sha1, size and reason. Staged files are readable by everyone and writable by
-their group (mode `664`), so you can edit them under the folder's ACLs. One line per file says what
+with its source URL, sha1, size and reason. Staged files are yours and readable by everyone (mode
+`644`). One line per file says what
 happened (`staged`, `kept`: already staged and intact, `FAILED`: with the reason), then a summary.
 Running it again keeps what is already staged and downloads only what is missing or changed.
 Air-gapped, it is refused unless `PROCUREMENT_SOURCE_URL` names a copy the update center can reach.

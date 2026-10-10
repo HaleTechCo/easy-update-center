@@ -13,14 +13,14 @@ files to the repository. Files you obtain elsewhere go through the same folder. 
 repository without the separate push step, and once the files are in, `uc procure clean` deletes
 their staged copies.
 
-| Stage | Command | `make` shortcut |
-|---|---|---|
-| [1. Check](#1-check) | `uc doctor` | |
-| [2. Stage](#2-stage) | `uc procure stage`, and `uc procure record` for files you add by hand | `make procure-stage`, `make procure-record` |
-| [3. Review](#3-review) | none: you read `./procurement/procurement.json` | |
-| [4. Push](#4-push) | `uc procure push` | `make procure-push` |
-| [5. Confirm](#5-confirm) | `uc generate`, then `uc doctor` | |
-| [6. Clean up](#6-clean-up) | `uc procure clean` | `make procure-clean` |
+| Stage | Command |
+|---|---|
+| [1. Check](#1-check) | `uc doctor` |
+| [2. Stage](#2-stage) | `uc procure stage`, and `uc procure record` for files you add by hand |
+| [3. Review](#3-review) | none: you read `./procurement/procurement.json` |
+| [4. Push](#4-push) | `uc procure push` |
+| [5. Confirm](#5-confirm) | `uc generate`, then `uc doctor` |
+| [6. Clean up](#6-clean-up) | `uc procure clean` |
 
 To run these stages with an approval before the push, and a record of who approved it:
 [Run procurement from a pipeline](run-procurement-from-a-pipeline.md). Every command and option:
@@ -82,7 +82,7 @@ not an error.
 docker compose run --rm uc procure stage --poms --dependencies --war required
 ```
 
-(`make procure-stage ARGS="--poms --dependencies --war required"`.) It prints the doctor report,
+It prints the doctor report,
 then one line per file. Choose what to stage with options; they combine freely:
 
 | Option | Stages |
@@ -122,7 +122,6 @@ docker compose run --rm uc procure record         # check and record; report mis
 docker compose run --rm uc procure record --fix   # move misplaced files first, then record them
 ```
 
-(`make procure-record`, `make procure-record ARGS=--fix`.)
 
 It records every `.hpi`, `.jpi`, `.war` and `.pom` in the folder that `procurement.json` does not list
 yet, with the reason `added by hand`, after the checks a download gets: a plugin's manifest must name
@@ -158,7 +157,7 @@ Everything staged is in `./procurement/`, in the paths it will have in the repos
   `{"dry_run": true}`, then `{"dry_run": false}` (it also runs on Artifact Keeper's own schedule).
 
 Remove what your process rejects by deleting its entry from `procurement.json` (and the file), as
-yourself: the folder's ACLs let you edit and delete what uc staged, no `sudo` needed. Push refuses a
+yourself: what uc staged is yours, no `sudo` needed. Push refuses a
 file whose content changed, or that went missing, after it was staged.
 
 ## 4. Push
@@ -168,7 +167,7 @@ docker compose run --rm uc procure push --dry-run   # check each file, upload no
 docker compose run --rm uc procure push
 ```
 
-(`make procure-push ARGS=--dry-run`, `make procure-push`.) The first time you push to a repository,
+The first time you push to a repository,
 run the dry run first, then a real push, then `uc doctor --fetch` ([Confirm](#5-confirm)), so a
 misconfigured `repo_push_auth` or a changed file shows up before anything is written.
 
@@ -239,7 +238,7 @@ docker compose run --rm uc procure clean --dry-run   # list what would be delete
 docker compose run --rm uc procure clean
 ```
 
-(`make procure-clean ARGS=--dry-run`, `make procure-clean`.) It checks every `.hpi`, `.jpi`, `.war`
+It checks every `.hpi`, `.jpi`, `.war`
 and `.pom` in `./procurement/`, listed in `procurement.json` or placed by hand, against the
 repository. It deletes only the files the repository holds with the same content (the same sha1),
 with their `procurement.json` entries and any folder left empty, so what remains is what still needs

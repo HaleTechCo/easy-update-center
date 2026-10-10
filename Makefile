@@ -10,15 +10,6 @@ UC_VERSION ?= dev
 
 .DEFAULT_GOAL := help
 
-# The targets that run your own Compose project (procure-*) leave the images
-# to .env and compose.yaml: they unset UC_IMAGE and WEB_IMAGE, unless you gave them on make's command
-# line or in the environment. Their one-shot runs print only the command's output, without Compose's
-# container lines (older Compose releases ignore COMPOSE_PROGRESS).
-STACK_ENV = $(strip env $(foreach v,UC_IMAGE WEB_IMAGE,$(if $(filter file,$(origin $(v))),-u $(v))))
-STACK_RUN = $(STACK_ENV) COMPOSE_PROGRESS=quiet docker compose run --rm
-# A command that prints the uc image those targets run, as Compose resolves it for the stack.
-STACK_UC_IMAGE = $(STACK_ENV) docker compose config --images setup
-
 # Unit tests read the Python, templates and lint tools straight from the working tree, and the
 # workflows in .github/
 # (VersionTool.java is compiled into the image, so changing it needs `make build-uc`).
@@ -32,7 +23,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
 
-.PHONY: help build build-uc build-web uc-image stack-uc-image procure-stage procure-record procure-push procure-clean test test-unit test-web test-routing test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
+.PHONY: help build build-uc build-web uc-image test test-unit test-web test-routing test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
 
 # PREBUILT=1 (CI, after `docker load`): build-uc and build-web keep an image that already exists
 # instead of building it again. Without it they always build.
@@ -53,39 +44,6 @@ build-web:
 # host that loaded pre-built images and has no internet access.
 uc-image:
 	@docker image inspect $(UC_IMAGE) >/dev/null 2>&1 || docker build --target runtime -t $(UC_IMAGE) uc
-
-# The same for the targets that run your stack, with the image Compose resolves (STACK_UC_IMAGE).
-# When it is missing, it is built if it is compose.yaml's default and pulled otherwise, here where
-# the pull shows, not inside the quiet `compose run`.
-stack-uc-image:
-	@image="$$($(STACK_UC_IMAGE))" || exit; \
-	  if docker image inspect "$$image" >/dev/null 2>&1; then :; \
-	  elif [ "$$image" = easy-update-center/uc:local ]; then echo "docker build --target runtime -t $$image uc"; docker build --target runtime -t "$$image" uc; \
-	  else echo "docker pull $$image"; docker pull "$$image"; fi
-
-##@ Procurement
-
-# uc procure stage, record and clean write to ./procurement. Where uc-setup could not share it through
-# ACLs (make setup says so), these hand the folder to the uc containers' uid for the run and back to
-# you after, also when the run fails. ARGS passes options through, e.g. make procure-stage ARGS="--poms --dependencies".
-PROCUREMENT = $(CURDIR)/procurement
-HOST_UID ?= $(shell id -u)
-HOST_GID ?= $(shell id -g)
-IN_PROCUREMENT = docker run --rm --user 0:0 --entrypoint sh -v "$(PROCUREMENT):/procurement" "$$($(STACK_UC_IMAGE))" -c
-HANDED_OVER = mkdir -p procurement && $(IN_PROCUREMENT) 'chown -R 10001:10001 /procurement' && \
-  { $(STACK_RUN) uc procure $(1)$(if $(ARGS), $(ARGS)); rc=$$?; $(IN_PROCUREMENT) 'chown -R $(HOST_UID):$(HOST_GID) /procurement'; exit $$rc; }
-
-procure-stage: stack-uc-image ## Stage what uc doctor finds missing into ./procurement for review (ARGS="--poms ...")
-	$(call HANDED_OVER,stage)
-
-procure-record: stack-uc-image ## Record files you placed in ./procurement by hand (ARGS=--fix)
-	$(call HANDED_OVER,record)
-
-procure-push: stack-uc-image ## Push what procurement.json lists to the repository (ARGS=--dry-run)
-	$(STACK_RUN) uc procure push$(if $(ARGS), $(ARGS))
-
-procure-clean: stack-uc-image ## Delete the staged files the repository now holds (ARGS=--dry-run)
-	$(call HANDED_OVER,clean)
 
 ##@ Development
 
