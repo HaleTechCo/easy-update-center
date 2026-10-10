@@ -41,10 +41,9 @@ To run these stages with an approval before the push, and a record of who approv
   printf '%s' 'svc-upload:token' > secrets/repo_push_auth
   ```
 
-- On Artifactory, give that account **deploy** permission but not delete or overwrite permission:
-  push only uploads paths that do not exist yet, but Artifactory offers no create-only upload, so an
-  account allowed to overwrite could replace a file uploaded by someone else in the moment between
-  push's check and its own upload.
+- On Artifactory, give that account **deploy** permission, not delete or overwrite: Artifactory has
+  no create-only upload, so an account allowed to overwrite could replace someone else's upload
+  between push's check and its own.
 - `./procurement/` must be writable by the uc containers and by you: every container runs as
   `UC_UID`:`UC_GID`, which on Linux you set to your own `id -u` and `id -g` in `.env`.
 
@@ -54,27 +53,13 @@ To run these stages with an approval before the push, and a record of who approv
 docker compose run --rm uc doctor --fetch
 ```
 
-It prints the report: what the generator drops, and the POMs, dependencies and cores to procure, each
-with its repo.jenkins-ci.org URL. What to do about each section:
-[Check with uc doctor](stock-airgapped-repository.md#check-with-uc-doctor). `--fetch` reads the POMs
-and manifests the generator has not cached yet, so every missing dependency and required core shows.
-When it finds something `uc procure stage` can fetch, it ends with that step, naming the options for
-what it found:
-
-```text
-next: uc procure stage --poms --dependencies --war required
-```
-
-Given `--since`, it adds it after `--war required`. Air-gapped without `PROCUREMENT_SOURCE_URL`,
-where `uc procure stage` refuses to download, the line says instead to bring the files in by hand
-([Files you place by hand](#files-you-place-by-hand)) or to set the source:
-
-```text
-next: place the files the report lists in ./procurement and run uc procure record, or set PROCUREMENT_SOURCE_URL to a copy of repo.jenkins-ci.org the update center can reach, then uc procure stage --poms --dependencies --war required
-```
-
-It exits 1 when anything will be dropped or a dependency is missing; that is the reason to procure,
-not an error.
+It prints what the generator drops, and the POMs, dependencies and cores to procure, each with its
+repo.jenkins-ci.org URL ([uc doctor](../reference/cli.md#uc-doctor); what to do about each section:
+[Check with uc doctor](stock-airgapped-repository.md#check-with-uc-doctor)). When it finds something
+to procure, it ends with a `next:` line naming the `uc procure stage` options for it; air-gapped
+without `PROCUREMENT_SOURCE_URL`, the line says to place the files by hand instead
+([Files you place by hand](#files-you-place-by-hand)). Its exit code 1 is the reason to procure, not
+an error.
 
 ## 2. Stage
 
@@ -90,9 +75,17 @@ then one line per file. Choose what to stage with options; they combine freely:
 | `--poms` | The real `.pom` of every plugin whose POM is missing, derived from its archive, or unusable. |
 | `--dependencies` | Each required dependency the repository lacks or holds only in an older version, at the highest minimum any plugin declares, with its `.pom`; then their dependencies, until nothing is missing. Optional dependencies are skipped. |
 | `--war VERSION` | That core's `.war` and `.pom`. Repeatable. |
-| `--war required` | Every core plugins require that the repository lacks, at or above the oldest core it holds, or `--since VERSION` (`DOCTOR_SINCE`). With no core in the repository, `--since` is needed: use the oldest version your controllers run. It is also refused for the public repository: name the versions instead. Older required cores are left out; the report names the oldest and the `--since` that stages them. Once an older core is in the repository, it is the floor for every later run. |
+| `--war required` | Every core plugins require that the repository lacks, at or above the floor. |
 
 With nothing chosen, the run stages nothing and exits 2, naming the options.
+
+The floor of `--war required` is the oldest core in the repository, or `--since VERSION`
+(`DOCTOR_SINCE`):
+
+- With no core in the repository, `--since` is needed: the oldest version your controllers run.
+- Older required cores are left out; the report names the oldest and the `--since` that stages them.
+- Once an older core is in the repository, it is the floor for every later run.
+- For the public repository it is refused: name the versions instead.
 
 Before it stages, it reads the POMs and manifests the generator has not cached yet: without them the run cannot see every missing dependency or
 required core, and a `warning` line before the summary then says how many releases went unchecked.
@@ -200,24 +193,22 @@ next: uc generate (or wait for the schedule), then uc procure clean
 Jenkins WARs are close to 100 MB, and push sends each file in a single request. Two limits between
 push and the repository can cut such an upload off:
 
-- **Artifact Keeper's request timeout.** Artifact Keeper aborts any request to its Maven path that
-  takes longer than `GLOBAL_REQUEST_TIMEOUT_SECS` (default 120 seconds), however much of the file has
-  arrived. On a slow uplink a WAR then fails with `HTTP 503: Server overloaded, please retry: request
-  timed out`, or, when the connection is cut mid-upload, with a broken pipe, a dropped connection or
-  an HTTP 502 from a proxy in front. Raise the setting on the Artifact Keeper server, for example to
-  `600`. The same limit applies when controllers download a core through the update center, which
-  fetches it from the same path.
+- **Artifact Keeper's request timeout.** Raise `GLOBAL_REQUEST_TIMEOUT_SECS` on the Artifact Keeper
+  server (default 120 seconds), for example to `600`: Artifact Keeper aborts any request to its Maven
+  path that takes longer, however much of the file has arrived. On a slow uplink a WAR then fails
+  with `HTTP 503: Server overloaded, please retry: request timed out`, a broken pipe, a dropped
+  connection or an HTTP 502 from a proxy in front. The same limit cuts core downloads that controllers
+  make through the update center, which fetches from the same path.
 - **A proxy's upload limit.** Cloudflare's proxy accepts at most 100 MB per request on its Free and
   Pro plans. When the repository's hostname goes through it, push with a hostname that bypasses the
   proxy for that run (one that reaches Artifact Keeper directly, with a certificate the uc container
   trusts): `docker compose run --rm -e REPO_URL=https://<direct-host>/ uc procure push`.
 
-A timed-out upload can leave Artifact Keeper with the file's bytes stored but not recorded. It serves
-them on download, but its UI, its `.sha1` and the update center do not see them, and its storage
-garbage collection does not remove them. Push recognizes this: when the stored bytes are the staged
-file's, it uploads them again, which records them; when they differ, it reports `DIFFERENT` and leaves
-them, and only deleting them from Artifact Keeper's storage on its server clears the path. Clean keeps
-the staged file for push.
+Push recovers the bytes a timed-out upload can leave stored but unrecorded in Artifact Keeper
+(served on download, but invisible to its UI, its `.sha1`, the update center and its garbage
+collection): when they are the staged file's, it uploads them again, which records them. When they
+differ, it reports `DIFFERENT`, and only deleting them from Artifact Keeper's storage on its server
+clears the path. Clean keeps the staged file for push.
 
 ## 5. Confirm
 

@@ -60,10 +60,8 @@ update-center2's `resources/` directory, not in the generator. The run obtains a
 
 If fetching fails, the run uses `/data/resources/last-good/` (the copy behind the last published
 release) and warns; with no last good copy, the run fails. Then the
-[overlay](../how-to/block-plugins-and-add-warnings.md) in `config/overlay/` is applied: lines of
-`*.properties` files are appended after upstream's (later keys win), `warnings.json` entries are
-merged by `id`, and any other file replaces upstream's. The source, commit or checksum, and the
-data's age go into `status.json`.
+[overlay](../how-to/block-plugins-and-add-warnings.md) in `config/overlay/` is applied. The source,
+commit or checksum, and the data's age go into `status.json`.
 
 ## Step 3: Environment for the generator
 
@@ -85,10 +83,8 @@ as configured.
 ## Step 4: Tiers
 
 The generator is run once to write `tiers.json`: the weekly and LTS core versions that get a tiered
-site. They come from the core versions plugin releases require and whose `.war` the repository
-holds, plus the next weekly after each LTS and the next stored LTS after each weekly
-([Core age](modes.md#core-age)), limited to cores released within `CORE_AGE_DAYS` (0: no limit).
-Either list may be empty; a repository with no `jenkins-war` produces no tiers at all.
+site ([Core age](modes.md#core-age) says which). Either list may be empty; a repository with no
+`jenkins-war` produces no tiers at all.
 
 ## Step 5: .htaccess
 

@@ -42,14 +42,13 @@ services:
 ```
 
 Put the PEM certificate (with its chain) and key in `./tls/`, readable by `UC_UID` on Linux. Then add
-the override to `COMPOSE_FILE` in `.env`, so that every later `docker compose up -d` (upgrades, setting
-changes) keeps it; a one-off `-f compose.tls.yaml` would be dropped by the next plain command:
+the override to `COMPOSE_FILE` in `.env` ([Compose](../reference/configuration.md#compose)):
 
 ```bash
 COMPOSE_FILE=compose.yaml:compose.tls.yaml                              # online
 COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.tls.yaml       # air-gapped
 ```
 
-(On Windows, separate the files with `;`.) Then run `docker compose up -d`. Port 8443
+Then run `docker compose up -d`. Port 8443
 (`HTTPS_PORT` on the host) then serves TLS with Mozilla's "intermediate" settings; 8080 stays
 available for a proxy in front. Set `PUBLIC_URL` to the `https://` origin and publish a new release.

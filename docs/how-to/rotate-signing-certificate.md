@@ -23,12 +23,9 @@ docker compose run --rm -v /media/offline-usb/easy-update-center-root:/setup/roo
 ```
 
 This writes a new `secrets/update-center.key` and `secrets/update-center.cert`, keeps the previous
-pair as `*.old`, and sets the modes of everything in `secrets/`, as `setup secrets` does. The
-root key is mounted read-only and only read; nothing on the offline media changes. If the directory
-does not hold the key of `secrets/root-ca.crt` (a typo, or an old root after replacing it), it stops
-with an error naming the file. The new pair is issued in a temporary directory inside `secrets/` and
-only then renamed into place, so when a check, a step or a rename fails, `secrets/` is left as it
-was.
+pair as `*.old`, and sets the modes of everything in `secrets/`. The root key is only read. When
+anything fails, such as a root key that does not belong to `secrets/root-ca.crt`, it stops with an
+error naming the file and leaves `secrets/` as it was.
 
 Then make the running services use the new files. Compose mounts each secret file as it was when
 the container started, so recreate the scheduler:
@@ -39,8 +36,7 @@ docker compose run --rm uc generate
 docker compose run --rm uc status        # signing_cert.not_after is a year out
 ```
 
-(Air-gapped, with `COMPOSE_FILE` set in `.env`, as in [Deploy air-gapped](../getting-started/airgapped.md#3-configure).) Return the root
-key to offline storage. Once the new release is live, delete `secrets/*.old`.
+Return the root key to offline storage. Once the new release is live, delete `secrets/*.old`.
 
 ### A passphrase-protected root key
 

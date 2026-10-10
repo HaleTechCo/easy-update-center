@@ -2,9 +2,7 @@
 
 Everyday commands: publish a release now, accept a deliberate shrink, go back to an earlier release, read the logs.
 
-Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`, as in
-[Deploy air-gapped](../getting-started/airgapped.md#3-configure); otherwise add
-`-f compose.yaml -f compose.airgapped.yaml` to each.
+Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](../reference/configuration.md#compose)).
 
 ## Generate now
 
@@ -78,5 +76,4 @@ docker compose logs -f web            # access log and web errors
 docker compose logs -f repo-adapter   # repository access (air-gapped)
 ```
 
-`status.json` names only the class of a failure (`last_run.error`); the full message is in the
-scheduler's log, or on your terminal for `docker compose run --rm uc generate`.
+Where a failed run's message is: [Troubleshooting](../troubleshooting.md).

@@ -94,10 +94,12 @@ of its `META-INF/MANIFEST.MF` entry in the zip directory (the UTC extended times
 otherwise the DOS time read as UTC).
 
 The archive date is used only if it is on or after 2004-01-01 and no more than one day after the
-repository's time (the day covers the missing time zone; a build cannot follow its upload).
-Otherwise, or when it cannot be read, the repository's time is kept and the archive is reported
-under "dates from the repository". The date applies to the archive and its `.pom`, for plugins and
-cores alike.
+repository's time (the day covers the missing time zone; a build cannot follow its upload), so dates
+are accurate to about a day. Otherwise, or when it cannot be read (such as the 1980-02-01
+placeholder some builds write), the repository's time is kept and the archive is reported under
+"dates from the repository". The date applies to the archive and its `.pom`, for plugins and cores
+alike. With the adapter off, dates are whatever the repository reports: upload times for your own
+repository.
 
 From Artifactory the date is read with HTTP range requests for the zip directory; a server that
 ignores ranges falls back to the repository's time rather than downloading whole archives. From
@@ -164,14 +166,3 @@ replaced, dropped and dated from the repository, with paths and URLs.
 - `status.json` is public, so it gets counts only, under `doctor.repo_adapter`, and one warning
   line when anything was dropped.
 - With the adapter off there is no report.
-
-## Known limitations
-
-- **Release dates are accurate to about a day**: zip times carry no time zone. Archives without a
-  usable date (such as the 1980-02-01 placeholder some builds write) keep the upload time and are
-  reported. With the adapter off, dates are whatever the repository reports: right for
-  repo.jenkins-ci.org, upload times for your own repository.
-- **Parent POMs cannot be derived.** Plugins that inherit their SCM link from a parent POM the
-  repository lacks have no SCM link.
-- **Gradle-built plugins** still need their real `.pom` procured.
-- **Artifact Keeper** downloads each archive once, because it has no range support.

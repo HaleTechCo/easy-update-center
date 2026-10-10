@@ -21,12 +21,8 @@ Jenkins controllers need to reach only the web container, at `PUBLIC_URL`.
 | `scheduler`, `uc` | yes | yes | no |
 | `repo-adapter` | no | yes | yes |
 
-`setup` has no network at all: `docker compose run --rm setup` and its `secrets`, `pki-init` and
-`pki-rotate` commands only set up files on the host, in `./secrets` and a directory you mount.
-
 `repo` is an internal network: nothing on it can reach outside the host, and the web container is
-not on it. The repo-adapter reaches the repository through `repo-egress`. `make compose-check`
-asserts this layout.
+not on it. The repo-adapter reaches the repository through `repo-egress`.
 
 ## Outbound: online
 
@@ -41,11 +37,8 @@ asserts this layout.
 | `PROCUREMENT_SOURCE_URL`'s host (default `repo.jenkins-ci.org`) | `uc` | Only for `uc procure stage`: the files it stages. |
 | `REPO_URL`'s host, when it is your own repository | `scheduler`, `uc` (`REPO_ADAPTER` off); `repo-adapter` (`REPO_ADAPTER` on, always for Artifact Keeper); `uc` for `uc procure push` and `clean` | The listing, POMs and manifests instead of repo.jenkins-ci.org, the uploads of `uc procure push`, and the checks of both. |
 
-`uc doctor --fetch` reads from `repo.jenkins-ci.org` too. The air-gapped override also blocks
-`github.com` as a precaution. Behind an outbound HTTP proxy, set it for
-both halves: `JAVA_TOOL_OPTIONS` (`-Dhttps.proxyHost`, `-Dhttps.proxyPort`) for the generator, and
-`HTTPS_PROXY` with `NO_PROXY=repo-adapter` for the `uc` code, which fetches the upstream resources
-and tool installers itself.
+`uc doctor --fetch` reads from `repo.jenkins-ci.org` too. Behind an outbound HTTP proxy, set both
+the JVM's and Python's proxy settings ([Read by bundled software](configuration.md#read-by-bundled-software)).
 
 ## Outbound: air-gapped
 
@@ -59,11 +52,8 @@ and tool installers itself.
 | `PROCUREMENT_SOURCE_URL`'s host | `uc` | Only for `uc procure stage`, and only when set. |
 | `REPO_URL`'s host | `uc` | Only for `uc procure push` and `clean`. |
 
-`compose.airgapped.yaml` maps `api.github.com`, `github.com`, `codeload.github.com`,
-`raw.githubusercontent.com`, `reports.jenkins.io` and `updates.jenkins.io` to 127.0.0.1 in the
-`scheduler`, `uc` and `repo-adapter` containers, so any attempt to reach them fails at once instead
-of waiting for a firewall that silently drops packets. See
-[Fast failure for blocked hosts](../architecture/modes.md#fast-failure-for-blocked-hosts).
+The internet hosts of online mode fail at once air-gapped, instead of waiting on a firewall that
+drops packets: [Fast failure for blocked hosts](../architecture/modes.md#fast-failure-for-blocked-hosts).
 
 ## Outbound: controllers
 
@@ -77,7 +67,7 @@ Tool installers in `/updates/` still point at the internet for their downloads.
 
 ## Outbound: image builds
 
-Building the images (`docker compose build`, or `make build`) needs internet access. Without it,
+Building the images (`docker compose build`) needs internet access. Without it,
 build elsewhere and move the images:
 [Or build from source](../getting-started/airgapped.md#or-build-from-source).
 

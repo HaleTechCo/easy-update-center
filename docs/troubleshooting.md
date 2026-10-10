@@ -10,8 +10,7 @@ Start with `docker compose run --rm uc status`. `status.json` names only a failu
 - air-gapped, repository errors (authentication, certificates, timeouts) also appear in
   `docker compose logs --tail 200 repo-adapter`.
 
-Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
-([Deploy air-gapped](getting-started/airgapped.md#3-configure)).
+Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](reference/configuration.md#compose)).
 
 ## Generation
 
@@ -109,4 +108,4 @@ The commands of [Procure missing POMs, dependencies and cores](how-to/procure-mi
 | Plugins are offered that the controller cannot install | Their dependencies are missing from the repository. `uc doctor` lists them under dependency problems. |
 | `jenkins-plugin-cli` downloads from the wrong host | `JENKINS_UC` has a path; set it to the bare origin ([jenkins-plugin-cli](how-to/configure-jenkins.md#jenkins-plugin-cli-and-the-jenkins-docker-image)). |
 | The controller cannot reach the update center at all | From the controller's host, `curl https://jenkins-updates.example.com/uctest.json` (your `PUBLIC_URL`) must print `{}`. |
-| A controller in a container on the update center's machine gets `java.net.ConnectException` checking the update site | Inside the container, `localhost` is the container itself. Set `PUBLIC_URL` to a name the container can reach (on Docker Desktop, `http://host.docker.internal:<port>`), run `docker compose up -d` and `docker compose run --rm uc generate`, and use that URL for the update site: redirects and download URLs all use `PUBLIC_URL` ([A hostname for PUBLIC_URL](getting-started/requirements.md#a-hostname-for-public_url)). |
+| A controller in a container on the update center's machine gets `java.net.ConnectException` checking the update site | Inside the container, `localhost` is the container itself: set `PUBLIC_URL` to a name it can reach ([A hostname for PUBLIC_URL](getting-started/requirements.md#a-hostname-for-public_url)), run `docker compose up -d` and `docker compose run --rm uc generate`, and use that URL for the update site. |

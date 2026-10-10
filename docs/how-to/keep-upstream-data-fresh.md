@@ -76,10 +76,5 @@ mirror those downloads too.
 
 ## Check the age
 
-`status.json` reports the upstream data behind the live release:
-
-- `resources.source` and `resources.ref`: which copy was used;
-- `resources.age_days`: days since upstream last changed it;
-- `resources.stale`: `true` once that exceeds `STALE_AFTER_DAYS` (30).
-
-Alert on `resources.stale`: see [Monitor](monitor.md).
+`status.json`'s `resources` block shows which copy the live release used and how old it is
+([status.json](../reference/status-json.md)). Alert on `resources.stale`: see [Monitor](monitor.md).

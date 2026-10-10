@@ -22,7 +22,7 @@ release is one complete site with the same layout as updates.jenkins.io.
 | `/download/` | Index pages of every plugin and core version, and the download routes (see [Downloads](#downloads)). |
 | `/updates/` | Tool installer metadata (JDK, Maven, Gradle, NodeJS and others), signed by the Jenkins project. Present when `TOOL_INSTALLERS_URL` is set. |
 | `/tiers.json` | The weekly and LTS core versions that have a tier in this release (`weeklyCores`, `stableCores`). |
-| `/uctest.json` | `{}`: Jenkins' connection check, and the health endpoint. |
+| `/uctest.json` | `{}`: Jenkins' connection check, and the health endpoint ([Monitor](../how-to/monitor.md#health-checks)). |
 | `/status.json` | The update center's own [status](status-json.md). Not part of the release. |
 | `/` | A short `index.html`. |
 
@@ -33,10 +33,7 @@ A tier is a complete site for one core version, offering only the plugin version
 - `dynamic-<version>/` for weekly cores, for example `dynamic-2.540/`;
 - `dynamic-stable-<version>/` for LTS cores, for example `dynamic-stable-2.528.1/`.
 
-The generator derives the tier list from the core versions plugin releases declare as their minimum
-and whose `.war` the repository holds; each LTS tier also brings the next weekly tier, and each
-weekly one the next LTS release in the repository, limited by `CORE_AGE_DAYS`. See
-[Step 4: Tiers](../architecture/generation-pipeline.md#step-4-tiers). A repository with no core
+Which cores get a tier: [Core age](../architecture/modes.md#core-age). A repository with no core
 produces no tiers: every request goes to `current/`.
 
 ## Version routing
@@ -69,13 +66,4 @@ Download URLs in the signed metadata point at `$PUBLIC_URL/download/`:
 | `/download/war/latest/jenkins.war` | Redirect to `/latest/jenkins.war`, then to the newest core. |
 | `/download/plugins/<id>/`, `/download/war/` | Index pages listing every version. |
 
-"From the download backend" means a 302 redirect with `DOWNLOAD_ACCESS=redirect`, or the file
-streamed through the web container with `DOWNLOAD_ACCESS=proxy`. A version the backend does not have
-returns 404. See [Downloads](../architecture/request-routing.md#downloads).
-
-## Health and status endpoints
-
-| Path | Use |
-|---|---|
-| `/uctest.json` | Returns `{}` with status 200 once a release is live. The container's own health check uses it; use it for external probes too. |
-| `/status.json` | Last run, live release, certificate expiry and data age, with `Cache-Control: no-store`. |
+How the backend answers, redirect or proxy: [Downloads](../architecture/request-routing.md#downloads).

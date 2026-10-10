@@ -29,7 +29,7 @@ repository.
    ([File modes](../reference/secrets.md#file-modes)).
 
 2. Set `DOWNLOAD_ACCESS=proxy` in `.env`.
-3. Recreate the web container: `docker compose up -d` (air-gapped, with `COMPOSE_FILE` in `.env`).
+3. Recreate the web container: `docker compose up -d`.
 
 The web container refuses to start in proxy mode if the file does not hold `username:password`. To
 check, download a plugin you know the repository holds through it, using your own `PUBLIC_URL`:
@@ -58,12 +58,12 @@ services:
       DOWNLOAD_PROXY_CA_FILE: /etc/ssl/uc-proxy-ca.crt
 ```
 
-Copy the CA's PEM file to `secrets/proxy-ca.crt` and run `docker compose run --rm setup secrets`
-(it keeps the file readable, mode 0644), add the override to
-`COMPOSE_FILE` in `.env`, and recreate the web container:
+Copy the CA's PEM file to `secrets/proxy-ca.crt`, run `docker compose run --rm setup secrets`, add
+the override to `COMPOSE_FILE` in `.env` ([Compose](../reference/configuration.md#compose)), and
+recreate the web container:
 
 ```bash
-COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.proxy-ca.yaml    # in .env (Windows: ; between files)
+COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.proxy-ca.yaml    # in .env
 ```
 
 ```bash
@@ -72,8 +72,3 @@ docker compose up -d
 
 The file must hold every CA needed to verify the backend (intermediate CAs are accepted). It
 replaces the system bundle for this purpose, it is not added to it.
-
-## Credentials file location
-
-The web container reads the credentials from `/run/secrets/download_proxy_auth`, which Compose mounts
-from `secrets/download_proxy_auth`.

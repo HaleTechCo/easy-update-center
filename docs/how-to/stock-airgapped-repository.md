@@ -63,36 +63,24 @@ Store each core version you want to offer at:
 org/jenkins-ci/main/jenkins-war/<version>/jenkins-war-<version>.war
 ```
 
-Its POM is optional. Every stored core that a plugin requires gets a tier (`CORE_AGE_DAYS=0`, the
-air-gapped default). A required core the repository lacks costs its tier, and a missing weekly one
-can cost an LTS tier too: `uc doctor` lists them, and `uc procure stage --war required` stages them
-([Procure missing files](procure-missing-files.md)). Without any core the site offers plugins only,
-with no tiers: controllers still see every plugin in `current/`, but no core upgrade. See
-[Core age](../architecture/modes.md#core-age).
+Its POM is optional. Which stored cores get a tier: [Core age](../architecture/modes.md#core-age).
+`uc doctor` lists the required cores the repository lacks, and `uc procure stage --war required`
+stages them ([Procure missing files](procure-missing-files.md)). Without any core the site offers
+plugins only, with no tiers and no core upgrade.
 
 ## POMs
 
-- With the repo-adapter on (the air-gapped default) a plugin needs no `.pom`: the adapter serves the
-  one built into the `.hpi`.
-- A `.pom` you do store is used only if it is a real POM for the same coordinates. A saved error page
-  or a POM for another version is ignored and reported, and the embedded one is used instead.
-- Plugins built with Gradle embed no POM. `uc doctor` lists them with the URL of the real `.pom` on
-  repo.jenkins-ci.org; store that file beside the `.hpi`.
-- Parent POMs (`org/jenkins-ci/plugins/plugin/<version>/plugin-<version>.pom`) are optional; without
-  them some plugins have no SCM link.
-- `.jar` files are optional.
+With the repo-adapter on (the air-gapped default), a plugin needs no `.pom`: the adapter uses the one
+built into the `.hpi`, and ignores a stored `.pom` that is not a real POM for the same coordinates
+([Filling gaps](../architecture/repo-adapter.md#filling-gaps)). Only plugins built with Gradle need
+their real `.pom`, stored beside the `.hpi`: `uc doctor` lists them with its URL. Parent POMs and
+`.jar` files are optional.
 
 ## The service account
 
-- **Artifactory:** an account with read permission on the repository, with its password or an
-  access token in `secrets/repo_password`. No admin rights are needed: the generator's listing (an
-  AQL query) returns whatever the account can read. Anonymous access is not needed.
-- **Artifact Keeper:** a user name and an API token (not the password); the token goes in
-  `secrets/repo_password`.
-
-Only the repo-adapter container receives these credentials; see
-[Secrets](../reference/secrets.md#secret-files). A repository behind a private CA needs its CA
-bundle: [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca).
+What the account needs, for each repository type: [Secrets](../reference/secrets.md#secret-files). A
+repository behind a private CA also needs its CA bundle:
+[Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca).
 
 ## Check with uc doctor
 
@@ -102,10 +90,8 @@ Before the first generation, and after each procurement:
 docker compose run --rm uc doctor --fetch
 ```
 
-(With `COMPOSE_FILE` set in `.env`, as in [Deploy air-gapped](../getting-started/airgapped.md#3-configure);
-otherwise add `-f compose.yaml -f compose.airgapped.yaml`.) `--fetch` reads each archive's manifest
-and POM so dependencies can be checked before the first generation; the results are cached. It exits
-1 when anything will be dropped. Read it top down:
+`--fetch` reads each archive's manifest and POM, so dependencies can be checked before the first
+generation. Read the report top down:
 
 | Section | What to do |
 |---|---|

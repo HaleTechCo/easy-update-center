@@ -87,11 +87,6 @@ RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 
 ## Downloads
 
-Controllers download plugins from wherever the update center sends them:
-
-- online: get.jenkins.io, which controllers must be able to reach;
-- air-gapped with `DOWNLOAD_ACCESS=redirect` (the default): `DOWNLOAD_BACKEND_URL`, your
-  repository, which controllers must be able to read **without credentials**;
-- with `DOWNLOAD_ACCESS=proxy`: the update center itself, which fetches from the repository with
-  its own account. Use this when controllers cannot read the repository anonymously:
-  [Proxy plugin downloads](proxy-downloads.md).
+Controllers download plugins from wherever the update center sends them, which they must be able to
+reach: [Outbound: controllers](../reference/network.md#outbound-controllers). When they cannot read
+the repository without credentials: [Proxy plugin downloads](proxy-downloads.md).

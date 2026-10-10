@@ -8,7 +8,7 @@ on 2026-09-24 produced. Pins are enforced at build time.
 ## uc image
 
 The image behind the `uc`, `scheduler`, `repo-adapter` and `setup` services. Built by
-`docker compose build` (or `make build`) from [`uc/Dockerfile`](../../uc/Dockerfile).
+`docker compose build` from [`uc/Dockerfile`](../../uc/Dockerfile).
 
 | Component | Version or pin | Pinned in | License | Why |
 |---|---|---|---|---|
@@ -84,7 +84,7 @@ delivered artifact, and an unpinned one picks up checker fixes without a bump co
 - **Floating:** the base image tags (`eclipse-temurin:21-jre`, `httpd:2.4`,
   `maven:3.9-eclipse-temurin-21`) and every distribution package. The distributions drop superseded
   package versions from their archives, so a pinned package version breaks the build as soon as the
-  base image moves on. Rebuilding (`docker compose build`, or `make build`) picks up their security
+  base image moves on. Rebuilding (`docker compose build`) picks up their security
   fixes.
 - Upgrading update-center2 is a deliberate step: [Upgrading update-center2](../development/upgrading-upstream.md).
 

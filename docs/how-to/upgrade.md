@@ -37,12 +37,15 @@ without making a new folder:
 tar -xzf easy-update-center-<new version>.tar.gz --strip-components=1 -C <deployment folder>
 ```
 
-Files you added stay (`.env`, `secrets/`, `config/overlay/`, `procurement/`, the
-Compose overrides you created beside `compose.yaml` and the folders they mount, such as `tls/`);
-files the release tracks are replaced by the release's, so a change you made to one of them is lost.
+Files the release tracks are replaced by the release's, so a change you made to one is lost. Files
+you added stay:
+
+- `.env`, `secrets/`, `config/overlay/` and `procurement/`;
+- the Compose overrides you created beside `compose.yaml`, and the folders they mount, such as `tls/`.
+
 Files a release dropped are not deleted: remove any you recognise. Then set `UC_IMAGE` and
-`WEB_IMAGE` in `.env` and run the commands from `setup` on, in that folder. The Compose project is
-named `easy-update-center` by `compose.yaml`, so the data volume stays the same.
+`WEB_IMAGE` in `.env` and run the commands from `setup` on, in that folder. The data volume stays
+the same: `compose.yaml` names the Compose project `easy-update-center`.
 
 ## Upgrade from source
 
@@ -51,28 +54,23 @@ git fetch
 git checkout main
 git log --oneline HEAD..origin/main                # what changes
 git pull
-docker compose build                                 # or: make build
+docker compose build
 docker compose run --rm setup                        # safe to repeat
 docker compose run --rm --no-deps uc config --check  # your settings, as the new revision reads them
-docker compose up -d                                 # air-gapped: COMPOSE_FILE in .env selects the override
+docker compose up -d
 docker compose run --rm uc generate                  # publish with the new generator now, instead of at the next schedule
 docker compose run --rm uc status
 ```
 
-Run `setup` after the images are rebuilt: it creates what a newer revision needs, such as a
-credential file it added, and leaves what exists.
-
-Check the settings before `docker compose up -d`: a newer revision can refuse a value an older one
-loaded, and a service whose settings do not load exits with an error instead of running.
-`uc config --check` prints `configuration ok`, or `uc: error: ...` naming the setting to fix in
-`.env`.
+Run `setup` after the images are rebuilt, and check the settings before `docker compose up -d`, as
+for a release: a service whose settings do not load exits instead of running.
 
 `docker compose up -d` recreates the services whose image or configuration changed. Check that
 `last_run.result` is `success` and that `update_center2` names the version you expect.
 
 Air-gapped hosts without internet access cannot `git pull`: the clone came from a bundle, so its
-`origin` never changes. On a connected machine, update your clone, run `docker compose build` (or
-`make build`), and create a new image archive and bundle as in
+`origin` never changes. On a connected machine, update your clone, run `docker compose build`, and create a new image
+archive and bundle as in
 [Or build from source](../getting-started/airgapped.md#or-build-from-source).
 Then, on the air-gapped host:
 
@@ -103,7 +101,7 @@ To go back to an earlier source revision:
 
 ```bash
 git checkout <previous commit or tag>
-docker compose build      # or: make build
+docker compose build
 docker compose up -d
 ```
 

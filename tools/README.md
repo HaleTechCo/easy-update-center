@@ -8,23 +8,8 @@ invokes, and `release.py`, the Release workflow's helper. Nothing else imports i
 
 ## Setup
 
-```bash
-python -m venv .venv
-.venv/Scripts/pip install -r requirements-dev.txt   # Linux/Mac: .venv/bin/pip
-.venv/Scripts/pre-commit install                    # run the hooks on every git commit
-.venv/Scripts/pre-commit run --all-files            # run them now
-```
-
-The venv **must** be active when you `git commit`, or every hook fails with "command not found",
-because they are all `language: system`:
-
-```bash
-source .venv/Scripts/activate    # Windows;  Linux/Mac: source .venv/bin/activate
-```
-
-The checker settings live beside the hooks: ruff in [`pyproject.toml`](../pyproject.toml)
-(`[tool.ruff]`), yamllint in [`.yamllint`](../.yamllint), shellcheck in
-[`.shellcheckrc`](../.shellcheckrc).
+The venv and the hooks: [CONTRIBUTING.md](../CONTRIBUTING.md#set-up). Every hook is
+`language: system`, so the venv must be active when you `git commit`.
 
 ## Why these exist at all
 
@@ -68,16 +53,8 @@ Docker is unreachable, because a Dockerfile changed and went unlinted.
 
 ## Running them
 
-You should not normally need to. They run as part of `pre-commit`:
-
-```bash
-pre-commit run --all-files          # everything
-pre-commit run unicode-gremlins --all-files   # one hook
-```
-
-Fixer hooks (`ruff-format`, the whitespace fixers, `unicode-gremlins`, `shfmt`) rewrite files and
-therefore report **Failed** on the run that changes something. Re-run - a second consecutive clean
-run is the real signal.
+They run as part of `pre-commit`; how to run them by hand, and how fixer hooks report:
+[Lint](../CONTRIBUTING.md#lint).
 
 ## Dependencies
 

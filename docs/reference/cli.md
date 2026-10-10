@@ -11,14 +11,7 @@ has the same volume, secrets and settings as the scheduler:
 docker compose run --rm uc <command> [options]
 ```
 
-Air-gapped, set `COMPOSE_FILE` in `.env` so plain `docker compose` uses the air-gapped override
-(Compose reads it from there; on Windows, separate the files with `;`):
-
-```bash
-COMPOSE_FILE=compose.yaml:compose.airgapped.yaml
-```
-
-Without it, add `-f compose.yaml -f compose.airgapped.yaml` to every command.
+Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](configuration.md#compose)).
 
 - The `uc` service sits in the `tools` profile, so `docker compose up` does not start it; `run`
   does. Running it starts the `repo-adapter` first.
@@ -124,28 +117,19 @@ docker compose run --rm uc procure push [--dry-run] [--staging DIR]
 docker compose run --rm uc procure clean [--dry-run] [--staging DIR]
 ```
 
-One command per stage of procurement: `stage` fetches what `uc doctor` finds missing into a staging
-folder for review, `record` adds the files you place there by hand, `push` uploads exactly the files
-the folder's `procurement.json` lists to the repository, and `clean` deletes the staged copies the
-repository then holds. Nothing reaches the repository without `push`. How to use them, in order:
-[Procure missing POMs, dependencies and cores](../how-to/procure-missing-files.md); with an
-approval before the push:
-[Run procurement from a pipeline](../how-to/run-procurement-from-a-pipeline.md).
+`stage` fetches what `uc doctor` finds missing into a staging folder for review, `record` adds the
+files you place there by hand, `push` uploads exactly what the folder's `procurement.json` lists, and
+`clean` deletes the staged copies the repository then holds. How each behaves, in order:
+[Procure missing POMs, dependencies and cores](../how-to/procure-missing-files.md).
 
-The staging folder is `./procurement` on the host, which the `uc` service mounts at `/procurement`.
-Every command takes `--staging DIR` to use another folder inside the `uc` container for one run; it
+The staging folder is `./procurement` on the host, mounted at `/procurement`; on Linux it must be
+writable by `UC_UID`. `--staging DIR` uses another folder inside the `uc` container for one run; it
 must not be the data volume, `/data`, or a folder in it.
-On Linux, `./procurement` must be writable by `UC_UID`, the user the containers run as.
 
 ### uc procure stage
 
-Prints `uc doctor`'s report, then stages the missing files you chose with the options below: each is
-downloaded from `PROCUREMENT_SOURCE_URL` (repo.jenkins-ci.org by default), checked against the
-`.sha1` published beside it, saved in the folder at its Maven path and listed in `procurement.json`
-with its source URL, sha1, size and reason. Staged files are yours and readable by everyone (mode
-`644`). One line per file says what
-happened (`staged`, `kept`: already staged and intact, `FAILED`: with the reason), then a summary.
-Running it again keeps what is already staged and downloads only what is missing or changed.
+Prints `uc doctor`'s report, then downloads each file you chose from `PROCUREMENT_SOURCE_URL`, checks
+it against its `.sha1` and lists it in `procurement.json` ([2. Stage](../how-to/procure-missing-files.md#2-stage)).
 Air-gapped, it is refused unless `PROCUREMENT_SOURCE_URL` names a copy the update center can reach.
 
 | Option | Meaning |
@@ -157,24 +141,18 @@ Air-gapped, it is refused unless `PROCUREMENT_SOURCE_URL` names a copy the updat
 | `--fetch`, `--no-fetch` | First download the POMs and manifests missing from the generator's cache, so the run finds every missing dependency and required core. On by default. |
 | `--staging DIR` | The staging folder (default `/procurement`). |
 
-Exits 0 when everything planned is staged; 1 when a file could not be staged, or when the run is
-refused as `uc: error: ...` (air-gapped without `PROCUREMENT_SOURCE_URL`, a `--war` that is neither a
-version nor `required`); 2 when nothing is selected: no POMs, dependencies or cores
-(`uc: error: nothing to stage: choose --poms, --dependencies or --war VERSION|required`). Whenever `procurement.json` lists files, also
-after a run with problems, it ends with the review:
-
-```text
-next: review ./procurement (procurement.json lists 12 files), then uc procure push
-```
-
-With `--staging`, the line names that folder instead.
+Exits 0 when everything planned is staged; 1 when a file could not be staged, or the run is refused
+(`uc: error: ...`: air-gapped without `PROCUREMENT_SOURCE_URL`, a `--war` that is neither a version
+nor `required`); 2 when nothing is selected
+(`uc: error: nothing to stage: choose --poms, --dependencies or --war VERSION|required`). Whenever
+`procurement.json` lists files, it ends with
+`next: review ./procurement (procurement.json lists N files), then uc procure push`.
 
 ### uc procure record
 
-Records every `.hpi`, `.jpi`, `.war` and `.pom` placed in the folder by hand that `procurement.json`
-does not list yet, with the reason `added by hand`, after the checks a download gets. A misplaced
-file is refused with the Maven path it belongs at, from the coordinates its manifest or POM
-declares. It needs no network.
+Records the `.hpi`, `.jpi`, `.war` and `.pom` files placed in the folder by hand, after the checks a
+download gets, and refuses a misplaced file with the Maven path it belongs at. It needs no network
+([Files you place by hand](../how-to/procure-missing-files.md#files-you-place-by-hand)).
 
 | Option | Meaning |
 |---|---|
@@ -185,11 +163,10 @@ Exits 0 unless it refused a file, else 1. It ends with the same `next:` line as 
 
 ### uc procure push
 
-Uploads the files `procurement.json` lists that the repository lacks, with
-`secrets/repo_push_auth`, never overwriting a path the repository already holds. It first checks
-that each file is the one recorded, and reports the files in the folder that `procurement.json` does
-not list (`unlisted`), which it does not push. It refuses the public repo.jenkins-ci.org, and a
-folder with no `procurement.json`.
+Uploads the files `procurement.json` lists that the repository lacks, with `secrets/repo_push_auth`,
+never overwriting a path the repository holds; files it does not list are reported as `unlisted` and
+not pushed. It refuses the public repo.jenkins-ci.org, and a folder with no `procurement.json`
+([4. Push](../how-to/procure-missing-files.md#4-push)).
 
 | Option | Meaning |
 |---|---|
@@ -197,18 +174,13 @@ folder with no `procurement.json`.
 | `--staging DIR` | The staging folder (default `/procurement`). |
 
 Exits 0 when every listed file ends up in the repository with the recorded content, else 1;
-unlisted files do not change it. After a real push with no problem, it ends with:
-
-```text
-next: uc generate (or wait for the schedule), then uc procure clean
-```
+unlisted files do not change it.
 
 ### uc procure clean
 
-Deletes the staged files, listed or placed by hand, that the repository holds with the same content
-(the same sha1), with their `procurement.json` entries and any folder left empty, so the folder keeps
-only what still needs pushing. It reads the repository with `secrets/repo_push_auth`, as push does,
-and likewise refuses the public repo.jenkins-ci.org.
+Deletes the staged files the repository holds with the same sha1, with their `procurement.json`
+entries. It reads the repository with `secrets/repo_push_auth` and refuses the public
+repo.jenkins-ci.org, as push does ([6. Clean up](../how-to/procure-missing-files.md#6-clean-up)).
 
 | Option | Meaning |
 |---|---|
@@ -245,23 +217,20 @@ docker compose run --rm --no-deps uc config [--json | --check]
 docker compose run --rm --no-deps uc config --example [--mode online|airgapped]
 ```
 
-`uc config` needs no other service, so run it with `--no-deps`. Without it, Compose first starts the
-repo-adapter the `uc` service depends on, recreating it when its image or settings changed: after an
-upgrade or a settings change, the adapter would then run with settings not yet checked, and a
-setting the new revision refuses would show as Compose's `dependency failed to start` instead of
-`uc: error: ...`.
+Shows every setting with its value and where it came from: `environment`, `mode` (the default for
+the mode), `derived` (worked out from other settings, as `REPO_URL` is) or `default`. Secret files
+are not settings: `uc config` never reads them. Credentials inside a URL setting are shown as `***`,
+taken as everything before the URL's last `@` (after any `scheme://`), so an `@` in a path also hides
+the part before it: `https://cdn.example/gh/repo@1.0/data.json` shows as `https://***@1.0/data.json`.
 
-Shows every setting with its value and where it came from: `environment`, `mode`
-(the default for the mode), `derived` (worked out from other settings, as `REPO_URL` is) or
-`default`. Secret files are not settings: `uc config` never reads them. How a change in `.env` takes effect:
-[When changes apply](configuration.md#when-changes-apply).
-Credentials inside a URL setting are shown as `***`, taken as everything before the URL's last `@`
-(after any `scheme://`), so an `@` in a path also hides the part before it:
-`https://cdn.example/gh/repo@1.0/data.json` shows as `https://***@1.0/data.json`.
+Run it with `--no-deps`: it needs no other service, and without it Compose first starts (or
+recreates) the repo-adapter, which would then run with settings not yet checked, and a refused
+setting would show as `dependency failed to start` instead of `uc: error: ...`. How a change in
+`.env` takes effect: [When changes apply](configuration.md#when-changes-apply).
 
 | Option | Meaning |
 |---|---|
-| `--json` | The same as a JSON list of objects with `env`, `value`, `source` and `note`. |
+| `--json` | The same as a JSON list of objects with `env`, `value` and `source` (`env` where the text says `environment`). |
 | `--check` | Only check the settings: prints `configuration ok`, or the error. |
 | `--example` | Print an example `.env` that lists every setting, with the settings the mode needs set and the rest commented out at their defaults. It reads no settings, so it works before any exist. |
 | `--mode` | With `--example`: the mode the example is for, `online` (the default) or `airgapped`. |
@@ -275,19 +244,18 @@ How settings combine: [How settings are read](configuration.md#how-settings-are-
 uc schedule
 ```
 
-The `scheduler` service's command; you do not run it by hand. When no release is live it generates
-one at once, in its own process: that
-first run prints no `published release` line, and a failure is logged as a traceback while
-scheduling continues. It then hands over to supercronic, which runs:
+The `scheduler` service's command; you do not run it by hand. It hands over to supercronic, which
+runs:
 
-- `uc generate --wait` on `GENERATE_SCHEDULE` (default every six hours); those runs print
-  `published release <id>`;
+- `uc generate --wait` on `GENERATE_SCHEDULE` (default every six hours);
 - `uc doctor --record` on `DOCTOR_SCHEDULE`, when it is set: a read-only report whose counts go
   into `status.json`.
 
-A bad schedule stops the scheduler at start, with a message naming the setting. supercronic never starts a job while its
-previous run is still going, and a scheduled generation that finds another generation or a
-rollback running waits for it.
+supercronic never starts a job while its previous run is still going, and a scheduled generation
+waits for another generation or a rollback. When no release is live, `uc schedule` first generates
+one in its own process: that run prints no `published release` line, and a failure is logged as a
+traceback while scheduling continues. A bad schedule stops the scheduler at start, with a message
+naming the setting.
 
 ## uc repo-adapter
 
@@ -316,20 +284,19 @@ uc pki rotate --dir <dir> [--root <dir>] [--display-dir <dir>] [--days 365] [--o
 uc pki show --dir <dir>
 ```
 
-A directory `init` or `rotate` cannot write in is reported as
-`uc: error: cannot write in <dir>: <reason>` (one `init` cannot create, as
-`uc: error: cannot create <dir>: <reason>`), and nothing changes. While they rename files into
-place, both hold SIGINT and SIGTERM back (Ctrl-C, `docker stop`) until every rename is done or
-undone, and neither renames onto a file that exists: one that appears meanwhile is reported as
-`refusing to overwrite existing files: ...` and kept. If moving back fails too, the error names
-what is not back and the `.rotate-*` or `.init-*` directory inside `<dir>` that keeps what was set
-aside.
-
 | Command | What it does |
 |---|---|
-| `init` | Creates a root CA (`root-ca.crt`, and `root/root-ca.key` to move offline) and a signing key and certificate (`update-center.key`, `update-center.cert`) issued by it. It refuses to overwrite any of them. It creates them in a temporary directory inside `<dir>` and moves them in once all four exist; when a step fails, it moves back what it moved, so `<dir>` is left as it was. |
-| `rotate` | Issues a new signing certificate from the root key in `<dir>/root/`. The previous pair is kept as `*.old`, replacing an older `*.old` pair. Controllers need no change. It first checks that the root key and `root-ca.crt` can be read and belong together, and that `update-center.key` and `update-center.cert` are both there or both missing. It refuses an encrypted root key without asking for the passphrase: [decrypt it to a temporary file](../how-to/rotate-signing-certificate.md#a-passphrase-protected-root-key) for the rotation. It issues the new pair in a temporary directory inside `<dir>` and only then renames the files; when a check, a step or a rename fails, it moves back what it moved, so `<dir>` is left as it was. |
+| `init` | Creates a root CA (`root-ca.crt`, and `root/root-ca.key` to move offline) and a signing key and certificate (`update-center.key`, `update-center.cert`) issued by it. It refuses to overwrite any of them. |
+| `rotate` | Issues a new signing certificate from the root key in `<dir>/root/` (or `--root`), keeping the previous pair as `*.old` in place of an older one. It first checks that the root key and `root-ca.crt` can be read and belong together, and that `update-center.key` and `update-center.cert` are both there or both missing. It refuses an encrypted root key without asking for the passphrase: [decrypt it to a temporary file](../how-to/rotate-signing-certificate.md#a-passphrase-protected-root-key) for the rotation. |
 | `show` | Prints the subject, expiry (with days left) and SHA-256 fingerprint of the root and signing certificates. |
+
+When `init` or `rotate` fails, `<dir>` is left as it was. Both build the new files in a temporary
+directory inside `<dir>` and only then rename them into place, moving back what they moved when a
+step fails; meanwhile they hold SIGINT and SIGTERM back (Ctrl-C, `docker stop`), and they never
+rename onto a file that exists (`refusing to overwrite existing files: ...`). A directory they cannot
+write in (or that `init` cannot create) is reported as `uc: error: cannot write in <dir>: <reason>`
+(`cannot create`). If moving back fails too, the error names what is not back and the `.rotate-*` or
+`.init-*` directory inside `<dir>` that keeps it.
 
 | Option | Meaning |
 |---|---|

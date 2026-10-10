@@ -87,8 +87,7 @@ cp .env.airgapped.example .env
 
 The image archive is about 200 MB. `docker load` prints
 `Loaded image: easy-update-center/uc:local` and `Loaded image: easy-update-center/web:local`. On that
-host, skip `docker compose build`. `make build` is the shortcut: it builds the same images with
-`docker build`, so it needs no `.env`, and also the image the test suites use.
+host, skip `docker compose build`.
 
 ## 3. Configure
 
@@ -97,10 +96,9 @@ that. Then:
 
 - On Linux, `UC_UID` and `UC_GID`: your `id -u` and `id -g`. Every container runs as that user, so
   the files in `secrets/` and `procurement/` stay yours; Docker Desktop needs neither.
-- `PUBLIC_URL`: the origin controllers will use, decided now, because it is written into the signed
-  metadata. Include the port if it is not the scheme's default, for example
-  `http://uc.corp.example:8080`, or `https://jenkins-updates.corp.example` behind your TLS proxy
-  ([Enable TLS](../how-to/enable-tls.md)).
+- `PUBLIC_URL`: the origin controllers will use, with the port if it is not the scheme's default,
+  for example `http://uc.corp.example:8080`. Decide it now: it is written into the signed metadata
+  ([A hostname for PUBLIC_URL](requirements.md#a-hostname-for-public_url)).
 - `REPO_URL` and `REPO_KEY`: for Artifactory, the `/artifactory/` base URL (a trailing slash is
   optional) and the repository key.
 - For Artifact Keeper instead: `REPO_TYPE=artifact-keeper`, `REPO_URL` the server's base URL, and
@@ -109,10 +107,8 @@ that. Then:
   `${REPO_URL}${REPO_KEY}/` for Artifactory, `${REPO_URL}maven/${REPO_KEY}/` for Artifact Keeper.
 - `DOWNLOAD_ACCESS=proxy` if controllers cannot read the repository without credentials
   ([Proxy plugin downloads](../how-to/proxy-downloads.md)).
-- Uncomment `COMPOSE_FILE=compose.yaml:compose.airgapped.yaml` (on Windows, separate the files with
-  `;`). Compose reads it from `.env`, so every `docker compose` command below, and in the other
-  pages, uses the air-gapped override without `-f` flags, as long as you run it from the repository
-  directory.
+- Uncomment `COMPOSE_FILE=compose.yaml:compose.airgapped.yaml`, so every `docker compose` command
+  uses the air-gapped override ([Compose](../reference/configuration.md#compose)).
 - Recommended: fresh security warnings through `RESOURCES_SOURCE=url`. The data built into the image
   is only as recent as its update-center2 commit, and `status.json` marks it stale 30 days after
   that. See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
@@ -141,18 +137,15 @@ printf '%s' 'password-or-token' > secrets/repo_password
 printf '%s' 'svc-read:password-or-token' > secrets/download_proxy_auth
 ```
 
-`repo_password` is the account's password or an access token (Artifactory), or an API token
-(Artifact Keeper). Only the repo-adapter container receives these two files. What each file holds:
-[Secrets reference](../reference/secrets.md).
+What each file holds, for each repository type: [Secrets reference](../reference/secrets.md).
 
 `setup` is safe to repeat: it creates only what is missing, and never replaces the keys or a
 credential file. Each step: [The setup service](../reference/cli.md#the-setup-service).
 
 ## 5. Move the root key offline
 
-`setup` created the root CA and the signing certificate in `secrets/` (`uc pki init`), and set the
-modes of everything there: `secrets/` stays yours ([File modes](../reference/secrets.md#file-modes)). Now move the root CA's
-key to offline storage (it is needed only once a year):
+`setup` created the root CA and the signing certificate in `secrets/`. Now **move the root CA's key to
+offline storage**: it is needed only once a year, to issue the next signing certificate.
 
 ```bash
 mv secrets/root /media/offline-usb/easy-update-center-root      # any offline location
@@ -168,9 +161,9 @@ First check what the generator will see:
 docker compose run --rm uc doctor --fetch
 ```
 
-`--fetch` downloads the manifest and POM of every archive the generator will read, so dependency
-problems show up before the first generation; on a large repository it takes a while, and the
-results are cached for the generator. Fix what it reports as dropped, or accept it, then start:
+On a large repository `--fetch` takes a while; the generator reuses what it downloads. Fix what it
+reports as dropped ([Check with uc doctor](../how-to/stock-airgapped-repository.md#check-with-uc-doctor)),
+or accept it, then start:
 
 ```bash
 docker compose up -d
@@ -183,11 +176,11 @@ docker compose logs -f scheduler repo-adapter
 ```
 
 Its length depends on the repository: the adapter reads each archive's manifest once and caches it.
-The first run ends quietly (the scheduler logs `read crontab` after it); it is done when
-`docker compose run --rm uc status` shows a `live_release`. Later scheduled runs end with
-`published release <id>`. Until the first release, the web container logs "waiting for the first
-published release". A failed run logs a Python traceback saying why; repository errors (401,
-certificates) also appear in the repo-adapter's log.
+The first run is done when `docker compose run --rm uc status` shows a `live_release`; it prints
+no `published release` line, as later scheduled runs do.
+Until then, the web container logs "waiting for the first published release". A failed run logs a
+Python traceback saying why; repository errors (401, certificates) also appear in the repo-adapter's
+log ([Troubleshooting](../troubleshooting.md#generation)).
 
 ## 8. Verify
 
@@ -239,19 +232,8 @@ REPO_CA_FILE=/etc/ssl/uc-repo-ca.crt
 COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.repo-ca.yaml
 ```
 
-Set it in `.env`, not under `environment:` in the override: every service then has
-the same value, which `uc config` needs to tell whether the running services use the current
-settings ([When changes apply](../reference/configuration.md#when-changes-apply)). The other
-services never open the file, so they need no mount.
-
-This bundle is **added to** the system bundle. The download proxy's CA setting works the other way
-round: `DOWNLOAD_PROXY_CA_FILE` **replaces** the system bundle for downloads
-([Backend with a private CA](../how-to/proxy-downloads.md#backend-with-a-private-ca)). With both, and
-TLS in the web container, `COMPOSE_FILE` lists every override:
-
-```bash
-COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.repo-ca.yaml:compose.proxy-ca.yaml:compose.tls.yaml
-```
+This bundle is **added to** the system bundle, unlike `DOWNLOAD_PROXY_CA_FILE`, which replaces it
+for downloads ([Backend with a private CA](../how-to/proxy-downloads.md#backend-with-a-private-ca)).
 
 ## Production checklist
 

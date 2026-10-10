@@ -14,8 +14,6 @@ What a host, a network and a set of accounts need before you deploy the update c
 ## Software
 
 - Docker Engine with Compose v2: `docker compose version` must work.
-- GNU make is optional: it runs the contributor targets, such as `make build` (`make help` lists
-  them).
 - git, to clone this repository (not needed to deploy an air-gapped bundle).
 
 Nothing else is installed on the host: the generator, Python and Apache all run in the containers.
@@ -44,10 +42,8 @@ Nothing else is installed on the host: the generator, Python and Apache all run 
   for it, as air-gapped.
   Recommended: a GitHub classic token with no scopes, for plugin labels; see
   [GitHub token](../reference/secrets.md#github-token).
-- **Air-gapped:** an account that can read your repository. Artifactory: an account with read
-  permission on the repository; no admin rights are needed, because the generator's listing (an AQL
-  query) returns whatever the account can read. It authenticates with its password or an access
-  token. Artifact Keeper: a user name and an API token.
+- **Air-gapped:** an account that can read your repository; what it needs for each repository type:
+  [Secrets](../reference/secrets.md#secret-files).
 - **Air-gapped with `DOWNLOAD_ACCESS=proxy`:** a read-only account for downloads (it can be the same
   one).
 

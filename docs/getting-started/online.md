@@ -35,12 +35,11 @@ docker compose pull
 docker compose run --rm --no-deps uc --version
 ```
 
-Pull each image explicitly because the services also have `build:` sections: if a pull failed
-silently (the packages still private, a mistyped version), `setup` or `up` would build the image from
-your checkout and tag the result with the release's name, printing only a warning. `docker compose
-pull` fails loudly instead, and the second command must print `uc <version>`, the release you chose.
-You can check the signatures too: [Verify a release](../how-to/verify-a-release.md). You edit the
-rest of `.env` in the next step.
+The second command must print `uc <version>`, the release you chose. Pull before anything else:
+`docker compose pull` fails loudly, while `setup` or `up` after a missed pull (a mistyped version)
+would build the image from your checkout under the release's name, with only a warning. You can
+check the signatures too: [Verify a release](../how-to/verify-a-release.md). You edit the rest of
+`.env` in the next step.
 
 ### Or build from source
 
@@ -56,9 +55,7 @@ docker compose build
 
 Compose reads `.env` for every command, building included, so copy the example first; you edit it
 in the next step. This builds `easy-update-center/uc:local` (update-center2 from source, with its
-tests) and `easy-update-center/web:local`. The first build takes several minutes. `make build` is
-the shortcut: it builds the same images with `docker build`, so it needs no `.env`, and also the
-image the test suites use.
+tests) and `easy-update-center/web:local`. The first build takes several minutes.
 
 ## 2. Configure
 
@@ -70,9 +67,8 @@ now:
   the files in `secrets/` and `procurement/` stay yours; Docker Desktop needs neither.
 - `GENERATE_SCHEDULE`: when to regenerate (default every six hours);
 - `JAVA_TOOL_OPTIONS`: `-Xmx6g` for the full catalog;
-- behind an outbound proxy, set it twice, once for the generator and once for the `uc` code:
-  `-Dhttps.proxyHost=proxy.example.com -Dhttps.proxyPort=3128` in `JAVA_TOOL_OPTIONS`, and
-  `HTTPS_PROXY=http://proxy.example.com:3128` with `NO_PROXY=repo-adapter`;
+- behind an outbound proxy, the JVM's and Python's proxy settings
+  ([Read by bundled software](../reference/configuration.md#read-by-bundled-software));
 - `HTTP_PORT`: the host port for the web container (default 8080);
 - to read your own Artifactory or Artifact Keeper instead of repo.jenkins-ci.org:
   [Your own repository](../architecture/modes.md#your-own-repository).
@@ -99,19 +95,16 @@ printf '%s' 'your-github-user' > secrets/github_username
 printf '%s' 'ghp_...' > secrets/github_token
 ```
 
-Reading your own repository, `repo_username` and `repo_password` hold its account instead (for
-Artifact Keeper, a user name and an API token). What each file holds:
-[Secrets reference](../reference/secrets.md).
+Reading your own repository, `repo_username` and `repo_password` hold its account instead. What each
+file holds: [Secrets reference](../reference/secrets.md).
 
 `setup` is safe to repeat: it creates only what is missing, and never replaces the keys or a
 credential file. Each step: [The setup service](../reference/cli.md#the-setup-service).
 
 ## 4. Move the root key offline
 
-`setup` created the root CA and the signing certificate in `secrets/` (`uc pki init`), and set the
-modes of everything there: `secrets/` stays yours ([File modes](../reference/secrets.md#file-modes)).
-Now **move the root CA's key to offline storage**: it is needed only once a year, to issue the next
-signing certificate.
+`setup` created the root CA and the signing certificate in `secrets/`. Now **move the root CA's key to
+offline storage**: it is needed only once a year, to issue the next signing certificate.
 
 ```bash
 mv secrets/root /media/offline-usb/easy-update-center-root      # any offline location
@@ -134,14 +127,12 @@ generation at once, because no release is live yet.
 docker compose logs -f scheduler
 ```
 
-The generator logs each manifest and POM it downloads. The first run ends quietly: the generator's
-last line is `Finished N executions found in parameters file`, then the scheduler logs
-`read crontab`. It is done when `docker compose run --rm uc status` shows a `live_release`. Later
-scheduled runs end with `published release <id>`. Until the first release, the web container logs
-"waiting for the first published release" and answers nothing. If the run fails, the log shows a
-Python traceback saying why; see [Troubleshooting](../troubleshooting.md#generation). A stack trace
-from `GitHubSource` saying "This endpoint requires you to be authenticated" is only the warning for
-a missing GitHub token.
+The generator logs each manifest and POM it downloads. The first run is done when `docker compose run --rm uc status` shows a `live_release`; it prints
+no `published release` line, as later scheduled runs do.
+Until then, the web container logs "waiting for the first published release" and answers nothing.
+A failed run logs a Python traceback saying why
+([Troubleshooting](../troubleshooting.md#generation), which also explains the `GitHubSource` stack
+trace a missing GitHub token prints).
 
 ## 7. Verify
 

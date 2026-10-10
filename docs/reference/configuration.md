@@ -5,9 +5,8 @@ Every setting the update center reads, its default in each mode, and which servi
 ## How settings are read
 
 Every setting is an environment variable, set in `.env` in the project directory: the file Compose
-loads as each service's `env_file` (`UC_ENV_FILE` names another). Every service that runs the uc
-image (`uc`, `scheduler`, `repo-adapter` and the on-demand `setup`) reads the same
-file. `.env.online.example` and `.env.airgapped.example` list every setting.
+loads as each service's `env_file` (`UC_ENV_FILE` names another) for `uc`, `scheduler` and
+`repo-adapter`. `.env.online.example` and `.env.airgapped.example` list every setting.
 
 The web container gets only its own variables from it, through Compose
 ([Where web gets its settings](../architecture/request-routing.md#where-web-gets-its-settings)).
@@ -23,8 +22,7 @@ Run `uc config` to see every value and where it came from ([uc config](cli.md#uc
 - **Types**: booleans accept `1`, `true`, `yes`, `on` and `0`, `false`, `no`, `off`.
 - **Mistakes**: an invalid value stops the command that reads it with a message naming the
   setting.
-- Credentials and keys are files, not settings: see [Secrets](secrets.md). Only their paths are
-  settings.
+- Credentials and the signing keys are files, not settings: see [Secrets](secrets.md).
 
 When each change takes effect: [When changes apply](#when-changes-apply).
 
@@ -149,14 +147,11 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 ## Compose
 
 These are read by `docker compose` itself, from the shell environment or from `.env` in the project
-directory, not by the containers. The `make` targets that run your stack (`procure-*`) leave `UC_IMAGE` and `WEB_IMAGE` to `.env` too, unless
-you set them on make's command line or in the shell. When the uc image they resolve is missing, they
-build it if it is `easy-update-center/uc:local` and pull it otherwise. `make build` does not read `.env`,
-and tags the images it builds with these defaults unless you pass `UC_IMAGE=...` or `WEB_IMAGE=...`
-to it.
+directory, not by the containers.
 
 | Setting | Default | Notes |
 |---|---|---|
+| `COMPOSE_FILE` | `compose.yaml` | The Compose files every plain `docker compose` command uses. Set it whenever you use an override, in either mode, so later commands keep it: `compose.yaml:compose.airgapped.yaml` air-gapped, plus `compose.tls.yaml`, `compose.repo-ca.yaml` or `compose.proxy-ca.yaml` when you use them. On Windows, separate the files with `;`. Without it, add `-f` for each file to every command. |
 | `UC_ENV_FILE` | `.env` | The file every uc-image service loads as `env_file`; web takes its variables from Compose's own `.env` (or `--env-file`). Lets several configurations sit side by side. |
 | `UC_UID` | `10001` | The user id every container runs as. On Linux, set it to the output of `id -u`, so the files in `secrets/` and `procurement/` stay yours. |
 | `UC_GID` | `10001` | The group id every container runs as. On Linux, the output of `id -g`. |
@@ -186,7 +181,6 @@ These are read from the process environment by the JVM and by Python.
 | `JAVA_TOOL_OPTIONS` | the JVM running update-center2 | Heap size (`-Xmx6g`) and the generator's outbound HTTP proxy (`-Dhttps.proxyHost=... -Dhttps.proxyPort=...`). See [Host sizing](../getting-started/requirements.md#host-sizing). |
 | `HTTPS_PROXY`, `HTTP_PROXY` | Python in `uc`, `scheduler` and `repo-adapter` | The outbound proxy for everything the generator does not fetch itself: upstream resources, tool installers, listing queries. Behind a proxy, set it **and** the proxy flags in `JAVA_TOOL_OPTIONS`; neither covers the other. |
 | `NO_PROXY` | Python in `uc`, `scheduler` and `repo-adapter` | Hosts to reach directly. With a proxy set, include `repo-adapter` (and your repository's host if it is internal), for example `NO_PROXY=repo-adapter,artifactory.corp.example`. |
-| `COMPOSE_FILE` | `docker compose`, from `.env` | The Compose files every plain `docker compose` command uses (on Windows, `;` between files). Set it whenever you use an override, in either mode, so later commands keep it: `compose.yaml:compose.airgapped.yaml` air-gapped, plus `compose.tls.yaml`, `compose.repo-ca.yaml` or `compose.proxy-ca.yaml` when you use them. |
 
 ## Procurement
 

@@ -13,7 +13,7 @@ watch it actively.
 | `GET $PUBLIC_URL/uctest.json` returns 200 | The web container is up and a release is live. Use it for external probes; Jenkins itself uses it as its connection check. |
 | The web container's Docker health status | Runs the same check from inside, plus that `/data/live` exists. |
 | The repo-adapter's Docker health status | Its `/healthz` answers. The `scheduler` and `uc` services wait for it. |
-| `GET $PUBLIC_URL/status.json` | Everything below. It is sent with `Cache-Control: no-store`. |
+| `GET $PUBLIC_URL/status.json` | Everything below. |
 
 ## What to alert on
 
@@ -27,14 +27,9 @@ From [status.json](../reference/status-json.md):
 | `resources.stale` is `true` | Security warnings are older than `STALE_AFTER_DAYS`. | Online: check GitHub access. Air-gapped: [procure a fresh copy](keep-upstream-data-fresh.md). |
 | `warnings` not empty | The run published, but dropped or degraded something. | Review each line; `uc doctor` explains repository drops. |
 | `doctor.missing_dependencies` above 0 | Some offered plugins cannot be installed. | Procure the missing plugins. |
-| `doctor.missing_cores` above 0 | Plugins require cores the repository lacks, so those tiers are missing. Only the scheduled report (`uc doctor --record`, `DOCTOR_SCHEDULE`) checks cores, and generations keep its count. The full list is in `/data/doctor/report.json`. | [Procure missing files](procure-missing-files.md). |
+| `doctor.missing_cores` above 0 | Plugins require cores the repository lacks, so those tiers are missing. Only the scheduled report (`DOCTOR_SCHEDULE`) checks cores; the full list is in `/data/doctor/report.json`. | [Procure missing files](procure-missing-files.md). |
 | `doctor.cores_unchecked` above 0 | The core check could not read that many plugin releases' manifests, so `missing_cores` and the report's required cores are incomplete. | Set `DOCTOR_FETCH=true`, or let a generation fill the cache. |
-| `doctor.recorded_at` older than twice your `DOCTOR_SCHEDULE` interval (only when `DOCTOR_SCHEDULE` is set) | The scheduled report stopped, so `missing_cores` is out of date. Generations keep this time, so it works with either backend. | `docker compose logs scheduler`. |
-
-The `doctor` counts come from each generation with `DOWNLOAD_BACKEND=artifactory`, and from the
-scheduled report when `DOCTOR_SCHEDULE` is set
-([Change the schedule](generate-and-roll-back.md#change-the-schedule)). `missing_cores` and
-`recorded_at` come only from the scheduled report, and generations keep them.
+| `doctor.recorded_at` older than twice your `DOCTOR_SCHEDULE` interval (only when `DOCTOR_SCHEDULE` is set) | The scheduled report stopped, so `missing_cores` is out of date. | `docker compose logs scheduler`. |
 
 A small script covering the first four is enough, for example (with your own `PUBLIC_URL`):
 
@@ -49,10 +44,6 @@ curl -fsS "$PUBLIC_URL/status.json" | jq -e '
 
 `jq -e` exits non-zero when the expression is false, so this works in cron or a monitoring agent.
 `43200` seconds is twice the default six-hour schedule; adjust it to yours.
-
-Air-gapped on the image's bundled security data, `resources.stale` turns `true` 30 days after that
-data's date (`resources.data_date`), whatever the image's build date:
-[procure fresh copies](keep-upstream-data-fresh.md) rather than silencing the check.
 
 ## Logs
 

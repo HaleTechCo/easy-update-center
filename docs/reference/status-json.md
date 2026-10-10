@@ -6,16 +6,16 @@ Every field of status.json, the public report of the last run and the live relea
 
 - `$PUBLIC_URL/status.json`, served by the web container with `Cache-Control: no-store`. It is
   public: it never holds credentials, and a failure appears only as its error class. `warnings` can
-  name plugin coordinates or the URL of an upstream-data source that failed to download.
+  name plugin coordinates or the URL of an upstream-data source that failed to download; restrict
+  `/status.json` at your proxy if those URLs are sensitive.
 - `docker compose run --rm uc status` prints the same document.
 - On the data volume it is `/data/status.json`.
 
-A successful `uc generate` rewrites the whole document, except that it keeps what only
-`uc doctor --record` works out: `doctor.missing_cores`, `doctor.cores_unchecked` and
-`doctor.recorded_at`, and the whole `doctor` block when the generation computes none. A failed one
-changes only `mode`, `last_run` and `warnings`, so the other fields keep describing the live
-release. `uc rollback` updates `live_release` and `plugin_count`. Before the first run the document
-is empty (`{}`).
+Each successful `uc generate` rewrites the document. A failed one changes only `mode`, `last_run`
+and `warnings`, so the rest keeps describing the live release, and `uc rollback` updates
+`live_release` and `plugin_count`. Before the first run the document is empty (`{}`). A generation
+keeps what only `uc doctor --record` works out (`doctor.missing_cores`, `doctor.cores_unchecked`,
+`doctor.recorded_at`), and the whole `doctor` block when it computes none.
 
 ## Fields
 
@@ -28,7 +28,7 @@ is empty (`{}`).
 | `last_run` | object | The most recent `uc generate`, successful or not. |
 | `last_run.id` | string | Its release id. |
 | `last_run.result` | string | `success` or `failed`. |
-| `last_run.error` | string or null | On failure, the error's class only, as `<ErrorClass>: see the generator log`. The message is in the run's output: the scheduler's log for scheduled runs, the terminal for a manual `uc generate`; air-gapped repository errors also appear in the repo-adapter's log. See [Troubleshooting](../troubleshooting.md). |
+| `last_run.error` | string or null | On failure, the error's class only, as `<ErrorClass>: see the generator log`. Where the message is: [Troubleshooting](../troubleshooting.md). |
 | `last_run.finished_at` | string | When it finished (ISO 8601, UTC). |
 | `generated_at` | string | When the live release's generation started (ISO 8601, UTC). |
 | `update_center2` | string | The generator version, for example `3.18.4+patches`. |

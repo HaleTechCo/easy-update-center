@@ -11,12 +11,9 @@ on a Java runtime, plus the `uc` command in Python) and the **web image** (Apach
   `?version=` routing to tiered sites, and `/download/` routes that redirect (or proxy) to where the
   binaries are. It mounts the data volume read-only and never sees the signing key. See
   [Request routing](request-routing.md).
-- **setup** runs only when called, never by `docker compose up`: `docker compose run --rm setup`
-  for first-time setup, or `setup secrets`, `pki-init` or `pki-rotate`. Its entrypoint, `uc-setup`,
-  runs `uc pki` and sets the modes of the files in `./secrets` (mounted at `/setup/secrets`; a new
-  PKI's directory, when you mount one, at `/setup/out`; the offline root key, for a rotation, at
-  `/setup/root`). It runs as `UC_UID`:`UC_GID` like every other service, with no network, no
-  Compose secrets and no settings. See [The setup service](../reference/cli.md#the-setup-service).
+- **setup** runs only when called, never by `docker compose up`: first-time setup and the jobs that
+  write to `./secrets` (the signing keys, the files' modes), with no network, no Compose secrets and
+  no settings. See [The setup service](../reference/cli.md#the-setup-service).
 - **scheduler** runs `uc generate` on `GENERATE_SCHEDULE`, and at once when no release is live;
   with `DOCTOR_SCHEDULE` set it also runs a read-only `uc doctor --record`.
   Each run builds a complete new release, validates it, and swaps it in atomically. See
@@ -102,9 +99,7 @@ The boundaries they and the images draw:
   `setup` is the exception described above, and only while it runs.
 - Archives and POMs from the repository are treated as untrusted input: reads are size-capped,
   only named entries are read, and XML with DOCTYPE or entity declarations is refused.
-- `status.json` is public. It never holds credentials, and a failed run shows only the error's
-  class. Its `warnings` can name plugin coordinates or the URL of an upstream-data source that
-  failed to download.
+- `status.json` is public and never holds credentials ([Where to read it](../reference/status-json.md#where-to-read-it)).
 
 ## Not in scope
 

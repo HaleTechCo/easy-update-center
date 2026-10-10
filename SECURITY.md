@@ -23,20 +23,9 @@ The latest release. Fixes ship in a new release; earlier releases get no backpor
 
 ## Security design
 
-- The signing key is mounted only into the `uc` and `scheduler` containers, and into the on-demand
-  `setup` service, which mounts `./secrets` while it runs; the internet-facing `web` container never
-  receives it. The root CA key is meant to live offline.
-- Every container runs as the operator's own user (`UC_UID`:`UC_GID`), none as root, with a
-  read-only root filesystem. `web` mounts the data volume read-only.
-- The repo-adapter's unauthenticated file reads, and its listing, which needs a token, are reachable
-  only on an internal network that `web` is not attached to. Air-gapped, only the repo-adapter
-  receives repository credentials.
-- Plugin archives and POMs from the repository are treated as untrusted: reads are size-capped,
-  only named entries are read, and XML with DOCTYPE or entity declarations is refused.
-- `status.json` is public. It never holds credentials, and a failed run shows only the error's
-  class, never its message. Its `warnings` are short messages that can name plugin coordinates or
-  the URL of an upstream-data source that failed to download; restrict `/status.json` at your proxy
-  if those URLs are sensitive.
-
-Details: [docs/architecture/overview.md](docs/architecture/overview.md#networks-and-trust-boundaries)
-and [docs/architecture/repo-adapter.md](docs/architecture/repo-adapter.md#security).
+The internet-facing `web` container never receives the signing key, and the root CA key is meant to
+live offline. Every container runs as the operator's own user, none as root, on a read-only root
+filesystem. Air-gapped, only the repo-adapter receives repository credentials, and it is reachable
+only on an internal network. Repository content is untrusted input, and the public `status.json`
+never holds credentials. Details: [Networks and trust boundaries](docs/architecture/overview.md#networks-and-trust-boundaries)
+and [repo-adapter security](docs/architecture/repo-adapter.md#security).

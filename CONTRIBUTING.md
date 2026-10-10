@@ -26,18 +26,19 @@ The hooks run tools from the venv (`language: system`), so **activate the venv i
 commit from**: `source .venv/Scripts/activate` (Linux/macOS: `source .venv/bin/activate`). Optional
 tools and the details of each hook: [tools/README.md](tools/README.md).
 
-Plain `make` runs `make help`: the targets you run, each with one line on what it does, grouped as
-Setup, Running, Procurement and Development. `make build` runs `docker build`, not
-`docker compose build`: Compose refuses to load the project without a `.env`, and `make build` must
-work on a fresh clone.
+The checker settings live beside the hooks: ruff in `pyproject.toml`, yamllint in `.yamllint`,
+shellcheck in `.shellcheckrc`.
+
+Plain `make` runs `make help`: the contributor targets, each with one line on what it does. Operators
+use `docker compose` alone. `make build` runs `docker build`, not `docker compose build`: Compose
+refuses to load the project without a `.env`, and `make build` must work on a fresh clone.
 
 ## Repository layout
 
 ```text
 uc/                   the uc image: Dockerfile, update-center2 patches, VersionTool, templates,
                       licenses/ (third-party notices shipped in the image)
-uc/bin/               the image's commands: uc, and the setup service's uc-setup with the
-                      secrets permissions script it runs
+uc/bin/               the image's commands: uc, and uc-setup, the setup service's entrypoint
 uc/uc/                the uc Python package (standard library only): CLI, generation, doctor,
                       PKI, status; repo_adapter/ is the repo-adapter service
 web/                  the web image: Apache configuration, entrypoint, health check
@@ -52,7 +53,7 @@ tests/compose/        network and secret isolation of the Compose files
 tests/setup/          uc-setup: first-time setup, the modes in secrets/, pki-init and pki-rotate
 tests/integration/    end to end: fake Artifactory and Artifact Keeper, real Jenkins controllers
 tests/support/        helpers shared by the suites
-tools/                pre-commit hook scripts
+tools/                pre-commit hook scripts, and the Release workflow's helper
 .github/              workflows, their scripts, Dependabot, issue and pull request templates
 docs/                 the documentation
 ```
