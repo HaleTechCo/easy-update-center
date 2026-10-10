@@ -123,6 +123,12 @@ once releases are published.
 - A weekly Scheduled workflow runs `make it-online` (when the community account's secrets are set)
   and opens an issue when update-center2 publishes a release newer than the pin; Dependabot
   proposes updates for the workflows' actions, the Docker base images and the lint tools.
+- Releases: a Release workflow (`.github/workflows/release.yml`) moves CHANGELOG's Unreleased
+  entries under the version, tags `vX.Y.Z`, and publishes the uc and web images on GHCR
+  (`ghcr.io/haletechco/easy-update-center-uc` and `-web`, linux/amd64 and linux/arm64, tagged
+  `X.Y.Z`, `X.Y` and `latest`), signed with cosign and with build-provenance and SPDX SBOM
+  attestations, plus an air-gapped bundle per architecture and a signed `SHA256SUMS` on the GitHub
+  Release.
 - `uc --version` and status.json's `uc_version` report the release the uc image was built as (`dev`
   for an image built from source; `make build UC_VERSION=...` sets it).
 - `config/uc.toml`: every setting can be set there as well as in `.env`, whose variables win.

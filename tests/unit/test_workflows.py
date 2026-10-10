@@ -1,6 +1,8 @@
 """The GitHub Actions workflows (.github/workflows): pinned actions, least permissions, the CI gate, the scheduled jobs and the release."""
 
+import itertools
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -16,11 +18,17 @@ PINNED = re.compile(r'^[\w.-]+/[\w.-]+(?:/[\w./-]+)?@[0-9a-f]{40}$')
 USES = re.compile(r'^\s*(?:-\s+)?uses:\s*(\S+)(.*)$', re.MULTILINE)
 EXTRA_PERMISSIONS: dict[tuple[str, str], dict[str, str]] = {
     ('scheduled.yml', 'upstream-watch'): {'contents': 'read', 'issues': 'write'},
+    ('release.yml', 'prepare'): {'contents': 'write'},
+    ('release.yml', 'images'): {'contents': 'read', 'packages': 'write'},
+    ('release.yml', 'manifests'): {'contents': 'read', 'packages': 'write'},
+    ('release.yml', 'sign'): {'contents': 'read', 'packages': 'write', 'id-token': 'write', 'attestations': 'write'},
+    ('release.yml', 'bundle'): {'contents': 'read', 'packages': 'read'},
+    ('release.yml', 'release'): {'contents': 'write', 'id-token': 'write'},
 }
 """Every job that declares permissions, with exactly the ones it needs; any other job inherits contents: read."""
-WRITES_CONTENTS: set[tuple[str, str]] = set()
+WRITES_CONTENTS = {('release.yml', 'prepare'), ('release.yml', 'release')}
 """The only jobs that may hold contents: write: the rulesets let the GitHub Actions app bypass them, so any such job could push to main."""
-CHECKOUT_WITH_CREDENTIALS: set[tuple[str, str]] = set()
+CHECKOUT_WITH_CREDENTIALS = {('release.yml', 'prepare')}
 """The only jobs whose checkout keeps the token, for a git push."""
 TEST_TARGETS = ['test-unit', 'test-web', 'test-routing', 'test-secrets', 'test-setup', 'compose-check']
 """make test's suites and make compose-check, one CI job each."""
@@ -252,3 +260,160 @@ def test_dependabot_updates_actions_images_and_lint_tools_weekly_in_one_pull_req
     for update in updates.values():
         assert update['schedule']['interval'] == 'weekly'
         assert [group['patterns'] for group in update['groups'].values()] == [['*']]
+
+
+RELEASE_ORDER = ['check', 'ci', 'prepare', 'images', 'manifests', 'sign', 'bundle', 'release']
+TOOLS = Path(__file__).resolve().parents[2] / 'tools'
+DOCKER_STUB = """#!/bin/sh
+echo "$*" >> "$STUB_DIR/docker.log"
+case "$*" in
+    'buildx imagetools inspect'*) echo 'sha256:1111' ;;
+esac
+"""
+
+
+def release_job(name: str) -> dict:
+    return jobs('release.yml')[name]
+
+
+def test_the_release_runs_by_hand_with_a_version_and_publish_only():
+    inputs = load('release.yml')['on']['workflow_dispatch']['inputs']
+    assert set(load('release.yml')['on']) == {'workflow_dispatch'}
+    assert inputs['version']['required'] is True
+    assert (inputs['publish-only']['type'], inputs['publish-only']['default']) == ('boolean', False)
+
+
+def test_release_jobs_run_in_order_each_after_the_one_before():
+    release = jobs('release.yml')
+    assert list(release) == RELEASE_ORDER
+    for before, job in itertools.pairwise(RELEASE_ORDER):
+        needs = release[job]['needs']
+        assert before in ([needs] if isinstance(needs, str) else needs), job
+
+
+def test_prepare_is_skipped_for_publish_only_and_the_jobs_after_it_still_run():
+    assert release_job('prepare')['if'] == '${{ !inputs.publish-only }}'
+    for job in RELEASE_ORDER[RELEASE_ORDER.index('images') :]:
+        assert release_job(job)['if'] == '${{ !failure() && !cancelled() }}', job
+
+
+def test_ci_runs_on_the_commit_being_released():
+    ci = release_job('ci')
+    assert ci['uses'] == './.github/workflows/ci.yml'
+    assert ci['with']['ref'] == "${{ inputs.publish-only && format('refs/tags/v{0}', inputs.version) || github.sha }}"
+
+
+def test_images_and_bundles_are_built_natively_for_both_architectures():
+    images = release_job('images')['strategy']['matrix']['include']
+    assert {(each['runner'], each['platform']) for each in images} == {('ubuntu-24.04', 'linux/amd64'), ('ubuntu-24.04-arm', 'linux/arm64')}
+    bundles = release_job('bundle')['strategy']['matrix']['include']
+    assert {(each['runner'], each['arch']) for each in bundles} == {('ubuntu-24.04', 'amd64'), ('ubuntu-24.04-arm', 'arm64')}
+
+
+@pytest.mark.parametrize(('ref', 'publish_only', 'refused'), [('refs/heads/feature', 'false', True), ('refs/heads/main', 'false', False), ('refs/heads/main', 'true', False)])
+def test_the_release_runs_only_on_main_and_passes_publish_only_on(tmp_path, ref, publish_only, refused):
+    stubs = stub(tmp_path, 'python3', '#!/bin/sh\necho "$*" >> "$STUB_DIR/python3.log"\necho latest=true\n')
+    output = tmp_path / 'output'
+    env = {'PATH': f'{stubs}:{PATH}', 'STUB_DIR': str(tmp_path), 'GITHUB_REF': ref, 'GITHUB_OUTPUT': str(output), 'VERSION': '0.1.0', 'PUBLISH_ONLY': publish_only}
+    result = run_bash(tmp_path, step(release_job('check'), 'Check the version')['run'], env, tmp_path)
+    if refused:
+        assert result.returncode == 1
+        assert '::error::run the Release workflow on main, not refs/heads/feature' in result.stdout
+        assert not (tmp_path / 'python3.log').exists()
+    else:
+        assert result.returncode == 0, result.stdout
+        expected = 'tools/release.py check 0.1.0' + (' --publish-only' if publish_only == 'true' else '')
+        assert (tmp_path / 'python3.log').read_text(encoding='utf-8') == f'{expected}\n'
+        assert output.read_text(encoding='utf-8') == 'latest=true\n'
+
+
+def git(*args: str, cwd: Path) -> str:
+    return subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@example.com', *args], cwd=cwd, check=True, capture_output=True, text=True).stdout
+
+
+def release_repository(tmp_path: Path) -> tuple[Path, Path, Path]:
+    """Make an origin whose main holds CHANGELOG.md and tools/release.py, a second clone to move main with, and the checkout actions/checkout leaves; return all three."""
+    origin, other, work = tmp_path / 'origin.git', tmp_path / 'other', tmp_path / 'work'
+    git('init', '-q', '--bare', '--initial-branch=main', str(origin), cwd=tmp_path)
+    git('clone', '-q', str(origin), str(other), cwd=tmp_path)
+    (other / 'tools').mkdir()
+    shutil.copy(TOOLS / 'release.py', other / 'tools' / 'release.py')
+    (other / 'CHANGELOG.md').write_text('# Changelog\n\n## Unreleased\n\n### Added\n\n- The first release.\n', encoding='utf-8')
+    git('add', '-A', cwd=other)
+    git('commit', '-q', '-m', 'Start', cwd=other)
+    git('push', '-q', 'origin', 'HEAD:main', cwd=other)
+    git('clone', '-q', str(origin), str(work), cwd=tmp_path)
+    return origin, other, work
+
+
+def run_prepare(tmp_path: Path, work: Path) -> subprocess.CompletedProcess[str]:
+    script = step(release_job('prepare'), 'Commit the release and tag it')['run']
+    return run_bash(tmp_path, script, {'VERSION': '0.1.0', 'PATH': PATH, 'HOME': str(tmp_path)}, work)
+
+
+def test_prepare_pushes_the_release_commit_and_its_tag_together(tmp_path):
+    origin, _, work = release_repository(tmp_path)
+    result = run_prepare(tmp_path, work)
+    assert result.returncode == 0, result.stdout
+    assert git('log', '-1', '--format=%s|%an', 'main', cwd=origin) == 'Release 0.1.0|github-actions[bot]\n'
+    assert git('rev-parse', 'v0.1.0^{commit}', cwd=origin) == git('rev-parse', 'main', cwd=origin)
+    assert '## [0.1.0] - ' in git('show', 'main:CHANGELOG.md', cwd=origin)
+
+
+def test_prepare_pushes_nothing_when_main_moved_after_the_run_started(tmp_path):
+    origin, other, work = release_repository(tmp_path)
+    (other / 'meanwhile.txt').write_text('merged during the run\n', encoding='utf-8')
+    git('add', '-A', cwd=other)
+    git('commit', '-q', '-m', 'Meanwhile', cwd=other)
+    git('push', '-q', 'origin', 'HEAD:main', cwd=other)
+    result = run_prepare(tmp_path, work)
+    assert result.returncode != 0
+    assert git('tag', '--list', cwd=origin) == ''
+    assert git('log', '-1', '--format=%s', 'main', cwd=origin) == 'Meanwhile\n'
+
+
+@pytest.mark.parametrize(('latest', 'minor_latest', 'tags'), [('true', 'true', ['0.2.1', '0.2', 'latest']), ('false', 'true', ['0.2.1', '0.2']), ('false', 'false', ['0.2.1'])])
+def test_the_manifest_lists_move_latest_and_the_minor_tag_only_for_the_highest_release(tmp_path, latest, minor_latest, tags):
+    for image in ('uc', 'web'):
+        (tmp_path / 'digests' / image).mkdir(parents=True)
+        for digest in ('aaaa', 'bbbb'):
+            (tmp_path / 'digests' / image / digest).touch()
+    stubs = stub(tmp_path, 'docker', DOCKER_STUB)
+    output = tmp_path / 'output'
+    env = {
+        'PATH': f'{stubs}:{PATH}',
+        'STUB_DIR': str(tmp_path),
+        'VERSION': '0.2.1',
+        'LATEST': latest,
+        'MINOR_LATEST': minor_latest,
+        'GITHUB_OUTPUT': str(output),
+        'UC_REPO': 'ghcr.io/haletechco/easy-update-center-uc',
+        'WEB_REPO': 'ghcr.io/haletechco/easy-update-center-web',
+        'SOURCE_URL': 'https://github.com/HaleTechCo/easy-update-center',
+    }
+    result = run_bash(tmp_path, step(release_job('manifests'), 'Create the multi-architecture manifest lists')['run'], env, tmp_path)
+    assert result.returncode == 0, result.stdout
+    creates = [line for line in (tmp_path / 'docker.log').read_text(encoding='utf-8').splitlines() if line.startswith('buildx imagetools create')]
+    assert len(creates) == 2
+    for image, line in zip(('uc', 'web'), creates, strict=True):
+        repo = f'ghcr.io/haletechco/easy-update-center-{image}'
+        assert re.findall(r'--tag (\S+)', line) == [f'{repo}:{tag}' for tag in tags]
+        assert line.endswith(f'{repo}@sha256:aaaa {repo}@sha256:bbbb')
+    assert output.read_text(encoding='utf-8') == 'uc-digest=sha256:1111\nweb-digest=sha256:1111\n'
+
+
+def test_the_release_refuses_an_asset_of_2_gib_naming_it(tmp_path):
+    script = step(release_job('release'), 'Check the asset sizes')['run']
+    (tmp_path / 'assets').mkdir()
+    subprocess.run(['truncate', '--size=2047M', str(tmp_path / 'assets' / 'fits.tar')], check=True)
+    assert run_bash(tmp_path, script, {'PATH': PATH}, tmp_path).returncode == 0
+    subprocess.run(['truncate', '--size=2G', str(tmp_path / 'assets' / 'too-big.tar')], check=True)
+    result = run_bash(tmp_path, script, {'PATH': PATH}, tmp_path)
+    assert result.returncode == 1
+    assert 'assets/too-big.tar' in result.stdout
+    assert 'fits.tar' not in result.stdout
+
+
+def test_the_release_creates_the_github_release_only_after_the_size_check():
+    names = [each.get('name') for each in release_job('release')['steps']]
+    assert names.index('Check the asset sizes') < names.index('Write and sign SHA256SUMS') < names.index('Publish the GitHub Release')
