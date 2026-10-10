@@ -129,6 +129,10 @@ Once the images are loaded or built, `docker compose run --rm --no-deps uc confi
 `docker compose run --rm setup` does first-time setup: it creates the credential files, readable by
 you alone, and the signing keys (step 5). Writing into the credential files keeps their permissions.
 
+Setup creates the signing keys on this host. To keep the root CA's key off it from the start,
+[create the PKI on an offline machine](../how-to/rotate-signing-certificate.md#create-the-pki-on-an-offline-machine)
+before running setup.
+
 ```bash
 docker compose run --rm setup
 printf '%s' 'svc-easy-update-center' > secrets/repo_username

@@ -1,6 +1,7 @@
 # Rotate the signing certificate
 
-How to issue a new signing certificate before the current one expires, and how to replace the root CA.
+How to issue a new signing certificate before the current one expires, how to replace the root CA, and
+how to create the PKI so its root key never reaches the update center's host.
 
 ## When
 
@@ -93,3 +94,20 @@ to `secrets/root/root-ca.key`. It is needed only to issue signing certificates, 
 `secrets/root/` to offline storage (an encrypted USB key, a vault) right after setup: anyone holding
 it can sign metadata your controllers accept. Keep a backup of it; losing it means replacing the
 root CA on every controller.
+
+## Create the PKI on an offline machine
+
+Recommended: the root CA's key never touches the update center's host. On a machine with Docker and
+no network access, with the uc image loaded (`docker load -i images.tar` from the air-gapped bundle,
+or `docker save` of the image you run):
+
+```bash
+mkdir pki
+docker run --rm --network none --user "$(id -u):$(id -g)" -v "$PWD/pki:/out" \
+  ghcr.io/haletechco/easy-update-center-uc:<version> pki init --out /out --display-dir pki
+```
+
+Copy `pki/root-ca.crt`, `pki/update-center.key` and `pki/update-center.cert` into `secrets/` on the
+update center's host, then run `docker compose run --rm setup` there: it keeps the signing keys,
+creates the credential files and sets the modes. Keep `pki/root/` on the offline machine (or offline
+media): rotation mounts it read-only ([Issue a new signing certificate](#issue-a-new-signing-certificate)).
