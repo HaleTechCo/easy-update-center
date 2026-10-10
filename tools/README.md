@@ -2,7 +2,7 @@
 
 **This directory is not project code.** Nothing here generates, signs or serves an update center.
 It holds the small helper scripts that [`.pre-commit-config.yaml`](../.pre-commit-config.yaml)
-invokes, and nothing else imports it. The update center itself is the `uc` package under
+invokes, and `release.py`, the Release workflow's helper. Nothing else imports it. The update center itself is the `uc` package under
 [`uc/uc/`](../uc/uc/) and the web image under [`web/`](../web/). For contributing in general, see
 [CONTRIBUTING.md](../CONTRIBUTING.md).
 
@@ -50,6 +50,7 @@ interpreter pre-commit already needs.
 | `run_hadolint.py` | Lints a Dockerfile with hadolint, running it as a container. |
 | `run_psscriptanalyzer.py` | Lints staged `.ps1` files with PSScriptAnalyzer, skipping cleanly when it is absent. |
 | `run_psscriptanalyzer.ps1` | The PowerShell half of the above, at `-Severity Error`. |
+| `release.py` | The Release workflow's helper: `prepare` moves CHANGELOG.md's Unreleased entries under a version, `check` refuses a version the workflow must not publish, `notes` prints a version's section for the GitHub Release, `latest` prints the highest release. |
 
 These are ordinary repo code: ruff checks them exactly like the code under `uc/`.
 
