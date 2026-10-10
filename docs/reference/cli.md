@@ -115,22 +115,6 @@ next: place the files the report lists in ./procurement and run uc procure recor
 What the repository must contain:
 [Stock an air-gapped repository](../how-to/stock-airgapped-repository.md).
 
-The options that staged, recorded, pushed and cleaned up files moved to [uc procure](#uc-procure).
-Each now exits 2: after the usage line, the error names the command that replaces it, such as
-`uc: error: --push moved: run uc procure push`:
-
-| Removed `uc doctor` option | Use instead |
-|---|---|
-| `--download-poms` | `uc procure stage --poms` |
-| `--download-dependencies` | `uc procure stage --dependencies` |
-| `--download-war VERSION\|required` | `uc procure stage --war VERSION\|required` |
-| `--staging DIR` | `--staging DIR` of `uc procure stage`, `record`, `push` or `clean` |
-| `--push` | `uc procure push` |
-| `--dry-run` | `uc procure push --dry-run`, or `uc procure clean --dry-run` |
-| `--stage-local` | `uc procure record` |
-| `--fix` | `uc procure record --fix` |
-| `--clean` | `uc procure clean` |
-
 ## uc procure
 
 ```bash
@@ -418,7 +402,7 @@ docker compose run --rm -v /path/to/root:/setup/secrets/root:ro setup pki-rotate
 | Command | What it does | `make` shortcut |
 |---|---|---|
 | (none) | First-time setup, safe to repeat: `secrets`, then `pki-init` unless `secrets/update-center.key` exists, then `procurement`, last because it is the one step that can fail on some filesystems. | `make setup` |
-| `secrets` | Creates the missing credential files empty and sets the permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)). | `make secrets` (or its aliases `make secrets-placeholders` and `make secrets-permissions`) |
+| `secrets` | Creates the missing credential files empty and sets the permissions of `secrets/` ([File ownership on Linux](secrets.md#file-ownership-on-linux)). | `make secrets` |
 | `procurement` | Shares `./procurement` with the uc containers ([below](#sharing-procurement)). | `make setup` runs it, after the other steps |
 | `pki-init` | Runs `uc pki init` in `secrets/`, then the `secrets` step; or in `--out DIR` (a directory you mount for a new PKI), naming the files under `--display-dir NAME` in its messages, then only sets the permissions there. | `make pki-init`, or `make pki-init OUT=<dir>`, which mounts `<dir>` at `/setup/out` |
 | `pki-rotate` | Runs `uc pki rotate` on `secrets/`, with the directory holding the root key mounted read-only at `/setup/secrets/root` (named `--root-display-dir NAME` in messages), then the `secrets` step. Without that directory it exits 1, naming `make pki-rotate ROOT=<dir>`. | `make pki-rotate ROOT=<dir>`, which mounts `<dir>` there |

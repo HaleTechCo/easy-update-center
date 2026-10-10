@@ -78,7 +78,7 @@ docker compose run --rm setup secrets      # or: make secrets
 ```
 
 It is idempotent: it creates any missing credential file empty and sets the permissions again. It
-also hands back a `secrets/` that an older version of `make pki-init` gave wholesale to uid 10001.
+also gives back `secrets/` and the files in it when another user, such as root, owns them.
 Docker Desktop (macOS, Windows) ignores ownership, so the owners and modes above do not matter
 there.
 
@@ -86,8 +86,7 @@ there.
 `./secrets`, `./procurement` and `./config` (at `/setup/secrets`, `/setup/procurement` and
 `/setup/config`), and the directory `make pki-rotate ROOT=<dir>` or `make pki-init OUT=<dir>`
 names. Its commands and their `make` shortcuts (`make setup`, `make secrets`, `make pki-init`,
-`make pki-rotate ROOT=<dir>`; `make secrets-placeholders` and `make secrets-permissions` are
-aliases of `make secrets`): [The setup service](cli.md#the-setup-service). It reads `.env` (or the
+`make pki-rotate ROOT=<dir>`): [The setup service](cli.md#the-setup-service). It reads `.env` (or the
 file `UC_ENV_FILE` names) as the other services do, so quotes in it are handled the same way, and
 the file must exist: create it first (`cp .env.online.example .env`), or Compose stops with
 `env file ... not found`.

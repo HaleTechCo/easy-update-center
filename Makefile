@@ -33,7 +33,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
 
-.PHONY: help build build-uc build-web uc-image stack-uc-image setup secrets secrets-placeholders secrets-permissions pki-init pki-rotate reload procure-stage procure-record procure-push procure-clean test test-unit test-web test-routing test-secrets test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
+.PHONY: help build build-uc build-web uc-image stack-uc-image setup secrets pki-init pki-rotate reload procure-stage procure-record procure-push procure-clean test test-unit test-web test-routing test-secrets test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
 
 # PREBUILT=1 (CI, after `docker load`): build-uc and build-web keep an image that already exists
 # instead of building it again. Without it they always build.
@@ -81,9 +81,6 @@ secrets: stack-uc-image ## Create the missing credential files and set the permi
 	@mkdir -p secrets
 	$(IN_SETUP) setup secrets
 
-# Aliases of secrets.
-secrets-placeholders secrets-permissions: secrets
-
 # The host path of a directory to mount: absolute, as Docker wants it (C:/... with make on Windows),
 # and whole when it holds spaces, which $(abspath) splits on, so each goes through it as <space>.
 space := $(subst ,, )
@@ -118,11 +115,10 @@ pki-init: stack-uc-image ## Create the root CA and signing certificate in secret
 # Usage: make pki-rotate ROOT=<directory holding root-ca.key>, mounted read-only. Issues a new
 # signing certificate and keeps the previous pair as *.old; when a check, a step or a rename of
 # uc pki rotate fails, secrets/ is left as it was. The mount point Docker creates, secrets/root, is
-# removed again when it is empty, also when the rotation fails: a directory, or a file that an older
-# run given the key file as ROOT left behind (Docker refuses to mount a directory on it).
+# removed again when it is empty, also when the rotation fails.
 pki-rotate: stack-uc-image ## Issue a new signing certificate from the root key in ROOT=<dir>
 	$(IN_SETUP) -v "$(call HOST_PATH,$(PKI_ROOT)):/setup/secrets/root:ro" setup pki-rotate --root-display-dir "$(PKI_ROOT)"; rc=$$?; \
-	  rmdir secrets/root 2>/dev/null; if [ -f secrets/root ] && [ ! -s secrets/root ]; then rm -f secrets/root; fi; exit $$rc
+	  rmdir secrets/root 2>/dev/null; exit $$rc
 
 ##@ Running
 

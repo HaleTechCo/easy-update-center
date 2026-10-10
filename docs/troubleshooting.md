@@ -21,7 +21,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env`
 | The listing fails with HTTP 403 (online) | Anonymous or wrong credentials: repo.jenkins-ci.org needs a Jenkins community account ([Accounts](getting-started/requirements.md#accounts)). |
 | The listing fails with HTTP 403 (Artifactory) | The account cannot read the repository. Give it read permission on the repository (no admin rights are needed), or use another account. |
 | A stack trace from `GitHubSource`: `java.io.IOException: This endpoint requires you to be authenticated` | Not an error: the warning for a missing GitHub token. The run continues without labels from GitHub topics ([GitHub token](reference/secrets.md#github-token)). |
-| `Permission denied` writing to `secrets/` (Linux) | `secrets/` was set up by an older `make pki-init`, which gave it to uid 10001. Run `docker compose run --rm setup secrets` (`make secrets`) to give it back ([File ownership on Linux](reference/secrets.md#file-ownership-on-linux)). |
+| `Permission denied` writing to `secrets/` (Linux) | `secrets/` or a file in it belongs to another user, such as root. Run `docker compose run --rm setup secrets` (`make secrets`) to give it back ([File ownership on Linux](reference/secrets.md#file-ownership-on-linux)). |
 | A container logs `Permission denied` reading a file under `/run/secrets/` (Linux) | The file was replaced (copied over, or saved by an editor that writes a new file) and lost its group. Run `docker compose run --rm setup secrets` (`make secrets`), then `docker compose up -d`. |
 | `PUBLIC_URL must be a bare origin such as https://uc.example.com` | `PUBLIC_URL` has a path, query or fragment. Give the update center its own hostname ([A hostname for PUBLIC_URL](getting-started/requirements.md#a-hostname-for-public_url)). |
 | `PUBLIC_URL points at localhost, which Jenkins controllers cannot reach` | Use a name controllers can resolve. `ALLOW_LOCAL_PUBLIC_URL=true` exists for tests only. |
@@ -89,7 +89,6 @@ The commands of [Procure missing POMs, dependencies and cores](how-to/procure-mi
 
 | Symptom | Cause and fix |
 |---|---|
-| `uc doctor` with a removed option: `uc: error: --push moved: run uc procure push` (or another option) | The options that staged, pushed and cleaned up moved from `uc doctor` to `uc procure`: run the command the message names ([Removed uc doctor options](reference/cli.md#uc-doctor)). |
 | `uc procure stage`: `nothing to stage: choose with --poms, ...` (exit 2) | No POMs, dependencies or cores are selected: add the options, or set `PROCUREMENT_POMS`, `PROCUREMENT_DEPENDENCIES` or `PROCUREMENT_WARS` ([Stage](how-to/procure-missing-files.md#2-stage)). |
 | `uc procure`: `cannot write to /procurement: ... Permission denied` | The uc containers cannot write `./procurement`: run `docker compose run --rm setup procurement` (`make setup`), or, where it fails, the `make procure-*` targets ([Sharing ./procurement](reference/cli.md#sharing-procurement)). |
 | `uc procure record`: `REFUSED ... it belongs at <path>; --fix moves it there` | A file you added is not at the Maven path its manifest or POM declares. Move it there, or run `uc procure record --fix` ([Files you place by hand](how-to/procure-missing-files.md#files-you-place-by-hand)). |

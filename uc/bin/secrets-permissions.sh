@@ -1,9 +1,9 @@
 #!/bin/sh
 # Give secrets/ to the host user, and let each container read only what it needs, through its group:
 # the uc image's services (scheduler, uc, repo-adapter) run as 10001:10001, web as 33:33. The host
-# user keeps writing the directory and every file, so no step needs sudo, and the order of
-# `make pki-init` and writing credentials no longer matters. Idempotent; it also repairs a
-# secrets/ that an older `make pki-init` gave wholesale to uid 10001.
+# user keeps writing the directory and every file, so no step needs sudo, and credentials can be
+# written before or after the keys. Idempotent; it also gives back a secrets/ that another user,
+# such as root, owns.
 #
 # Runs as root in the setup service: uc-setup runs it after secrets, pki-init and pki-rotate, for
 # the owner of ./config. Usage: secrets-permissions.sh DIR HOST_UID HOST_GID

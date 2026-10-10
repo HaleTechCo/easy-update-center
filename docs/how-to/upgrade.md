@@ -60,10 +60,10 @@ docker compose run --rm uc generate                  # publish with the new gene
 docker compose run --rm uc status
 ```
 
-Run `setup` after the images are rebuilt: it creates what a newer revision needs, such as
-`secrets/repo_push_auth`, and leaves what exists. `make setup` builds the uc image only when it is
-missing, so it does not replace an older one, which may lack `uc-setup`, the `setup` service's
-entrypoint. Plain `make` prints the help and builds nothing; `make build` builds.
+Run `setup` after the images are rebuilt: it creates what a newer revision needs, such as a
+credential file it added, and leaves what exists. `make setup` builds the uc image only when it is
+missing, so it does not replace an older one. Plain `make` prints the help and builds nothing;
+`make build` builds.
 
 The last step of `setup` shares `./procurement` with the uc containers. On a filesystem without
 ACLs, where uid 10001 cannot write the folder, that step can fail. The secrets and keys steps have
@@ -74,11 +74,8 @@ already run by then, and the error names the fallback: `make procure-stage`, `pr
 Check the settings before `docker compose up -d`: a newer revision can refuse a value an older one
 loaded, and a service whose settings do not load exits with an error instead of running.
 `uc config --check` prints `configuration ok`, or `uc: error: ...` naming the setting to fix in
-`.env` or `config/uc.toml`. Revisions since `config/uc.toml` was added refuse any `@` in `PUBLIC_URL`,
-`REPO_URL`, `DOWNLOAD_BACKEND_URL` and `PROCUREMENT_SOURCE_URL`, and an `HTTPS_PROXY` or
-`HTTP_PROXY` whose host and port urllib cannot use (such as `http://proxy:3128?x`, or a port that is
-not a number); see `CHANGELOG.md`. Instead of `docker compose up -d` you can run `make reload`,
-which checks the settings first and recreates nothing when they are invalid.
+`.env` or `config/uc.toml`. Instead of `docker compose up -d` you can run `make reload`, which
+checks the settings first and recreates nothing when they are invalid.
 
 `docker compose up -d` recreates the services whose image or configuration changed. Check that
 `last_run.result` is `success` and that `update_center2` names the version you expect.
@@ -98,10 +95,6 @@ docker compose up -d
 docker compose run --rm uc generate
 ```
 
-On Linux, if `git pull` cannot update a file under `secrets/` (such as its README), an older
-`make pki-init` gave `secrets/` to uid 10001: run `make secrets-permissions` first. Until the pull,
-you are on the older revision, which may not have the `setup` service yet.
-
 ## Go back to the previous revision
 
 For a release, check out the previous tag and set the previous image tags in `.env`:
@@ -116,18 +109,13 @@ docker compose up -d
 
 Air-gapped, load the previous bundle's images and unpack its source instead of pulling.
 
-To go back to an earlier source revision: revisions before `config/uc.toml` existed ignore it, so
-move the settings it holds back into `.env` first, or the services start without them.
+To go back to an earlier source revision:
 
 ```bash
 git checkout <previous commit or tag>
 docker compose build      # or: make build
 docker compose up -d
 ```
-
-A revision from before `docker compose build` could build the images (see `CHANGELOG.md`) has no
-`build:` sections, so there `docker compose build` only warns `No services to build` and
-`docker compose up -d` would run the newer images: use `make build`.
 
 If the problem is the release the new revision published, not the software, roll the site back
 too: `docker compose run --rm uc rollback`. See [Generate and roll back](generate-and-roll-back.md).

@@ -121,34 +121,6 @@ def test_pki_init_and_show(tmp_path, capsys):
     assert 'root-ca.crt: CN=Easy Update Center Root CA' in shown
 
 
-MOVED = [
-    (['--download-poms'], 'uc procure stage --poms'),
-    (['--download-dependencies'], 'uc procure stage --dependencies'),
-    (['--download-war', 'required'], 'uc procure stage --war'),
-    (['--staging', '/x'], 'uc procure stage|record|push|clean --staging'),
-    (['--push'], 'uc procure push'),
-    (['--dry-run'], 'uc procure push --dry-run, or uc procure clean --dry-run'),
-    (['--stage-local'], 'uc procure record'),
-    (['--fix'], 'uc procure record --fix'),
-    (['--clean'], 'uc procure clean'),
-]
-
-
-@pytest.mark.parametrize(('argv', 'replacement'), MOVED, ids=[argv[0] for argv, _ in MOVED])
-def test_a_removed_doctor_flag_names_its_command(argv, replacement, capsys):
-    with pytest.raises(SystemExit) as exited:
-        main(['doctor', *argv])
-    assert exited.value.code == 2
-    assert capsys.readouterr().err.splitlines()[-1] == f'uc: error: {argv[0]} moved: run {replacement}'  # after argparse's usage line
-
-
-def test_a_moved_flag_beside_a_valid_one_still_exits_2(capsys):
-    with pytest.raises(SystemExit) as exited:
-        main(['doctor', '--push', '--fetch'])
-    assert exited.value.code == 2
-    assert capsys.readouterr().err.splitlines()[-1] == 'uc: error: --push moved: run uc procure push'
-
-
 def test_procure_stage_with_nothing_selected_exits_2(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')

@@ -37,19 +37,6 @@ if TYPE_CHECKING:
 
 EXIT_LOCKED = 75
 
-DOCTOR_MOVED = {
-    '--download-poms': 'uc procure stage --poms',
-    '--download-dependencies': 'uc procure stage --dependencies',
-    '--download-war': 'uc procure stage --war',
-    '--staging': 'uc procure stage|record|push|clean --staging',
-    '--push': 'uc procure push',
-    '--dry-run': 'uc procure push --dry-run, or uc procure clean --dry-run',
-    '--stage-local': 'uc procure record',
-    '--fix': 'uc procure record --fix',
-    '--clean': 'uc procure clean',
-}
-"""The uc doctor flags that became uc procure commands, and what replaces each (nothing has been released, so no aliases)."""
-
 NOTHING_TO_STAGE = 'nothing to stage: choose with --poms, --dependencies or --war VERSION|required, or set PROCUREMENT_POMS, PROCUREMENT_DEPENDENCIES or PROCUREMENT_WARS'
 
 
@@ -68,8 +55,6 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument('--json', action=argparse.BooleanOptionalAction, help='print the report as JSON (default: DOCTOR_JSON, off)')
     doctor.add_argument('--since', metavar='VERSION', help='floor for required cores (default: DOCTOR_SINCE, else the oldest core in the repository)')
     doctor.add_argument('--record', action='store_true', help='also save the report as the latest: /data/doctor/report.json, and its counts in status.json')
-    for flag in DOCTOR_MOVED:
-        doctor.add_argument(flag, nargs='?', const=True, default=None, dest='moved_' + flag[2:].replace('-', '_'), help=argparse.SUPPRESS)
 
     procure = sub.add_parser('procure', help='stage, record, push and clean the files the repository lacks (docs/how-to/procure-missing-files.md)').add_subparsers(dest='procure_command', required=True)
     stage = procure.add_parser('stage', help="print uc doctor's report, then stage what it finds missing for review")
@@ -131,8 +116,6 @@ def main(argv: list[str] | None = None) -> int:
     """Run the uc command line and return its exit status (EXIT_LOCKED when another run holds the lock)."""
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command == 'doctor':
-        _check_doctor_args(parser, args)
     if args.command == 'config':
         _check_config_args(parser, args)
     try:
@@ -153,12 +136,6 @@ def _check_config_args(parser: argparse.ArgumentParser, args: argparse.Namespace
         parser.error('--out only applies to --web-env')
     if args.mode is not None and args.example is None:
         parser.error('--mode only applies to --example')
-
-
-def _check_doctor_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
-    for flag, replacement in DOCTOR_MOVED.items():
-        if getattr(args, 'moved_' + flag[2:].replace('-', '_')) is not None:
-            parser.error(f'{flag} moved: run {replacement}')
 
 
 def _dispatch(args: argparse.Namespace) -> int:
