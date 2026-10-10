@@ -3,7 +3,7 @@
 name: uc-routing
 
 x-web: &web
-  image: ${WEB_IMAGE:-jenkins-uc/web:local}
+  image: ${WEB_IMAGE:-easy-update-center/web:local}
   read_only: true
   tmpfs:
     - /tmp
@@ -18,7 +18,7 @@ x-web: &web
     start_period: 1s
 
 x-uc-test: &uc-test
-  image: ${UC_TEST_IMAGE:-jenkins-uc/uc-test:local}
+  image: ${UC_TEST_IMAGE:-easy-update-center/uc-test:local}
   user: "0:0"
 
 services:

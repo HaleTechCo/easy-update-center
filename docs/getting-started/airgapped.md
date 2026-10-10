@@ -23,8 +23,8 @@ Compose reads `.env` for every command, building included, so copy the air-gappe
 edit it in step 3. If the Docker host has internet access, build there:
 
 ```bash
-git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
-cd jenkins-update-center
+git clone https://github.com/HaleTechCo/easy-update-center.git
+cd easy-update-center
 cp .env.airgapped.example .env
 docker compose build
 ```
@@ -34,22 +34,22 @@ If it has none, build on a machine that does, with the **same CPU architecture**
 
 ```bash
 # on the machine with internet access
-git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
-cd jenkins-update-center
+git clone https://github.com/HaleTechCo/easy-update-center.git
+cd easy-update-center
 cp .env.airgapped.example .env
 docker compose build
-docker save jenkins-uc/uc:local jenkins-uc/web:local | gzip > ../jenkins-uc-images.tar.gz
-git bundle create ../jenkins-uc.bundle master
+docker save easy-update-center/uc:local easy-update-center/web:local | gzip > ../easy-update-center-images.tar.gz
+git bundle create ../easy-update-center.bundle master
 
 # on the air-gapped Docker host, with both files in the current directory
-git clone jenkins-uc.bundle jenkins-update-center
-gunzip -c jenkins-uc-images.tar.gz | docker load
-cd jenkins-update-center
+git clone easy-update-center.bundle easy-update-center
+gunzip -c easy-update-center-images.tar.gz | docker load
+cd easy-update-center
 cp .env.airgapped.example .env
 ```
 
-The image archive is about 200 MB. `docker load` prints `Loaded image: jenkins-uc/uc:local` and
-`Loaded image: jenkins-uc/web:local`. These two images are all the update center runs; nothing else
+The image archive is about 200 MB. `docker load` prints `Loaded image: easy-update-center/uc:local` and
+`Loaded image: easy-update-center/web:local`. These two images are all the update center runs; nothing else
 is pulled. On that host, skip `docker compose build`; the commands below use the loaded images and
 need no internet.
 
@@ -97,7 +97,7 @@ with the uc containers. Writing into the credential files keeps their permission
 
 ```bash
 docker compose run --rm setup
-printf '%s' 'svc-jenkins-uc' > secrets/repo_username
+printf '%s' 'svc-easy-update-center' > secrets/repo_username
 printf '%s' 'password-or-token' > secrets/repo_password
 # only with DOWNLOAD_ACCESS=proxy: a read-only account for downloads
 printf '%s' 'svc-read:password-or-token' > secrets/download_proxy_auth
@@ -122,7 +122,7 @@ group 10001, and the web container reads `download_proxy_auth` through group 33
 key to offline storage (it is needed only once a year):
 
 ```bash
-mv secrets/root /media/offline-usb/jenkins-uc-root      # any offline location
+mv secrets/root /media/offline-usb/easy-update-center-root      # any offline location
 ```
 
 See [Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).

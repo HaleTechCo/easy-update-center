@@ -35,7 +35,7 @@ checkout() { # refuse to run when Docker created ./config too: then it is no che
     uid=$(stat -c %u "${config}")
     entries=$(ls -A "${config}")
     if [ "${uid}" = 0 ] && [ -z "${entries}" ]; then
-        die "config/ is empty and owned by root, so Docker just created it: this is not a checkout of jenkins-update-center, and setup cannot tell whose secrets/ and procurement/ are. Run it in your checkout (where config/ holds uc.example.toml), or create config/ as yourself first"
+        die "config/ is empty and owned by root, so Docker just created it: this is not a checkout of Easy Update Center, and setup cannot tell whose secrets/ and procurement/ are. Run it in your checkout (where config/ holds uc.example.toml), or create config/ as yourself first"
     fi
 }
 

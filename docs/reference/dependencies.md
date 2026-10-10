@@ -93,7 +93,7 @@ delivered artifact, and an unpinned one picks up checker fixes without a bump co
 The jars the image ships, update-center2 itself included:
 
 ```bash
-docker run --rm --entrypoint ls jenkins-uc/uc:local /opt/uc/generator
+docker run --rm --entrypoint ls easy-update-center/uc:local /opt/uc/generator
 ```
 
 (From Git Bash on Windows, prefix it with `MSYS_NO_PATHCONV=1`.) Their licenses are listed in the
@@ -112,7 +112,7 @@ The uc image carries the notices for everything it ships that is not this projec
 | `Apache-2.0.txt`, `MIT.txt`, `LGPL-2.1.txt`, `jaxen-BSD.txt`, `dom4j.txt`, `BouncyCastle.txt` | The license texts the libraries use, as published by each license's author or project. |
 | `supercronic-MIT.txt` | supercronic's license. |
 
-To read them: `docker run --rm --entrypoint cat jenkins-uc/uc:local /opt/uc/licenses/NOTICE.txt`.
+To read them: `docker run --rm --entrypoint cat easy-update-center/uc:local /opt/uc/licenses/NOTICE.txt`.
 
 The build keeps them complete. Maven's license plugin lists each runtime library with the license
 its POM declares, and the build fails when a library has no known license, or when a jar the image

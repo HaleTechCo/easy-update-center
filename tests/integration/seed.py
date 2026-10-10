@@ -30,7 +30,7 @@ PROCURE_CORE = '2.999.1'  # a core only the procurement test's upstream has
 
 
 def get(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={'User-Agent': 'jenkins-uc-seed/1'})
+    request = urllib.request.Request(url, headers={'User-Agent': 'easy-update-center-seed/1'})
     with urllib.request.urlopen(request, timeout=600) as response:
         return response.read()
 

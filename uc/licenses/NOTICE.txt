@@ -2,12 +2,12 @@ Third-party software in the uc image
 ====================================
 
 This directory, /opt/uc/licenses/, holds the notices for the third-party software this image
-contains. The rest of the image is jenkins-update-center, under the MIT License:
-https://gitlab.com/ZacharySHale95/jenkins-update-center/-/blob/master/LICENSE
+contains. The rest of the image is Easy Update Center for Jenkins, under the MIT License:
+https://github.com/HaleTechCo/easy-update-center/blob/main/LICENSE
 
 1. update-center2
    https://github.com/jenkins-infra/update-center2, the Jenkins project's update site generator,
-   built from source at the pinned tag with the two patches in jenkins-update-center's uc/patches/
+   built from source at the pinned tag with the two patches in Easy Update Center's uc/patches/
    applied. /opt/uc/generator/update-center2-*.jar, /opt/uc/site/generate-htaccess.sh and
    /opt/uc/resources/ come from it.
 

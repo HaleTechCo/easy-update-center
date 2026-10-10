@@ -1,4 +1,4 @@
-# Jenkins update center, self-hosted
+# Easy Update Center for Jenkins
 
 **The upstream Jenkins update-center2, containerized and extended, with support for Artifact Keeper
 and air-gapped networks.**
@@ -112,8 +112,8 @@ Jenkins community account (online) or an account on your repository (air-gapped)
 ### Online
 
 ```bash
-git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
-cd jenkins-update-center
+git clone https://github.com/HaleTechCo/easy-update-center.git
+cd easy-update-center
 cp .env.online.example .env          # set PUBLIC_URL to your update center's origin
 docker compose build
 docker compose run --rm setup        # credential placeholders, ./procurement, signing keys
@@ -139,12 +139,12 @@ Full walkthrough: [Deploy online](docs/getting-started/online.md).
 ### Air-gapped
 
 ```bash
-git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
-cd jenkins-update-center
+git clone https://github.com/HaleTechCo/easy-update-center.git
+cd easy-update-center
 cp .env.airgapped.example .env        # set PUBLIC_URL, REPO_URL, REPO_KEY; uncomment COMPOSE_FILE
 docker compose build                  # needs internet once; see below for hosts without it
 docker compose run --rm setup         # credential placeholders, ./procurement, signing keys
-printf '%s' 'svc-jenkins-uc' > secrets/repo_username
+printf '%s' 'svc-easy-update-center' > secrets/repo_username
 printf '%s' 'password-or-token' > secrets/repo_password
 docker compose run --rm uc doctor --fetch       # what the generator will see in your repository
 docker compose up -d

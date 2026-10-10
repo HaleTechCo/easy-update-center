@@ -11,7 +11,7 @@ in to the child pipeline.
 
 Each one runs where the update center runs: a Jenkins agent labelled `uc-host`, a GitLab shell runner
 tagged `uc-host`, or a GitHub self-hosted runner labelled `uc-host`. Every command runs in the
-deployment directory `UC_DIR` (a pipeline variable, default `/opt/jenkins-update-center`), which holds
+deployment directory `UC_DIR` (a pipeline variable, default `/opt/easy-update-center`), which holds
 `.env`, `config/uc.toml` and `secrets/` and is not a checkout of the pipeline's repository. They are
 triggered by hand (a weekly trigger is included, commented out). Jenkins and GitHub allow one run at a
 time. GitLab's resource group holds from the job that starts the child pipeline until that pipeline

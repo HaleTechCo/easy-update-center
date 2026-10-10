@@ -45,7 +45,7 @@ def test_json_rows_give_each_value_and_its_source(tmp_path, secrets_dir):
     assert (rows['UC_ID']['value'], rows['UC_ID']['source']) == ('default', 'default')
     assert (rows['SIGNING_KEY_FILE']['source'], rows['SIGNING_KEY_FILE']['note']) == ('derived', 'present')
     assert rows['GITHUB_TOKEN_FILE']['note'] == 'missing'
-    assert rows['UC_IMAGE'] == {'env': 'UC_IMAGE', 'key': '', 'value': 'jenkins-uc/uc:local', 'source': 'default', 'note': '', 'restart': False}
+    assert rows['UC_IMAGE'] == {'env': 'UC_IMAGE', 'key': '', 'value': 'easy-update-center/uc:local', 'source': 'default', 'note': '', 'restart': False}
 
 
 def test_text_groups_the_settings_and_names_the_file(tmp_path, secrets_dir):

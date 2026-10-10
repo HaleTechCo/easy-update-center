@@ -13,8 +13,8 @@ On Windows, use Git Bash or WSL; the Makefile sets `MSYS_NO_PATHCONV=1` for its 
 ## Set up
 
 ```bash
-git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
-cd jenkins-update-center
+git clone https://github.com/HaleTechCo/easy-update-center.git
+cd easy-update-center
 make build                                         # both images, and the uc test image
 
 python -m venv .venv

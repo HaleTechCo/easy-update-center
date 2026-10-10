@@ -100,7 +100,7 @@ def test_private_files_are_not_served():
 
 def test_status_landing_page_and_uctest():
     assert json.loads(fetch('web-full', '/status.json').body)['live_release'] == '20260101T000000Z'
-    assert b'Jenkins Update Center' in fetch('web-full', '/').body
+    assert b'Easy Update Center for Jenkins' in fetch('web-full', '/').body
     assert fetch('web-full', '/uctest.json').body == b'{}\n'
 
 

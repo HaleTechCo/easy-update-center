@@ -114,7 +114,7 @@ An air-gapped deployment after a successful run, with the doctor report schedule
   "signing_cert": {
     "days_left": 301,
     "not_after": "2027-07-22T10:00:00Z",
-    "subject": "CN=Jenkins Update Center Signing,O=Jenkins Update Center"
+    "subject": "CN=Easy Update Center Signing,O=Easy Update Center"
   },
   "tiers": {"stable": ["2.528.1", "2.528.3"], "weekly": []},
   "update_center2": "3.18.4+patches",

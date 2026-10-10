@@ -251,7 +251,7 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('DOCTOR_JSON', 'bool', 'Doctor', 'uc doctor prints its report as JSON (--json).', default='false'),
     # Signing
     Setting('CERTIFICATE_MINIMUM_VALID_DAYS', 'int', 'Signing', 'Generation stops when the signing certificate expires within this many days.', default='30'),
-    Setting('PKI_ORG', 'str', 'Signing', 'The organization in the subjects of the certificates uc pki init and uc pki rotate create.', default='Jenkins Update Center'),
+    Setting('PKI_ORG', 'str', 'Signing', 'The organization in the subjects of the certificates uc pki init and uc pki rotate create.', default='Easy Update Center'),
     Setting('PKI_ROOT_DAYS', 'int', 'Signing', 'Lifetime of the root CA uc pki init creates, in days.', default='3650', minimum=1),
     Setting('PKI_SIGNING_DAYS', 'int', 'Signing', 'Lifetime of the signing certificate uc pki init and uc pki rotate issue, in days.', default='365', minimum=1),
     # Web and TLS
@@ -317,8 +317,8 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('UC_CONFIG_FILE', 'path', 'Internal', 'The settings file; a missing file is fine.', default='/config/uc.toml', env_only=True),
     # Compose
     Setting('UC_ENV_FILE', 'path', 'Compose', 'The file every service except web loads as env_file.', default='.env', env_only=True),
-    Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler, repo-adapter, web-config and setup.', default='jenkins-uc/uc:local', env_only=True),
-    Setting('WEB_IMAGE', 'str', 'Compose', 'The image for web.', default='jenkins-uc/web:local', env_only=True),
+    Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler, repo-adapter, web-config and setup.', default='easy-update-center/uc:local', env_only=True),
+    Setting('WEB_IMAGE', 'str', 'Compose', 'The image for web.', default='easy-update-center/web:local', env_only=True),
     Setting('HTTP_PORT', 'int', 'Compose', "Host port published for the web container's HTTP listener.", default='8080', env_only=True),
     Setting('HTTPS_PORT', 'int', 'Compose', "Host port published for the web container's TLS listener.", default='8443', env_only=True),
 )

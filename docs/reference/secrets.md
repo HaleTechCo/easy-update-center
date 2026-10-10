@@ -24,7 +24,7 @@ missing credential file empty, so Compose can mount it.
 Write credential files with `printf '%s'`, which adds no newline (a trailing newline is tolerated):
 
 ```bash
-printf '%s' 'svc-jenkins-uc' > secrets/repo_username
+printf '%s' 'svc-easy-update-center' > secrets/repo_username
 ```
 
 ## Which container gets which secret

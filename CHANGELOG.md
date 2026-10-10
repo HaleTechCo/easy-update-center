@@ -8,6 +8,17 @@ once releases are published.
 
 ### Changed
 
+- The project is now **Easy Update Center for Jenkins** (`easy-update-center`), named in the
+  "<name> for Jenkins" form the Jenkins trademark guidelines ask for. The Compose project is
+  `easy-update-center`, so a running stack's containers and volumes change name: carry the data
+  across as in [Upgrading from jenkins-update-center](docs/how-to/upgrade.md#upgrading-from-jenkins-update-center).
+  The local images are `easy-update-center/uc:local`, `easy-update-center/uc-test:local` and
+  `easy-update-center/web:local`; `PKI_ORG` defaults to `Easy Update Center` (new certificates only);
+  the example pipelines default to `UC_DIR=/opt/easy-update-center` and the lock names
+  `easy-update-center` and `easy-update-center-procurement`; and uc's HTTP User-Agent is
+  `easy-update-center/<version> (+https://github.com/HaleTechCo/easy-update-center)` instead of
+  `jenkins-uc/1`.
+
 - `PUBLIC_URL`, `REPO_URL`, `DOWNLOAD_BACKEND_URL` and `PROCUREMENT_SOURCE_URL` refuse any `@`
   (`uc: error: <setting> must not contain credentials or an @`), so none of them can carry
   credentials, not even a password holding a `#`, `?` or `/`, which a URL parser takes for the end
@@ -71,9 +82,9 @@ once releases are published.
   (`make secrets`) also repairs a `secrets/` set up the old way.
 - `make setup`, `make secrets`, `make pki-init`, `make pki-rotate`, `make reload` and the
   `make procure-*` targets run the images `.env` names in `UC_IMAGE` and `WEB_IMAGE`: they no
-  longer hand Compose make's own `jenkins-uc/*:local` defaults, which beat `.env`. A value given on
+  longer hand Compose make's own `easy-update-center/*:local` defaults, which beat `.env`. A value given on
   make's command line or in the shell still wins. They build or pull that uc image only when it is
-  missing, in a step of its own: they build it if it is `jenkins-uc/uc:local` and pull any other,
+  missing, in a step of its own: they build it if it is `easy-update-center/uc:local` and pull any other,
   so an offline or air-gapped host that loaded pre-built images builds and pulls nothing.
 - The `docker compose run`s of those targets no longer print Compose's `Container ... Creating` and
   `Created` lines around the command's output (`COMPOSE_PROGRESS=quiet`; older Compose releases

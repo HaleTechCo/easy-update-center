@@ -9,7 +9,7 @@
 # Protect the "procurement" environment (Settings > CI/CD > Protected environments) so only its
 # approvers can run the review job.
 variables:
-  UC_DIR: /opt/jenkins-update-center
+  UC_DIR: /opt/easy-update-center
 
 stages: [check, stage, procure]
 
@@ -18,7 +18,7 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "web"
     # - if: $CI_PIPELINE_SOURCE == "schedule"  # a weekly schedule, set in Build > Pipeline schedules
 
-# One pipeline at a time: the staging folder is shared. Each job here takes the jenkins-update-center
+# One pipeline at a time: the staging folder is shared. Each job here takes the easy-update-center
 # resource group, and the procure job holds it until the child pipeline ends, the review included. A
 # resource group serializes jobs, not pipelines: between this pipeline's stage job and its procure job,
 # another pipeline can still check and stage. The push job therefore checks procurement.sha256 and
@@ -31,7 +31,7 @@ default:
 
 check:
   stage: check
-  resource_group: jenkins-update-center
+  resource_group: easy-update-center
   script:
     - docker compose run --rm --no-deps uc config --check
     # Exit 1 means there is something to procure, which is what this pipeline is for.
@@ -39,7 +39,7 @@ check:
 
 stage:
   stage: stage
-  resource_group: jenkins-update-center
+  resource_group: easy-update-center
   script:
     # The directory this job works in, wherever UC_DIR was set (variables: above, the project, group or
     # instance, or the run): the procure job passes it on, so the child pipeline works there too.
@@ -70,7 +70,7 @@ stage:
 
 procure:
   stage: procure
-  resource_group: jenkins-update-center
+  resource_group: easy-update-center
   # strategy: depend keeps this job running, and so holding the resource group, until the child pipeline
   # ends: while it waits at the review too, so cancel a pipeline whose review no one will run.
   # needs: [stage] gives this job the stage job's dotenv report, and forwarding the pipeline variables

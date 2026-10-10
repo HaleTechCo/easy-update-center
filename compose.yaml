@@ -1,12 +1,12 @@
 ---
-# Jenkins update center (docs/architecture/overview.md).
+# Easy Update Center for Jenkins (docs/architecture/overview.md).
 #   online:     docker compose up -d
 #   air-gapped: docker compose -f compose.yaml -f compose.airgapped.yaml up -d
 #   one-shot:   docker compose run --rm uc doctor | procure | generate | rollback | status
-name: jenkins-update-center
+name: easy-update-center
 
 x-uc: &uc
-  image: ${UC_IMAGE:-jenkins-uc/uc:local}
+  image: ${UC_IMAGE:-easy-update-center/uc:local}
   build: {context: uc, target: runtime}
   env_file: ${UC_ENV_FILE:-.env}
   read_only: true
@@ -29,7 +29,7 @@ x-uc: &uc
 
 services:
   web:
-    image: ${WEB_IMAGE:-jenkins-uc/web:local}
+    image: ${WEB_IMAGE:-easy-update-center/web:local}
     build: {context: web}
     read_only: true
     tmpfs:
@@ -51,7 +51,7 @@ services:
   # One-shot, before web: works out web's settings from .env and config/uc.toml (uc config --web-env)
   # and writes them to the web-config volume. No network, no secrets.
   web-config:
-    image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    image: ${UC_IMAGE:-easy-update-center/uc:local}
     build: {context: uc, target: runtime}
     env_file: ${UC_ENV_FILE:-.env}
     command: ["config", "--web-env", "--out", "/run/uc-web/web.env"]
@@ -66,7 +66,7 @@ services:
   # Root, so it can set ownership, ACLs and permissions; no network, no compose secrets; it reads .env
   # (or UC_ENV_FILE) and config/uc.toml as the other services do, so .env must exist.
   setup:
-    image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    image: ${UC_IMAGE:-easy-update-center/uc:local}
     build: {context: uc, target: runtime}
     profiles: ["setup"]
     user: "0:0"
@@ -86,7 +86,7 @@ services:
   # Answers the generator's Artifactory requests from Artifactory or Artifact Keeper and fills in POMs,
   # descriptions and release dates from the archives. Idle when REPO_ADAPTER is off (the online default).
   repo-adapter:
-    image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    image: ${UC_IMAGE:-easy-update-center/uc:local}
     build: {context: uc, target: runtime}
     env_file: ${UC_ENV_FILE:-.env}
     command: ["repo-adapter"]

@@ -1,9 +1,9 @@
 # Local build and test entry points (see CONTRIBUTING.md#tests). Needs Docker with Compose v2 and GNU make.
 export MSYS_NO_PATHCONV := 1
 
-UC_IMAGE ?= jenkins-uc/uc:local
-UC_TEST_IMAGE ?= jenkins-uc/uc-test:local
-WEB_IMAGE ?= jenkins-uc/web:local
+UC_IMAGE ?= easy-update-center/uc:local
+UC_TEST_IMAGE ?= easy-update-center/uc-test:local
+WEB_IMAGE ?= easy-update-center/web:local
 export UC_IMAGE UC_TEST_IMAGE WEB_IMAGE
 # The release the uc images report (uc --version, status.json uc_version): make build UC_VERSION=0.1.0.
 UC_VERSION ?= dev
@@ -55,7 +55,7 @@ uc-image:
 stack-uc-image:
 	@image="$$($(STACK_UC_IMAGE))" || exit; \
 	  if docker image inspect "$$image" >/dev/null 2>&1; then :; \
-	  elif [ "$$image" = jenkins-uc/uc:local ]; then echo "docker build --target runtime -t $$image uc"; docker build --target runtime -t "$$image" uc; \
+	  elif [ "$$image" = easy-update-center/uc:local ]; then echo "docker build --target runtime -t $$image uc"; docker build --target runtime -t "$$image" uc; \
 	  else echo "docker pull $$image"; docker pull "$$image"; fi
 
 # secrets/ stays yours; the containers read their files through their group (uc 10001, web 33).

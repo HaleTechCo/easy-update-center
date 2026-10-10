@@ -15,10 +15,10 @@ root.
 ## Issue a new signing certificate
 
 You need the root key from offline storage. Point `ROOT` at the directory holding `root-ca.key` (not
-at the key file, which is refused), here `/media/offline-usb/jenkins-uc-root`:
+at the key file, which is refused), here `/media/offline-usb/easy-update-center-root`:
 
 ```bash
-make pki-rotate ROOT=/media/offline-usb/jenkins-uc-root
+make pki-rotate ROOT=/media/offline-usb/easy-update-center-root
 ```
 
 Without make, mount that directory read-only at `/setup/secrets/root` for the `setup` service's
@@ -26,8 +26,8 @@ Without make, mount that directory read-only at `/setup/secrets/root` for the `s
 remove the empty mount point Docker leaves in `secrets/` (`make pki-rotate` does both):
 
 ```bash
-docker compose run --rm -v /media/offline-usb/jenkins-uc-root:/setup/secrets/root:ro \
-  setup pki-rotate --root-display-dir /media/offline-usb/jenkins-uc-root
+docker compose run --rm -v /media/offline-usb/easy-update-center-root:/setup/secrets/root:ro \
+  setup pki-rotate --root-display-dir /media/offline-usb/easy-update-center-root
 rmdir secrets/root
 ```
 
@@ -60,7 +60,7 @@ rotation (...)`. Decrypt it into a new directory only you can read, rotate with 
 
 ```bash
 mkdir -m 700 /tmp/uc-root
-openssl pkey -in /media/offline-usb/jenkins-uc-root/root-ca.key -out /tmp/uc-root/root-ca.key  # asks for the passphrase
+openssl pkey -in /media/offline-usb/easy-update-center-root/root-ca.key -out /tmp/uc-root/root-ca.key  # asks for the passphrase
 make pki-rotate ROOT=/tmp/uc-root
 rm -rf /tmp/uc-root
 ```

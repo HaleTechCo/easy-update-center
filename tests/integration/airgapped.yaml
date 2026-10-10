@@ -9,7 +9,7 @@ networks:
   internet: {}
 
 x-uc-test: &uc-test
-  image: ${UC_TEST_IMAGE:-jenkins-uc/uc-test:local}
+  image: ${UC_TEST_IMAGE:-easy-update-center/uc-test:local}
   user: "0:0"
 
 x-jenkins: &jenkins
@@ -68,7 +68,7 @@ services:
       - ../../uc/uc:/opt/uc/python/uc:ro
 
   pki:
-    image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    image: ${UC_IMAGE:-easy-update-center/uc:local}
     profiles: ["seed"]
     user: "0:0"
     network_mode: none
@@ -217,7 +217,7 @@ services:
       - ../../uc/uc:/opt/uc/python/uc:ro
 
   web:
-    image: ${WEB_IMAGE:-jenkins-uc/web:local}
+    image: ${WEB_IMAGE:-easy-update-center/web:local}
     networks: [airgap]
     depends_on:
       web-config: {condition: service_completed_successfully}
@@ -226,7 +226,7 @@ services:
       - web-config:/run/uc-web:ro
 
   web-proxy:
-    image: ${WEB_IMAGE:-jenkins-uc/web:local}
+    image: ${WEB_IMAGE:-easy-update-center/web:local}
     networks: [airgap]
     environment:
       DOWNLOAD_BACKEND: artifactory

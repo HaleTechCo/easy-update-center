@@ -13,7 +13,7 @@ def test_get_follows_redirects():
     }
     with StubServer(routes) as stub:
         assert get(stub.url + '/start') == b'payload'
-        assert stub.requests[0][2]['User-Agent'].startswith('jenkins-uc/')
+        assert stub.requests[0][2]['User-Agent'].startswith('easy-update-center/')
 
 
 def test_get_wraps_errors():
