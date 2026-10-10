@@ -89,15 +89,14 @@ was, such as an internal one, has no `.pom` there.
 Exits 1 when anything will be dropped or a dependency is missing, else 0; required cores the
 repository lacks are reported but do not change the exit code. When the report finds something
 `uc procure stage` can fetch (POMs to procure, missing dependencies, missing required cores), it ends
-with that step, naming the options for what it found and the settings that choose them for every
-run:
+with that step, naming the options for what it found:
 
 ```text
 next: uc procure stage --poms --dependencies --war required
 ```
 
-Given `--since`, the line carries it to the required cores: `--war required --since 2.462.1`, or
-`DOCTOR_SINCE=2.462.1` among the settings. Air-gapped without `PROCUREMENT_SOURCE_URL`, where
+Given `--since`, the line carries it to the required cores: `--war required --since 2.462.1`.
+Air-gapped without `PROCUREMENT_SOURCE_URL`, where
 `uc procure stage` refuses to download, the line names the other ways in instead: place the files in
 the staging folder and record them, or set the source, then stage:
 
@@ -236,6 +235,9 @@ setting would show as `dependency failed to start` instead of `uc: error: ...`. 
 | `--mode` | With `--example`: the mode the example is for, `online` (the default) or `airgapped`. |
 
 An invalid configuration exits 1; without options, after printing every value it could work out.
+When the environment still holds an internal path an older release documented, such as
+`REPO_ADAPTER_URL`, with a value other than its default, every form also prints a `uc: note:` line
+naming it on standard error: uc still follows those names, so remove them from `.env`.
 How settings combine: [How settings are read](configuration.md#how-settings-are-read).
 
 ## uc schedule

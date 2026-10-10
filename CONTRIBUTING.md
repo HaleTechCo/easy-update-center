@@ -71,7 +71,7 @@ How the pieces fit: [Architecture overview](docs/architecture/overview.md).
 | `make it-online` | End to end against repo.jenkins-ci.org, capped at 25 plugins. | `JENKINS_COMMUNITY_USERNAME` and `JENKINS_COMMUNITY_PASSWORD` exported (a free account); optional `GITHUB_USERNAME`, `GITHUB_TOKEN` |
 | `make it-full` | The online run with the whole catalog. Takes hours. | as above |
 | `make test-setup` | `uc/bin/uc-setup`, the setup service's entrypoint, run as uid 1000 inside the uc image with real Linux permissions: first-time setup, the modes, `pki-init` and `pki-rotate` (part of `make test`). | Docker |
-| `make test-pipelines` | The example pipelines in `examples/pipelines/`: each runs the procurement stages in the order of the how-to, with the approval before the push and none when nothing was staged, and checks before pushing that `procurement.json` is the one reviewed (`tests/unit/test_pipeline_examples.py`, so part of `make test-unit`). | Docker |
+| `make test-pipelines` | The example pipeline in `examples/pipelines/`: it runs the procurement stages in the order of the how-to, with the approval before the push and none when nothing was staged, and checks before pushing that `procurement.json` is the one reviewed (`tests/unit/test_pipeline_examples.py`, so part of `make test-unit`). | Docker |
 | `make it-clean` | Removes the integration suites' containers and volumes. | Docker |
 
 **CI** (`.github/workflows/ci.yml`) runs on every pull request and push to `main`: the pre-commit

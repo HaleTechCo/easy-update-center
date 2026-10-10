@@ -7,8 +7,8 @@
 data/
 secrets/*
 !secrets/README.md
-# A new PKI from `make pki-init OUT=newpki` (docs/how-to/rotate-signing-certificate.md): it holds a
-# root CA's private key.
+# A new PKI from `docker compose run --rm -v "$PWD/newpki:/setup/out" setup pki-init --out /setup/out`
+# (docs/how-to/rotate-signing-certificate.md): it holds a root CA's private key.
 newpki/
 
 # Files staged for review by uc procure stage and record (docs/how-to/procure-missing-files.md)

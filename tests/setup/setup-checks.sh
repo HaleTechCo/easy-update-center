@@ -98,6 +98,13 @@ says "not writable: names UC_UID and UC_GID" "secrets/ is not writable by uid 10
 left="$(ls -A "${secrets}")"
 same "not writable: nothing created" "" "${left}"
 
+# 3b. A file in secrets/ that belongs to another user: stop, naming the file and UC_UID, not chmod's own error.
+fresh
+: > "${secrets}/repo_password" && chmod 0644 "${secrets}/repo_password"
+run secrets
+same "another user's file: exits 1" 1 "${rc}"
+says "another user's file: names it and UC_UID" "secrets/repo_password belongs to another user than uid 1000: give it to yours (sudo chown), or set UC_UID and UC_GID in .env to its owner"
+
 # 4. pki-init with options, in another folder: the PKI there with its modes, and no credential files.
 fresh
 mkdir /setup/out && chown "${host}" /setup/out

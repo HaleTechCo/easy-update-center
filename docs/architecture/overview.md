@@ -84,8 +84,8 @@ The boundaries they and the images draw:
   container never has it, and the root CA key is meant to live offline.
 - Only the one-shot `uc` service can write to the repository: it alone receives `repo_push_auth`
   as a Compose secret, and it is the only service with a network that mounts the staging folder
-  `./procurement` (`setup` can read the file in `./secrets`, but has no network). The scheduler, the repo-adapter and the web container never do, and
-  `make compose-check` asserts it.
+  `./procurement` (`setup` can read the file in `./secrets`, but has no network). The scheduler,
+  the repo-adapter and the web container never do, and a test of the Compose files asserts it.
 - Every container runs as the operator's own user, `UC_UID`:`UC_GID`, none as root, with a
   read-only root filesystem. Only `/data` and `/tmp` are writable (`setup`: `/setup/secrets`, and a directory you mount at
   `/setup/out` for a new PKI), and `web` mounts `/data` read-only. Apache serves only the live

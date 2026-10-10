@@ -7,7 +7,7 @@ import sys
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, TextIO
 
-from .config import make_resolver, settings_from, split_userinfo
+from .config import INTERNAL, make_resolver, settings_from, split_userinfo
 from .errors import ConfigError
 from .settings import GROUPS, REGISTRY, SETTINGS
 
@@ -89,6 +89,9 @@ def run(
     out = sys.stdout if out is None else out
     err = sys.stderr if err is None else err
     r = make_resolver(env)
+    leftovers = [name for name, default in INTERNAL.items() if r.env.get(name, '').strip() not in ('', default)]
+    if leftovers:  # names an older release documented: uc still follows them (tests point them at their own paths)
+        err.write(f'uc: note: not settings, but uc still follows them: {", ".join(leftovers)}; remove them from .env (only the tests set them)\n')
     try:
         settings = settings_from(r)
     except ConfigError as exc:

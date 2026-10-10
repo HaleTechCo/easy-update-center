@@ -192,7 +192,7 @@ def test_staging_flag_inside_the_data_volume_is_refused_before_anything_runs(mon
     if command == 'stage':
         argv.append('--poms')
     assert main(argv) == 1
-    assert capsys.readouterr().err.splitlines()[-1] == f'uc: error: --staging must be outside UC_DATA_DIR ({data}), which the other services mount too: keep it on the ./procurement mount, /procurement by default (got {str(staging)!r})'
+    assert capsys.readouterr().err.splitlines()[-1] == f'uc: error: --staging must not be the data volume ({data}) or a folder in it, which the other services mount too: keep it on the ./procurement mount, /procurement by default (got {str(staging)!r})'
     assert not (data / 'x').exists()
 
 
@@ -200,7 +200,7 @@ def test_staging_flag_inside_the_data_volume_is_refused_before_the_nothing_selec
     data = use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
     assert main(['procure', 'stage', '--staging', str(data / 'x')]) == 1  # not 2, nothing selected
-    assert capsys.readouterr().err.splitlines()[-1].startswith('uc: error: --staging must be outside UC_DATA_DIR')
+    assert capsys.readouterr().err.splitlines()[-1].startswith('uc: error: --staging must not be the data volume')
 
 
 @pytest.mark.parametrize('command', ['stage', 'record', 'push', 'clean'])
@@ -285,7 +285,7 @@ def test_config_reports_a_malformed_public_url(monkeypatch, tmp_path, secrets_di
     assert main(['config', '--check']) == 1
     captured = capsys.readouterr()
     assert captured.out == ''
-    assert captured.err.startswith('uc: error: PUBLIC_URL is not a valid URL: ')
+    assert captured.err.splitlines()[-1].startswith('uc: error: PUBLIC_URL is not a valid URL: ')
 
 
 def test_config_json_and_check_are_exclusive(capsys):
@@ -758,7 +758,7 @@ def test_config_check_reports_a_malformed_url_setting(monkeypatch, tmp_path, sec
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('HTTPS_PROXY', 'http://[bad')
     assert main(['config', '--check']) == 1
-    assert capsys.readouterr().err.startswith('uc: error: HTTPS_PROXY is not a valid URL: ')
+    assert capsys.readouterr().err.splitlines()[-1].startswith('uc: error: HTTPS_PROXY is not a valid URL: ')
 
 
 def test_config_check_takes_a_proxy_password_with_a_hash_and_never_prints_one(monkeypatch, tmp_path, secrets_dir, capsys):
@@ -768,7 +768,7 @@ def test_config_check_takes_a_proxy_password_with_a_hash_and_never_prints_one(mo
     monkeypatch.setenv('HTTPS_PROXY', 'http://svc:S3cretPW@proxy.corp:abc')  # pragma: allowlist secret
     assert main(['config', '--check']) == 1
     err = capsys.readouterr().err
-    assert err.startswith('uc: error: HTTPS_PROXY is not a valid URL: ')
+    assert err.splitlines()[-1].startswith('uc: error: HTTPS_PROXY is not a valid URL: ')
     assert 'S3cretPW' not in err
     assert 'abc' not in err
 

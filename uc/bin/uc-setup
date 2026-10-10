@@ -32,16 +32,21 @@ writable() { # writable DIR LABEL - stop unless this uid can create files in DIR
     rm -f "$1/.uc-setup-check"
 }
 
+foreign() { # foreign PATH - stop: PATH belongs to another user, so this uid cannot set its mode
+    uid=$(id -u)
+    die "${1#/setup/} belongs to another user than uid ${uid}: give it to yours (sudo chown), or set UC_UID and UC_GID in .env to its owner"
+}
+
 set_modes() { # set_modes DIR - keys and credentials 0600, certificates 0644, root/ 0700 and its files 0600
     for name in update-center.key update-center.key.old ${credential_files}; do
-        if [ -f "$1/${name}" ]; then chmod 0600 "$1/${name}"; fi
+        if [ -f "$1/${name}" ]; then chmod 0600 "$1/${name}" 2> /dev/null || foreign "$1/${name}"; fi
     done
     for name in update-center.cert update-center.cert.old root-ca.crt repo-ca.crt proxy-ca.crt; do
-        if [ -f "$1/${name}" ]; then chmod 0644 "$1/${name}"; fi
+        if [ -f "$1/${name}" ]; then chmod 0644 "$1/${name}" 2> /dev/null || foreign "$1/${name}"; fi
     done
     if [ -d "$1/root" ] && [ -w "$1/root" ]; then
-        chmod 0700 "$1/root"
-        find "$1/root" -type f -exec chmod 0600 {} +
+        chmod 0700 "$1/root" 2> /dev/null || foreign "$1/root"
+        find "$1/root" -type f -exec chmod 0600 {} + 2> /dev/null || foreign "$1/root/root-ca.key"
     fi
 }
 
