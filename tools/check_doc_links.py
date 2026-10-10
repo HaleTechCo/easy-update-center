@@ -19,10 +19,9 @@ heading/anchor scanner and the link scanner so the two cannot drift apart. The a
 genuinely broken reference that appears only inside a fence goes unreported, because it was
 never live to begin with.
 
-`heading_slug` reproduces GitLab's algorithm (GitLab 17.0 and later), because GitLab is where these
-pages are read. It gives each space its own hyphen and does NOT collapse runs, so a heading like
-`uc.env / web.env` slugs to `ucenv--webenv` with TWO hyphens. GitLab before 17.0 collapsed runs to
-one; a checker that did the same would reject links that work today and pass ones that are broken.
+`heading_slug` reproduces GitHub's algorithm, because GitHub is where these pages are read. It gives
+each space its own hyphen and does NOT collapse runs, so a heading like `uc.env / web.env` slugs to
+`ucenv--webenv` with TWO hyphens, and keeps accented letters.
 """
 
 from __future__ import annotations
@@ -64,19 +63,19 @@ MARKDOWN_SUFFIX = '.md'
 
 
 def heading_slug(text: str) -> str:
-    """Reproduce GitLab's heading-to-anchor algorithm (17.0 and later).
+    """Reproduce GitHub's heading-to-anchor algorithm (github-slugger).
 
-    Inline code, links and raw HTML are reduced to their text, the result is lowercased, every
-    character that is not a word character, whitespace or hyphen is dropped, and then each
-    remaining whitespace character becomes one hyphen. Runs are NOT collapsed: `uc.env / web.env`
-    is `ucenv--webenv`, as GitLab 17.0+ (and GitHub) generate it.
+    Inline code, links and raw HTML are reduced to their text, and the result is lowercased. Every
+    character that is not a letter, mark, number, connector punctuation (`_`), hyphen or space is
+    dropped, and each space becomes one hyphen. Runs are NOT collapsed: `uc.env / web.env` is
+    `ucenv--webenv`. Accented letters stay as they are (`Café` is `café`), where GitLab strips the
+    accent.
     """
     text = re.sub(r'`([^`]*)`', r'\1', text)
     text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)
     text = re.sub(r'<[^>]+>', '', text)
-    text = unicodedata.normalize('NFKD', text).lower()
-    text = re.sub(r'[^\w\s-]', '', text)
-    return re.sub(r'\s', '-', text.strip())
+    kept = ''.join(char for char in text.strip().lower() if char in ' -' or unicodedata.category(char)[0] in 'LMN' or unicodedata.category(char) == 'Pc')
+    return kept.replace(' ', '-')
 
 
 def _unfenced_lines(text: str) -> list[str]:

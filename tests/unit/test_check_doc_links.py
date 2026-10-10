@@ -1,4 +1,4 @@
-"""The documentation link checker: GitLab heading anchors, and which tracked files it scans."""
+"""The documentation link checker: GitHub heading anchors, and which tracked files it scans."""
 
 import importlib.util
 import subprocess
@@ -10,11 +10,16 @@ links = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(links)
 
 
-def test_heading_slug_keeps_hyphen_runs_like_gitlab_17():
+def test_heading_slug_keeps_hyphen_runs_like_github():
     assert links.heading_slug('uc.env / web.env') == 'ucenv--webenv'
     assert links.heading_slug('`tools/` - pre-commit shims') == 'tools---pre-commit-shims'
     assert links.heading_slug('Step 5: .htaccess') == 'step-5-htaccess'
     assert links.heading_slug('Outbound: air-gapped') == 'outbound-air-gapped'
+
+
+def test_heading_slug_keeps_accented_letters_where_gitlab_strips_their_accents():
+    assert links.heading_slug('Café ünits') == 'café-ünits'
+    assert links.heading_slug('Ⅻ → © ½') == 'ⅻ---½'
 
 
 def test_heading_slug_keeps_underscores_and_drops_code_marks():

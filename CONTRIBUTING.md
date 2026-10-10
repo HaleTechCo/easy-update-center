@@ -94,7 +94,7 @@ run that changes something; run again, and a second clean run is the real signal
 documentation:
 
 - `check-doc-links`: every relative link and every `docs/<page>.md#anchor` reference in a comment
-  resolves, with GitLab's heading anchors;
+  resolves, with GitHub's heading anchors;
 - `check-settings-documented`: every setting the code reads is in
   [docs/reference/configuration.md](docs/reference/configuration.md), and nothing documented there is
   unread.
