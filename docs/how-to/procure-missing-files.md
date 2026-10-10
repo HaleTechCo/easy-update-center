@@ -72,7 +72,7 @@ When it finds something `uc procure stage` can fetch, it ends with that step, na
 what it found:
 
 ```text
-next: uc procure stage --poms --dependencies --war required (or set PROCUREMENT_POMS=true, PROCUREMENT_DEPENDENCIES=true, PROCUREMENT_WARS=required)
+next: uc procure stage --poms --dependencies --war required
 ```
 
 Given `--since`, it adds it after `--war required`. Air-gapped without `PROCUREMENT_SOURCE_URL`,
@@ -93,32 +93,18 @@ docker compose run --rm uc procure stage --poms --dependencies --war required
 ```
 
 (`make procure-stage ARGS="--poms --dependencies --war required"`.) It prints the doctor report,
-then one line per file. Choose what to stage with options, or once for every run with the
-`PROCUREMENT_*` settings in `.env`; the options combine freely:
+then one line per file. Choose what to stage with options; they combine freely:
 
-| Option | Setting | Stages |
-|---|---|---|
-| `--poms` | `PROCUREMENT_POMS=true` | The real `.pom` of every plugin whose POM is missing, derived from its archive, or unusable. |
-| `--dependencies` | `PROCUREMENT_DEPENDENCIES=true` | Each required dependency the repository lacks or holds only in an older version, at the highest minimum any plugin declares, with its `.pom`; then their dependencies, until nothing is missing. Optional dependencies are skipped. |
-| `--war VERSION` | `PROCUREMENT_WARS=2.479.1` | That core's `.war` and `.pom`. Repeatable. |
-| `--war required` | `PROCUREMENT_WARS=required` | Every core plugins require that the repository lacks, at or above the oldest core it holds, or `--since VERSION` (`DOCTOR_SINCE`). With no core in the repository, `--since` is needed: use the oldest version your controllers run. It is also refused for the public repository: name the versions instead. Older required cores are left out; the report names the oldest and the `--since` that stages them. Once an older core is in the repository, it is the floor for every later run. |
+| Option | Stages |
+|---|---|
+| `--poms` | The real `.pom` of every plugin whose POM is missing, derived from its archive, or unusable. |
+| `--dependencies` | Each required dependency the repository lacks or holds only in an older version, at the highest minimum any plugin declares, with its `.pom`; then their dependencies, until nothing is missing. Optional dependencies are skipped. |
+| `--war VERSION` | That core's `.war` and `.pom`. Repeatable. |
+| `--war required` | Every core plugins require that the repository lacks, at or above the oldest core it holds, or `--since VERSION` (`DOCTOR_SINCE`). With no core in the repository, `--since` is needed: use the oldest version your controllers run. It is also refused for the public repository: name the versions instead. Older required cores are left out; the report names the oldest and the `--since` that stages them. Once an older core is in the repository, it is the floor for every later run. |
 
-With the settings, a plain `docker compose run --rm uc procure stage` (or `make procure-stage`)
-stages the same every time:
+With nothing chosen, the run stages nothing and exits 2, naming the options.
 
-```bash
-# .env
-PROCUREMENT_POMS=true
-PROCUREMENT_DEPENDENCIES=true
-PROCUREMENT_WARS=required
-```
-
-An option beats its setting for one run: `--no-poms`, `--no-dependencies` and `--no-wars` turn a
-configured one off, and `--war` replaces the configured cores. With nothing chosen either way, the
-run stages nothing and exits 2, naming the options and the settings.
-
-Before it stages, it reads the POMs and manifests the generator has not cached yet
-(`PROCUREMENT_FETCH`, on by default): without them the run cannot see every missing dependency or
+Before it stages, it reads the POMs and manifests the generator has not cached yet: without them the run cannot see every missing dependency or
 required core, and a `warning` line before the summary then says how many releases went unchecked.
 `--no-fetch` skips it for one run.
 
@@ -147,8 +133,7 @@ docker compose run --rm uc procure record         # check and record; report mis
 docker compose run --rm uc procure record --fix   # move misplaced files first, then record them
 ```
 
-(`make procure-record`, `make procure-record ARGS=--fix`; `PROCUREMENT_FIX=true` makes `--fix` the
-default, and `--no-fix` turns it off for one run.)
+(`make procure-record`, `make procure-record ARGS=--fix`.)
 
 It records every `.hpi`, `.jpi`, `.war` and `.pom` in the folder that `procurement.json` does not list
 yet, with the reason `added by hand`, after the checks a download gets: a plugin's manifest must name

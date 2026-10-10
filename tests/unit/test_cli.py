@@ -123,26 +123,7 @@ def test_procure_stage_with_nothing_selected_exits_2(monkeypatch, tmp_path, secr
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
     assert main(['procure', 'stage']) == 2
-    err = capsys.readouterr().err
-    assert err.startswith('uc: error: nothing to stage:')
-    for name in ('--poms', '--dependencies', '--war', 'PROCUREMENT_POMS', 'PROCUREMENT_DEPENDENCIES', 'PROCUREMENT_WARS'):
-        assert name in err
-
-
-def test_procure_options_come_from_the_settings_unless_given(tmp_path, secrets_dir):
-    settings = make_settings(tmp_path, secrets_dir, procurement_poms=True, procurement_wars=('required',), procurement_fetch=True, doctor_since='2.462.1')
-    parse = build_parser().parse_args
-    assert procure_options(parse(['procure', 'stage']), settings) == StageOptions(fetch=True, poms=True, dependencies=False, wars=('required',), since='2.462.1', staging=settings.procurement_staging_dir)
-    assert procure_options(parse(['procure', 'stage', '--no-poms', '--no-fetch']), settings).poms is False  # --no-poms beats PROCUREMENT_POMS=true
-    assert procure_options(parse(['procure', 'stage', '--war', '2.479.1', '--war', '2.462.3']), settings).wars == ('2.479.1', '2.462.3')  # replaces the setting
-    assert procure_options(parse(['procure', 'stage', '--no-wars']), settings).wars == ()
-    assert procure_options(parse(['procure', 'stage', '--staging', '/elsewhere']), settings).staging == Path('/elsewhere')
-
-
-def test_procure_stage_refuses_war_and_no_wars_together():
-    with pytest.raises(SystemExit) as exited:
-        main(['procure', 'stage', '--war', 'required', '--no-wars'])
-    assert exited.value.code == 2
+    assert capsys.readouterr().err == 'uc: error: nothing to stage: choose --poms, --dependencies or --war VERSION|required\n'
 
 
 def test_procure_stage_downloads_are_refused_air_gapped_before_listing(monkeypatch, tmp_path, secrets_dir, capsys):
@@ -188,17 +169,6 @@ def test_procure_record_needs_neither_a_source_nor_the_repository(monkeypatch, t
     staging.mkdir()
     assert main(['procure', 'record', '--staging', str(staging)]) == 0
     assert capsys.readouterr().out.splitlines() == ['0 recorded, 0 refused']
-
-
-@pytest.mark.parametrize(('given', 'expected'), [(([], 'true'), True), (([], 'false'), False), ((['--fix'], 'false'), True), ((['--no-fix'], 'true'), False)])
-def test_procure_record_takes_fix_over_the_setting(monkeypatch, tmp_path, secrets_dir, given, expected):
-    argv, setting = given
-    use_env(monkeypatch, tmp_path, secrets_dir)
-    monkeypatch.setenv('PROCUREMENT_FIX', setting)
-    seen = {}
-    monkeypatch.setattr('uc.cli.stage_local', lambda *_, fix, **__: seen.update(fix=fix) or 0)
-    assert main(['procure', 'record', *argv, '--staging', str(tmp_path / 'stage')]) == 0
-    assert seen == {'fix': expected}
 
 
 @pytest.mark.parametrize('command', ['push', 'clean'])
@@ -258,7 +228,7 @@ def test_doctor_json_prints_the_next_line_on_stderr_and_keeps_stdout_valid(monke
     main(['doctor', '--json', '--no-fetch'])
     captured = capsys.readouterr()
     assert json.loads(captured.out)['plugins'] == 0
-    assert captured.err.splitlines()[-1] == 'next: uc procure stage --dependencies (or set PROCUREMENT_DEPENDENCIES=true)'
+    assert captured.err.splitlines()[-1] == 'next: uc procure stage --dependencies'
     assert 'next:' not in captured.out
 
 
@@ -279,7 +249,7 @@ def test_doctor_carries_its_since_into_the_next_line_when_it_suggests_cores(monk
     monkeypatch.setattr('uc.cli.inspect_repository', lambda *_, since, **__: seen.update(since=since) or Inspection(report, classify([]), None))
     main(['doctor', '--no-fetch', '--since', '2.462.1'])
     assert seen == {'since': '2.462.1'}
-    assert capsys.readouterr().out.splitlines()[-1] == 'next: uc procure stage --war required --since 2.462.1 (or set PROCUREMENT_WARS=required, DOCTOR_SINCE=2.462.1)'
+    assert capsys.readouterr().out.splitlines()[-1] == 'next: uc procure stage --war required --since 2.462.1'
 
 
 def test_doctor_record_keeps_json_output_valid_and_reports_the_saved_path_on_stderr(artifactory, monkeypatch, tmp_path, secrets_dir, capsys):
@@ -330,14 +300,6 @@ def test_config_options_that_need_another(argv, message, capsys):
     with pytest.raises(SystemExit):
         main(argv)
     assert message in capsys.readouterr().err
-
-
-def test_doctor_options_come_from_the_settings_unless_given(tmp_path, secrets_dir):
-    parser = build_parser()
-    configured = make_settings(tmp_path, secrets_dir, DOCTOR_FETCH='true', DOCTOR_JSON='yes', DOCTOR_SINCE='2.462.1')
-    assert doctor_options(parser.parse_args(['doctor']), configured) == (True, True, '2.462.1')
-    assert doctor_options(parser.parse_args(['doctor', '--no-fetch', '--no-json', '--since', '2.479.1']), configured) == (False, False, '2.479.1')
-    assert doctor_options(parser.parse_args(['doctor']), make_settings(tmp_path, secrets_dir)) == (False, False, None)
 
 
 def test_generate_accepts_wait():
@@ -838,13 +800,6 @@ def test_a_malformed_url_prints_an_error_not_a_traceback(monkeypatch, tmp_path, 
     assert 'uc: error: REPO_URL is not a valid URL: ' in capsys.readouterr().err
 
 
-def test_config_check_reports_a_bad_procurement_war(monkeypatch, tmp_path, secrets_dir, capsys):
-    use_env(monkeypatch, tmp_path, secrets_dir)
-    monkeypatch.setenv('PROCUREMENT_WARS', 'latest')
-    assert main(['config', '--check']) == 1
-    assert capsys.readouterr().err.startswith('uc: error: PROCUREMENT_WARS takes Jenkins versions')
-
-
 def test_config_check_refuses_a_staging_folder_in_the_data_volume(monkeypatch, tmp_path, secrets_dir, capsys):
     data = use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('PROCUREMENT_STAGING_DIR', str(data / 'procurement'))
@@ -996,3 +951,36 @@ def test_config_has_no_web_env():
     with pytest.raises(SystemExit) as exited:
         main(['config', '--web-env'])
     assert exited.value.code == 2
+
+
+def test_procure_stage_options_come_from_the_command_line(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, DOCTOR_SINCE='2.462.1')
+    parse = build_parser().parse_args
+    assert procure_options(parse(['procure', 'stage', '--poms']), settings) == StageOptions(fetch=True, poms=True, dependencies=False, wars=(), since='2.462.1', staging=settings.procurement_staging_dir)
+    given = ['procure', 'stage', '--dependencies', '--war', 'required', '--war', '2.479.1', '--no-fetch', '--since', '2.479.1']
+    assert procure_options(parse(given), settings) == StageOptions(fetch=False, poms=False, dependencies=True, wars=('required', '2.479.1'), since='2.479.1', staging=settings.procurement_staging_dir)
+    assert procure_options(parse(['procure', 'stage', '--staging', '/elsewhere']), settings).staging == Path('/elsewhere')
+
+
+@pytest.mark.parametrize('argv', [['procure', 'stage', '--no-wars'], ['procure', 'stage', '--no-poms'], ['procure', 'record', '--no-fix'], ['doctor', '--no-json']])
+def test_the_options_that_turned_a_setting_off_are_gone(argv):
+    with pytest.raises(SystemExit) as exited:
+        main(argv)
+    assert exited.value.code == 2
+
+
+@pytest.mark.parametrize(('argv', 'expected'), [([], False), (['--fix'], True)])
+def test_procure_record_takes_fix_from_the_command_line(monkeypatch, tmp_path, secrets_dir, argv, expected):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    seen = {}
+    monkeypatch.setattr('uc.cli.stage_local', lambda *_, fix, **__: seen.update(fix=fix) or 0)
+    assert main(['procure', 'record', *argv, '--staging', str(tmp_path / 'stage')]) == 0
+    assert seen == {'fix': expected}
+
+
+def test_doctor_options_take_json_from_the_command_line_and_fetch_from_the_setting(tmp_path, secrets_dir):
+    parser = build_parser()
+    configured = make_settings(tmp_path, secrets_dir, DOCTOR_FETCH='true', DOCTOR_SINCE='2.462.1')
+    assert doctor_options(parser.parse_args(['doctor']), configured) == (True, False, '2.462.1')
+    assert doctor_options(parser.parse_args(['doctor', '--json', '--no-fetch', '--since', '2.479.1']), configured) == (False, True, '2.479.1')
+    assert doctor_options(parser.parse_args(['doctor']), make_settings(tmp_path, secrets_dir)) == (False, False, None)

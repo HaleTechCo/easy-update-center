@@ -85,3 +85,8 @@ def test_the_staged_flag_follows_the_review_line(tmp_path, report, staged):
         (tmp_path / 'stage-report.txt').write_text(report, encoding='utf-8')
     result = subprocess.run(['sh', '-c', found.group(1)], cwd=tmp_path, env={'PATH': '/usr/bin:/bin'}, capture_output=True, text=True, check=False, timeout=30)
     assert (result.returncode, result.stdout) == (0, f'{staged}\n')
+
+
+def test_the_stage_step_chooses_what_to_stage_from_a_parameter():
+    assert "string(name: 'STAGE_OPTIONS', defaultValue: '--poms --dependencies --war required'" in code()
+    assert 'uc procure stage ${params.STAGE_OPTIONS}' in stages()['stage']

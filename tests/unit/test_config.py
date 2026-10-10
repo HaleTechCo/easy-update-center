@@ -246,11 +246,7 @@ def test_an_explicit_adapter_url_wins_over_the_port():
 
 
 def test_procurement_staging_defaults():
-    settings = load_settings(AIRGAPPED)
-    assert settings.procurement_staging_dir == Path('/procurement')
-    assert settings.procurement_fetch is True
-    assert (settings.procurement_poms, settings.procurement_dependencies, settings.procurement_fix) == (False, False, False)
-    assert settings.procurement_wars == ()
+    assert load_settings(AIRGAPPED).procurement_staging_dir == Path('/procurement')
 
 
 @pytest.mark.parametrize(('data', 'staging'), [('/data', '/data'), ('/data', '/data/'), ('/data', '/data/procurement'), ('/data', '/data/../data/stage'), ('/srv/uc', '/srv/uc/stage')])
@@ -262,17 +258,6 @@ def test_a_staging_folder_in_the_data_volume_fails_when_the_settings_load(data, 
 @pytest.mark.parametrize('staging', ['/procurement', '/procurement/batch', '/database', '/srv/data', '/data2/stage'])
 def test_a_staging_folder_outside_the_data_volume_loads(staging):
     assert load_settings({**AIRGAPPED, 'PROCUREMENT_STAGING_DIR': staging}).procurement_staging_dir == Path(staging)
-
-
-@pytest.mark.parametrize(('raw', 'wars'), [('required', ('required',)), ('required 2.479.1', ('required', '2.479.1')), ('2.462.3,2.479.1', ('2.462.3', '2.479.1')), (' required , 2.479.1 ', ('required', '2.479.1'))])
-def test_procurement_wars_from_the_environment(raw, wars):
-    assert load_settings({**AIRGAPPED, 'PROCUREMENT_WARS': raw}).procurement_wars == wars
-
-
-@pytest.mark.parametrize('raw', ['latest', '2.x', 'required,latest'])
-def test_a_bad_procurement_war_fails_when_the_settings_load(raw):
-    with pytest.raises(ConfigError, match=r'^PROCUREMENT_WARS takes Jenkins versions such as 2\.479\.1, or required'):
-        load_settings({**AIRGAPPED, 'PROCUREMENT_WARS': raw})
 
 
 @pytest.mark.parametrize('value', ['2.462', '2.462.1', '2.440'])

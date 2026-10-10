@@ -49,11 +49,10 @@ Before the first run:
 
 ## Choose what to stage
 
-The stage step runs `uc procure stage` with no options, so what it stages comes from the
-`PROCUREMENT_*` settings in `UC_DIR`'s `.env`. Set them before the first run, for
-example `PROCUREMENT_POMS=true`, `PROCUREMENT_DEPENDENCIES=true` and `PROCUREMENT_WARS=required` in
-`.env`. With none of them set, the stage step exits 2 and the run stops before the review. What each
-one stages: [2. Stage](procure-missing-files.md#2-stage).
+The stage step runs `uc procure stage` with the job's `STAGE_OPTIONS` parameter, by default
+`--poms --dependencies --war required`. Change it in the job, or for one run in **Build with
+Parameters**. Empty, the stage step exits 2 and the run stops before the review. What each option
+stages: [2. Stage](procure-missing-files.md#2-stage).
 
 The example assumes the default staging folder: it reads the staged list as
 `procurement/procurement.json` in `UC_DIR`, where `PROCUREMENT_STAGING_DIR`'s default,
@@ -132,7 +131,7 @@ approval before it pushes.
 | `uc doctor` | 1 | Expected: something will be dropped or a dependency is missing, which is what the run is for. The example lets it pass in the check and verify stages. An error, such as an unreachable repository, also exits 1 (`uc: error: ...`); the stage step then fails on it too. |
 | `uc doctor` | 2 or more | An invalid command line: the stage fails. |
 | `uc procure stage` | 1 | A file could not be staged (`FAILED` in `stage-report.txt`), or the run was refused (`uc: error: ...`, for example air-gapped without `PROCUREMENT_SOURCE_URL`). |
-| `uc procure stage` | 2 | Nothing selected to stage: set `PROCUREMENT_POMS`, `PROCUREMENT_DEPENDENCIES` or `PROCUREMENT_WARS` ([above](#choose-what-to-stage)). |
+| `uc procure stage` | 2 | Nothing selected to stage: `STAGE_OPTIONS` is empty ([above](#choose-what-to-stage)). |
 | `sha256sum -c` | 1 | `procurement.json` changed after the review; nothing was pushed. |
 | `uc procure push` | 1 | A file did not end up in the repository; its line says why ([4. Push](procure-missing-files.md#4-push)). Run the pipeline again once it is fixed: files already pushed show as `present`. |
 | `uc generate` | 1 | The generation failed; the live release is unchanged. The next scheduled generation publishes the pushed files. |
@@ -142,4 +141,5 @@ approval before it pushes.
 ## The example
 
 [Jenkinsfile](../../examples/pipelines/Jenkinsfile) is a Pipeline job (or a multibranch one in your
-pipeline repository). Set `UC_DIR` as the job's parameter default and `submitter` to your approvers.
+pipeline repository). Set `UC_DIR` and `STAGE_OPTIONS` as the job's parameter defaults and `submitter` to
+your approvers.

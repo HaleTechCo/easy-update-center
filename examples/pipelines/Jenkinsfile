@@ -9,6 +9,7 @@ pipeline {
     }
     parameters {
         string(name: 'UC_DIR', defaultValue: '/opt/easy-update-center', description: 'The update center deployment directory on the uc-host agent')
+        string(name: 'STAGE_OPTIONS', defaultValue: '--poms --dependencies --war required', description: 'What uc procure stage stages (docs/how-to/procure-missing-files.md#2-stage)')
     }
     // triggers { cron('H 6 * * 1') } // weekly, on Monday morning
     stages {
@@ -37,7 +38,7 @@ pipeline {
                         set -eo pipefail
                         rm -f '${env.WORKSPACE}/stage-report.txt' '${env.WORKSPACE}/procurement.json' '${env.WORKSPACE}/procurement.sha256'
                         rc=0
-                        docker compose run --rm uc procure stage 2>&1 | tee '${env.WORKSPACE}/stage-report.txt' || rc=\$?
+                        docker compose run --rm uc procure stage ${params.STAGE_OPTIONS} 2>&1 | tee '${env.WORKSPACE}/stage-report.txt' || rc=\$?
                         if [ -e procurement/procurement.json ]; then
                             cp procurement/procurement.json '${env.WORKSPACE}/'
                             sha256sum procurement/procurement.json > '${env.WORKSPACE}/procurement.sha256'

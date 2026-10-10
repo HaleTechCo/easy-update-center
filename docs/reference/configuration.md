@@ -20,8 +20,7 @@ Run `uc config` to see every value and where it came from ([uc config](cli.md#uc
 - **Empty values**: an empty variable means "not set", so the default applies, except for
   `POPULARITY_JSON_URL` and `TOOL_INSTALLERS_URL`, where an explicitly empty value turns the
   feature off.
-- **Types**: booleans accept `1`, `true`, `yes`, `on` and `0`, `false`, `no`, `off`. A list
-  (`PROCUREMENT_WARS`) is separated by spaces or commas.
+- **Types**: booleans accept `1`, `true`, `yes`, `on` and `0`, `false`, `no`, `off`.
 - **Mistakes**: an invalid value stops the command that reads it with a message naming the
   setting.
 - Credentials and keys are files, not settings: see [Secrets](secrets.md). Only their paths are
@@ -137,8 +136,7 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 |---|---|---|---|
 | `DOCTOR_SCHEDULE` | empty: none | scheduler | Cron expression (or an `@macro`) for a read-only `uc doctor --record` run, which saves the report and puts its counts in `status.json`. It never stages, pushes or cleans. |
 | `DOCTOR_FETCH` | `false` | doctor | Download the POMs and manifests missing from the generator's cache, as `--fetch` does; `--no-fetch` turns it off for one run. |
-| `DOCTOR_SINCE` | empty: the oldest core in the repository | doctor, procure | The floor for required cores, as `--since`, so also the floor of `uc procure stage --war required` and `PROCUREMENT_WARS=required`. A Jenkins version such as `2.462.1`; anything else is refused when the settings load. |
-| `DOCTOR_JSON` | `false` | doctor | Print the report as JSON, as `--json`; `--no-json` turns it off for one run. |
+| `DOCTOR_SINCE` | empty: the oldest core in the repository | doctor, procure | The floor for required cores, as `--since`, so also the floor of `uc procure stage --war required`. A Jenkins version such as `2.462.1`; anything else is refused when the settings load. |
 
 ## Signing
 
@@ -200,11 +198,6 @@ These are read from the process environment by the JVM and by Python.
 |---|---|---|---|
 | `PROCUREMENT_SOURCE_URL` | `https://repo.jenkins-ci.org/releases/` | procure | Where `uc procure stage` fetches files from, by Maven path, each checked against the `.sha1` beside it. Set it to reach repo.jenkins-ci.org through your own proxy repository. Air-gapped, downloads are refused unless it is set. Must not contain credentials or any `@`. See [Procure missing files](../how-to/procure-missing-files.md). |
 | `PROCUREMENT_STAGING_DIR` | `/procurement` | procure | The staging folder `uc procure stage` fills and the other `uc procure` commands read (`--staging`), inside the `uc` container. `compose.yaml` mounts `./procurement` there, and the folder must stay on that mount: `/procurement` or a folder in it. `UC_DATA_DIR`, or a folder in it, is refused: the other services mount the data volume. `--staging` is held to the same rule. |
-| `PROCUREMENT_FETCH` | `true` | procure | `uc procure stage` first downloads the POMs and manifests missing from the cache, so it finds every missing dependency and required core (`--fetch`). |
-| `PROCUREMENT_POMS` | `false` | procure | `uc procure stage` stages the real `.pom` of every plugin whose POM is missing, derived or unusable (`--poms`). |
-| `PROCUREMENT_DEPENDENCIES` | `false` | procure | `uc procure stage` stages the missing required dependencies, transitively, each with its `.pom` (`--dependencies`). |
-| `PROCUREMENT_WARS` | none | procure | The Jenkins cores `uc procure stage` stages: versions such as `2.479.1`, or `required` for every core plugins require that the repository lacks, from `DOCTOR_SINCE` up (`--war`). Separate them with spaces or commas. |
-| `PROCUREMENT_FIX` | `false` | procure | `uc procure record` first moves each file placed by hand to the Maven path it declares (`--fix`). |
 
 ## Internal
 

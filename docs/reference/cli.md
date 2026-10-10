@@ -57,7 +57,7 @@ The scheduler runs the same command on `GENERATE_SCHEDULE`.
 ## uc doctor
 
 ```bash
-docker compose run --rm uc doctor [--fetch | --no-fetch] [--json | --no-json] [--since VERSION] [--record]
+docker compose run --rm uc doctor [--fetch | --no-fetch] [--json] [--since VERSION] [--record]
 ```
 
 Reports what the generator will and will not see in the source repository, without generating. It
@@ -89,7 +89,7 @@ was, such as an internal one, has no `.pom` there.
 | Option | Meaning |
 |---|---|
 | `--fetch`, `--no-fetch` | Download the POMs and manifests missing from the generator's cache, so dependencies and required cores can be checked before the first generation. Without it, unchecked items are counted and reported. The default is `DOCTOR_FETCH` (off). |
-| `--json`, `--no-json` | Print the full report as JSON. The default is `DOCTOR_JSON` (off). The `next:` line, and the line `--record` prints, then go to standard error, so standard output stays valid JSON. |
+| `--json` | Print the full report as JSON. The `next:` line, and the line `--record` prints, then go to standard error, so standard output stays valid JSON. |
 | `--since VERSION` | The floor for required cores, instead of the oldest core in the repository. The default is `DOCTOR_SINCE`. |
 | `--record` | Also save the report as the latest: in full as `/data/doctor/report.json` (not served), and its counts in `status.json`'s `doctor` block with `checked_at` and `recorded_at`. The scheduler runs it on `DOCTOR_SCHEDULE`. |
 
@@ -100,7 +100,7 @@ with that step, naming the options for what it found and the settings that choos
 run:
 
 ```text
-next: uc procure stage --poms --dependencies --war required (or set PROCUREMENT_POMS=true, PROCUREMENT_DEPENDENCIES=true, PROCUREMENT_WARS=required)
+next: uc procure stage --poms --dependencies --war required
 ```
 
 Given `--since`, the line carries it to the required cores: `--war required --since 2.462.1`, or
@@ -118,8 +118,8 @@ What the repository must contain:
 ## uc procure
 
 ```bash
-docker compose run --rm uc procure stage [--poms | --no-poms] [--dependencies | --no-dependencies] [--war VERSION|required ... | --no-wars] [--since VERSION] [--fetch | --no-fetch] [--staging DIR]
-docker compose run --rm uc procure record [--fix | --no-fix] [--staging DIR]
+docker compose run --rm uc procure stage [--poms] [--dependencies] [--war VERSION|required ...] [--since VERSION] [--fetch | --no-fetch] [--staging DIR]
+docker compose run --rm uc procure record [--fix] [--staging DIR]
 docker compose run --rm uc procure push [--dry-run] [--staging DIR]
 docker compose run --rm uc procure clean [--dry-run] [--staging DIR]
 ```
@@ -162,19 +162,17 @@ Air-gapped, it is refused unless `PROCUREMENT_SOURCE_URL` names a copy the updat
 
 | Option | Meaning |
 |---|---|
-| `--poms`, `--no-poms` | Stage the real `.pom` of every plugin whose POM is missing, derived from its archive, or unusable. The default is `PROCUREMENT_POMS` (off). |
-| `--dependencies`, `--no-dependencies` | Stage the required dependencies the repository lacks or holds only in an older version, transitively, each with its `.pom`. The default is `PROCUREMENT_DEPENDENCIES` (off). |
-| `--war VERSION`, `--war required` | Stage that core's `.war` and `.pom`; `required` stages every core plugins require that the repository lacks, at or above the floor. Repeatable. It replaces `PROCUREMENT_WARS` for the run. |
-| `--no-wars` | Stage no core, whatever `PROCUREMENT_WARS` says. Not with `--war`. |
+| `--poms` | Stage the real `.pom` of every plugin whose POM is missing, derived from its archive, or unusable. |
+| `--dependencies` | Stage the required dependencies the repository lacks or holds only in an older version, transitively, each with its `.pom`. |
+| `--war VERSION`, `--war required` | Stage that core's `.war` and `.pom`; `required` stages every core plugins require that the repository lacks, at or above the floor. Repeatable. |
 | `--since VERSION` | The floor for `required`, instead of the oldest core in the repository. The default is `DOCTOR_SINCE`. |
-| `--fetch`, `--no-fetch` | First download the POMs and manifests missing from the generator's cache, so the run finds every missing dependency and required core. The default is `PROCUREMENT_FETCH` (on). |
+| `--fetch`, `--no-fetch` | First download the POMs and manifests missing from the generator's cache, so the run finds every missing dependency and required core. On by default. |
 | `--staging DIR` | The staging folder. The default is `PROCUREMENT_STAGING_DIR` (`/procurement`). |
 
 Exits 0 when everything planned is staged; 1 when a file could not be staged, or when the run is
 refused as `uc: error: ...` (air-gapped without `PROCUREMENT_SOURCE_URL`, a `--war` that is neither a
-version nor `required`); 2 when nothing is selected: no POMs, dependencies or cores, by option or by
-setting (`uc: error: nothing to stage: ...`, naming the options and `PROCUREMENT_POMS`,
-`PROCUREMENT_DEPENDENCIES` and `PROCUREMENT_WARS`). Whenever `procurement.json` lists files, also
+version nor `required`); 2 when nothing is selected: no POMs, dependencies or cores
+(`uc: error: nothing to stage: choose --poms, --dependencies or --war VERSION|required`). Whenever `procurement.json` lists files, also
 after a run with problems, it ends with the review:
 
 ```text
@@ -192,7 +190,7 @@ declares. It needs no network.
 
 | Option | Meaning |
 |---|---|
-| `--fix`, `--no-fix` | First move each misplaced file to the Maven path it declares, never onto another file, a listed path or out of the folder. The default is `PROCUREMENT_FIX` (off). |
+| `--fix` | First move each misplaced file to the Maven path it declares, never onto another file, a listed path or out of the folder. |
 | `--staging DIR` | The staging folder. The default is `PROCUREMENT_STAGING_DIR` (`/procurement`). |
 
 Exits 0 unless it refused a file, else 1. It ends with the same `next:` line as `stage`.

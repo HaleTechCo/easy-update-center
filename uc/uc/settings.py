@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-TYPES = ('str', 'bool', 'int', 'ratio', 'choice', 'cron', 'path', 'url', 'version', 'list')
+TYPES = ('str', 'bool', 'int', 'ratio', 'choice', 'cron', 'path', 'url', 'version')
 GROUPS = (
     'Required',
     'Source repository',
@@ -220,7 +220,6 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('DOCTOR_SCHEDULE', 'cron', 'Doctor', 'Cron expression for a read-only uc doctor --record run, which saves the report and its counts in status.json; empty means none.', sample='30 5 * * *'),
     Setting('DOCTOR_FETCH', 'bool', 'Doctor', 'uc doctor downloads the POMs and manifests missing from the cache, so it can check every dependency and required core (--fetch).', default='false'),
     Setting('DOCTOR_SINCE', 'version', 'Doctor', 'The floor for required cores (--since); empty means the oldest core in the repository.', sample='2.462.1'),
-    Setting('DOCTOR_JSON', 'bool', 'Doctor', 'uc doctor prints its report as JSON (--json).', default='false'),
     # Signing
     Setting('CERTIFICATE_MINIMUM_VALID_DAYS', 'int', 'Signing', 'Generation stops when the signing certificate expires within this many days.', default='30'),
     Setting('PKI_ORG', 'str', 'Signing', 'The organization in the subjects of the certificates uc pki init and uc pki rotate create.', default='Easy Update Center'),
@@ -238,11 +237,6 @@ SETTINGS: tuple[Setting, ...] = (
         derived=True,
     ),
     Setting('PROCUREMENT_STAGING_DIR', 'path', 'Procurement', 'The staging folder uc procure stage fills and the other uc procure commands read (--staging), inside the uc container; compose.yaml mounts ./procurement there. It must stay on that mount: UC_DATA_DIR or a folder in it is refused.', default='/procurement'),
-    Setting('PROCUREMENT_FETCH', 'bool', 'Procurement', 'uc procure stage first downloads the POMs and manifests missing from the cache, so it finds every missing dependency and required core (--fetch).', default='true'),
-    Setting('PROCUREMENT_POMS', 'bool', 'Procurement', 'uc procure stage stages the real .pom of every plugin whose POM is missing, derived or unusable (--poms).', default='false'),
-    Setting('PROCUREMENT_DEPENDENCIES', 'bool', 'Procurement', 'uc procure stage stages the missing required dependencies, transitively, each with its .pom (--dependencies).', default='false'),
-    Setting('PROCUREMENT_WARS', 'list', 'Procurement', 'The Jenkins cores uc procure stage stages: versions such as 2.479.1, or required for every core plugins require that the repository lacks, from DOCTOR_SINCE up (--war). Separate them with spaces or commas.', sample='required'),
-    Setting('PROCUREMENT_FIX', 'bool', 'Procurement', 'uc procure record first moves each file placed by hand to the Maven path it declares (--fix).', default='false'),
     # Testing and evaluation
     Setting('ALLOW_LOCAL_PUBLIC_URL', 'bool', 'Testing and evaluation', 'Allows a localhost or loopback PUBLIC_URL, which controllers on other hosts cannot reach. Not for production.', default='false'),
     Setting('UC_EXTRA_ARGS', 'str', 'Testing and evaluation', 'Extra update-center2 arguments appended to every run, for example --max-plugins 25 to cap a trial run.', attr='extra_args'),

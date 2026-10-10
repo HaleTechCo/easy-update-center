@@ -80,7 +80,6 @@ SAMPLE_CHECKS = {
     'bool': lambda sample: sample in {'true', 'false'},
     'version': lambda sample: CORE_VERSION.match(sample) is not None,
     'url': lambda sample: urlsplit(sample).scheme in {'http', 'https'} and bool(urlsplit(sample).netloc),
-    'list': lambda sample: bool(sample.split()) and ',' not in sample,
 }
 """How a sample of each type must parse; only types some setting has a sample of, so no check is dead (test_every_checked_type_has_a_sample)."""
 UNCHECKED_SAMPLE_TYPES = ('str', 'path', 'cron')

@@ -88,10 +88,6 @@ def test_the_header_says_what_a_commented_line_shows():
     assert 'a line starting with # is not set: it shows the default or an example value, and the comment above it says what applies when it is unset' in example_env('online').replace('\n# ', ' ')
 
 
-def test_a_list_setting_shows_as_words():
-    assert '# PROCUREMENT_WARS=required\n' in example_env('airgapped')
-
-
 @pytest.mark.parametrize('mode', MODES)
 def test_the_examples_never_mention_a_settings_file(mode):
     assert 'uc.toml' not in example_env(mode)

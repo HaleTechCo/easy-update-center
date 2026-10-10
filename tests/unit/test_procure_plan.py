@@ -92,11 +92,11 @@ def test_war_arguments_refused(value):
 def test_suggest_stage_names_only_what_the_report_finds():
     assert suggest_stage(DoctorReport()) is None
     report = DoctorReport(missing_dependencies=['a 1.0 requires b 2.0'], missing_cores=[{'version': '2.479.1', 'url': 'u', 'required_by': 1, 'example': 'a:b:1'}])
-    assert suggest_stage(report) == 'next: uc procure stage --dependencies --war required (or set PROCUREMENT_DEPENDENCIES=true, PROCUREMENT_WARS=required)'
-    assert suggest_stage(adapter(derived_poms=[{'gav': AD, 'url': 'u'}])) == 'next: uc procure stage --poms (or set PROCUREMENT_POMS=true)'
+    assert suggest_stage(report) == 'next: uc procure stage --dependencies --war required'
+    assert suggest_stage(adapter(derived_poms=[{'gav': AD, 'url': 'u'}])) == 'next: uc procure stage --poms'
     both = adapter(needs_pom=[{'gav': AD, 'url': 'u'}])
     both.missing_dependencies = ['a 1.0 requires b 2.0']
-    assert suggest_stage(both) == 'next: uc procure stage --poms --dependencies (or set PROCUREMENT_POMS=true, PROCUREMENT_DEPENDENCIES=true)'
+    assert suggest_stage(both) == 'next: uc procure stage --poms --dependencies'
 
 
 def test_suggest_stage_says_to_place_and_record_the_files_where_downloads_are_refused():
@@ -110,6 +110,6 @@ def test_suggest_stage_says_to_place_and_record_the_files_where_downloads_are_re
 
 def test_suggest_stage_carries_since_when_it_suggests_cores():
     cores = DoctorReport(missing_cores=[CORE_MISSING])
-    assert suggest_stage(cores, since='2.462.1') == 'next: uc procure stage --war required --since 2.462.1 (or set PROCUREMENT_WARS=required, DOCTOR_SINCE=2.462.1)'
+    assert suggest_stage(cores, since='2.462.1') == 'next: uc procure stage --war required --since 2.462.1'
     assert suggest_stage(cores, downloads=False, since='2.462.1').endswith(', then uc procure stage --war required --since 2.462.1')
-    assert suggest_stage(DoctorReport(missing_dependencies=['a 1.0 requires b 2.0']), since='2.462.1') == 'next: uc procure stage --dependencies (or set PROCUREMENT_DEPENDENCIES=true)'
+    assert suggest_stage(DoctorReport(missing_dependencies=['a 1.0 requires b 2.0']), since='2.462.1') == 'next: uc procure stage --dependencies'

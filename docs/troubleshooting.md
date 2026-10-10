@@ -88,7 +88,7 @@ The commands of [Procure missing POMs, dependencies and cores](how-to/procure-mi
 
 | Symptom | Cause and fix |
 |---|---|
-| `uc procure stage`: `nothing to stage: choose with --poms, ...` (exit 2) | No POMs, dependencies or cores are selected: add the options, or set `PROCUREMENT_POMS`, `PROCUREMENT_DEPENDENCIES` or `PROCUREMENT_WARS` ([Stage](how-to/procure-missing-files.md#2-stage)). |
+| `uc procure stage`: `nothing to stage: choose --poms, ...` (exit 2) | No POMs, dependencies or cores are selected: add `--poms`, `--dependencies` or `--war` ([Stage](how-to/procure-missing-files.md#2-stage)). |
 | `uc procure`: `cannot write to /procurement: ... Permission denied` | The uc containers cannot write `./procurement`: run `docker compose run --rm setup procurement` (`make setup`), or, where it fails, the `make procure-*` targets ([Sharing ./procurement](reference/cli.md#sharing-procurement)). |
 | `uc procure record`: `REFUSED ... it belongs at <path>; --fix moves it there` | A file you added is not at the Maven path its manifest or POM declares. Move it there, or run `uc procure record --fix` ([Files you place by hand](how-to/procure-missing-files.md#files-you-place-by-hand)). |
 | `uc procure record`: `REFUSED ... not a Maven path to a .hpi, .jpi, .war or .pom` | The file declares no coordinates to place it by, such as a plugin whose manifest names no group. Find its group and move it to its Maven path by hand. |

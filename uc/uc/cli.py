@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 EXIT_LOCKED = 75
 
-NOTHING_TO_STAGE = 'nothing to stage: choose with --poms, --dependencies or --war VERSION|required, or set PROCUREMENT_POMS, PROCUREMENT_DEPENDENCIES or PROCUREMENT_WARS'
+NOTHING_TO_STAGE = 'nothing to stage: choose --poms, --dependencies or --war VERSION|required'
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -50,22 +50,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor = sub.add_parser('doctor', help='report what the generator will see in the source repository')
     doctor.add_argument('--fetch', action=argparse.BooleanOptionalAction, help='download POMs and manifests missing from the cache (default: DOCTOR_FETCH, off)')
-    doctor.add_argument('--json', action=argparse.BooleanOptionalAction, help='print the report as JSON (default: DOCTOR_JSON, off)')
+    doctor.add_argument('--json', action='store_true', help='print the report as JSON')
     doctor.add_argument('--since', metavar='VERSION', help='floor for required cores (default: DOCTOR_SINCE, else the oldest core in the repository)')
     doctor.add_argument('--record', action='store_true', help='also save the report as the latest: /data/doctor/report.json, and its counts in status.json')
 
     procure = sub.add_parser('procure', help='stage, record, push and clean the files the repository lacks (docs/how-to/procure-missing-files.md)').add_subparsers(dest='procure_command', required=True)
     stage = procure.add_parser('stage', help="print uc doctor's report, then stage what it finds missing for review")
-    stage.add_argument('--poms', action=argparse.BooleanOptionalAction, help='stage the real .pom of every plugin whose POM is missing, derived or unusable (default: PROCUREMENT_POMS, off)')
-    stage.add_argument('--dependencies', action=argparse.BooleanOptionalAction, help='stage missing required dependencies, transitively, each with its .pom (default: PROCUREMENT_DEPENDENCIES, off)')
-    wars = stage.add_mutually_exclusive_group()
-    wars.add_argument('--war', action='append', metavar='VERSION', help='stage jenkins-war VERSION, or with "required" every required core the repository lacks; repeatable; replaces PROCUREMENT_WARS for this run')
-    wars.add_argument('--no-wars', action='store_true', help='stage no cores, whatever PROCUREMENT_WARS says')
+    stage.add_argument('--poms', action='store_true', help='stage the real .pom of every plugin whose POM is missing, derived or unusable')
+    stage.add_argument('--dependencies', action='store_true', help='stage missing required dependencies, transitively, each with its .pom')
+    stage.add_argument('--war', action='append', default=[], metavar='VERSION', help='stage jenkins-war VERSION, or with "required" every required core the repository lacks; repeatable')
     stage.add_argument('--since', metavar='VERSION', help='floor for required cores (default: DOCTOR_SINCE, else the oldest core in the repository)')
-    stage.add_argument('--fetch', action=argparse.BooleanOptionalAction, help='download POMs and manifests missing from the cache first (default: PROCUREMENT_FETCH, on)')
+    stage.add_argument('--fetch', action=argparse.BooleanOptionalAction, default=True, help='download POMs and manifests missing from the cache first (default: on)')
     stage.add_argument('--staging', type=Path, help='the staging folder (default: PROCUREMENT_STAGING_DIR, /procurement)')
     record_cmd = procure.add_parser('record', help='record the files placed in the staging folder by hand, after the checks a download gets')
-    record_cmd.add_argument('--fix', action=argparse.BooleanOptionalAction, help='first move each file to the Maven path it declares (default: PROCUREMENT_FIX, off)')
+    record_cmd.add_argument('--fix', action='store_true', help='first move each file to the Maven path it declares')
     record_cmd.add_argument('--staging', type=Path, help='the staging folder (default: PROCUREMENT_STAGING_DIR, /procurement)')
     push_cmd = procure.add_parser('push', help='upload the files procurement.json lists to the repository, never overwriting')
     push_cmd.add_argument('--dry-run', action='store_true', help='check each file, change nothing')
@@ -169,11 +167,10 @@ def _dispatch(args: argparse.Namespace) -> int:
 
 
 def doctor_options(args: argparse.Namespace, settings: Settings) -> tuple[bool, bool, str | None]:
-    """Return fetch, json and since for a doctor run: each option given on the command line, else its setting."""
+    """Return fetch, json and since for a doctor run: --fetch/--no-fetch else DOCTOR_FETCH, --json, --since else DOCTOR_SINCE."""
     fetch = settings.doctor_fetch if args.fetch is None else args.fetch
-    as_json = settings.doctor_json if args.json is None else args.json
     since = args.since if args.since is not None else (settings.doctor_since or None)
-    return fetch, as_json, since
+    return fetch, args.json, since
 
 
 def _doctor(args: argparse.Namespace, settings: Settings) -> int:
@@ -192,7 +189,7 @@ def _doctor(args: argparse.Namespace, settings: Settings) -> int:
 
 @dataclass(frozen=True)
 class StageOptions:
-    """What uc procure stage does: each option given on the command line, else its setting."""
+    """What uc procure stage does, from its command line (and DOCTOR_SINCE for --since)."""
 
     fetch: bool
     poms: bool
@@ -203,13 +200,12 @@ class StageOptions:
 
 
 def procure_options(args: argparse.Namespace, settings: Settings) -> StageOptions:
-    """Return uc procure stage's options: --war replaces PROCUREMENT_WARS, --no-wars empties it."""
-    wars = () if args.no_wars else tuple(args.war) if args.war else settings.procurement_wars
+    """Return uc procure stage's options."""
     return StageOptions(
-        fetch=settings.procurement_fetch if args.fetch is None else args.fetch,
-        poms=settings.procurement_poms if args.poms is None else args.poms,
-        dependencies=settings.procurement_dependencies if args.dependencies is None else args.dependencies,
-        wars=wars,
+        fetch=args.fetch,
+        poms=args.poms,
+        dependencies=args.dependencies,
+        wars=tuple(args.war),
         since=args.since if args.since is not None else (settings.doctor_since or None),
         staging=args.staging or settings.procurement_staging_dir,
     )
@@ -222,7 +218,7 @@ def _procure(args: argparse.Namespace, settings: Settings) -> int:
     if args.procure_command == 'push':
         return push(settings, staging, dry_run=args.dry_run)
     if args.procure_command == 'record':
-        return stage_local(staging, settings.procurement_source_url, fix=settings.procurement_fix if args.fix is None else args.fix, out=sys.stdout)
+        return stage_local(staging, settings.procurement_source_url, fix=args.fix, out=sys.stdout)
     if args.procure_command == 'clean':
         return clean(settings, staging, dry_run=args.dry_run, out=sys.stdout)
     options = procure_options(args, settings)

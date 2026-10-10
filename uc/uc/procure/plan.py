@@ -55,18 +55,17 @@ def suggest_stage(report: DoctorReport, *, downloads: bool = True, since: str | 
     --since, carried over with the required cores, which need it when the repository holds no core.
     """
     found = [
-        ('--poms', 'PROCUREMENT_POMS=true', bool(plan_poms(report))),
-        ('--dependencies', 'PROCUREMENT_DEPENDENCIES=true', bool(report.missing_dependencies)),
-        ('--war required', 'PROCUREMENT_WARS=required', bool(report.missing_cores)),
-        (f'--since {since}', f'DOCTOR_SINCE={since}', since is not None and bool(report.missing_cores)),
+        ('--poms', bool(plan_poms(report))),
+        ('--dependencies', bool(report.missing_dependencies)),
+        ('--war required', bool(report.missing_cores)),
+        (f'--since {since}', since is not None and bool(report.missing_cores)),
     ]
-    flags = [flag for flag, _, present in found if present]
+    flags = [flag for flag, present in found if present]
     if not flags:
         return None
     if not downloads:
         return f'next: place the files the report lists in {shown_staging(staging)} and run uc procure record, or set PROCUREMENT_SOURCE_URL to a copy of repo.jenkins-ci.org the update center can reach, then uc procure stage {" ".join(flags)}'
-    settings = [setting for _, setting, present in found if present]
-    return f'next: uc procure stage {" ".join(flags)} (or set {", ".join(settings)})'
+    return f'next: uc procure stage {" ".join(flags)}'
 
 
 def check_war_args(values: Sequence[str]) -> None:
