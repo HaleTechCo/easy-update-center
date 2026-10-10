@@ -7,8 +7,9 @@ import urllib.request
 from collections.abc import Callable, Mapping
 
 from .errors import UcError
+from .version import uc_version
 
-USER_AGENT = 'jenkins-uc/1'
+USER_AGENT = f'easy-update-center/{uc_version()} (+https://github.com/HaleTechCo/easy-update-center)'
 Getter = Callable[..., bytes]
 
 

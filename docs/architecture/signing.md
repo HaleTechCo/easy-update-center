@@ -15,7 +15,7 @@ trusts. The update center uses its own two-level PKI, created by first-time setu
 | `secrets/update-center.key` | The signing key: RSA 4096. Mounted only into `scheduler` and `uc`. |
 | `secrets/update-center.cert` | The signing certificate, issued by the root: 365 days by default, key usage `digitalSignature`. |
 
-The subjects name the organization "Jenkins Update Center" unless `--org` (`PKI_ORG`) is given.
+The subjects name the organization "Easy Update Center" unless `--org` (`PKI_ORG`) is given.
 `uc pki init` refuses to overwrite existing files, and first-time setup runs it only when
 `secrets/update-center.key` does not exist.
 

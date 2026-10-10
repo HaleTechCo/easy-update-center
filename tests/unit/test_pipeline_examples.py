@@ -341,7 +341,7 @@ def test_one_run_at_a_time(name):
     assert ONE_AT_A_TIME[name] in code(name)
     if name == 'gitlab-ci.yml':
         for job, block in gitlab_jobs(name).items():
-            assert 'resource_group: jenkins-update-center\n' in block, job
+            assert 'resource_group: easy-update-center\n' in block, job
         assert 'resource_group' not in gitlab_default(name)
         # The procure job holds the lock until the child pipeline ends, so a child job waiting for it would wait forever.
         assert 'resource_group' not in code(GITLAB_CHILD)
@@ -457,7 +457,7 @@ def test_the_gitlab_procure_job_starts_the_chosen_child_pipeline_and_holds_the_l
     assert '\n  trigger:\n    include:\n      - artifact: procure-pipeline.yml\n        job: stage\n' in procure
     # depend: the procure job runs, so holds the resource group, until the child pipeline ends, the review included.
     assert '\n    strategy: depend\n' in procure
-    assert '\n  resource_group: jenkins-update-center\n' in procure
+    assert '\n  resource_group: easy-update-center\n' in procure
     assert re.search(r'^  variables:\n    PARENT_PIPELINE_ID: \$CI_PIPELINE_ID$', procure, re.MULTILINE) is not None
     # needs: [stage] hands this job the stage job's dotenv report, and forwarding the pipeline variables passes its UC_DIR on to the child pipeline,
     # where it outranks the UC_DIR of variables: that the YAML variables carry: the child works in the directory the stage job used.

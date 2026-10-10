@@ -8,7 +8,7 @@ pipeline {
         disableConcurrentBuilds()
     }
     parameters {
-        string(name: 'UC_DIR', defaultValue: '/opt/jenkins-update-center', description: 'The update center deployment directory on the uc-host agent')
+        string(name: 'UC_DIR', defaultValue: '/opt/easy-update-center', description: 'The update center deployment directory on the uc-host agent')
     }
     // triggers { cron('H 6 * * 1') } // weekly, on Monday morning
     stages {

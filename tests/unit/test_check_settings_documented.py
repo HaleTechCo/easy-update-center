@@ -33,7 +33,7 @@ echo "${DOWNLOAD_PROXY_AUTH_HEADER}" "${local_name:-x}"
 """
 
 COMPOSE_YAML = """
-image: ${UC_IMAGE:-jenkins-uc/uc:local}
+image: ${UC_IMAGE:-easy-update-center/uc:local}
 env_file: ${UC_ENV_FILE:-.env}
 ports:
   - "${HTTPS_PORT:-8443}:8443"

@@ -174,7 +174,7 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 | Setting | uc.toml | Default | Read by | Notes |
 |---|---|---|---|---|
 | `CERTIFICATE_MINIMUM_VALID_DAYS` | `certificate_minimum_valid_days` | `30` | generate | Generation stops when the signing certificate expires within this many days. Also passed to the generator. |
-| `PKI_ORG` | `[pki] org` | `Jenkins Update Center` | pki | The organization in the subjects of the certificates `uc pki init` and `uc pki rotate` create; `--org` overrides it. |
+| `PKI_ORG` | `[pki] org` | `Easy Update Center` | pki | The organization in the subjects of the certificates `uc pki init` and `uc pki rotate` create; `--org` overrides it. |
 | `PKI_ROOT_DAYS` | `[pki] root_days` | `3650` | pki | Lifetime of the root CA `uc pki init` creates, in days; `--root-days` overrides it. Minimum 1. |
 | `PKI_SIGNING_DAYS` | `[pki] signing_days` | `365` | pki | Lifetime of the signing certificate `uc pki init` and `uc pki rotate` issue, in days; `--signing-days` and `--days` override it. Minimum 1. |
 
@@ -191,15 +191,15 @@ These are read by `docker compose` itself, from the shell environment or from `.
 directory, not by the containers. The `make` targets that run your stack (`setup`, `secrets` and
 its aliases, `pki-*`, `reload`, `procure-*`) leave `UC_IMAGE` and `WEB_IMAGE` to `.env` too, unless
 you set them on make's command line or in the shell. When the uc image they resolve is missing, they
-build it if it is `jenkins-uc/uc:local` and pull it otherwise. `make build` does not read `.env`,
+build it if it is `easy-update-center/uc:local` and pull it otherwise. `make build` does not read `.env`,
 and tags the images it builds with these defaults unless you pass `UC_IMAGE=...` or `WEB_IMAGE=...`
 to it.
 
 | Setting | Default | Notes |
 |---|---|---|
 | `UC_ENV_FILE` | `.env` | The file every service except `web` loads as `env_file`. Lets several configurations sit side by side. |
-| `UC_IMAGE` | `jenkins-uc/uc:local` | The image for `uc`, `scheduler`, `repo-adapter`, `web-config` and `setup`. |
-| `WEB_IMAGE` | `jenkins-uc/web:local` | The image for `web`. |
+| `UC_IMAGE` | `easy-update-center/uc:local` | The image for `uc`, `scheduler`, `repo-adapter`, `web-config` and `setup`. |
+| `WEB_IMAGE` | `easy-update-center/web:local` | The image for `web`. |
 | `HTTP_PORT` | `8080` | Host port published for the web container's HTTP listener. |
 | `HTTPS_PORT` | `8443` | Host port published for the web container's TLS listener. |
 

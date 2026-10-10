@@ -32,7 +32,7 @@ def test_finalize_layout_matches_upstream(tmp_path):
     assert (tmp_path / 'latest').readlink() == Path('current/latest')
     assert (tmp_path / 'latestCore.txt').read_text() == '2.528.1'
     assert (tmp_path / 'uctest.json').read_bytes() == b'{}\n'
-    assert 'Jenkins Update Center' in (tmp_path / 'index.html').read_text()
+    assert 'Easy Update Center for Jenkins' in (tmp_path / 'index.html').read_text()
 
 
 def test_without_stable_tiers_stable_is_current(tmp_path):

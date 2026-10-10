@@ -55,7 +55,7 @@ NOTHING_TO_STAGE = 'nothing to stage: choose with --poms, --dependencies or --wa
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for every uc subcommand."""
-    parser = argparse.ArgumentParser(prog='uc', description='Self-hosted Jenkins update center')
+    parser = argparse.ArgumentParser(prog='uc', description='Easy Update Center for Jenkins: a self-hosted update center')
     parser.add_argument('--version', action='version', version=f'uc {uc_version()}', help='print the release this image was built as (dev for a build from source) and exit')
     sub = parser.add_subparsers(dest='command', required=True)
 

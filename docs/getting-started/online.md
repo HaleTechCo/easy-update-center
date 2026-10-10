@@ -12,15 +12,15 @@ A production deployment with internet access that reads plugins from repo.jenkin
 ## 1. Build the images
 
 ```bash
-git clone https://gitlab.com/ZacharySHale95/jenkins-update-center.git
-cd jenkins-update-center
+git clone https://github.com/HaleTechCo/easy-update-center.git
+cd easy-update-center
 cp .env.online.example .env
 docker compose build
 ```
 
 Compose reads `.env` for every command, building included, so copy the example first; you edit it in
-the next step. This builds `jenkins-uc/uc:local` (update-center2 from source, with its tests) and
-`jenkins-uc/web:local`. The first build takes several minutes. `make build` is the shortcut: it
+the next step. This builds `easy-update-center/uc:local` (update-center2 from source, with its tests) and
+`easy-update-center/web:local`. The first build takes several minutes. `make build` is the shortcut: it
 builds the same images with `docker build`, so it needs no `.env`, and also the image the test
 suites use.
 
@@ -80,7 +80,7 @@ Now **move the root CA's key to offline storage**: it is needed only once a year
 signing certificate.
 
 ```bash
-mv secrets/root /media/offline-usb/jenkins-uc-root      # any offline location
+mv secrets/root /media/offline-usb/easy-update-center-root      # any offline location
 ```
 
 See [Where the root key lives](../how-to/rotate-signing-certificate.md#where-the-root-key-lives).

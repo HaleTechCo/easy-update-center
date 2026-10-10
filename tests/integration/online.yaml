@@ -4,7 +4,7 @@ name: uc-it-online
 
 services:
   pki:
-    image: ${UC_IMAGE:-jenkins-uc/uc:local}
+    image: ${UC_IMAGE:-easy-update-center/uc:local}
     user: "0:0"
     network_mode: none
     # Test-only: the stack under test reads repo.jenkins-ci.org, so the community account becomes its
@@ -28,14 +28,14 @@ services:
       - pki:/pki
 
   web:
-    image: ${WEB_IMAGE:-jenkins-uc/web:local}
+    image: ${WEB_IMAGE:-easy-update-center/web:local}
     environment:
       PUBLIC_URL: "http://web:8080"
     volumes:
       - uc-data:/data:ro
 
   driver:
-    image: ${UC_TEST_IMAGE:-jenkins-uc/uc-test:local}
+    image: ${UC_TEST_IMAGE:-easy-update-center/uc-test:local}
     user: "0:0"
     environment:
       MODE: online

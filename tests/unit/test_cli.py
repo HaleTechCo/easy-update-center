@@ -117,8 +117,8 @@ def test_pki_init_and_show(tmp_path, capsys):
     assert f'move {out / "root" / "root-ca.key"} to offline storage' in capsys.readouterr().out
     assert main(['pki', 'show', '--dir', str(out)]) == 0
     shown = capsys.readouterr().out
-    assert 'update-center.cert: CN=Jenkins Update Center Signing' in shown
-    assert 'root-ca.crt: CN=Jenkins Update Center Root CA' in shown
+    assert 'update-center.cert: CN=Easy Update Center Signing' in shown
+    assert 'root-ca.crt: CN=Easy Update Center Root CA' in shown
 
 
 MOVED = [

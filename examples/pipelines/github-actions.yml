@@ -19,11 +19,11 @@ on:  # yamllint disable-line rule:truthy
 # ones, so a run waiting behind another may be dropped. The push job also checks procurement.sha256 and
 # stops if the staged list changed since the review.
 concurrency:
-  group: jenkins-update-center-procurement
+  group: easy-update-center-procurement
   cancel-in-progress: false
 
 env:
-  UC_DIR: /opt/jenkins-update-center
+  UC_DIR: /opt/easy-update-center
 
 defaults:
   run:

@@ -1,5 +1,5 @@
 ---
-# Pre-commit hooks for jenkins-update-center. See https://pre-commit.com/.
+# Pre-commit hooks for Easy Update Center for Jenkins. See https://pre-commit.com/.
 #
 # This is deliberately the FULL superset - one strict standard for every file type this tree could
 # plausibly grow, not the subset it needs today: yamllint --strict, shellcheck enable=all /

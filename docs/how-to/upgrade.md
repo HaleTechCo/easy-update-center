@@ -50,8 +50,8 @@ Air-gapped hosts without internet access cannot `git pull`: the clone came from 
 Then, on the air-gapped host:
 
 ```bash
-git pull ../jenkins-uc.bundle master            # the Compose files and docs change too
-gunzip -c ../jenkins-uc-images.tar.gz | docker load
+git pull ../easy-update-center.bundle master            # the Compose files and docs change too
+gunzip -c ../easy-update-center-images.tar.gz | docker load
 docker compose run --rm setup
 docker compose run --rm --no-deps uc config --check
 docker compose up -d
@@ -61,6 +61,41 @@ docker compose run --rm uc generate
 On Linux, if `git pull` cannot update a file under `secrets/` (such as its README), an older
 `make pki-init` gave `secrets/` to uid 10001: run `make secrets-permissions` first. Until the pull,
 you are on the older revision, which may not have the `setup` service yet.
+
+## Upgrading from jenkins-update-center
+
+The project was renamed Easy Update Center for Jenkins, and its Compose project with it, from
+`jenkins-update-center` to `easy-update-center`. Docker names a stack's containers and volumes after
+its Compose project, so after the rename `docker compose up -d` would start a second stack on new,
+empty volumes, and fail to bind the ports the old one still holds. Move the data across once:
+
+```bash
+docker compose -p jenkins-update-center down       # the old stack; its volumes stay
+git pull                                            # or check out the release you move to
+docker compose build                                # or set UC_IMAGE and WEB_IMAGE to a release
+docker compose run --rm --no-deps --user 0:0 --entrypoint cp \
+  -v jenkins-update-center_uc-data:/from:ro uc -a /from/. /data/
+docker compose run --rm setup
+docker compose run --rm --no-deps uc config --check
+docker compose up -d
+docker compose run --rm uc status                   # the live_release you had before
+```
+
+The copy runs as root so `cp -a` keeps ownership; `web-config` is recreated from your settings, so
+only `uc-data` is copied. If `.env` sets `UC_IMAGE` or `WEB_IMAGE` to `jenkins-uc/...`, change them to
+`easy-update-center/uc:local` and `easy-update-center/web:local` (or a release's images) first. If
+`.env` sets `COMPOSE_PROJECT_NAME`, that name wins over the new one and nothing needs moving.
+
+Once the new stack serves what the old one did, remove what the old one left:
+
+```bash
+docker volume rm jenkins-update-center_uc-data jenkins-update-center_web-config
+docker image rm jenkins-uc/uc:local jenkins-uc/uc-test:local jenkins-uc/web:local
+```
+
+uc's HTTP User-Agent changed too, from `jenkins-uc/1` to
+`easy-update-center/<version> (+https://github.com/HaleTechCo/easy-update-center)`: update a proxy
+or firewall rule that matched the old one.
 
 ## Go back to the previous revision
 

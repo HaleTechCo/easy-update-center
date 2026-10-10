@@ -30,7 +30,7 @@ The pipeline runs the same `docker compose run --rm uc ...` commands you would, 
 update center's Docker host, in the deployment directory: the directory you run `docker compose` in,
 which holds `compose.yaml`, `.env`, `config/uc.toml` and `secrets/`. It is not a checkout of the
 pipeline's repository. The examples call it `UC_DIR`, a pipeline variable that defaults to
-`/opt/jenkins-update-center`, and run on:
+`/opt/easy-update-center`, and run on:
 
 | System | Runs on |
 |---|---|
@@ -164,7 +164,7 @@ The staging folder is shared, so the examples keep runs apart:
 - **Jenkins**: `disableConcurrentBuilds()`: a second run waits until the first ends.
 - **GitHub Actions**: a `concurrency` group: a second run waits too, but GitHub keeps only one
   pending run and cancels older pending ones, so a run queued behind another may be dropped.
-- **GitLab CI**: the `jenkins-update-center` resource group on each job of `gitlab-ci.yml`. The
+- **GitLab CI**: the `easy-update-center` resource group on each job of `gitlab-ci.yml`. The
   `procure` job starts the child pipeline with `strategy: depend`, so it runs, and holds the
   resource group, until that pipeline ends, the review included: a second pipeline's check and
   stage wait for it. Cancel a pipeline whose review no one will run, or the next one waits forever.
