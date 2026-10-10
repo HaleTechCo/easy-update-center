@@ -55,8 +55,14 @@ Settings > Rules > Rulesets > New branch ruleset.
 
 Why the GitHub Actions app: the Release workflow's `prepare` job pushes the release commit to
 `main`. GitHub accepts that app as a bypass actor only in an organization's repository. The bypass
-names the whole app, so what limits it to the release is that only `release.yml`'s `prepare` and
-`release` jobs hold `contents: write` (pinned by `tests/unit/test_workflows.py`).
+names the whole app, and a workflow job that holds `contents: write` can push to `main` or create a
+`v*` tag as that app. `tests/unit/test_workflows.py` keeps this repository's workflows honest (only
+`release.yml`'s `prepare` and `release` jobs hold `contents: write`), but a test only checks the
+branch it runs on: anyone with write access can push a branch whose own workflow asks for
+`contents: write` and uses it. The real limit is who has write access, so give it only to people you
+would let push to `main` (today one maintainer, with members' base permission Read). Later, a deploy
+key held in a `release` environment restricted to `main` could replace the app as the bypass actor,
+at no cost.
 
 ## 6. Tag ruleset
 

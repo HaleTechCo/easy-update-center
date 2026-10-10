@@ -123,6 +123,8 @@ cp .env.online.example .env
 # in .env: set PUBLIC_URL to your update center's origin, and
 #   UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<version>
 #   WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<version>
+docker compose pull                  # fails loudly if the images cannot be pulled
+docker compose run --rm --no-deps uc --version      # must print uc <version>
 docker compose run --rm setup        # credential placeholders, ./procurement, signing keys
 printf '%s' 'community-user' > secrets/repo_username        # free: https://accounts.jenkins.io
 printf '%s' 'community-password' > secrets/repo_password

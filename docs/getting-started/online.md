@@ -28,8 +28,19 @@ UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<version>
 WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<version>
 ```
 
-Compose pulls them when `setup` or `up` first needs them. You can check their signatures first:
-[Verify a release](../how-to/verify-a-release.md). You edit the rest of `.env` in the next step.
+Pull them now, before anything else:
+
+```bash
+docker compose pull
+docker compose run --rm --no-deps uc --version
+```
+
+Pull each image explicitly because the services also have `build:` sections: if a pull failed
+silently (the packages still private, a mistyped version), `setup` or `up` would build the image from
+your checkout and tag the result with the release's name, printing only a warning. `docker compose
+pull` fails loudly instead, and the second command must print `uc <version>`, the release you chose.
+You can check the signatures too: [Verify a release](../how-to/verify-a-release.md). You edit the
+rest of `.env` in the next step.
 
 ### Or build from source
 

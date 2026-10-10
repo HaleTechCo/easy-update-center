@@ -61,7 +61,8 @@ Only GitHub can show that the workflows work, so the first release is a rehearsa
       packages start private, so until step 9 of [GitHub setup](github-setup.md) makes them public,
       sign in first with `docker login ghcr.io`.
 - [ ] `docker run --rm ghcr.io/haletechco/easy-update-center-uc:0.1.0 --version` prints `uc 0.1.0`.
-- [ ] The commands of [Verify a release](../how-to/verify-a-release.md) pass.
+- [ ] The commands of [Verify a release](../how-to/verify-a-release.md) pass, with cosign 3 or later
+      and `gh` signed in (`gh auth login`), as that page's prerequisites say.
 - [ ] Download the bundle for your host and run `docker load -i images.tar`. Then, in a checkout of
       `v0.1.0`, run the following; it builds only the test image.
 
@@ -71,5 +72,12 @@ Only GitHub can show that the workflows work, so the first release is a rehearsa
           WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:0.1.0
       ```
 
-- [ ] The Release's notes match CHANGELOG's 0.1.0 section.
+- [ ] Run the released generator end to end, which `make it-airgapped` does not (it runs only `pki`
+      from `UC_IMAGE`; the generator, repo-adapter and web-config run from the test image built from
+      your checkout). Follow [Deploy online](../getting-started/online.md), or
+      [Deploy air-gapped](../getting-started/airgapped.md) with the bundle against your test
+      repository, with the 0.1.0 images, then check that `docker compose run --rm uc status` shows a
+      `live_release` and `uc_version` 0.1.0.
+- [ ] The Release's notes match CHANGELOG's 0.1.0 section, and their links open (they point at the
+      files of the `v0.1.0` tag).
 - [ ] Make the packages public ([GitHub setup](github-setup.md), step 9).

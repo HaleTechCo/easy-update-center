@@ -8,7 +8,8 @@
 # Release. publish-only republishes an existing tag without touching CHANGELOG.md.
 #
 # Only prepare and release hold contents: write: the rulesets' bypass names the whole GitHub
-# Actions app, so any job holding it could push to main (tests/unit/test_workflows.py pins this).
+# Actions app, so any job holding it could push to main. tests/unit/test_workflows.py keeps these
+# workflows to that, but the real limit is who has write access (a branch can carry its own workflow).
 name: Release
 
 on:

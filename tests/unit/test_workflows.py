@@ -27,7 +27,7 @@ EXTRA_PERMISSIONS: dict[tuple[str, str], dict[str, str]] = {
 }
 """Every job that declares permissions, with exactly the ones it needs; any other job inherits contents: read."""
 WRITES_CONTENTS = {('release.yml', 'prepare'), ('release.yml', 'release')}
-"""The only jobs that may hold contents: write: the rulesets let the GitHub Actions app bypass them, so any such job could push to main."""
+"""The only jobs that may hold contents: write: the rulesets let the GitHub Actions app bypass them, so any such job could push to main. This keeps these workflows honest; a branch can carry its own workflow, so the real limit is who has write access."""
 CHECKOUT_WITH_CREDENTIALS = {('release.yml', 'prepare')}
 """The only jobs whose checkout keeps the token, for a git push."""
 TEST_TARGETS = ['test-unit', 'test-web', 'test-routing', 'test-secrets', 'test-setup', 'compose-check']
