@@ -25,7 +25,6 @@ def make_settings(tmp_path: Path, secrets: Path, **env: str) -> Settings:
         'SECRETS_DIR': str(secrets),
         'UC_DATA_DIR': str(tmp_path / 'data'),
         'UC_OVERLAY_DIR': str(tmp_path / 'overlay'),
-        'UC_CONFIG_FILE': str(tmp_path / 'uc.toml'),
     }
     base.update({name: value for name, value in env.items() if name.isupper()})
     return dataclasses.replace(load_settings(base), **{name: value for name, value in env.items() if not name.isupper()})

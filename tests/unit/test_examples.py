@@ -1,34 +1,25 @@
-"""The example settings files: generated from the registry, complete, working, and committed up to date."""
+"""The example .env files: generated from the registry, complete, working, and committed up to date."""
 
 import re
-import tomllib
 from pathlib import Path
 
 import pytest
 
-from uc.config import load_settings, read_config_file
-from uc.examples import example_env, example_toml
-from uc.settings import MODES, SETTINGS, toml_key
+from uc.config import load_settings
+from uc.examples import example_env
+from uc.settings import MODES, SETTINGS
 
 # The committed copies, mounted by `make test-unit` (Makefile SRC_MOUNTS).
 COMMITTED = Path('/examples')
 
 
-@pytest.mark.parametrize(
-    ('name', 'make'),
-    [
-        ('uc.example.toml', lambda: example_toml('online')),
-        ('env.online.example', lambda: example_env('online')),
-        ('env.airgapped.example', lambda: example_env('airgapped')),
-    ],
-)
-def test_the_committed_examples_are_current(name, make):
-    assert (COMMITTED / name).read_text(encoding='utf-8') == make(), f'{name} is out of date: run make examples'
+@pytest.mark.parametrize(('name', 'mode'), [('env.online.example', 'online'), ('env.airgapped.example', 'airgapped')])
+def test_the_committed_examples_are_current(name, mode):
+    assert (COMMITTED / name).read_text(encoding='utf-8') == example_env(mode), f'{name} is out of date: run make examples'
 
 
-@pytest.mark.parametrize('make', [example_env, example_toml])
-def test_each_example_says_where_its_mode_reads_and_downloads_from(make):
-    online, airgapped = make('online'), make('airgapped')
+def test_each_example_says_where_its_mode_reads_and_downloads_from():
+    online, airgapped = example_env('online'), example_env('airgapped')
     assert '# Online, the generator reads repo.jenkins-ci.org with a free Jenkins community account\n# (secrets/repo_*), and controllers download from get.jenkins.io' in online
     assert '# Air-gapped, the generator reads your repository through the repo-adapter\n# (docs/how-to/stock-airgapped-repository.md), and controllers download from it.\n' in airgapped
     assert 'reads your repository through the repo-adapter' not in online
@@ -48,41 +39,19 @@ def test_the_env_example_lists_every_setting(mode):
         assert re.search(rf'^(# )?{setting.env}=', text, re.MULTILINE), setting.env
 
 
-def test_the_toml_example_lists_every_setting_the_file_can_hold():
-    uncommented = '\n'.join(line[2:] if re.match(r'# [a-z0-9_]+ = ', line) else line for line in example_toml('online').splitlines())
-    document = tomllib.loads(uncommented)
-    for setting in SETTINGS:
-        if setting.env_only:
-            continue
-        section, key = toml_key(setting.env)
-        assert key in (document[section] if section else document), setting.env
-
-
 @pytest.mark.parametrize('mode', MODES)
-def test_the_active_lines_of_each_example_are_a_working_configuration(mode, tmp_path):
+def test_the_active_lines_of_each_example_are_a_working_configuration(mode):
     active = dict(line.split('=', 1) for line in example_env(mode).splitlines() if line and not line.startswith('#'))
-    assert load_settings(active, config_file=tmp_path / 'none.toml').mode == mode
-    path = tmp_path / 'uc.toml'
-    path.write_text(example_toml(mode), encoding='utf-8')
-    assert load_settings({}, config_file=path).mode == mode
+    assert load_settings(active).mode == mode
 
 
 @pytest.mark.parametrize('mode', MODES)
-def test_uncommenting_the_adapter_url_keeps_it_following_the_port(mode, tmp_path):
+def test_uncommenting_the_adapter_url_keeps_it_following_the_port(mode):
     lines = example_env(mode).splitlines()
     active = dict(line.split('=', 1) for line in lines if line and not line.startswith('#'))
     name, value = next(line[2:] for line in lines if line.startswith('# REPO_ADAPTER_URL=')).split('=', 1)
-    s = load_settings({**active, name: value, 'REPO_ADAPTER_PORT': '9091'}, config_file=tmp_path / 'none.toml')
+    s = load_settings({**active, name: value, 'REPO_ADAPTER_PORT': '9091'})
     assert s.repo_adapter_url == 'http://repo-adapter:9091/artifactory/'
-    path = tmp_path / 'uc.toml'
-    path.write_text(re.sub(r'^# (adapter_(url|port) = )', r'\1', example_toml(mode), flags=re.MULTILINE).replace('adapter_port = 8081', 'adapter_port = 9091'), encoding='utf-8')
-    assert load_settings({}, config_file=path).repo_adapter_url == 'http://repo-adapter:9091/artifactory/'
-
-
-def test_the_online_toml_example_sets_only_the_required_settings(tmp_path):
-    path = tmp_path / 'uc.toml'
-    path.write_text(example_toml('online'), encoding='utf-8')
-    assert read_config_file(path) == {'MODE': 'online', 'PUBLIC_URL': 'https://jenkins-updates.example.com'}
 
 
 def test_the_online_example_says_how_to_use_your_own_repository():
@@ -90,8 +59,6 @@ def test_the_online_example_says_how_to_use_your_own_repository():
     hint = '# Your own Artifactory or Artifact Keeper instead of repo.jenkins-ci.org? Set REPO_TYPE, REPO_URL and REPO_KEY here.\n# Also set DOWNLOAD_BACKEND=artifactory, and usually CORE_AGE_DAYS=0. See docs/architecture/modes.md#your-own-repository.\n# REPO_TYPE=artifactory\n'
     assert hint in online
     assert 'Your own Artifactory or Artifact Keeper instead' not in airgapped
-    assert 'Your own Artifactory or Artifact Keeper instead' not in example_toml('airgapped')
-    assert 'Your own Artifactory or Artifact Keeper instead' in example_toml('online')
 
 
 def test_the_airgapped_example_explains_core_age_days():
@@ -117,11 +84,14 @@ def test_the_compose_file_example_differs_by_mode():
     assert 'air-gapped override' not in online
 
 
-@pytest.mark.parametrize('make', [example_env, example_toml])
-def test_the_header_says_what_a_commented_line_shows(make):
-    assert 'a line starting with # is not set: it shows the default or an example value, and the comment above it says what applies when it is unset' in make('online').replace('\n# ', ' ')
+def test_the_header_says_what_a_commented_line_shows():
+    assert 'a line starting with # is not set: it shows the default or an example value, and the comment above it says what applies when it is unset' in example_env('online').replace('\n# ', ' ')
 
 
-def test_a_list_setting_shows_as_an_array_in_the_toml_example_and_as_words_in_the_env_example():
-    assert '# wars = ["required"]\n' in example_toml('airgapped')
+def test_a_list_setting_shows_as_words():
     assert '# PROCUREMENT_WARS=required\n' in example_env('airgapped')
+
+
+@pytest.mark.parametrize('mode', MODES)
+def test_the_examples_never_mention_a_settings_file(mode):
+    assert 'uc.toml' not in example_env(mode)

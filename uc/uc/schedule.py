@@ -18,7 +18,7 @@ from .timeutil import iso, utcnow
 
 if TYPE_CHECKING:
     import datetime as dt
-    from collections.abc import Callable, Collection, Mapping
+    from collections.abc import Callable, Mapping
 
     from .config import Settings
 
@@ -69,7 +69,6 @@ def write_state(settings: Settings, now: dt.datetime, environ: Mapping[str, str]
 def run_schedule(
     settings: Settings,
     *,
-    drop_env: Collection[str] = (),
     generate_once: Callable[[], object] | None = None,
     exec_: Callable[[str, list[str], dict[str, str]], object] = os.execvpe,
     crontab: Path = CRONTAB,
@@ -79,9 +78,7 @@ def run_schedule(
     """Check the schedules, record the start, generate a first release if none is live, then replace this process with supercronic.
 
     A bad schedule raises ScheduleError before anything else; a failed first run is logged and scheduling goes ahead.
-    supercronic gets this process's environment without the names in drop_env, those apply_process_env exported
-    from uc.toml: the first run uses them, and each scheduled run reads them from uc.toml afresh.
-    environ is the environment the container received, from before apply_process_env exported anything, for the digest; it is required, since os.environ already holds what apply_process_env exported.
+    environ is the environment the container received, for the digest.
     With the default exec_ (os.execvpe) this never returns.
     """
     text = crontab_text(settings)
@@ -96,4 +93,4 @@ def run_schedule(
         except Exception:  # noqa: BLE001 - whatever fails, keep scheduling; status.json records the failure
             traceback.print_exc()
     crontab.write_text(text, encoding='utf-8')
-    exec_('supercronic', ['supercronic', '-passthrough-logs', str(crontab)], {name: value for name, value in os.environ.items() if name not in drop_env})
+    exec_('supercronic', ['supercronic', '-passthrough-logs', str(crontab)], dict(os.environ))

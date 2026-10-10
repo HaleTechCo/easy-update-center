@@ -4,8 +4,6 @@
 .env
 .env.*
 !.env.*.example
-# Your settings file; config/uc.example.toml is the committed example.
-config/uc.toml
 data/
 secrets/*
 !secrets/README.md

@@ -1,10 +1,7 @@
-"""Every setting uc, the web container and Compose read, defined once: its environment variable, its place in uc.toml, its type and its default.
+"""Every setting uc, the web container and Compose read, defined once: its environment variable, its type and its default.
 
 docs/reference/configuration.md documents each one, and tools/check_settings_documented.py keeps the two in step by
-reading the entries of SETTINGS below. A setting's place in uc.toml follows from its name
-(docs/reference/configuration.md#how-settings-are-read): a variable whose name starts with a section's name and an
-underscore lives in that section, under the rest of its name in lower case; every other variable is a top-level key
-in lower case.
+reading the entries of SETTINGS below.
 """
 
 from __future__ import annotations
@@ -12,7 +9,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-SECTIONS = ('generate', 'doctor', 'repo', 'download', 'resources', 'tls', 'procurement', 'pki', 'signing', 'github', 'uc')
 TYPES = ('str', 'bool', 'int', 'ratio', 'choice', 'cron', 'path', 'url', 'version', 'list')
 GROUPS = (
     'Required',
@@ -43,26 +39,6 @@ CORE_VERSION = re.compile(r'^[0-9]+\.[0-9]+(\.[0-9]+)?$')
 """A Jenkins core version such as 2.462 or 2.462.1: the pattern of the `version` setting type, DOCTOR_SINCE and uc doctor's version arguments."""
 
 
-def toml_key(env: str) -> tuple[str | None, str]:
-    """Return the section (None at the top level) and the key that hold env in uc.toml."""
-    for section in SECTIONS:
-        prefix = section.upper() + '_'
-        if env.startswith(prefix):
-            return section, env.removeprefix(prefix).lower()
-    return None, env.lower()
-
-
-def env_name(section: str | None, key: str) -> str:
-    """Return the environment variable for key in section (None: the top level) of uc.toml."""
-    return f'{section}_{key}'.upper() if section else key.upper()
-
-
-def toml_label(env: str) -> str:
-    """Return how env is written in uc.toml, for messages and tables: `[repo] url`, or `public_url` at the top level."""
-    section, key = toml_key(env)
-    return f'[{section}] {key}' if section else key
-
-
 @dataclass(frozen=True)
 class Setting:
     """One setting: its name, type and default, and how uc config and the example files show it.
@@ -81,7 +57,7 @@ class Setting:
     choices: tuple[str, ...] = ()
     minimum: int | None = None
     empty_means_off: bool = False  # an explicitly empty value turns the feature off instead of meaning "not set"
-    env_only: bool = False  # read before uc.toml exists (by Compose, or to find uc.toml): environment only
+    env_only: bool = False  # read by Compose or the shell, not by uc: it has no Settings field
     secret_file: bool = False  # the path of a secret file; uc config shows whether it exists, never its contents
     derived: bool = False
     restart: bool = False  # read when a long-running service starts (the scheduler, web-config, the repo-adapter): a change needs make reload; the rest apply at the next run
@@ -314,9 +290,8 @@ SETTINGS: tuple[Setting, ...] = (
     Setting('GITHUB_USERNAME_FILE', 'path', 'Internal', 'The GitHub user, ${SECRETS_DIR}/github_username by default.', derived=True, secret_file=True),
     Setting('GITHUB_TOKEN_FILE', 'path', 'Internal', 'The GitHub token, ${SECRETS_DIR}/github_token by default.', derived=True, secret_file=True),
     Setting('REPO_PUSH_AUTH_FILE', 'path', 'Internal', 'The account that can write to the repository, ${SECRETS_DIR}/repo_push_auth by default.', derived=True, secret_file=True),
-    Setting('UC_CONFIG_FILE', 'path', 'Internal', 'The settings file; a missing file is fine.', default='/config/uc.toml', env_only=True),
     # Compose
-    Setting('UC_ENV_FILE', 'path', 'Compose', 'The file every service except web loads as env_file.', default='.env', env_only=True),
+    Setting('UC_ENV_FILE', 'path', 'Compose', "The file every uc-image service loads as env_file; web takes its variables from Compose's own .env (or --env-file).", default='.env', env_only=True),
     Setting('UC_IMAGE', 'str', 'Compose', 'The image for uc, scheduler, repo-adapter, web-config and setup.', default='easy-update-center/uc:local', env_only=True),
     Setting('WEB_IMAGE', 'str', 'Compose', 'The image for web.', default='easy-update-center/web:local', env_only=True),
     Setting('HTTP_PORT', 'int', 'Compose', "Host port published for the web container's HTTP listener.", default='8080', env_only=True),

@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import configview, publish, status
-from .config import apply_process_env, check_staging_outside_data_dir, load_pki_settings, load_settings, load_web_settings
+from .config import check_staging_outside_data_dir, load_pki_settings, load_settings, load_web_settings
 from .doctor import check_since, format_report, inspect_repository, record
 from .errors import UcError, UsageError
-from .examples import example_env, example_toml
+from .examples import example_env
 from .generate import generate
 from .pki import ROOT_CERT, ROOT_KEY, SIGNING_CERT, SIGNING_KEY, cert_info, init_pki, rotate_signing
 from .preflight import load_credentials
@@ -84,7 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     shows = config_cmd.add_mutually_exclusive_group()
     shows.add_argument('--json', action='store_true', help='print the settings as JSON')
     shows.add_argument('--check', action='store_true', help='only check the settings')
-    shows.add_argument('--example', choices=('toml', 'env'), help='print an example settings file that lists every setting')
+    shows.add_argument('--example', action='store_true', help='print an example .env that lists every setting')
     shows.add_argument('--web-env', action='store_true', help="print the web container's settings, as the web-config service writes them")
     config_cmd.add_argument('--out', type=Path, help='with --web-env: write them to this file, atomically')
     config_cmd.add_argument('--mode', choices=MODES, help='with --example: the mode the example is for (default: online)')
@@ -134,7 +134,7 @@ def main(argv: list[str] | None = None) -> int:
 def _check_config_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if args.out is not None and not args.web_env:
         parser.error('--out only applies to --web-env')
-    if args.mode is not None and args.example is None:
+    if args.mode is not None and not args.example:
         parser.error('--mode only applies to --example')
 
 
@@ -147,8 +147,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         healthcheck(args.port)  # reads no settings: health is the running server's, not the files'
         return 0
     settings = load_settings()
-    received = {name: os.environ[name] for name in REGISTRY if name in os.environ}  # before apply_process_env: what the container was given
-    exported = apply_process_env(settings)
+    received = {name: os.environ[name] for name in REGISTRY if name in os.environ}  # what the container was given, for the scheduler's settings digest
     if args.command == 'generate':
         print(f'published release {generate(settings, force=args.force, wait=args.wait)}')
         return 0
@@ -167,7 +166,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(json.dumps(status.read_status(settings.data_dir), indent=2, sort_keys=True))
         return 0
     if args.command == 'schedule':
-        run_schedule(settings, drop_env=exported, environ=received)
+        run_schedule(settings, environ=received)
         return 0
     if args.command == 'repo-adapter':
         serve(settings, port=settings.repo_adapter_port if args.port is None else args.port)
@@ -247,8 +246,7 @@ def _procure(args: argparse.Namespace, settings: Settings) -> int:
 
 def _config(args: argparse.Namespace) -> int:
     if args.example:
-        mode = args.mode or 'online'
-        print(example_toml(mode) if args.example == 'toml' else example_env(mode), end='')
+        print(example_env(args.mode or 'online'), end='')
         return 0
     if args.web_env:
         text = web_env(load_web_settings())

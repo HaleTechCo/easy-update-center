@@ -94,7 +94,7 @@ docker compose run --rm uc procure stage --poms --dependencies --war required
 
 (`make procure-stage ARGS="--poms --dependencies --war required"`.) It prints the doctor report,
 then one line per file. Choose what to stage with options, or once for every run with the
-`PROCUREMENT_*` settings in `.env` or `config/uc.toml`; the options combine freely:
+`PROCUREMENT_*` settings in `.env`; the options combine freely:
 
 | Option | Setting | Stages |
 |---|---|---|
@@ -106,12 +106,11 @@ then one line per file. Choose what to stage with options, or once for every run
 With the settings, a plain `docker compose run --rm uc procure stage` (or `make procure-stage`)
 stages the same every time:
 
-```toml
-# config/uc.toml
-[procurement]
-poms = true
-dependencies = true
-wars = ["required"]
+```bash
+# .env
+PROCUREMENT_POMS=true
+PROCUREMENT_DEPENDENCIES=true
+PROCUREMENT_WARS=required
 ```
 
 An option beats its setting for one run: `--no-poms`, `--no-dependencies` and `--no-wars` turn a

@@ -1,11 +1,10 @@
-"""The example settings files, generated from the settings registry: uc config --example env|toml (docs/reference/configuration.md)."""
+"""The example .env files, generated from the settings registry: uc config --example (docs/reference/configuration.md)."""
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
-from .settings import GROUPS, SECTIONS, SETTINGS, toml_key
+from .settings import GROUPS, SETTINGS
 
 if TYPE_CHECKING:
     from .settings import Setting
@@ -14,17 +13,7 @@ ENV_HEADER = """\
 # Settings for the update center in {mode} mode, one variable per setting. Copy this file to .env and
 # edit the copy; a line starting with # is not set: it shows the default or an example value, and the
 # comment above it says what applies when it is unset. Remove the # to set it.
-{note}# Generated from the settings registry: `uc config --example env --mode {mode}` (make examples).
-# Any of these can go in config/uc.toml instead (config/uc.example.toml); a variable here wins over it.
-# Every setting: docs/reference/configuration.md
-"""
-
-TOML_HEADER = """\
-# Settings for the update center in {mode} mode. Copy this file to config/uc.toml and edit the copy;
-# a line starting with # is not set: it shows the default or an example value, and the comment above
-# it says what applies when it is unset. Remove the # to set it.
-{note}# Generated from the settings registry: `uc config --example toml --mode {mode}` (make examples).
-# A variable in .env wins over this file: [section] key is SECTION_KEY, and a top-level key is KEY.
+{note}# Generated from the settings registry: `uc config --example --mode {mode}` (make examples).
 # Every setting: docs/reference/configuration.md
 """
 
@@ -64,34 +53,9 @@ def example_env(mode: str) -> str:
     return ''.join(parts)
 
 
-def example_toml(mode: str) -> str:
-    """Return the example uc.toml for mode: every setting the file can hold, the top-level keys first, then each section."""
-    parts = [TOML_HEADER.format(mode=mode, note=_note(mode))]
-    for section in (None, *SECTIONS):
-        members = [setting for setting in SETTINGS if not setting.env_only and toml_key(setting.env)[0] == section]
-        if not members:
-            continue
-        parts.append(f'\n[{section}]\n' if section else '\n')
-        for setting in members:
-            active, value = shown(setting, mode)
-            parts.append(_comments(setting, mode, f' ({setting.env})'))
-            parts.append(f'{"" if active else "# "}{toml_key(setting.env)[1]} = {_toml_value(setting, value)}\n')
-    return ''.join(parts)
-
-
 def _note(mode: str) -> str:
     return ''.join(f'# {line}\n' for line in MODE_NOTES[mode])
 
 
-def _comments(setting: Setting, mode: str, suffix: str = '') -> str:
-    return ''.join(f'# {line}\n' for line in (setting.doc + suffix, *setting.hint_for(mode)))
-
-
-def _toml_value(setting: Setting, value: str) -> str:
-    if value and setting.type in {'int', 'ratio'}:
-        return value
-    if value and setting.type == 'bool':
-        return value.lower()
-    if setting.type == 'list':
-        return json.dumps(value.replace(',', ' ').split())
-    return json.dumps(value)
+def _comments(setting: Setting, mode: str) -> str:
+    return ''.join(f'# {line}\n' for line in (setting.doc, *setting.hint_for(mode)))

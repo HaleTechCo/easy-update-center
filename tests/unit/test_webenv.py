@@ -12,25 +12,22 @@ from uc.config import NO_CREDENTIALS, load_settings, load_web_settings
 from uc.errors import ConfigError
 from uc.webenv import WEB_SETTINGS, WebEnvWriteError, web_env, write_web_env
 
-NO_FILE = Path('/nonexistent/uc.toml')
 WEB_FIELDS = ('public_url', 'download_backend', 'download_backend_url', 'download_access', 'download_proxy_auth_file', 'download_proxy_ca_file', 'tls_cert_file', 'tls_key_file')
 
 
 def test_online_web_settings():
-    text = web_env(load_web_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com/'}, config_file=NO_FILE))
+    text = web_env(load_web_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com/'}))
     assert text == ('PUBLIC_URL=https://uc.example.com\nDOWNLOAD_BACKEND=mirror\nDOWNLOAD_BACKEND_URL=https://get.jenkins.io\nDOWNLOAD_ACCESS=redirect\nDOWNLOAD_PROXY_AUTH_FILE=/run/secrets/download_proxy_auth\nDOWNLOAD_PROXY_CA_FILE=/etc/ssl/certs/ca-certificates.crt\nTLS_CERT_FILE=\nTLS_KEY_FILE=\n')
 
 
 def test_the_artifact_keeper_backend_url_is_worked_out_for_web():
     env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'REPO_TYPE': 'artifact-keeper', 'REPO_URL': 'http://keeper.internal/', 'REPO_KEY': 'jenkins'}
-    assert 'DOWNLOAD_BACKEND=artifactory\nDOWNLOAD_BACKEND_URL=http://keeper.internal/maven/jenkins\n' in web_env(load_web_settings(env, config_file=NO_FILE))
+    assert 'DOWNLOAD_BACKEND=artifactory\nDOWNLOAD_BACKEND_URL=http://keeper.internal/maven/jenkins\n' in web_env(load_web_settings(env))
 
 
-def test_a_value_on_two_lines_is_refused(tmp_path):
-    path = tmp_path / 'uc.toml'
-    path.write_text('[tls]\ncert_file = "a\\nb"\n', encoding='utf-8')
+def test_a_value_on_two_lines_is_refused():
     with pytest.raises(ConfigError, match='TLS_CERT_FILE must be on one line'):
-        web_env(load_web_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc'}, config_file=path))
+        web_env(load_web_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc', 'TLS_CERT_FILE': 'a\nb'}))
 
 
 def test_write_web_env_is_atomic_and_readable_by_web(tmp_path):
@@ -74,31 +71,31 @@ def test_a_failed_replace_is_reported_and_removes_the_temporary_file(tmp_path, m
 
 def test_invalid_generator_only_settings_do_not_stop_web():
     env = {'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com/', 'RESOURCES_SOURCE': 'gihub', 'RETAIN_RELEASES': '0'}
-    assert web_env(load_web_settings(env, config_file=NO_FILE)) == web_env(load_web_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com'}, config_file=NO_FILE))
+    assert web_env(load_web_settings(env)) == web_env(load_web_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com'}))
     with pytest.raises(ConfigError, match='RESOURCES_SOURCE'):
-        load_settings(env, config_file=NO_FILE)
+        load_settings(env)
 
 
 def test_an_explicit_backend_url_needs_no_repository_settings():
     env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'DOWNLOAD_BACKEND_URL': 'http://backend/repo/'}
-    assert 'DOWNLOAD_BACKEND=artifactory\nDOWNLOAD_BACKEND_URL=http://backend/repo\n' in web_env(load_web_settings(env, config_file=NO_FILE))
+    assert 'DOWNLOAD_BACKEND=artifactory\nDOWNLOAD_BACKEND_URL=http://backend/repo\n' in web_env(load_web_settings(env))
 
 
 def test_airgapped_without_a_backend_url_or_repository_is_refused():
     with pytest.raises(ConfigError, match='REPO_URL and REPO_KEY must be set'):
-        load_web_settings({'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc'}, config_file=NO_FILE)
+        load_web_settings({'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc'})
 
 
 @pytest.mark.parametrize('load', [load_web_settings, load_settings])
 def test_credentials_in_the_repository_url_are_refused(load):
     env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'REPO_URL': 'https://u:p@artifactory.corp/artifactory/', 'REPO_KEY': 'jenkins'}  # pragma: allowlist secret
     with pytest.raises(ConfigError, match=r'^REPO_URL must not contain credentials or an @; use the secret files instead$'):
-        load(env, config_file=NO_FILE)
+        load(env)
 
 
 def test_an_invalid_download_access_still_fails():
     with pytest.raises(ConfigError, match='DOWNLOAD_ACCESS must be one of'):
-        load_web_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc', 'DOWNLOAD_ACCESS': 'tunnel'}, config_file=NO_FILE)
+        load_web_settings({'MODE': 'online', 'PUBLIC_URL': 'https://uc', 'DOWNLOAD_ACCESS': 'tunnel'})
 
 
 AGREEMENT_ENVS = {
@@ -111,7 +108,7 @@ AGREEMENT_ENVS = {
 
 @pytest.mark.parametrize('env', AGREEMENT_ENVS.values(), ids=AGREEMENT_ENVS.keys())
 def test_web_settings_agree_with_the_full_settings(env):
-    web, full = load_web_settings(env, config_file=NO_FILE), load_settings(env, config_file=NO_FILE)
+    web, full = load_web_settings(env), load_settings(env)
     assert {name: getattr(web, name) for name in WEB_FIELDS} == {name: getattr(full, name) for name in WEB_FIELDS}
 
 
@@ -125,7 +122,7 @@ def test_the_entrypoint_reads_exactly_the_web_settings():
 def test_the_entrypoint_refuses_an_at_in_the_backend_url_with_ucs_message():
     env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc.example.com', 'REPO_URL': 'https://repo.corp/artifactory/', 'REPO_KEY': 'jenkins', 'DOWNLOAD_BACKEND_URL': 'https://u@backend.example'}
     with pytest.raises(ConfigError) as refused:
-        load_web_settings(env, config_file=NO_FILE)
+        load_web_settings(env)
     message = str(refused.value)
     assert message.startswith(f'DOWNLOAD_BACKEND_URL {NO_CREDENTIALS}; ')
     assert f'die "{message}"' in Path('/web/entrypoint.sh').read_text(encoding='utf-8')
@@ -135,7 +132,6 @@ def test_the_entrypoint_refuses_an_at_in_the_backend_url_with_ucs_message():
 def test_an_unwritable_web_env_directory_is_reported_and_leaves_no_file(monkeypatch, tmp_path, capsys):
     monkeypatch.setenv('MODE', 'online')
     monkeypatch.setenv('PUBLIC_URL', 'https://uc.example.com')
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     out_dir = tmp_path / 'locked'
     out_dir.mkdir()
     out_dir.chmod(0o555)
@@ -152,20 +148,15 @@ CREDENTIAL_URL = 'https://user:pw@art/repo'  # pragma: allowlist secret
 
 
 @pytest.mark.parametrize('load', [load_web_settings, load_settings])
-def test_credentials_in_the_backend_url_are_refused(load, tmp_path):
+def test_credentials_in_the_backend_url_are_refused(load):
     env = {'MODE': 'online', 'PUBLIC_URL': 'https://uc', 'DOWNLOAD_BACKEND_URL': CREDENTIAL_URL}
     with pytest.raises(ConfigError, match=CREDENTIAL_ERROR):
-        load(env, config_file=NO_FILE)
-    path = tmp_path / 'uc.toml'
-    path.write_text(f'[download]\nbackend_url = "{CREDENTIAL_URL}"\n', encoding='utf-8')
-    with pytest.raises(ConfigError, match=r'\[download\] backend_url in .*must not contain credentials'):
-        load({'MODE': 'online', 'PUBLIC_URL': 'https://uc'}, config_file=path)
+        load(env)
 
 
-def test_web_env_refuses_a_credentialed_backend_url_at_the_command_line(monkeypatch, tmp_path, capsys):
+def test_web_env_refuses_a_credentialed_backend_url_at_the_command_line(monkeypatch, capsys):
     monkeypatch.setenv('MODE', 'online')
     monkeypatch.setenv('PUBLIC_URL', 'https://uc')
     monkeypatch.setenv('DOWNLOAD_BACKEND_URL', CREDENTIAL_URL)
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     assert main(['config', '--web-env']) == 1
     assert 'uc: error: ' + CREDENTIAL_ERROR in capsys.readouterr().err

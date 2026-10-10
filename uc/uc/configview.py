@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, TextIO
 
 from .config import make_resolver, read_secret, settings_digest, settings_from, split_userinfo
 from .errors import ConfigError
-from .settings import GROUPS, REGISTRY, SETTINGS, toml_label
+from .settings import GROUPS, REGISTRY, SETTINGS
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -29,9 +29,8 @@ class Row:
     """One setting as uc config shows it."""
 
     env: str
-    key: str  # its uc.toml key, '' for the settings only the environment holds
     value: str
-    source: str  # env, file, mode, derived or default
+    source: str  # env, mode, derived or default
     note: str = ''  # for secret files: present, empty, missing or unreadable
     restart: bool = False  # read when a service starts: a change needs make reload
 
@@ -44,7 +43,7 @@ def rows(r: Resolver, settings: Settings | None) -> list[Row]:
 def _row(setting: Setting, r: Resolver, settings: Settings | None) -> Row:
     if setting.env_only:
         given = r.env.get(setting.env, '').strip()
-        return Row(setting.env, '', _redact(setting, given or setting.default), 'env' if given else 'default', restart=setting.restart)
+        return Row(setting.env, _redact(setting, given or setting.default), 'env' if given else 'default', restart=setting.restart)
     source = r.source(setting.env)
     if source == 'default' and setting.derived:
         source = 'derived'
@@ -52,7 +51,7 @@ def _row(setting: Setting, r: Resolver, settings: Settings | None) -> Row:
         source = 'mode'
     value = _show(getattr(settings, setting.attribute)) if settings is not None and setting.attribute else r.raw(setting.env)
     note = _presence(Path(value)) if setting.secret_file and value else ''
-    return Row(setting.env, toml_label(setting.env), _redact(setting, value), source, note, setting.restart)
+    return Row(setting.env, _redact(setting, value), source, note, setting.restart)
 
 
 def _redact(setting: Setting, value: str) -> str:
@@ -80,20 +79,19 @@ def _presence(path: Path) -> str:
         return 'unreadable'
 
 
-def format_rows(shown: list[Row], config_file: Path) -> str:
-    """Return the text uc config prints: the settings file, then each group of settings with its value and source."""
-    found = 'read' if config_file.is_file() else 'not found: only the environment and the defaults apply'
-    lines = [f'Settings file: {config_file} ({found})']
+def format_rows(shown: list[Row]) -> str:
+    """Return the text uc config prints: each group of settings with its value and source."""
+    lines: list[str] = []
     for group in GROUPS:
         members = [row for row in shown if REGISTRY[row.env].group == group]
         if not members:
             continue
         lines += ['', group]
         for row in members:
-            where = f'uc.toml: {row.key}' if row.source == 'file' else SOURCE_NAMES.get(row.source, row.source)
+            where = SOURCE_NAMES.get(row.source, row.source)
             notes = ''.join(f'; {note}' for note in (row.note, 'restart' if row.restart else '') if note)
             lines.append(f'  {row.env} = {row.value}  ({where}{notes})')
-    return '\n'.join(lines) + '\n'
+    return '\n'.join(lines).lstrip('\n') + '\n'
 
 
 def reload_hint(settings: Settings, environ: Mapping[str, str]) -> str | None:
@@ -117,23 +115,18 @@ def run(
     as_json: bool = False,
     check: bool = False,
     env: Mapping[str, str] | None = None,
-    config_file: Path | None = None,
     out: TextIO | None = None,
     err: TextIO | None = None,
 ) -> int:
     """Print every setting (as text or JSON), or only check them; return 0, or 1 when they are invalid."""
     out = sys.stdout if out is None else out
     err = sys.stderr if err is None else err
-    try:
-        r = make_resolver(env, config_file=config_file)
-    except ConfigError as exc:
-        err.write(f'uc: error: {exc}\n')
-        return 1
+    r = make_resolver(env)
     try:
         settings = settings_from(r)
     except ConfigError as exc:
         if not (as_json or check):
-            out.write(format_rows(rows(r, None), r.config_file))
+            out.write(format_rows(rows(r, None)))
         err.write(f'uc: error: {exc}\n')
         return 1
     if check:
@@ -142,7 +135,7 @@ def run(
     if as_json:
         out.write(json.dumps([asdict(row) for row in rows(r, settings)], indent=2) + '\n')
         return 0
-    out.write(format_rows(rows(r, settings), r.config_file))
+    out.write(format_rows(rows(r, settings)))
     hint = reload_hint(settings, r.env)
     if hint:
         out.write(f'\n{hint}\n')

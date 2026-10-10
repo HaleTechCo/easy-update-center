@@ -1,7 +1,6 @@
 """Unit tests for uc.cli: exit codes, status output, rollback, the run lock and the pki subcommands."""
 
 import errno
-import io
 import json
 import os
 import re
@@ -19,15 +18,14 @@ from types import SimpleNamespace
 import pytest
 
 from sitefixture import uc_document, write_site
-from uc import configview, pki
+from uc import pki
 from uc.aql import classify
 from uc.cli import EXIT_LOCKED, StageOptions, build_parser, doctor_options, main, procure_options
 from uc.doctor import DoctorReport, Inspection
+from uc.examples import example_env
 from uc.pki import cert_info
 from uc.publish import RunLock
 from uc.repo_adapter.server import record_port
-from uc.schedule import run_schedule
-from uc.settings import REGISTRY
 from uc.status import read_status, write_status
 from uc.timeutil import utcnow
 from ucsupport import make_settings
@@ -43,7 +41,6 @@ def use_env(monkeypatch, tmp_path, secrets_dir):
         'SECRETS_DIR': str(secrets_dir),
         'UC_DATA_DIR': str(tmp_path / 'data'),
         'UC_OVERLAY_DIR': str(tmp_path / 'overlay'),
-        'UC_CONFIG_FILE': str(tmp_path / 'uc.toml'),
     }
     for key, value in values.items():
         monkeypatch.setenv(key, value)
@@ -304,57 +301,6 @@ def test_push_with_nothing_staged_exits_1(monkeypatch, tmp_path, secrets_dir, ca
     assert 'uc: error: nothing to push' in capsys.readouterr().err
 
 
-def test_commands_export_jvm_options_from_the_settings_file(monkeypatch, tmp_path, secrets_dir):
-    use_env(monkeypatch, tmp_path, secrets_dir)
-    (tmp_path / 'uc.toml').write_text('java_tool_options = "-Xmx6g"\n', encoding='utf-8')
-    monkeypatch.setenv('JAVA_TOOL_OPTIONS', '')  # monkeypatch restores it after the test
-    assert main(['status']) == 0
-    assert os.environ['JAVA_TOOL_OPTIONS'] == '-Xmx6g'
-
-
-def test_commands_export_proxy_settings_from_the_settings_file(monkeypatch, tmp_path, secrets_dir):
-    use_env(monkeypatch, tmp_path, secrets_dir)
-    (tmp_path / 'uc.toml').write_text('https_proxy = "http://proxy.corp:3128"\nhttp_proxy = "http://proxy.corp:3129"\nno_proxy = "repo-adapter,artifactory"\n', encoding='utf-8')
-    for name in ('HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY'):
-        monkeypatch.setenv(name, '')  # monkeypatch restores them after the test
-    assert main(['status']) == 0
-    assert os.environ['HTTPS_PROXY'] == 'http://proxy.corp:3128'
-    assert os.environ['HTTP_PROXY'] == 'http://proxy.corp:3129'
-    assert os.environ['NO_PROXY'] == 'repo-adapter,artifactory'
-
-
-def test_scheduled_jobs_read_jvm_options_and_proxies_from_the_settings_file_afresh(monkeypatch, tmp_path, secrets_dir):
-    use_env(monkeypatch, tmp_path, secrets_dir)
-    (tmp_path / 'uc.toml').write_text('java_tool_options = "-Xmx6g"\n', encoding='utf-8')
-    monkeypatch.setenv('JAVA_TOOL_OPTIONS', '')  # monkeypatch restores it after the test
-    monkeypatch.setenv('HTTPS_PROXY', 'http://proxy.corp:3128')
-    first_run, handed = {}, {}
-
-    def schedule(settings, **options):
-        run_schedule(settings, **options, generate_once=lambda: first_run.update(os.environ), exec_=lambda _file, _argv, env: handed.update(env), crontab=tmp_path / 'crontab')
-
-    monkeypatch.setattr('uc.cli.run_schedule', schedule)
-    assert main(['schedule']) == 0
-    assert first_run['JAVA_TOOL_OPTIONS'] == '-Xmx6g'  # the scheduler's own first generation
-    assert 'JAVA_TOOL_OPTIONS' not in handed  # supercronic's jobs read uc.toml again on each run
-    assert handed['HTTPS_PROXY'] == 'http://proxy.corp:3128'
-
-
-def test_the_scheduler_records_the_environment_it_received_not_what_uc_toml_exports(monkeypatch, tmp_path, secrets_dir):
-    data = use_env(monkeypatch, tmp_path, secrets_dir)
-    (tmp_path / 'uc.toml').write_text('java_tool_options = "-Xmx6g"\nhttps_proxy = "http://proxy.corp:3128"\n', encoding='utf-8')
-    monkeypatch.setenv('JAVA_TOOL_OPTIONS', '')  # monkeypatch restores both after apply_process_env exports the file's values
-    monkeypatch.setenv('HTTPS_PROXY', '')
-    environment = {name: value for name, value in os.environ.items() if name in REGISTRY}  # what the container was given
-    monkeypatch.setattr('uc.cli.run_schedule', lambda settings, **options: run_schedule(settings, **options, generate_once=lambda: None, exec_=lambda *_: None, crontab=tmp_path / 'crontab'))
-    assert main(['schedule']) == 0
-    assert os.environ['JAVA_TOOL_OPTIONS'] == '-Xmx6g'  # exported, so a digest of os.environ taken now would differ and the note would fire forever
-    assert (data / 'scheduler.json').is_file()
-    out = io.StringIO()
-    assert configview.run(env=environment, out=out, err=io.StringIO()) == 0
-    assert 'note:' not in out.getvalue()
-
-
 def test_config_check(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
     assert main(['config', '--check']) == 0
@@ -407,8 +353,8 @@ def test_generate_accepts_wait():
 
 
 def test_pki_init_uses_the_pki_settings(monkeypatch, tmp_path):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
-    (tmp_path / 'uc.toml').write_text('[pki]\norg = "Example Corp"\nsigning_days = 30\n', encoding='utf-8')
+    monkeypatch.setenv('PKI_ORG', 'Example Corp')
+    monkeypatch.setenv('PKI_SIGNING_DAYS', '30')
     assert main(['pki', 'init', '--out', str(tmp_path / 'pki')]) == 0
     signing = cert_info(tmp_path / 'pki' / 'update-center.cert')
     assert 'Example Corp' in signing.subject
@@ -418,15 +364,13 @@ def test_pki_init_uses_the_pki_settings(monkeypatch, tmp_path):
 
 
 def test_pki_init_rejects_an_invalid_setting(monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     monkeypatch.setenv('PKI_ROOT_DAYS', '0')
     assert main(['pki', 'init', '--out', str(tmp_path / 'pki')]) == 1
     assert 'uc: error: PKI_ROOT_DAYS must be >= 1' in capsys.readouterr().err
     assert not (tmp_path / 'pki').exists()
 
 
-def test_pki_init_names_the_files_under_the_display_dir(monkeypatch, tmp_path, capsys):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+def test_pki_init_names_the_files_under_the_display_dir(tmp_path, capsys):
     assert main(['pki', 'init', '--out', str(tmp_path / 'pki'), '--display-dir', 'new pki', '--root-days', '30', '--signing-days', '10']) == 0
     assert capsys.readouterr().out.splitlines() == [
         'created new pki/root-ca.crt: install it in $JENKINS_HOME/update-center-rootCAs/ on every controller',
@@ -442,8 +386,7 @@ def test_pki_init_names_the_files_under_the_display_dir(monkeypatch, tmp_path, c
         (['--display-dir', 'secrets'], 'secrets/root/root-ca.key, secrets/root-ca.crt, secrets/update-center.key, secrets/update-center.cert'),
     ],
 )
-def test_pki_init_names_the_existing_files_it_refuses_under_the_display_dir(monkeypatch, tmp_path, capsys, display, files):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+def test_pki_init_names_the_existing_files_it_refuses_under_the_display_dir(tmp_path, capsys, display, files):
     out = tmp_path / 'pki'
     (out / 'root').mkdir(parents=True)
     for name in ('root/root-ca.key', 'root-ca.crt', 'update-center.key', 'update-center.cert'):
@@ -452,8 +395,7 @@ def test_pki_init_names_the_existing_files_it_refuses_under_the_display_dir(monk
     assert capsys.readouterr().err == f'uc: error: refusing to overwrite existing files: {files.format(out=out)}\n'
 
 
-def test_pki_rotate_names_the_certificate_under_the_display_dir(monkeypatch, tmp_path, capsys, pki_material):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+def test_pki_rotate_names_the_certificate_under_the_display_dir(tmp_path, capsys, pki_material):
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
     assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets']) == 0
@@ -538,8 +480,7 @@ def break_root(work, case):
 
 
 @pytest.mark.parametrize('case', list(ROTATE_REFUSALS))
-def test_pki_rotate_refuses_an_unusable_root_and_changes_nothing(monkeypatch, tmp_path, capsys, pki_material, case):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+def test_pki_rotate_refuses_an_unusable_root_and_changes_nothing(tmp_path, capsys, pki_material, case):
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
     break_root(work, case)
@@ -556,7 +497,7 @@ ENCRYPTED_ROOT_KEYS = {
 }
 
 
-def run_without_a_terminal(args, tmp_path):
+def run_without_a_terminal(args):
     """Run python3 args with stdin open and silent, in a new session with no terminal: anything that asked for a passphrase would wait for it."""
     reader, writer = os.pipe()
     try:
@@ -567,7 +508,7 @@ def run_without_a_terminal(args, tmp_path):
             text=True,
             timeout=30,
             start_new_session=True,
-            env={**os.environ, 'UC_CONFIG_FILE': str(tmp_path / 'uc.toml')},
+            env=dict(os.environ),
             check=False,
         )
     finally:
@@ -582,7 +523,7 @@ def test_pki_rotate_never_asks_for_a_passphrase(tmp_path, pki_material, form):
     options, refusal = ENCRYPTED_ROOT_KEYS[form]
     encrypt_key(work / 'root' / 'root-ca.key', *options)
     before = tree_state(work)
-    proc = run_without_a_terminal(['-m', 'uc', 'pki', 'rotate', '--dir', str(work)], tmp_path)
+    proc = run_without_a_terminal(['-m', 'uc', 'pki', 'rotate', '--dir', str(work)])
     assert (proc.returncode, proc.stdout, proc.stderr) == (1, '', f'uc: error: {refusal.format(work=work)}\n')
     assert tree_state(work) == before
 
@@ -602,15 +543,14 @@ def test_checking_an_encrypted_signing_key_never_asks_for_a_passphrase(tmp_path,
     key = tmp_path / 'update-center.key'
     shutil.copy(pki_material / 'update-center.key', key)
     encrypt_key(key, 'pkey', '-aes256')
-    proc = run_without_a_terminal(['-c', CHECK_SIGNING_KEY, str(key), str(pki_material / 'update-center.cert')], tmp_path)
+    proc = run_without_a_terminal(['-c', CHECK_SIGNING_KEY, str(key), str(pki_material / 'update-center.cert')])
     assert proc.returncode == 1
     assert proc.stderr.startswith('refused: openssl pkey failed: ')
     assert 'pass phrase' not in proc.stderr
 
 
 @pytest.mark.parametrize('missing', ['update-center.key', 'update-center.cert'])
-def test_pki_rotate_refuses_half_a_signing_pair_and_changes_nothing(monkeypatch, tmp_path, capsys, pki_material, missing):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+def test_pki_rotate_refuses_half_a_signing_pair_and_changes_nothing(tmp_path, capsys, pki_material, missing):
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
     (work / missing).unlink()
@@ -622,7 +562,6 @@ def test_pki_rotate_refuses_half_a_signing_pair_and_changes_nothing(monkeypatch,
 
 
 def test_pki_rotate_changes_nothing_when_openssl_fails_partway(monkeypatch, tmp_path, capsys, pki_material):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
     before = tree_state(work)
@@ -652,7 +591,6 @@ ROTATE_RENAME_FAILURES = {
 @pytest.mark.usefixtures('small_keys')
 @pytest.mark.parametrize('case', list(ROTATE_RENAME_FAILURES))
 def test_pki_rotate_puts_back_what_it_moved_when_a_rename_fails(monkeypatch, tmp_path, capsys, pki_material, case):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     previous, failing, error = ROTATE_RENAME_FAILURES[case]
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
@@ -709,7 +647,6 @@ SIGNALLED_ROTATIONS = {
 @pytest.mark.usefixtures('small_keys')
 @pytest.mark.parametrize('case', list(SIGNALLED_ROTATIONS))
 def test_pki_rotate_finishes_its_renames_before_a_signal_stops_it(monkeypatch, tmp_path, pki_material, case):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     previous, failing, signame = SIGNALLED_ROTATIONS[case]
     signum, raised = SIGNALS[signame]
     work = tmp_path / 'pki'
@@ -733,7 +670,6 @@ def test_pki_rotate_finishes_its_renames_before_a_signal_stops_it(monkeypatch, t
 @pytest.mark.usefixtures('small_keys')
 @pytest.mark.parametrize('failing', [1, 2, 3, 4])
 def test_pki_init_finishes_its_renames_before_a_signal_stops_it(monkeypatch, tmp_path, failing):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     out = tmp_path / 'pki'
     signal_after_rename(monkeypatch, failing, signal.SIGINT)
     with pytest.raises(KeyboardInterrupt):
@@ -744,7 +680,6 @@ def test_pki_init_finishes_its_renames_before_a_signal_stops_it(monkeypatch, tmp
 
 @pytest.mark.usefixtures('small_keys')
 def test_pki_rotate_keeps_what_it_set_aside_when_it_cannot_move_everything_back(monkeypatch, tmp_path, capsys, pki_material):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
     assert main(['pki', 'rotate', '--dir', str(work)]) == 0  # an older *.old pair, which the next rotation sets aside
@@ -769,7 +704,6 @@ def test_pki_rotate_keeps_what_it_set_aside_when_it_cannot_move_everything_back(
 @pytest.mark.usefixtures('small_keys')
 @pytest.mark.parametrize('command', ['rotate', 'init'])
 def test_a_target_that_appears_meanwhile_is_not_overwritten(monkeypatch, tmp_path, capsys, pki_material, command):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     work = tmp_path / 'pki'
     if command == 'rotate':
         shutil.copytree(pki_material, work)
@@ -797,8 +731,7 @@ def test_a_target_that_appears_meanwhile_is_not_overwritten(monkeypatch, tmp_pat
     assert after == before
 
 
-def test_pki_rotate_reports_a_directory_it_cannot_write_in(monkeypatch, tmp_path, capsys, pki_material):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+def test_pki_rotate_reports_a_directory_it_cannot_write_in(tmp_path, capsys, pki_material):
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
     before = tree_state(work)
@@ -821,7 +754,6 @@ INIT_FAILURES = {
 @pytest.mark.parametrize('existing', ['no directory', 'a directory with root/ and other files'])
 @pytest.mark.parametrize('failure', list(INIT_FAILURES))
 def test_pki_init_leaves_nothing_behind_when_a_step_fails(monkeypatch, tmp_path, capsys, existing, failure):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     out = tmp_path / 'new' / 'pki'
     if existing != 'no directory':
         (out / 'root').mkdir(parents=True)
@@ -841,7 +773,6 @@ def test_pki_init_leaves_nothing_behind_when_a_step_fails(monkeypatch, tmp_path,
 
 @pytest.mark.usefixtures('small_keys')
 def test_pki_init_puts_back_what_it_moved_when_interrupted(monkeypatch, tmp_path):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     out = tmp_path / 'pki'
     out.mkdir()
     calls = fail_at_call(monkeypatch, Path, 'rename', 4, KeyboardInterrupt())
@@ -855,8 +786,7 @@ def test_pki_init_puts_back_what_it_moved_when_interrupted(monkeypatch, tmp_path
 
 
 @pytest.mark.parametrize('missing', [False, True], ids=['read-only directory', 'missing directory in a read-only one'])
-def test_pki_init_reports_a_directory_it_cannot_write_in(monkeypatch, tmp_path, capsys, missing):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+def test_pki_init_reports_a_directory_it_cannot_write_in(tmp_path, capsys, missing):
     parent = tmp_path / 'parent'
     out = parent / 'pki'
     out.mkdir(parents=True)
@@ -871,8 +801,7 @@ def test_pki_init_reports_a_directory_it_cannot_write_in(monkeypatch, tmp_path, 
     assert [path.relative_to(parent).as_posix() for path in parent.rglob('*')] == ([] if missing else ['pki'])
 
 
-def test_pki_rotate_names_the_root_files_where_they_are_on_the_host(monkeypatch, tmp_path, capsys, pki_material):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
+def test_pki_rotate_names_the_root_files_where_they_are_on_the_host(tmp_path, capsys, pki_material):
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
     (work / 'root' / 'root-ca.key').unlink()
@@ -887,7 +816,6 @@ def test_pki_rotate_names_the_root_files_where_they_are_on_the_host(monkeypatch,
 
 
 def test_pki_init_flags_override_the_settings(monkeypatch, tmp_path):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
     monkeypatch.setenv('PKI_ORG', 'Env Corp')
     monkeypatch.setenv('PKI_ROOT_DAYS', '900')
     monkeypatch.setenv('PKI_SIGNING_DAYS', '400')
@@ -984,9 +912,7 @@ def port_file(monkeypatch, tmp_path):
     return path
 
 
-def test_healthcheck_probes_the_recorded_port_and_reads_no_settings(monkeypatch, tmp_path, port_file, healthz_port):
-    monkeypatch.setenv('UC_CONFIG_FILE', str(tmp_path / 'uc.toml'))
-    (tmp_path / 'uc.toml').write_text('no_such_setting = 1\n[repo]\nadapter_port = 1\n', encoding='utf-8')
+def test_healthcheck_probes_the_recorded_port_and_reads_no_settings(monkeypatch, port_file, healthz_port):
     monkeypatch.setenv('MODE', 'bogus')
     monkeypatch.setattr('uc.cli.serve', lambda *_args, **_kwargs: pytest.fail('--healthcheck must not start a server'))
     record_port(healthz_port)
@@ -1061,3 +987,14 @@ def test_healthcheck_fails_on_an_unexpected_status(monkeypatch, tmp_path, secret
     monkeypatch.setattr('uc.repo_adapter.server.HEALTH_PATH', '/other')
     assert main(['repo-adapter', '--healthcheck', '--port', str(healthz_port)]) == 1
     assert f'uc: error: repo-adapter is not healthy on port {healthz_port}: HTTP 404' in capsys.readouterr().err
+
+
+def test_config_example_prints_the_env_example(capsys):
+    assert main(['config', '--example', '--mode', 'airgapped']) == 0
+    assert capsys.readouterr().out == example_env('airgapped')
+
+
+def test_config_example_takes_no_format():
+    with pytest.raises(SystemExit) as exited:
+        main(['config', '--example', 'toml'])
+    assert exited.value.code == 2

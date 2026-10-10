@@ -160,13 +160,14 @@ services:
 
   repo-adapter-push:
     <<: *uc-test
+    env_file: uc.env
     networks: [airgap]
     extra_hosts: *blocked-hosts
     entrypoint: ["python3", "-m", "uc", "repo-adapter"]
     environment:
       REPO_TYPE: ${IT_REPO_TYPE:-artifactory}
       REPO_URL: ${IT_PUSH_URL:-http://artifactory-push:8081/artifactory/}
-      REPO_KEY: procure  # wins over uc.toml's jenkins
+      REPO_KEY: procure  # wins over uc.env's jenkins
     healthcheck:
       test: ["CMD", "python3", "-m", "uc", "repo-adapter", "--healthcheck"]
       interval: 2s
@@ -178,11 +179,11 @@ services:
     volumes:
       - uc-data-push:/data
       - pki:/pki:ro
-      - ./uc.toml:/config/uc.toml:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 
   repo-adapter:
     <<: *uc-test
+    env_file: uc.env
     networks: [airgap]
     extra_hosts: *blocked-hosts
     entrypoint: ["python3", "-m", "uc", "repo-adapter"]
@@ -200,12 +201,12 @@ services:
     volumes:
       - uc-data:/data
       - pki:/pki:ro
-      - ./uc.toml:/config/uc.toml:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 
   # web's settings, worked out by uc as in a deployment (compose.yaml's web-config).
   web-config:
     <<: *uc-test
+    env_file: uc.env
     network_mode: none
     entrypoint: ["python3", "-m", "uc", "config", "--web-env", "--out", "/run/uc-web/web.env"]
     environment:
@@ -213,7 +214,6 @@ services:
       REPO_URL: ${IT_REPO_URL:-http://artifactory:8081/artifactory/}
     volumes:
       - web-config:/run/uc-web
-      - ./uc.toml:/config/uc.toml:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 
   web:
@@ -252,6 +252,7 @@ services:
 
   driver:
     <<: *uc-test
+    env_file: uc.env
     networks: [airgap]
     extra_hosts: *blocked-hosts
     environment:
@@ -283,7 +284,6 @@ services:
       - uc-data-push:/data-push
       - pki:/pki:ro
       - seed:/seed:ro
-      - ./uc.toml:/config/uc.toml:ro
       - ../../tests:/tests:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 

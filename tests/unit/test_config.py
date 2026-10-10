@@ -6,7 +6,7 @@ from urllib.parse import unquote
 
 import pytest
 
-from uc.config import _proxy_hostport, load_settings, load_web_settings, read_secret, settings_digest, split_userinfo, with_explicit_port
+from uc.config import PkiSettings, _proxy_hostport, load_pki_settings, load_settings, load_web_settings, read_secret, settings_digest, split_userinfo, with_explicit_port
 from uc.errors import ConfigError
 from uc.settings import SETTINGS
 
@@ -17,6 +17,7 @@ AIRGAPPED = {
     'REPO_KEY': 'jenkins-local',
 }
 KEEPER = {**AIRGAPPED, 'REPO_TYPE': 'artifact-keeper', 'REPO_URL': 'https://ak.corp', 'REPO_KEY': 'jenkins-prod-local'}
+ONLINE = {'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com'}
 
 
 def test_online_defaults():
@@ -243,25 +244,6 @@ def test_an_explicit_adapter_url_wins_over_the_port():
     assert s.repo_adapter_url == 'http://adapter.corp:8081/artifactory/'
 
 
-def test_the_adapter_url_follows_the_adapter_port_from_uc_toml(tmp_path):
-    path = tmp_path / 'uc.toml'
-    path.write_text('[repo]\nadapter_port = 9092\n', encoding='utf-8')
-    assert load_settings(AIRGAPPED, config_file=path).repo_adapter_url == 'http://repo-adapter:9092/artifactory/'
-
-
-def test_the_adapter_url_from_uc_toml_wins_over_the_one_its_port_gives(tmp_path):
-    path = tmp_path / 'uc.toml'
-    path.write_text('[repo]\nadapter_port = 9092\nadapter_url = "http://adapter.corp:9093/artifactory"\n', encoding='utf-8')
-    assert load_settings(AIRGAPPED, config_file=path).repo_adapter_url == 'http://adapter.corp:9093/artifactory/'
-
-
-def test_the_adapter_url_from_the_environment_wins_over_uc_toml(tmp_path):
-    path = tmp_path / 'uc.toml'
-    path.write_text('[repo]\nadapter_url = "http://adapter.corp:9093/artifactory"\n', encoding='utf-8')
-    s = load_settings({**AIRGAPPED, 'REPO_ADAPTER_URL': 'http://adapter.env:9094/artifactory'}, config_file=path)
-    assert s.repo_adapter_url == 'http://adapter.env:9094/artifactory/'
-
-
 def test_procurement_staging_defaults():
     settings = load_settings(AIRGAPPED)
     assert settings.procurement_staging_dir == Path('/procurement')
@@ -273,19 +255,12 @@ def test_procurement_staging_defaults():
 @pytest.mark.parametrize(('data', 'staging'), [('/data', '/data'), ('/data', '/data/'), ('/data', '/data/procurement'), ('/data', '/data/../data/stage'), ('/srv/uc', '/srv/uc/stage')])
 def test_a_staging_folder_in_the_data_volume_fails_when_the_settings_load(data, staging):
     with pytest.raises(ConfigError, match=rf"^PROCUREMENT_STAGING_DIR must be outside UC_DATA_DIR \({data}\), which the other services mount too: keep it on the \./procurement mount, /procurement by default \(got '{staging}'\)$"):
-        load_settings({**AIRGAPPED, 'UC_DATA_DIR': data, 'PROCUREMENT_STAGING_DIR': staging}, config_file=Path('/nonexistent/uc.toml'))
-
-
-def test_a_staging_folder_in_the_data_volume_from_uc_toml_names_its_key(tmp_path):
-    path = tmp_path / 'uc.toml'
-    path.write_text('[procurement]\nstaging_dir = "/data/stage"\n', encoding='utf-8')
-    with pytest.raises(ConfigError, match=r'^PROCUREMENT_STAGING_DIR \(\[procurement\] staging_dir in .*uc\.toml\) must be outside UC_DATA_DIR \(/data\)'):
-        load_settings(AIRGAPPED, config_file=path)
+        load_settings({**AIRGAPPED, 'UC_DATA_DIR': data, 'PROCUREMENT_STAGING_DIR': staging})
 
 
 @pytest.mark.parametrize('staging', ['/procurement', '/procurement/batch', '/database', '/srv/data', '/data2/stage'])
 def test_a_staging_folder_outside_the_data_volume_loads(staging):
-    assert load_settings({**AIRGAPPED, 'PROCUREMENT_STAGING_DIR': staging}, config_file=Path('/nonexistent/uc.toml')).procurement_staging_dir == Path(staging)
+    assert load_settings({**AIRGAPPED, 'PROCUREMENT_STAGING_DIR': staging}).procurement_staging_dir == Path(staging)
 
 
 @pytest.mark.parametrize(('raw', 'wars'), [('required', ('required',)), ('required 2.479.1', ('required', '2.479.1')), ('2.462.3,2.479.1', ('2.462.3', '2.479.1')), (' required , 2.479.1 ', ('required', '2.479.1'))])
@@ -293,25 +268,10 @@ def test_procurement_wars_from_the_environment(raw, wars):
     assert load_settings({**AIRGAPPED, 'PROCUREMENT_WARS': raw}).procurement_wars == wars
 
 
-def test_procurement_wars_from_uc_toml_as_an_array_or_a_string(tmp_path):
-    path = tmp_path / 'uc.toml'
-    path.write_text('[procurement]\nwars = ["required", "2.479.1"]\n', encoding='utf-8')
-    assert load_settings(AIRGAPPED, config_file=path).procurement_wars == ('required', '2.479.1')
-    path.write_text('[procurement]\nwars = "required 2.479.1"\n', encoding='utf-8')
-    assert load_settings(AIRGAPPED, config_file=path).procurement_wars == ('required', '2.479.1')
-
-
 @pytest.mark.parametrize('raw', ['latest', '2.x', 'required,latest'])
 def test_a_bad_procurement_war_fails_when_the_settings_load(raw):
     with pytest.raises(ConfigError, match=r'^PROCUREMENT_WARS takes Jenkins versions such as 2\.479\.1, or required'):
         load_settings({**AIRGAPPED, 'PROCUREMENT_WARS': raw})
-
-
-def test_a_list_in_uc_toml_must_hold_strings(tmp_path):
-    path = tmp_path / 'uc.toml'
-    path.write_text('[procurement]\nwars = [2]\n', encoding='utf-8')
-    with pytest.raises(ConfigError, match='must be a list of strings'):
-        load_settings(AIRGAPPED, config_file=path)
 
 
 @pytest.mark.parametrize('value', ['2.462', '2.462.1', '2.440'])
@@ -329,13 +289,6 @@ def test_doctor_since_must_be_a_jenkins_version(value):
         load_settings({**AIRGAPPED, 'DOCTOR_SINCE': value})
 
 
-def test_doctor_since_from_uc_toml_names_its_key(tmp_path):
-    path = tmp_path / 'uc.toml'
-    path.write_text('[doctor]\nsince = "newest"\n', encoding='utf-8')
-    with pytest.raises(ConfigError, match=r"DOCTOR_SINCE \(\[doctor\] since in .*uc\.toml\) must be a Jenkins version such as 2\.462\.1 \(got 'newest'\)"):
-        load_settings(AIRGAPPED, config_file=path)
-
-
 @pytest.mark.parametrize(
     ('name', 'extra'),
     [
@@ -351,30 +304,14 @@ def test_a_malformed_url_is_a_configuration_error(name, extra):
         load_settings(env)
 
 
-URL_SETTINGS = [
-    ('REPO_API_URL', '[repo]\napi_url'),
-    ('REPO_ADAPTER_URL', '[repo]\nadapter_url'),
-    ('RESOURCES_URL', '[resources]\nurl'),
-    ('POPULARITY_JSON_URL', 'popularity_json_url'),
-    ('TOOL_INSTALLERS_URL', 'tool_installers_url'),
-    ('HTTPS_PROXY', 'https_proxy'),
-    ('HTTP_PROXY', 'http_proxy'),
-]
+URL_SETTINGS = ['REPO_API_URL', 'REPO_ADAPTER_URL', 'RESOURCES_URL', 'POPULARITY_JSON_URL', 'TOOL_INSTALLERS_URL', 'HTTPS_PROXY', 'HTTP_PROXY']
 
 
 @pytest.mark.parametrize('bad', ['https://[bad', 'http://host:abc'])
-@pytest.mark.parametrize('name', [name for name, _ in URL_SETTINGS])
+@pytest.mark.parametrize('name', URL_SETTINGS)
 def test_every_url_setting_is_parsed_when_the_settings_load(name, bad):
     with pytest.raises(ConfigError, match=f'^{name} is not a valid URL: '):
-        load_settings({**AIRGAPPED, name: bad}, config_file=Path('/nonexistent/uc.toml'))
-
-
-@pytest.mark.parametrize(('name', 'toml'), URL_SETTINGS)
-def test_a_malformed_url_setting_from_uc_toml_names_its_key(tmp_path, name, toml):
-    path = tmp_path / 'uc.toml'
-    path.write_text(f'{toml} = "http://[bad"\n', encoding='utf-8')
-    with pytest.raises(ConfigError, match=rf'^{name} \(.* in .*uc\.toml\) is not a valid URL: '):
-        load_settings(AIRGAPPED, config_file=path)
+        load_settings({**AIRGAPPED, name: bad})
 
 
 @pytest.mark.parametrize(
@@ -388,7 +325,7 @@ def test_a_malformed_url_setting_from_uc_toml_names_its_key(tmp_path, name, toml
     ],
 )
 def test_valid_url_settings_still_load(name, value):
-    assert load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+    assert load_settings({**AIRGAPPED, name: value})
 
 
 PASSWORD_DELIMITERS = ['#', '?', '/', '[', ']']
@@ -397,13 +334,10 @@ PASSWORD_FORMS = ['http://proxyuser:{}@proxy.corp:3128', 'proxyuser:{}@proxy.cor
 
 @pytest.mark.parametrize('delimiter', PASSWORD_DELIMITERS)
 @pytest.mark.parametrize('form', PASSWORD_FORMS, ids=['scheme', 'no-scheme'])
-def test_a_proxy_password_may_hold_what_ends_a_url_host(tmp_path, delimiter, form):
+def test_a_proxy_password_may_hold_what_ends_a_url_host(delimiter, form):
     # urllib's proxy handler takes the user info up to the last @, so these work there and must not stop uc.
     value = form.format(f'S3cret{delimiter}Tail9z')
-    assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml')).https_proxy == value
-    path = tmp_path / 'uc.toml'
-    path.write_text(f'http_proxy = "{value}"\n', encoding='utf-8')
-    assert load_settings(AIRGAPPED, config_file=path).http_proxy == value
+    assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}).https_proxy == value
 
 
 UNREADABLE_PROXIES = [
@@ -418,7 +352,7 @@ UNREADABLE_PROXIES = [
 @pytest.mark.parametrize('value', UNREADABLE_PROXIES)
 def test_a_proxy_whose_host_or_port_cannot_be_read_is_refused_without_quoting_it(value):
     with pytest.raises(ConfigError, match=r'^HTTPS_PROXY is not a valid URL: ') as error:
-        load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml'))
+        load_settings({**AIRGAPPED, 'HTTPS_PROXY': value})
     for part in ('abc', '99999', 'proxyuser', 'S3cretPW'):
         assert part not in str(error.value)
 
@@ -433,7 +367,7 @@ SINGLE_SLASH_PROXIES = ['svc:/S3cretPW@proxy.corp:3128', 'http:/proxy.corp:3128'
 def test_a_proxy_with_a_single_slash_where_two_belong_is_refused_as_urllib_refuses_it(name, value):
     # urllib takes what precedes the first : as the scheme, if anything does, and refuses a rest that starts with / but not //.
     with pytest.raises(ConfigError, match=f'^{name} {PROXY_REFUSAL}') as error:
-        load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+        load_settings({**AIRGAPPED, name: value})
     for part in ('svc', 'S3cretPW', 'proxy.corp'):
         assert part not in str(error.value)
 
@@ -446,7 +380,7 @@ AT_AFTER_AUTHORITY_PROXIES = ['http://proxyuser:S3cretPW@Tail/9z@proxy.corp:3128
 def test_a_proxy_with_an_at_after_the_end_of_urllibs_authority_is_refused(name, value):
     # urllib ends the authority at the first / after the first @ and takes the host from before that /; uc reads it after the last @.
     with pytest.raises(ConfigError, match=f'^{name} {PROXY_REFUSAL}') as error:
-        load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+        load_settings({**AIRGAPPED, name: value})
     for part in ('proxyuser', 'S3cretPW', 'Tail', 'proxy.corp', 'other.corp'):
         assert part not in str(error.value)
 
@@ -468,7 +402,7 @@ UNUSABLE_HOSTPORT_PROXIES = [
 def test_a_proxy_whose_host_or_port_urllib_cannot_use_is_refused(name, value):
     # urllib hands http.client everything up to the end of its authority, which a ? or # does not end, nor a / without a // before it.
     with pytest.raises(ConfigError, match=f'^{name} {UNREADABLE_PROXY}') as error:
-        load_settings({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
+        load_settings({**AIRGAPPED, name: value})
     for part in ('proxyuser', 'S3cretPW', 'proxy.corp', '3128', 'abc'):
         assert part not in str(error.value)
 
@@ -487,7 +421,7 @@ BRACKETED_NOT_IPV6_PROXIES = [
 def test_a_proxy_host_in_brackets_must_be_an_ipv6_address(value):
     # urlsplit also takes an IPvFuture literal ([v1.x], even [v1.x[::1]), which http.client cannot connect to.
     with pytest.raises(ConfigError, match=f'^HTTPS_PROXY {UNREADABLE_PROXY}') as error:
-        load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml'))
+        load_settings({**AIRGAPPED, 'HTTPS_PROXY': value})
     for part in ('proxyuser', 'S3cretPW', 'v1.x', '3128'):
         assert part not in str(error.value)
 
@@ -507,7 +441,7 @@ USABLE_PROXIES = [
 
 @pytest.mark.parametrize('value', USABLE_PROXIES)
 def test_a_proxy_urllib_can_use_still_loads(value):
-    assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml')).https_proxy == value
+    assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}).https_proxy == value
 
 
 ATS_IN_USER_INFO_PROXIES = ['proxyuser:S3cretPW@Tail/9z@proxy.corp:3128', 'http://proxyuser:S3cretPW/Tail@9z@proxy.corp:3128', 'http://proxyuser:S3cretPW@Tail9z@proxy.corp:3128/']  # pragma: allowlist secret
@@ -516,7 +450,7 @@ ATS_IN_USER_INFO_PROXIES = ['proxyuser:S3cretPW@Tail/9z@proxy.corp:3128', 'http:
 @pytest.mark.parametrize('value', ATS_IN_USER_INFO_PROXIES)
 def test_a_proxy_whose_ats_are_all_in_urllibs_user_info_still_loads(value):
     # Without // urllib reads the whole value as the authority; with it, a / before the first @ or after the last one ends nothing early.
-    assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}, config_file=Path('/nonexistent/uc.toml')).https_proxy == value
+    assert load_settings({**AIRGAPPED, 'HTTPS_PROXY': value}).https_proxy == value
 
 
 def urllib_reading(value):
@@ -567,8 +501,8 @@ def test_the_proxy_host_and_port_follow_urllibs_own_parser(value):
 
 ALL_URL_SETTINGS = [setting.env for setting in SETTINGS if setting.type == 'url']
 WEB_URL_SETTINGS = ['PUBLIC_URL', 'REPO_URL', 'DOWNLOAD_BACKEND_URL']
-NO_AT_SETTINGS = {'PUBLIC_URL': 'public_url', 'REPO_URL': '[repo]\nurl', 'DOWNLOAD_BACKEND_URL': '[download]\nbackend_url', 'PROCUREMENT_SOURCE_URL': '[procurement]\nsource_url'}
-"""The URL settings that never carry credentials, so any @ in them is refused, with their uc.toml keys."""
+NO_AT_SETTINGS = ('PUBLIC_URL', 'REPO_URL', 'DOWNLOAD_BACKEND_URL', 'PROCUREMENT_SOURCE_URL')
+"""The URL settings that never carry credentials, so any @ in them is refused."""
 
 
 def refused(name):
@@ -579,7 +513,7 @@ def refused(name):
 @pytest.mark.parametrize(('load', 'name'), [*((load_settings, name) for name in ALL_URL_SETTINGS), *((load_web_settings, name) for name in WEB_URL_SETTINGS)])
 def test_a_malformed_url_message_does_not_quote_the_value(load, name):
     with pytest.raises(ConfigError, match=refused(name)) as error:
-        load({**AIRGAPPED, name: 'https://admin:S3cretPW@host.corp:wxyz/'}, config_file=Path('/nonexistent/uc.toml'))  # pragma: allowlist secret
+        load({**AIRGAPPED, name: 'https://admin:S3cretPW@host.corp:wxyz/'})  # pragma: allowlist secret
     for part in ('admin', 'S3cretPW', 'wxyz'):
         assert part not in str(error.value)
 
@@ -588,7 +522,7 @@ def test_a_malformed_url_message_does_not_quote_the_value(load, name):
 def test_a_password_that_ends_the_host_early_is_not_quoted(name):
     # Only the proxies take the user info up to the last @; elsewhere urlsplit reads S3cretPW as the port.
     with pytest.raises(ConfigError, match=refused(name)) as error:
-        load_settings({**AIRGAPPED, name: 'https://admin:S3cretPW#x@host.corp/'}, config_file=Path('/nonexistent/uc.toml'))  # pragma: allowlist secret
+        load_settings({**AIRGAPPED, name: 'https://admin:S3cretPW#x@host.corp/'})  # pragma: allowlist secret
     assert 'S3cretPW' not in str(error.value)
 
 
@@ -611,16 +545,7 @@ NO_AT_LOADS = [*((load_settings, name) for name in NO_AT_SETTINGS), *((load_web_
 def test_any_at_is_refused_in_a_url_setting_that_never_carries_credentials(load, name, value):
     # urlsplit ends the user info at a # ? or /, and would read a token before one as the host.
     with pytest.raises(ConfigError, match=f'^{name} must not contain credentials or an @') as error:
-        load({**AIRGAPPED, name: value}, config_file=Path('/nonexistent/uc.toml'))
-    assert TOKEN not in str(error.value)
-
-
-@pytest.mark.parametrize(('name', 'toml'), NO_AT_SETTINGS.items())
-def test_an_at_in_a_url_setting_from_uc_toml_names_its_key(tmp_path, name, toml):
-    path = tmp_path / 'uc.toml'
-    path.write_text(f'{toml} = "https://{TOKEN}#x@host.corp/"\n', encoding='utf-8')
-    with pytest.raises(ConfigError, match=rf'^{name} \(.* in .*uc\.toml\) must not contain credentials or an @') as error:
-        load_settings({key: value for key, value in AIRGAPPED.items() if key != name}, config_file=path)
+        load({**AIRGAPPED, name: value})
     assert TOKEN not in str(error.value)
 
 
@@ -640,41 +565,30 @@ ENCODED_AT = 'https://host.corp/jenkins%40corp'  # an encoded @ is not one
     ],
 )
 def test_a_url_setting_that_never_carries_credentials_loads_without_an_at(load, name, field, expected):
-    assert getattr(load({**AIRGAPPED, name: ENCODED_AT}, config_file=Path('/nonexistent/uc.toml')), field) == expected
-
-
-def test_a_malformed_url_from_uc_toml_names_its_key(tmp_path):
-    path = tmp_path / 'uc.toml'
-    path.write_text('[repo]\nurl = "http://[bad/"\n', encoding='utf-8')
-    with pytest.raises(ConfigError, match=r'REPO_URL \(\[repo\] url in .*uc\.toml\) is not a valid URL: '):
-        load_settings({'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'REPO_KEY': 'jenkins'}, config_file=path)
+    assert getattr(load({**AIRGAPPED, name: ENCODED_AT}), field) == expected
 
 
 def test_web_settings_refuse_a_malformed_repository_url():
     env = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc', 'REPO_URL': 'http://[bad/', 'REPO_KEY': 'jenkins'}
     with pytest.raises(ConfigError, match='REPO_URL is not a valid URL: '):
-        load_web_settings(env, config_file=Path('/nonexistent/uc.toml'))
+        load_web_settings(env)
 
 
 @pytest.mark.parametrize('load', [load_settings, load_web_settings])
 @pytest.mark.parametrize('value', ['https://[uc.example.com', 'https://uc:abc'], ids=['bracket', 'port'])
-def test_a_malformed_public_url_is_a_configuration_error(load, value, tmp_path):
+def test_a_malformed_public_url_is_a_configuration_error(load, value):
     with pytest.raises(ConfigError, match=r'^PUBLIC_URL is not a valid URL: '):
-        load({**AIRGAPPED, 'PUBLIC_URL': value}, config_file=Path('/nonexistent/uc.toml'))
-    path = tmp_path / 'uc.toml'
-    path.write_text(f'public_url = "{value}"\n', encoding='utf-8')
-    with pytest.raises(ConfigError, match=r'^PUBLIC_URL \(public_url in .*uc\.toml\) is not a valid URL: '):
-        load({name: given for name, given in AIRGAPPED.items() if name != 'PUBLIC_URL'}, config_file=path)
+        load({**AIRGAPPED, 'PUBLIC_URL': value})
 
 
 @pytest.mark.parametrize('load', [load_settings, load_web_settings])
 def test_an_unset_public_url_is_still_reported_as_unset(load):
     with pytest.raises(ConfigError, match=r'^PUBLIC_URL must be set$'):
-        load({'MODE': 'online', 'PUBLIC_URL': ' '}, config_file=Path('/nonexistent/uc.toml'))
+        load({'MODE': 'online', 'PUBLIC_URL': ' '})
 
 
-def digest(env, config_file=None):
-    return settings_digest(load_settings(env, config_file=config_file or Path('/nonexistent/uc.toml')), env)
+def digest(env):
+    return settings_digest(load_settings(env), env)
 
 
 def test_equal_settings_have_equal_digests():
@@ -684,19 +598,6 @@ def test_equal_settings_have_equal_digests():
 @pytest.mark.parametrize(('name', 'value'), [('GENERATE_SCHEDULE', '0 1 * * *'), ('DOWNLOAD_ACCESS', 'proxy'), ('REPO_MAX_ARCHIVE_MB', '64'), ('HTTPS_PROXY', 'http://proxy:3128')])
 def test_changing_a_restart_setting_changes_the_digest(name, value):
     assert digest({**AIRGAPPED, name: value}) != digest(AIRGAPPED)
-
-
-@pytest.mark.parametrize(
-    'after',
-    ['public_url = "https://uc.example.com"\n[generate]\nschedule = "0 1 * * *"\n', 'public_url = "https://other.example.com"\n'],
-    ids=['generate_schedule', 'public_url'],
-)
-def test_a_restart_setting_changed_only_in_uc_toml_changes_the_digest(tmp_path, after):
-    env = {name: value for name, value in AIRGAPPED.items() if name != 'PUBLIC_URL'}  # the same environment both times
-    before_file, after_file = tmp_path / 'before.toml', tmp_path / 'after.toml'
-    before_file.write_text('public_url = "https://uc.example.com"\n', encoding='utf-8')
-    after_file.write_text(after, encoding='utf-8')
-    assert digest(env, before_file) != digest(env, after_file)
 
 
 @pytest.mark.parametrize('blank', ['', '   '])
@@ -713,8 +614,33 @@ def test_an_empty_value_that_turns_a_setting_off_stays_in_the_digest(name):
     assert digest({**AIRGAPPED, name: ''}) != digest(AIRGAPPED)
 
 
-@pytest.mark.parametrize(('name', 'value', 'toml'), [('RETAIN_RELEASES', '9', 'retain_releases = 9\n'), ('JAVA_TOOL_OPTIONS', '-Xmx1g', 'java_tool_options = "-Xmx1g"\n')])
-def test_an_unmarked_setting_changes_the_digest_in_the_environment_but_not_in_uc_toml(tmp_path, name, value, toml):
-    assert digest({**AIRGAPPED, name: value}) != digest(AIRGAPPED)  # a container's environment is fixed when it is created
-    (tmp_path / 'uc.toml').write_text(toml, encoding='utf-8')
-    assert digest(AIRGAPPED, tmp_path / 'uc.toml') == digest(AIRGAPPED)
+def test_every_setting_has_a_settings_field():
+    s = load_settings(ONLINE)
+    for setting in SETTINGS:
+        if setting.attribute is not None:
+            assert hasattr(s, setting.attribute), setting.env
+
+
+@pytest.mark.parametrize('env', [ONLINE, AIRGAPPED])
+def test_the_registry_defaults_are_the_defaults(env):
+    s = load_settings(env)
+    for setting in SETTINGS:
+        default = setting.default_for(env['MODE'])
+        if setting.attribute is None or not default:
+            continue
+        value = getattr(s, setting.attribute)
+        assert (str(value).lower() if isinstance(value, bool) else str(value)) == default, setting.env
+
+
+def test_the_jvm_and_tls_settings_have_fields():
+    s = load_settings({**ONLINE, 'JAVA_TOOL_OPTIONS': '-Xmx6g', 'TLS_CERT_FILE': '/tls/c.pem', 'TLS_KEY_FILE': '/tls/k.pem'})
+    assert (s.java_tool_options, s.tls_cert_file, s.tls_key_file) == ('-Xmx6g', '/tls/c.pem', '/tls/k.pem')
+
+
+def test_pki_settings_need_no_mode():
+    assert load_pki_settings({'PKI_ORG': 'Example Corp', 'PKI_ROOT_DAYS': '100'}) == PkiSettings('Example Corp', 100, 365)
+
+
+def test_pki_days_must_be_positive():
+    with pytest.raises(ConfigError, match='PKI_SIGNING_DAYS must be >= 1'):
+        load_pki_settings({'PKI_SIGNING_DAYS': '0'})

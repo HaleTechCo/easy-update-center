@@ -22,7 +22,7 @@ runs it.
 
 The pipeline runs the same `docker compose run --rm uc ...` commands you would, so it must run on the
 update center's Docker host, in the deployment directory: the directory you run `docker compose` in,
-which holds `compose.yaml`, `.env`, `config/uc.toml` and `secrets/`. It is not a checkout of the
+which holds `compose.yaml`, `.env` and `secrets/`. It is not a checkout of the
 pipeline's repository. The example calls it `UC_DIR`, a parameter that defaults to
 `/opt/easy-update-center`, and runs on a Jenkins agent on the host, labelled `uc-host`.
 
@@ -50,7 +50,7 @@ Before the first run:
 ## Choose what to stage
 
 The stage step runs `uc procure stage` with no options, so what it stages comes from the
-`PROCUREMENT_*` settings in `UC_DIR`'s `.env` or `config/uc.toml`. Set them before the first run, for
+`PROCUREMENT_*` settings in `UC_DIR`'s `.env`. Set them before the first run, for
 example `PROCUREMENT_POMS=true`, `PROCUREMENT_DEPENDENCIES=true` and `PROCUREMENT_WARS=required` in
 `.env`. With none of them set, the stage step exits 2 and the run stops before the review. What each
 one stages: [2. Stage](procure-missing-files.md#2-stage).
@@ -128,7 +128,7 @@ approval before it pushes.
 
 | Step | Exit code | What it means |
 |---|---|---|
-| `uc config --check` | 1 | The settings are invalid; the message names the setting. Fix `.env` or `config/uc.toml` in `UC_DIR`. |
+| `uc config --check` | 1 | The settings are invalid; the message names the setting. Fix `.env` in `UC_DIR`. |
 | `uc doctor` | 1 | Expected: something will be dropped or a dependency is missing, which is what the run is for. The example lets it pass in the check and verify stages. An error, such as an unreachable repository, also exits 1 (`uc: error: ...`); the stage step then fails on it too. |
 | `uc doctor` | 2 or more | An invalid command line: the stage fails. |
 | `uc procure stage` | 1 | A file could not be staged (`FAILED` in `stage-report.txt`), or the run was refused (`uc: error: ...`, for example air-gapped without `PROCUREMENT_SOURCE_URL`). |

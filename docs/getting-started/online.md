@@ -77,9 +77,7 @@ now:
 
 Every setting: [Configuration reference](../reference/configuration.md).
 
-The same settings can go in `config/uc.toml` instead, or as well:
-[Configure with uc.toml](../how-to/configure-with-uc-toml.md). Once the images are
-pulled or built, `docker compose run --rm --no-deps uc config` shows what each setting ends up as.
+Once the images are pulled or built, `docker compose run --rm --no-deps uc config` shows what each setting ends up as.
 
 ## 3. Add credentials
 

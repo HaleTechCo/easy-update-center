@@ -21,8 +21,8 @@ A second run while one is in progress exits with code 75.
 
 ## Change the schedule
 
-Set `GENERATE_SCHEDULE` (a cron expression, or an `@macro` such as `@daily`) in `.env` or
-`config/uc.toml`, then recreate the services so the scheduler reads it:
+Set `GENERATE_SCHEDULE` (a cron expression, or an `@macro` such as `@daily`) in `.env`, then
+recreate the services so the scheduler reads it:
 
 ```bash
 docker compose up -d --force-recreate      # or: make reload

@@ -48,7 +48,7 @@ services:
       web-config: {condition: service_completed_successfully, restart: true}
     restart: unless-stopped
 
-  # One-shot, before web: works out web's settings from .env and config/uc.toml (uc config --web-env)
+  # One-shot, before web: works out web's settings from .env (uc config --web-env)
   # and writes them to the web-config volume. No network, no secrets.
   web-config:
     image: ${UC_IMAGE:-easy-update-center/uc:local}
@@ -64,7 +64,7 @@ services:
   # One-shot, only when called: `docker compose run --rm setup` (first-time setup, safe to repeat), or
   # `setup secrets | procurement | pki-init | pki-rotate` (docs/reference/cli.md#the-setup-service).
   # Root, so it can set ownership, ACLs and permissions; no network, no compose secrets; it reads .env
-  # (or UC_ENV_FILE) and config/uc.toml as the other services do, so .env must exist.
+  # (or UC_ENV_FILE) as the other services do, so .env must exist.
   setup:
     image: ${UC_IMAGE:-easy-update-center/uc:local}
     build: {context: uc, target: runtime}
@@ -72,8 +72,6 @@ services:
     user: "0:0"
     network_mode: none
     env_file: ${UC_ENV_FILE:-.env}
-    environment:
-      UC_CONFIG_FILE: /setup/config/uc.toml
     entrypoint: ["uc-setup"]
     read_only: true
     tmpfs:

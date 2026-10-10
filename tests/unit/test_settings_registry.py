@@ -1,8 +1,7 @@
-"""The settings registry: names, the uc.toml naming rule, types, groups and defaults (docs/reference/configuration.md#how-settings-are-read)."""
+"""The settings registry: names, types, groups and defaults (docs/reference/configuration.md#how-settings-are-read)."""
 
 import re
 from http.server import ThreadingHTTPServer
-from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
@@ -10,7 +9,7 @@ import pytest
 from uc import cli, config
 from uc.config import Settings
 from uc.repo_adapter import server as adapter_server
-from uc.settings import CORE_VERSION, GROUPS, MODES, REGISTRY, SETTINGS, TYPES, env_name, toml_key, toml_label
+from uc.settings import CORE_VERSION, GROUPS, MODES, REGISTRY, SETTINGS, TYPES
 
 
 def test_names_are_unique_upper_case_variables():
@@ -18,32 +17,6 @@ def test_names_are_unique_upper_case_variables():
     assert len(names) == len(set(names))
     assert all(re.fullmatch(r'[A-Z][A-Z0-9_]*', name) for name in names)
     assert set(REGISTRY) == set(names)
-
-
-@pytest.mark.parametrize(
-    ('env', 'section', 'key'),
-    [
-        ('REPO_ADAPTER_URL', 'repo', 'adapter_url'),
-        ('GENERATE_SCHEDULE', 'generate', 'schedule'),
-        ('PUBLIC_URL', None, 'public_url'),
-        ('UC_ID', 'uc', 'id'),
-        ('SIGNING_KEY_FILE', 'signing', 'key_file'),
-        ('CERTIFICATE_MINIMUM_VALID_DAYS', None, 'certificate_minimum_valid_days'),
-    ],
-)
-def test_toml_key_follows_the_naming_rule(env, section, key):
-    assert toml_key(env) == (section, key)
-    assert env_name(section, key) == env
-
-
-def test_every_setting_round_trips_through_its_file_key():
-    for setting in SETTINGS:
-        assert env_name(*toml_key(setting.env)) == setting.env, setting.env
-
-
-def test_toml_label():
-    assert toml_label('REPO_URL') == '[repo] url'
-    assert toml_label('MODE') == 'mode'
 
 
 def test_types_groups_and_docs():
@@ -162,27 +135,6 @@ NOT_READ_BY_THE_ADAPTER = {'JAVA_TOOL_OPTIONS': "only the generator's JVM uses i
 """The rest of PROCESS_ENV, each with the reason the repo-adapter does not use it."""
 
 
-def test_every_process_env_variable_is_classified():
-    assert not PROXY_VARIABLES & set(NOT_READ_BY_THE_ADAPTER)
-    assert PROXY_VARIABLES | set(NOT_READ_BY_THE_ADAPTER) == set(config.PROCESS_ENV), 'add each PROCESS_ENV variable to PROXY_VARIABLES if the repo-adapter uses it, else to NOT_READ_BY_THE_ADAPTER with the reason'
-
-
-def test_restart_marks_what_the_services_read_at_start(monkeypatch, tmp_path):
-    marked = {setting.env for setting in SETTINGS if setting.restart}
-    schedules = {'GENERATE_SCHEDULE', 'DOCTOR_SCHEDULE'}
-    web_inputs = recorded_web_inputs(monkeypatch)
-    adapter_reads = recorded_repo_adapter_reads(monkeypatch, tmp_path)
-    assert {'REPO_URL', 'REPO_KEY'} | PROXY_VARIABLES <= adapter_reads  # so a recorder that records nothing cannot pass
-    assert schedules <= marked
-    assert web_inputs <= marked
-    assert adapter_reads <= marked
-    # A setting the repo-adapter never reads still needs the mark when a value it reads follows it:
-    # REPO_ADAPTER_DIR's default follows UC_DATA_DIR, the secret files' SECRETS_DIR, REPO_ADAPTER's MODE.
-    adapter_inputs = adapter_reads | {name for name in marked - adapter_reads - schedules if read_values_follow(name, adapter_reads)}
-    unexplained = marked - web_inputs - adapter_inputs - schedules
-    assert not unexplained, f'restart-marked, but no service reads them at start and no value the repo-adapter reads changes with them: {sorted(unexplained)}'
-
-
 def test_restart_leaves_out_what_every_run_rereads():
     for name in ('RETAIN_RELEASES', 'JAVA_TOOL_OPTIONS', 'UC_EXTRA_ARGS', 'MIN_PLUGINS'):
         assert not REGISTRY[name].restart, name
@@ -208,7 +160,7 @@ def recorded_web_inputs(monkeypatch):
     with monkeypatch.context() as patch:  # undone on return, so later loads in the same test are not recorded
         patch.setattr(config, 'Resolver', Recording)
         for case in cases:
-            config.load_web_settings({**base, **case}, config_file=Path('none.toml'))
+            config.load_web_settings({**base, **case})
     return seen
 
 
@@ -260,7 +212,7 @@ def recorded_repo_adapter_reads(monkeypatch, tmp_path):
         patch.setattr(adapter_server, 'PORT_FILE', tmp_path / 'adapter.port')
 
         def start(env):
-            settings = RecordingSettings(config.load_settings(env, config_file=tmp_path / 'none.toml'), seen)
+            settings = RecordingSettings(config.load_settings(env), seen)
             patch.setattr(cli, 'load_settings', lambda: settings)
             try:
                 assert cli.main(['repo-adapter']) == 0
@@ -282,9 +234,9 @@ VARIATION_BASE = {'MODE': 'airgapped', 'PUBLIC_URL': 'https://uc.example.com', '
 
 def read_values_follow(name, reads):
     """Return whether the value of a setting in reads changes when name does, with every derived setting left at its default."""
-    before = config.load_settings(VARIATION_BASE, config_file=Path('none.toml'))
+    before = config.load_settings(VARIATION_BASE)
     setting = REGISTRY[name]
-    after = config.load_settings({**VARIATION_BASE, name: other_value(setting, str(getattr(before, setting.attribute)))}, config_file=Path('none.toml'))
+    after = config.load_settings({**VARIATION_BASE, name: other_value(setting, str(getattr(before, setting.attribute)))})
     return any(getattr(before, REGISTRY[read].attribute) != getattr(after, REGISTRY[read].attribute) for read in reads)
 
 
@@ -310,9 +262,9 @@ def other_value(setting, current):
 
 def test_other_value_has_a_valid_value_for_every_type():
     assert set(OTHER_VALUES) == set(TYPES)
-    before = config.load_settings(VARIATION_BASE, config_file=Path('none.toml'))
+    before = config.load_settings(VARIATION_BASE)
     for setting in SETTINGS:
         if setting.attribute:
             current = getattr(before, setting.attribute)
-            after = config.load_settings({**VARIATION_BASE, setting.env: other_value(setting, str(current))}, config_file=Path('none.toml'))
+            after = config.load_settings({**VARIATION_BASE, setting.env: other_value(setting, str(current))})
             assert getattr(after, setting.attribute) != current, setting.env

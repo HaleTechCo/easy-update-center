@@ -118,9 +118,7 @@ that up now, before step 6: [Repository behind a private CA](#repository-behind-
 
 Every setting: [Configuration reference](../reference/configuration.md).
 
-The same settings can go in `config/uc.toml` instead, or as well:
-[Configure with uc.toml](../how-to/configure-with-uc-toml.md). Once the images are
-loaded or built, `docker compose run --rm --no-deps uc config` shows what each setting ends up as.
+Once the images are loaded or built, `docker compose run --rm --no-deps uc config` shows what each setting ends up as.
 
 ## 4. Add credentials
 
@@ -240,8 +238,7 @@ REPO_CA_FILE=/etc/ssl/uc-repo-ca.crt
 COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.repo-ca.yaml
 ```
 
-`[repo] ca_file = "/etc/ssl/uc-repo-ca.crt"` in `config/uc.toml` works as well as the `.env` line.
-Set it in one of those two files, not under `environment:` in the override: every service then has
+Set it in `.env`, not under `environment:` in the override: every service then has
 the same value, which `uc config` needs to tell whether the running services use the current
 settings ([When changes apply](../reference/configuration.md#when-changes-apply)). The other
 services never open the file, so they need no mount.

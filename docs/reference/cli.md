@@ -256,7 +256,7 @@ Prints `status.json`, the same document served at `$PUBLIC_URL/status.json`. Fie
 
 ```bash
 docker compose run --rm --no-deps uc config [--json | --check]
-docker compose run --rm --no-deps uc config --example toml|env [--mode online|airgapped]
+docker compose run --rm --no-deps uc config --example [--mode online|airgapped]
 docker compose run --rm --no-deps uc config --web-env [--out FILE]
 ```
 
@@ -266,15 +266,13 @@ upgrade or a settings change, the adapter would then run with settings not yet c
 setting the new revision refuses would show as Compose's `dependency failed to start` instead of
 `uc: error: ...`.
 
-Shows every setting with its value and where it came from: `environment`, `uc.toml: <key>`, `mode`
+Shows every setting with its value and where it came from: `environment`, `mode`
 (the default for the mode), `derived` (worked out from other settings, as `REPO_URL` and the secret
 paths are) or `default`. For a secret file it shows the path and whether the file is `present`,
 `empty` or `missing`, never its contents. A setting read only when a service starts shows `restart`
-after its source (`environment; restart`): changing it needs `make reload` wherever it is set. For
-the others, a change in `config/uc.toml` applies at the next run, but one in `.env` also needs
-`make reload`, because a container's environment is fixed when it is created. When the scheduler
-started with other values of the `restart` settings, or in another environment, than these, it
-ends with the command that applies them. Set settings in `.env` or `config/uc.toml`, not under one
+after its source (`environment; restart`). A change in `.env` needs `make reload`, because a
+container's environment is fixed when it is created. When the scheduler started with other values
+than these, it ends with the command that applies them. Set settings in `.env`, not under one
 service's `environment:` in a Compose override: `uc config` compares its own container's settings
 with the scheduler's, so a value only one of them receives makes that note permanent (the TLS and
 proxy-CA overrides set variables on `web` alone, which neither compares).
@@ -287,9 +285,9 @@ there even when they are set up.
 
 | Option | Meaning |
 |---|---|
-| `--json` | The same as a JSON list of objects with `env`, `key`, `value`, `source`, `note` and `restart` (true or false). |
+| `--json` | The same as a JSON list of objects with `env`, `value`, `source`, `note` and `restart` (true or false). |
 | `--check` | Only check the settings: prints `configuration ok`, or the error. |
-| `--example toml\|env` | Print an example `config/uc.toml` or `.env` that lists every setting, with the settings the mode needs set and the rest commented out at their defaults. It reads no settings, so it works before any exist. |
+| `--example` | Print an example `.env` that lists every setting, with the settings the mode needs set and the rest commented out at their defaults. It reads no settings, so it works before any exist. |
 | `--mode` | With `--example`: the mode the example is for, `online` (the default) or `airgapped`. |
 | `--web-env` | Print the web container's settings as `NAME=value` lines, worked out from the settings and the mode: what the `web-config` service writes for the web container. |
 | `--out FILE` | With `--web-env`: write them to `FILE` instead, atomically. |
@@ -333,12 +331,12 @@ generator on the internal `repo` network, and stays idle when `REPO_ADAPTER` is 
 | Option | Meaning |
 |---|---|
 | `--port` | Port to listen on (default `REPO_ADAPTER_PORT`, 8081). |
-| `--healthcheck` | Do not serve: ask the running adapter on `127.0.0.1` for `/healthz` (3 seconds, proxy settings ignored), on `--port` or else the port the adapter recorded in `/tmp/uc-repo-adapter.port` when it started listening. It reads no settings, so editing `uc.toml` cannot make a running adapter unhealthy. Exit 0 when it answers 200; otherwise print `uc: error: repo-adapter is not healthy ...` (also when no port is recorded yet) and exit 1. The `repo-adapter` service's Compose healthcheck runs it. |
+| `--healthcheck` | Do not serve: ask the running adapter on `127.0.0.1` for `/healthz` (3 seconds, proxy settings ignored), on `--port` or else the port the adapter recorded in `/tmp/uc-repo-adapter.port` when it started listening. It reads no settings, so a settings change cannot make a running adapter unhealthy. Exit 0 when it answers 200; otherwise print `uc: error: repo-adapter is not healthy ...` (also when no port is recorded yet) and exit 1. The `repo-adapter` service's Compose healthcheck runs it. |
 
 ## uc pki
 
-Manages the signing PKI. It reads only the `PKI_*` settings (from the environment, and
-`config/uc.toml` when there is one) and needs no others, so it runs before anything else is
+Manages the signing PKI. It reads only the `PKI_*` settings (from the environment) and needs no
+others, so it runs before anything else is
 configured. `make pki-init` wraps `init`, and `make pki-rotate ROOT=<dir>` wraps `rotate`; both run
 the [`setup` Compose service](#the-setup-service), which reads `.env` (or the file `UC_ENV_FILE`
 names, which must exist) and `config/` as the other services do, so `uc pki` sees the settings they

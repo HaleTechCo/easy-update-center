@@ -1,48 +1,37 @@
-"""Settings from the environment and config/uc.toml, with per-mode defaults (docs/reference/configuration.md).
+"""Settings from the environment, with per-mode defaults (docs/reference/configuration.md).
 
-A setting's value is the first of: the environment, uc.toml, the registry's default for the mode (uc/uc/settings.py).
-An empty environment variable means "not set" and falls through, except for the settings where empty means "off"
-(POPULARITY_JSON_URL, TOOL_INSTALLERS_URL).
+A setting's value is the environment's, else the registry's default for the mode (uc/uc/settings.py). An empty
+environment variable means "not set", except for the settings where empty means "off" (POPULARITY_JSON_URL,
+TOOL_INSTALLERS_URL).
 """
 
 from __future__ import annotations
 
-import difflib
 import hashlib
 import ipaddress
 import json
 import os
 import re
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import unquote, urlsplit, urlunsplit
 
 from .errors import ConfigError
-from .settings import CORE_VERSION, REGISTRY, SECTIONS, SETTINGS, env_name, toml_key, toml_label
+from .settings import CORE_VERSION, REGISTRY, SETTINGS
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, MutableMapping
+    from collections.abc import Mapping
     from urllib.parse import SplitResult
-
-    from .settings import Setting
 
 PUBLIC_ARTIFACTORY_URL = 'https://repo.jenkins-ci.org/'
 # Where public plugins' and cores' real files live: the default download source, and the URLs uc doctor prints.
 PUBLIC_RELEASES_URL = PUBLIC_ARTIFACTORY_URL + 'releases/'
 UPSTREAM_MIRROR_URL = 'https://get.jenkins.io'
-DEFAULT_CONFIG_FILE = Path('/config/uc.toml')
 _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 _SCHEME = re.compile(r'[^/:]+://')  # the scheme split_userinfo keeps in front of the user info uc config masks
 _PROXY_SCHEME = re.compile(r'[^/:]+:')  # how urllib's proxy handler finds a scheme: up to the first ':', if anything precedes one
 _NOT_IN_HOST = re.compile(r'[\x00-\x20\x7f/?#@]')  # http.client refuses a space or control character; a / ? # or @ is part of a path, query or user info
-_FILE_KEYS = tuple(sorted(toml_label(setting.env) for setting in SETTINGS if not setting.env_only))
-_FILE_SECTIONS = tuple(f'[{section}]' for section in SECTIONS)
-
-PROCESS_ENV = ('JAVA_TOOL_OPTIONS', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY')
-"""Settings read straight from the process environment, by the JVM and by Python's urllib."""
-
 NO_CREDENTIALS = 'must not contain credentials or an @'
 """What follows the setting's name when a URL setting that never carries credentials holds an '@'; preflight's PUBLIC_URL check says the same."""
 
@@ -110,7 +99,6 @@ class Settings:
     overlay_dir: Path
     app_dir: Path
     secrets_dir: Path
-    config_file: Path
     signing_key_file: Path
     signing_cert_file: Path
     root_ca_file: Path
@@ -199,49 +187,34 @@ class Settings:
 
 
 class Resolver:
-    """Raw setting values: the environment first, then uc.toml, then the registry's default for the mode."""
+    """Raw setting values: the environment first, then the registry's default for the mode."""
 
-    def __init__(self, env: Mapping[str, str], file_values: Mapping[str, str], config_file: Path) -> None:
-        """Resolve from env and file_values, which were read from config_file (it may not exist)."""
+    def __init__(self, env: Mapping[str, str]) -> None:
+        """Resolve from env."""
         self.env = env
-        self.file_values = file_values
-        self.config_file = config_file
         self.mode = ''
 
     def source(self, name: str) -> str:
-        """Return where name's value comes from: 'env', 'file' or 'default'."""
+        """Return where name's value comes from: 'env' or 'default'."""
         if name in self.env and (self.env[name].strip() or REGISTRY[name].empty_means_off):
             return 'env'
-        if name in self.file_values:
-            return 'file'
         return 'default'
 
     def raw(self, name: str) -> str:
         """Return name's value as given, stripped, or its default for the mode ('' when the code derives it)."""
-        source = self.source(name)
-        if source == 'env':
+        if self.source(name) == 'env':
             return self.env[name].strip()
-        if source == 'file':
-            return self.file_values[name]
         return REGISTRY[name].default_for(self.mode)
 
-    def label(self, name: str) -> str:
-        """Return how a message names the setting: the variable, plus its uc.toml key when the value came from the file."""
-        if self.source(name) == 'file':
-            return f'{name} ({toml_label(name)} in {self.config_file})'
-        return name
+
+def make_resolver(env: Mapping[str, str] | None = None) -> Resolver:
+    """Return a Resolver over env (default: os.environ)."""
+    return Resolver(os.environ if env is None else env)
 
 
-def make_resolver(env: Mapping[str, str] | None = None, *, config_file: Path | None = None) -> Resolver:
-    """Return a Resolver over env (default: os.environ) and the uc.toml at config_file (default: UC_CONFIG_FILE, else /config/uc.toml)."""
-    env = os.environ if env is None else env
-    path = config_file if config_file is not None else Path(env.get('UC_CONFIG_FILE', '').strip() or DEFAULT_CONFIG_FILE)
-    return Resolver(env, read_config_file(path), path)
-
-
-def load_settings(env: Mapping[str, str] | None = None, *, config_file: Path | None = None) -> Settings:
-    """Build Settings from env (default: os.environ) and uc.toml, applying the mode's defaults; raise ConfigError on bad values."""
-    return settings_from(make_resolver(env, config_file=config_file))
+def load_settings(env: Mapping[str, str] | None = None) -> Settings:
+    """Build Settings from env (default: os.environ), applying the mode's defaults; raise ConfigError on bad values."""
+    return settings_from(make_resolver(env))
 
 
 @dataclass(frozen=True)
@@ -253,9 +226,9 @@ class PkiSettings:
     signing_days: int
 
 
-def load_pki_settings(env: Mapping[str, str] | None = None, *, config_file: Path | None = None) -> PkiSettings:
+def load_pki_settings(env: Mapping[str, str] | None = None) -> PkiSettings:
     """Return uc pki's defaults (PKI_ORG, PKI_ROOT_DAYS, PKI_SIGNING_DAYS); it needs no other setting, so it runs before MODE and PUBLIC_URL are set."""
-    r = make_resolver(env, config_file=config_file)
+    r = make_resolver(env)
     return PkiSettings(org=r.raw('PKI_ORG'), root_days=_int(r, 'PKI_ROOT_DAYS'), signing_days=_int(r, 'PKI_SIGNING_DAYS'))
 
 
@@ -273,15 +246,15 @@ class WebSettings:
     tls_key_file: str
 
 
-def load_web_settings(env: Mapping[str, str] | None = None, *, config_file: Path | None = None) -> WebSettings:
+def load_web_settings(env: Mapping[str, str] | None = None) -> WebSettings:
     """Resolve and validate only what the web container uses, so a bad generator-only setting cannot stop web; the same values and messages as load_settings."""
-    r = make_resolver(env, config_file=config_file)
+    r = make_resolver(env)
     r.mode = _choice(r, 'MODE')
     public_url = r.raw('PUBLIC_URL').rstrip('/')
     if not public_url:
         msg = 'PUBLIC_URL must be set'
         raise ConfigError(msg)
-    _check_credential_free_url(r, 'PUBLIC_URL', public_url)
+    _check_credential_free_url('PUBLIC_URL', public_url)
     backend = _choice(r, 'DOWNLOAD_BACKEND')
     backend_url = _explicit_backend_url(r) or _default_backend_url(r, backend)
     return WebSettings(
@@ -296,18 +269,6 @@ def load_web_settings(env: Mapping[str, str] | None = None, *, config_file: Path
     )
 
 
-def apply_process_env(settings: Settings, environ: MutableMapping[str, str] | None = None) -> tuple[str, ...]:
-    """Export the JVM options and proxies uc.toml sets to environ (default: os.environ) where it leaves them unset, so the generator and urllib use them; return the names exported."""
-    environ = os.environ if environ is None else environ
-    exported = []
-    for name in PROCESS_ENV:
-        value = getattr(settings, name.lower())
-        if value and not environ.get(name, '').strip():
-            environ[name] = value
-            exported.append(name)
-    return tuple(exported)
-
-
 def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
     """Return the validated (REPO_TYPE, REPO_URL with a trailing slash, REPO_KEY), for load_settings and load_web_settings alike."""
     repo_type = _choice(r, 'REPO_TYPE')
@@ -318,9 +279,9 @@ def _repository(r: Resolver, *, online: bool) -> tuple[str, str, str]:
         msg = 'REPO_URL and REPO_KEY must be set (they default to repo.jenkins-ci.org only in online mode with REPO_TYPE=artifactory)'
         raise ConfigError(msg)
     if not _REPOSITORY_RE.match(repo_key):
-        msg = f'{r.label("REPO_KEY")} contains unsupported characters: {repo_key!r}'
+        msg = f'REPO_KEY contains unsupported characters: {repo_key!r}'
         raise ConfigError(msg)
-    _check_credential_free_url(r, 'REPO_URL', repo_url, advice='; use the secret files instead')
+    _check_credential_free_url('REPO_URL', repo_url, advice='; use the secret files instead')
     return repo_type, with_trailing_slash(repo_url), repo_key
 
 
@@ -353,7 +314,7 @@ def settings_from(r: Resolver) -> Settings:
     if not public_url:
         msg = 'PUBLIC_URL must be set'
         raise ConfigError(msg)
-    _check_credential_free_url(r, 'PUBLIC_URL', public_url)
+    _check_credential_free_url('PUBLIC_URL', public_url)
 
     repo_type, repo_url, repo_key = _repository(r, online=online)
     repo_url_with_port = with_explicit_port(repo_url)
@@ -377,7 +338,7 @@ def settings_from(r: Resolver) -> Settings:
     resources_url = _checked_url(r, 'RESOURCES_URL')
 
     procurement_source = r.raw('PROCUREMENT_SOURCE_URL')
-    _check_credential_free_url(r, 'PROCUREMENT_SOURCE_URL', procurement_source)
+    _check_credential_free_url('PROCUREMENT_SOURCE_URL', procurement_source)
 
     secrets_dir = Path(r.raw('SECRETS_DIR'))
 
@@ -441,7 +402,6 @@ def settings_from(r: Resolver) -> Settings:
         overlay_dir=Path(r.raw('UC_OVERLAY_DIR')),
         app_dir=Path(r.raw('UC_APP_DIR')),
         secrets_dir=secrets_dir,
-        config_file=r.config_file,
         signing_key_file=_secret_path(r, 'SIGNING_KEY_FILE', 'update-center.key'),
         signing_cert_file=_secret_path(r, 'SIGNING_CERT_FILE', 'update-center.cert'),
         root_ca_file=_secret_path(r, 'ROOT_CA_FILE', 'root-ca.crt'),
@@ -453,94 +413,11 @@ def settings_from(r: Resolver) -> Settings:
     )
 
 
-def read_config_file(path: Path) -> dict[str, str]:
-    """Return the settings the uc.toml at path sets, by variable name and spelled as the environment would; {} when there is no file."""
-    try:
-        text = path.read_text(encoding='utf-8-sig')
-    except FileNotFoundError:
-        return {}
-    except IsADirectoryError:
-        msg = f'{path} is a directory, not a settings file: remove it, or point UC_CONFIG_FILE at the file'
-        raise ConfigError(msg) from None
-    except PermissionError:
-        msg = f'{path} is not readable by uid {os.getuid()}: make it readable by everyone (chmod 644)'
-        raise ConfigError(msg) from None
-    except UnicodeDecodeError:
-        msg = f'{path} is not UTF-8 text: save it as UTF-8'
-        raise ConfigError(msg) from None
-    except OSError as exc:
-        msg = f'{path} cannot be read: {exc.strerror or exc}'
-        raise ConfigError(msg) from None
-    try:
-        document = tomllib.loads(text)
-    except tomllib.TOMLDecodeError as exc:
-        msg = f'{path} is not valid TOML: {exc}'
-        raise ConfigError(msg) from None
-    values: dict[str, str] = {}
-    for name, value in document.items():
-        if isinstance(value, dict):
-            if name not in SECTIONS:
-                raise ConfigError(_unknown(path, f'[{name}]', _FILE_SECTIONS))
-            for key, item in value.items():
-                _add(values, path, name, key, item)
-        else:
-            _add(values, path, None, name, value)
-    return values
-
-
-def _add(values: dict[str, str], path: Path, section: str | None, key: str, value: object) -> None:
-    label = f'[{section}] {key}' if section else key
-    name = env_name(section, key)
-    setting = REGISTRY.get(name) if key.islower() else None
-    if setting is None:
-        raise ConfigError(_unknown(path, label, _FILE_KEYS))
-    if setting.env_only:
-        msg = f'{label} in {path}: {name} can only be set in the environment (.env), not in this file'
-        raise ConfigError(msg)
-    if toml_key(name) != (section, key):
-        msg = f'{label} in {path}: write {name} as {toml_label(name)}'
-        raise ConfigError(msg)
-    text = _file_value(setting, value, f'{label} in {path}')
-    if text or setting.empty_means_off:
-        values[name] = text
-
-
-def _unknown(path: Path, label: str, candidates: tuple[str, ...]) -> str:
-    close = difflib.get_close_matches(label.lower(), candidates, n=1)
-    hint = f'; did you mean {close[0]}?' if close else ''
-    return f'unknown setting {label} in {path}{hint}'
-
-
-def _file_value(setting: Setting, value: object, where: str) -> str:
-    """Return a uc.toml value spelled as the environment would; a string is taken as the environment would take it."""
-    if isinstance(value, str):
-        return value.strip()
-    if isinstance(value, bool):
-        if setting.type == 'bool':
-            return 'true' if value else 'false'
-    elif (isinstance(value, int) and setting.type in {'int', 'ratio'}) or (isinstance(value, float) and setting.type == 'ratio'):
-        return str(value)
-    if isinstance(value, list) and setting.type == 'list' and all(isinstance(item, str) for item in value):
-        return ' '.join(item.strip() for item in value)
-    expected = {'bool': 'true or false', 'int': 'an integer', 'ratio': 'a number', 'list': 'a list of strings'}.get(setting.type, 'a string')
-    # only the TOML type: a value can hold credentials (a URL's, or a password in JAVA_TOOL_OPTIONS), so it is never quoted
-    msg = f'{where} must be {expected} (got {_toml_type(value)})'
-    raise ConfigError(msg)
-
-
-def _toml_type(value: object) -> str:
-    """Return what a uc.toml value that is not a string is, in TOML's words."""
-    for kind, name in ((bool, 'a boolean'), (int, 'an integer'), (float, 'a float'), (list, 'an array'), (dict, 'a table')):
-        if isinstance(value, kind):
-            return name
-    return 'a date or time'
-
-
 def _choice(r: Resolver, name: str) -> str:
     choices = REGISTRY[name].choices
     value = r.raw(name)
     if value not in choices:
-        msg = f'{r.label(name)} must be one of {", ".join(choices)} (got {value!r})'
+        msg = f'{name} must be one of {", ".join(choices)} (got {value!r})'
         raise ConfigError(msg)
     return value
 
@@ -549,7 +426,7 @@ def _explicit_backend_url(r: Resolver) -> str:
     """Return DOWNLOAD_BACKEND_URL as set ('' if unset); an '@' in it, and so any credentials, is refused, since web logs it and sends it to controllers."""
     value = r.raw('DOWNLOAD_BACKEND_URL')
     if value:
-        _check_credential_free_url(r, 'DOWNLOAD_BACKEND_URL', value, advice='; for proxied downloads put them in secrets/download_proxy_auth')
+        _check_credential_free_url('DOWNLOAD_BACKEND_URL', value, advice='; for proxied downloads put them in secrets/download_proxy_auth')
     return value
 
 
@@ -557,7 +434,7 @@ def _checked_url(r: Resolver, name: str) -> str:
     """Return name's value, '' if unset; a non-empty value must parse as a URL."""
     value = r.raw(name)
     if value:
-        _parse_url(r, name, value)
+        _parse_url(name, value)
     return value
 
 
@@ -575,12 +452,12 @@ def _checked_proxy(r: Resolver, name: str) -> str:
         hint = '; percent-encode # ? / [ ] @ in a user name or password'
         hostport = _proxy_hostport(value)
         if hostport is None:
-            msg = f'{r.label(name)} is not a valid URL: write it as scheme://host:port{hint}'
+            msg = f'{name} is not a valid URL: write it as scheme://host:port{hint}'
             raise ConfigError(msg)
-        unreadable = f'{r.label(name)} is not a valid URL: its host or port cannot be read{hint}'
+        unreadable = f'{name} is not a valid URL: its host or port cannot be read{hint}'
         if _NOT_IN_HOST.search(hostport):
             raise ConfigError(unreadable)
-        host = _parse_url(r, name, '//' + hostport, hint=hint).hostname  # raises the same message for a port that is not a number or broken brackets
+        host = _parse_url(name, '//' + hostport, hint=hint).hostname  # raises the same message for a port that is not a number or broken brackets
         if not host or (hostport.startswith('[') and not _is_ipv6(host)):  # urlsplit also takes an IPvFuture literal ([v1.x]), which http.client cannot use
             raise ConfigError(unreadable)
     return value
@@ -634,19 +511,19 @@ def split_userinfo(value: str) -> tuple[str, str | None, str]:
     return scheme, userinfo if at else None, rest
 
 
-def _check_credential_free_url(r: Resolver, name: str, value: str, *, advice: str = '') -> None:
+def _check_credential_free_url(name: str, value: str, *, advice: str = '') -> None:
     """Refuse any '@' in a URL setting that never carries credentials, then parse it (_parse_url).
 
     urlsplit ends the user info at a # ? or /, so it would read a token followed by one as the host and accept it;
     refusing the '@' first also keeps any later message from quoting the token. advice follows the message.
     """
     if '@' in value:
-        msg = f'{r.label(name)} {NO_CREDENTIALS}{advice}'
+        msg = f'{name} {NO_CREDENTIALS}{advice}'
         raise ConfigError(msg)
-    _parse_url(r, name, value)
+    _parse_url(name, value)
 
 
-def _parse_url(r: Resolver, name: str, value: str, *, hint: str = '') -> SplitResult:
+def _parse_url(name: str, value: str, *, hint: str = '') -> SplitResult:
     """Return value split into its parts; a URL urllib cannot parse, or whose port is not a number, is a ConfigError naming the setting.
 
     The message never includes urllib's reason, which can quote part of the value: a password, say.
@@ -655,7 +532,7 @@ def _parse_url(r: Resolver, name: str, value: str, *, hint: str = '') -> SplitRe
         parts = urlsplit(value)
         _ = parts.port  # raises ValueError for a port that is not a number in range
     except ValueError:
-        msg = f'{r.label(name)} is not a valid URL: its host or port cannot be read{hint}'
+        msg = f'{name} is not a valid URL: its host or port cannot be read{hint}'
         raise ConfigError(msg) from None
     return parts
 
@@ -663,13 +540,13 @@ def _parse_url(r: Resolver, name: str, value: str, *, hint: str = '') -> SplitRe
 def _version(r: Resolver, name: str) -> str:
     raw = r.raw(name)
     if raw and not CORE_VERSION.match(raw):
-        msg = f'{r.label(name)} must be a Jenkins version such as 2.462.1 (got {raw!r})'
+        msg = f'{name} must be a Jenkins version such as 2.462.1 (got {raw!r})'
         raise ConfigError(msg)
     return raw
 
 
 def _list(r: Resolver, name: str) -> tuple[str, ...]:
-    """Return a list setting's items, separated by spaces or commas (uc.toml's arrays arrive joined with spaces)."""
+    """Return a list setting's items, separated by spaces or commas."""
     return tuple(item for item in re.split(r'[\s,]+', r.raw(name)) if item)
 
 
@@ -678,7 +555,7 @@ def _wars(r: Resolver, name: str) -> tuple[str, ...]:
     wars = _list(r, name)
     for item in wars:
         if item != 'required' and not CORE_VERSION.match(item):
-            msg = f'{r.label(name)} takes Jenkins versions such as 2.479.1, or required (got {item!r})'
+            msg = f'{name} takes Jenkins versions such as 2.479.1, or required (got {item!r})'
             raise ConfigError(msg)
     return wars
 
@@ -697,7 +574,7 @@ def check_staging_outside_data_dir(raw: str | Path, data_dir: Path, label: str) 
 def _staging_dir(r: Resolver, data_dir: Path) -> Path:
     """Return PROCUREMENT_STAGING_DIR, refusing UC_DATA_DIR or a folder in it."""
     raw = r.raw('PROCUREMENT_STAGING_DIR')
-    check_staging_outside_data_dir(raw, data_dir, r.label('PROCUREMENT_STAGING_DIR'))
+    check_staging_outside_data_dir(raw, data_dir, 'PROCUREMENT_STAGING_DIR')
     return Path(raw)
 
 
@@ -706,11 +583,11 @@ def _int(r: Resolver, name: str) -> int:
     try:
         value = int(raw)
     except ValueError:
-        msg = f'{r.label(name)} must be an integer (got {raw!r})'
+        msg = f'{name} must be an integer (got {raw!r})'
         raise ConfigError(msg) from None
     minimum = REGISTRY[name].minimum or 0
     if value < minimum:
-        msg = f'{r.label(name)} must be >= {minimum} (got {value})'
+        msg = f'{name} must be >= {minimum} (got {value})'
         raise ConfigError(msg)
     return value
 
@@ -720,10 +597,10 @@ def _ratio(r: Resolver, name: str) -> float:
     try:
         value = float(raw)
     except ValueError:
-        msg = f'{r.label(name)} must be a number (got {raw!r})'
+        msg = f'{name} must be a number (got {raw!r})'
         raise ConfigError(msg) from None
     if not 0 <= value <= 1:
-        msg = f'{r.label(name)} must be between 0 and 1 (got {value})'
+        msg = f'{name} must be between 0 and 1 (got {value})'
         raise ConfigError(msg)
     return value
 
@@ -734,7 +611,7 @@ def _bool(r: Resolver, name: str, *, default: bool = False) -> bool:
         return True
     if raw in {'0', 'false', 'no', 'off'}:
         return False
-    msg = f'{r.label(name)} must be true or false (got {raw!r})'
+    msg = f'{name} must be true or false (got {raw!r})'
     raise ConfigError(msg)
 
 

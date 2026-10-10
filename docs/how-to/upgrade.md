@@ -2,7 +2,7 @@
 
 How to move an installation to a newer release or revision of this project, and back.
 
-Your settings (`.env` and `config/uc.toml`), secrets (`secrets/`), overlay (`config/overlay/`) and
+Your settings (`.env`), secrets (`secrets/`), overlay (`config/overlay/`) and
 the data volume carry over; only the images and the Compose files change. Read `CHANGELOG.md` for
 the release or revision you move to first.
 
@@ -38,7 +38,7 @@ without making a new folder:
 tar -xzf easy-update-center-<new version>.tar.gz --strip-components=1 -C <deployment folder>
 ```
 
-Files you added stay (`.env`, `config/uc.toml`, `secrets/`, `config/overlay/`, `procurement/`, the
+Files you added stay (`.env`, `secrets/`, `config/overlay/`, `procurement/`, the
 Compose overrides you created beside `compose.yaml` and the folders they mount, such as `tls/`);
 files the release tracks are replaced by the release's, so a change you made to one of them is lost.
 Files a release dropped are not deleted: remove any you recognise. Then set `UC_IMAGE` and
@@ -74,7 +74,7 @@ already run by then, and the error names the fallback: `make procure-stage`, `pr
 Check the settings before `docker compose up -d`: a newer revision can refuse a value an older one
 loaded, and a service whose settings do not load exits with an error instead of running.
 `uc config --check` prints `configuration ok`, or `uc: error: ...` naming the setting to fix in
-`.env` or `config/uc.toml`. Instead of `docker compose up -d` you can run `make reload`, which
+`.env`. Instead of `docker compose up -d` you can run `make reload`, which
 checks the settings first and recreates nothing when they are invalid.
 
 `docker compose up -d` recreates the services whose image or configuration changed. Check that

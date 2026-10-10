@@ -47,14 +47,14 @@ stat_is() { # stat_is DESCRIPTION FORMAT EXPECTED PATH - stat -c FORMAT PATH pri
 }
 
 run() { # run [ARG...] - uc-setup as the setup service runs it, as root; sets rc and output
-    output="$(UC_CONFIG_FILE="${config}/uc.toml" sh "${setup}" "$@" 2>&1)"
+    output="$(sh "${setup}" "$@" 2>&1)"
     rc=$?
 }
 
 run_with() { # run_with DIR [ARG...] - run, with DIR first on PATH (a setfacl stand-in)
     local dir="$1"
     shift
-    output="$(PATH="${dir}:${PATH}" UC_CONFIG_FILE="${config}/uc.toml" sh "${setup}" "$@" 2>&1)"
+    output="$(PATH="${dir}:${PATH}" sh "${setup}" "$@" 2>&1)"
     rc=$?
 }
 
@@ -307,7 +307,7 @@ same "no checkout: nothing created in secrets/" "" "${left}"
 # A root-owned config/ that holds files is a checkout whose ownership shows as root (Docker Desktop
 # bind mounts): setup runs.
 fresh
-chown 0:0 "${config}" && touch "${config}/uc.example.toml"
+chown 0:0 "${config}" && mkdir "${config}/overlay"
 run secrets
 same "root's checkout: setup secrets exits 0" 0 "${rc}"
 says "root's checkout: does the secrets step" "secrets/: created any missing credential files"

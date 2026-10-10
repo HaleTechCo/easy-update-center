@@ -29,7 +29,6 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/web:/web:ro" \
              $(if $(wildcard examples/pipelines),-v "$(CURDIR)/examples/pipelines:/examples/pipelines:ro") \
              $(if $(wildcard .github),-v "$(CURDIR)/.github:/github:ro") \
-             -v "$(CURDIR)/config/uc.example.toml:/examples/uc.example.toml:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
 
@@ -183,14 +182,13 @@ test-setup: build-uc ## Check uc-setup as root in the uc image
 test-pipelines: build-uc ## Check the example pipelines run the procurement stages in order, with the approval before the push
 	docker run --rm $(SRC_MOUNTS) $(UC_TEST_IMAGE) -q /tests/unit/test_pipeline_examples.py
 
-# The example settings files are generated from the settings registry (uc/uc/settings.py), using the
+# The example .env files are generated from the settings registry (uc/uc/settings.py), using the
 # working tree's code; test-unit fails while a committed copy is out of date.
 EXAMPLE = docker run --rm -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" $(UC_IMAGE) config --example
 
-examples: uc-image ## Regenerate the example settings files from the settings registry
-	$(EXAMPLE) toml --mode online > config/uc.example.toml
-	$(EXAMPLE) env --mode online > .env.online.example
-	$(EXAMPLE) env --mode airgapped > .env.airgapped.example
+examples: uc-image ## Regenerate the example .env files from the settings registry
+	$(EXAMPLE) --mode online > .env.online.example
+	$(EXAMPLE) --mode airgapped > .env.airgapped.example
 
 # UC_ENV_FILE selects the services' env_file; --env-file only feeds compose's own interpolation.
 # check_isolation.py asserts the network and secret boundaries the repo-adapter relies on.

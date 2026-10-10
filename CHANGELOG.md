@@ -26,11 +26,9 @@ the interface.
   ([Block plugins and add warnings](docs/how-to/block-plugins-and-add-warnings.md)).
 - TLS in the web container ([Enable TLS](docs/how-to/enable-tls.md)), and a download proxy mode
   for repositories controllers cannot read ([Proxy downloads](docs/how-to/proxy-downloads.md)).
-- Settings in `.env` or `config/uc.toml`, whose generated examples list every setting. `uc config`
-  shows each value and where it came from, `--check` validates, and `make reload` recreates the
-  services only when the settings are valid
-  ([Configure with uc.toml](docs/how-to/configure-with-uc-toml.md),
-  [Configuration](docs/reference/configuration.md)).
+- Settings in `.env`, whose generated examples list every setting. `uc config` shows each value and
+  whether it is the default, and `--check` validates them
+  ([Configuration](docs/reference/configuration.md)).
 - First-time setup in one command, `docker compose run --rm setup` (`make setup`): the credential
   files, the signing keys and the `./procurement` staging folder, with `secrets/` kept owned by you
   on Linux ([Secrets](docs/reference/secrets.md)).
