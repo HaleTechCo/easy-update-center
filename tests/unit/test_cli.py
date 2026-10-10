@@ -737,20 +737,6 @@ def test_pki_init_reports_a_directory_it_cannot_write_in(tmp_path, capsys, missi
     assert [path.relative_to(parent).as_posix() for path in parent.rglob('*')] == ([] if missing else ['pki'])
 
 
-def test_pki_rotate_names_the_root_files_where_they_are_on_the_host(tmp_path, capsys, pki_material):
-    work = tmp_path / 'pki'
-    shutil.copytree(pki_material, work)
-    (work / 'root' / 'root-ca.key').unlink()
-    assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets', '--root-display-dir', 'old root']) == 1
-    assert capsys.readouterr().err == 'uc: error: cannot read the root CA key old root/root-ca.key: No such file or directory\n'
-    assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets']) == 1  # without --root-display-dir: root/ under --display-dir
-    assert capsys.readouterr().err == 'uc: error: cannot read the root CA key secrets/root/root-ca.key: No such file or directory\n'
-    shutil.copy(pki_material / 'root' / 'root-ca.key', work / 'root' / 'root-ca.key')
-    (work / 'root-ca.crt').unlink()
-    assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets', '--root-display-dir', 'old root']) == 1
-    assert capsys.readouterr().err == 'uc: error: cannot read the root CA certificate secrets/root-ca.crt: No such file or directory\n'
-
-
 def test_repo_adapter_listens_on_8081_unless_given_a_port(monkeypatch, tmp_path, secrets_dir):
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('REPO_ADAPTER_PORT', '9090')  # not a setting: ignored
@@ -971,3 +957,25 @@ def test_pki_takes_no_settings(monkeypatch, tmp_path):
     signing = cert_info(tmp_path / 'pki' / 'update-center.cert')
     assert 'Env Corp' not in signing.subject
     assert signing.days_left(utcnow()) > 300
+
+
+def test_pki_rotate_reads_the_root_key_from_root_and_names_it_there(tmp_path, capsys, pki_material):
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    offline = tmp_path / 'offline'
+    (work / 'root').rename(offline)
+    assert main(['pki', 'rotate', '--dir', str(work), '--root', str(offline)]) == 0
+    assert (work / 'update-center.key.old').is_file()
+    assert not (work / 'root').exists()
+    (offline / 'root-ca.key').unlink()
+    capsys.readouterr()
+    assert main(['pki', 'rotate', '--dir', str(work), '--root', str(offline), '--display-dir', 'secrets']) == 1
+    assert capsys.readouterr().err == f'uc: error: cannot read the root CA key {offline / "root-ca.key"}: No such file or directory\n'
+    assert main(['pki', 'rotate', '--dir', str(work), '--display-dir', 'secrets']) == 1  # without --root: root/ under --display-dir
+    assert capsys.readouterr().err == 'uc: error: cannot read the root CA key secrets/root/root-ca.key: No such file or directory\n'
+
+
+def test_pki_rotate_has_no_root_display_dir():
+    with pytest.raises(SystemExit) as exited:
+        main(['pki', 'rotate', '--dir', 'x', '--root-display-dir', 'y'])
+    assert exited.value.code == 2

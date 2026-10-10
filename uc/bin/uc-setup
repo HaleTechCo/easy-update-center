@@ -102,17 +102,16 @@ do_pki_init() {
 }
 
 do_pki_rotate() {
-    root_shown=secrets/root
     while [ $# -gt 0 ]; do
         [ $# -ge 2 ] || usage
         case $1 in
-            --root-display-dir) root_shown=$2 ;;
+            --root-display-dir) : ;; # make pki-rotate passes it; uc names the root key under secrets/root
             *) usage ;;
         esac
         shift 2
     done
     [ -d "${secrets}/root" ] || die "the root key is not mounted: run make pki-rotate ROOT=<directory holding root-ca.key>, or mount that directory read-only at /setup/secrets/root yourself: docker compose run --rm -v /path/to/root:/setup/secrets/root:ro setup pki-rotate"
-    uc pki rotate --dir "${secrets}" --display-dir secrets --root-display-dir "${root_shown}"
+    uc pki rotate --dir "${secrets}" --display-dir secrets
     do_secrets
 }
 

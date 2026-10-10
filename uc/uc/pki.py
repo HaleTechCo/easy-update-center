@@ -365,20 +365,19 @@ def _create_pki(work: Path, out_dir: Path, shown: Path, *, root_days: int, signi
     _move_all([root_move, *((work / name, out_dir / name) for name in (ROOT_CERT, SIGNING_KEY, SIGNING_CERT))], out_dir, shown, work)
 
 
-def rotate_signing(out_dir: Path, *, days: int = SIGNING_DAYS, org: str = DEFAULT_ORG, display_dir: Path | None = None, root_display_dir: Path | None = None) -> None:
-    """Issue a fresh signing key and certificate in out_dir from its root CA (root-ca.crt, root/root-ca.key); the previous pair is kept as *.old.
+def rotate_signing(out_dir: Path, *, root_dir: Path | None = None, days: int = SIGNING_DAYS, org: str = DEFAULT_ORG, display_dir: Path | None = None) -> None:
+    """Issue a fresh signing key and certificate in out_dir from its root CA (root-ca.crt, and root-ca.key in root_dir, default out_dir/root/); the previous pair is kept as *.old.
 
     Nothing in out_dir changes until the new pair exists: the root files and the current pair are checked first, the
     new pair is issued in a temporary directory inside out_dir (the same filesystem), and only then is any older *.old
     pair set aside there (and deleted with it), the current pair renamed to *.old and the new one moved in; when a
     rename fails, those already done are undone, so out_dir is left as it was. display_dir, when given, is where out_dir
-    is on the host, and root_display_dir where its root/ is (default: root/ under display_dir, else under out_dir);
-    messages name the files under them.
+    is on the host; messages name the files under it, and the root key where root_dir says.
     """
     _check_org(org)
     shown = display_dir or out_dir
-    root_key, root_cert = out_dir / 'root' / ROOT_KEY, out_dir / ROOT_CERT
-    _check_root(root_key, root_cert, (root_display_dir or shown / 'root') / ROOT_KEY, shown / ROOT_CERT)
+    root_key, root_cert = (root_dir or out_dir / 'root') / ROOT_KEY, out_dir / ROOT_CERT
+    _check_root(root_key, root_cert, root_key if root_dir else shown / 'root' / ROOT_KEY, shown / ROOT_CERT)
     current = [name for name in (SIGNING_KEY, SIGNING_CERT) if (out_dir / name).exists()]
     if len(current) == 1:
         missing = SIGNING_CERT if current == [SIGNING_KEY] else SIGNING_KEY
