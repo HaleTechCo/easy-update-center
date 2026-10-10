@@ -1,10 +1,16 @@
+---
+name: Bug report
+about: Something does not work as the documentation says
+labels: bug
+---
+
 ## What happened
 
 <!-- What you did, what you expected, what happened instead. -->
 
 ## Environment
 
-- Commit (`git rev-parse --short HEAD`):
+- Version (`docker compose run --rm --no-deps uc --version`), or the commit for a build from source (`git rev-parse --short HEAD`):
 - Mode (`online` or `airgapped`):
 - Repository type (`artifactory` or `artifact-keeper`), if air-gapped:
 - Docker and Compose versions (`docker version --format '{{.Server.Version}}'`, `docker compose version`):
@@ -27,5 +33,3 @@ Logs (`docker compose logs --tail 200 scheduler web repo-adapter`):
 
 ~~~text
 ~~~
-
-/label ~bug

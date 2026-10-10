@@ -39,7 +39,7 @@ cd easy-update-center
 cp .env.airgapped.example .env
 docker compose build
 docker save easy-update-center/uc:local easy-update-center/web:local | gzip > ../easy-update-center-images.tar.gz
-git bundle create ../easy-update-center.bundle master
+git bundle create ../easy-update-center.bundle main
 
 # on the air-gapped Docker host, with both files in the current directory
 git clone easy-update-center.bundle easy-update-center

@@ -99,16 +99,16 @@ documentation:
   [docs/reference/configuration.md](docs/reference/configuration.md), and nothing documented there is
   unread.
 
-## Commits and merge requests
+## Commits and pull requests
 
 - One logical change per commit. Subjects in the imperative mood, with an optional area prefix:
   `repo-adapter: ...`, `web: ...`, `docs: ...`.
 - Tests with every behavior change: a failing test first, then the fix.
-- Before opening a merge request: `make test` passes (and `make it-airgapped` if generation, the
+- Before opening a pull request: `make test` passes (and `make it-airgapped` if generation, the
   repo-adapter or the web tier changed), `pre-commit run --all-files` passes, the docs describe the
   change (a new setting fails the settings hook until it is documented), and `CHANGELOG.md` has an
   entry under "Unreleased".
-- Security issues go through [SECURITY.md](SECURITY.md), never a public issue or merge request.
+- Security issues go through [SECURITY.md](SECURITY.md), never a public issue or pull request.
 
 By contributing you agree that your contribution is licensed under the project's
 [MIT license](LICENSE), and to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
