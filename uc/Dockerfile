@@ -8,7 +8,7 @@ ARG SUPERCRONIC_VERSION=v0.2.49
 # build from source (make build UC_VERSION=... to set it).
 ARG UC_VERSION=dev
 
-FROM maven:3.9-eclipse-temurin-21 AS jar-build
+FROM maven:3.9-eclipse-temurin-26 AS jar-build
 ARG UC2_VERSION
 ARG UC2_COMMIT
 # Distribution packages are not version-pinned (DL3008) in any stage: the base images track their
@@ -52,7 +52,7 @@ RUN mvn -B -ntp -q org.codehaus.mojo:license-maven-plugin:2.4.0:add-third-party 
       grep -qxF "${name}" /tmp/listed || { echo "no third-party notice for ${name}" >&2; exit 1; }; \
     done
 
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:25-jre AS runtime
 ARG UC2_VERSION
 ARG SUPERCRONIC_VERSION
 ARG TARGETARCH
