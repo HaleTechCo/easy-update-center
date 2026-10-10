@@ -9,7 +9,9 @@ the release or revision you move to first.
 ## Upgrade to a newer release
 
 Read the release's section of `CHANGELOG.md` first: it lists what changed and anything you must do.
-Then, from the folder you deployed in:
+Then, from the folder you deployed in (if you cloned the project before it moved to GitHub, point
+the clone at GitHub first:
+[Upgrading from jenkins-update-center](#upgrading-from-jenkins-update-center)):
 
 ```bash
 git fetch --tags
@@ -31,17 +33,25 @@ they are invalid; `docker compose up -d` does not check. You can verify the new 
 
 Air-gapped hosts cannot `git fetch`, and a bundle's source is an unpacked folder, not a clone. On a
 connected machine, download and verify the new bundle, carry it across, then on the Docker host
-`docker load -i images.tar` and unpack the new bundle's source as in
-[Get the images](../getting-started/airgapped.md#2-get-the-images). Copy your `.env` and
-`config/uc.toml`, `secrets/` and `config/overlay/` into the new folder, set `UC_IMAGE` and
-`WEB_IMAGE` in `.env`, and run the commands from `setup` on, in that folder. The
-Compose project is named `easy-update-center` by `compose.yaml`, so the new folder keeps the data
-volume of the old one.
+`docker load -i images.tar`, then unpack the new bundle's source over the folder you deployed in,
+without making a new folder:
+
+```bash
+tar -xzf easy-update-center-<new version>.tar.gz --strip-components=1 -C <deployment folder>
+```
+
+Files you added stay (`.env`, `config/uc.toml`, `secrets/`, `config/overlay/`, `procurement/`, the
+Compose overrides you created beside `compose.yaml` and the folders they mount, such as `tls/`);
+files the release tracks are replaced by the release's, so a change you made to one of them is lost.
+Files a release dropped are not deleted: remove any you recognise. Then set `UC_IMAGE` and
+`WEB_IMAGE` in `.env` and run the commands from `setup` on, in that folder. The Compose project is
+named `easy-update-center` by `compose.yaml`, so the data volume stays the same.
 
 ## Upgrade from source
 
 ```bash
 git fetch
+git checkout main
 git log --oneline HEAD..origin/main                # what changes
 git pull
 docker compose build                                 # or: make build
@@ -99,11 +109,24 @@ you are on the older revision, which may not have the `setup` service yet.
 The project was renamed Easy Update Center for Jenkins, and its Compose project with it, from
 `jenkins-update-center` to `easy-update-center`. Docker names a stack's containers and volumes after
 its Compose project, so after the rename `docker compose up -d` would start a second stack on new,
-empty volumes, and fail to bind the ports the old one still holds. Move the data across once:
+empty volumes, and fail to bind the ports the old one still holds. Move the data across once.
+
+First, point your clone at GitHub. The project moved from GitLab, whose project is archived, and its
+default branch is now `main` (it was `master`), so `git fetch --tags` there finds no release and
+`git pull` would keep following the old branch:
+
+```bash
+git remote set-url origin https://github.com/HaleTechCo/easy-update-center.git
+git fetch --prune --tags origin
+git checkout v<version>              # a release; or, to follow source: git checkout -B main origin/main
+```
+
+If you already started the new stack (ran `docker compose up -d` since the rename), remove its empty
+volumes first, or the copy would merge into a half-written one: `docker compose down -v` removes only
+the new `easy-update-center` volumes. Then:
 
 ```bash
 docker compose -p jenkins-update-center down       # the old stack; its volumes stay
-git pull                                            # or check out the release you move to
 docker compose build                                # or set UC_IMAGE and WEB_IMAGE to a release
 docker compose run --rm --no-deps --user 0:0 --entrypoint cp \
   -v jenkins-update-center_uc-data:/from:ro uc -a /from/. /data/

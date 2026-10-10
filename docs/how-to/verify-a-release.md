@@ -25,9 +25,12 @@ ISSUER=https://token.actions.githubusercontent.com
 
 ## The images
 
-You need [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) and the
-[GitHub CLI](https://cli.github.com/) (`gh`). For each image, with the release's version in place of
-`<version>` (for example `1.0.0`):
+You need [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3 or later (the
+workflow signs with a cosign that writes the newer bundle format, which older versions cannot read)
+and the [GitHub CLI](https://cli.github.com/) (`gh`), signed in with `gh auth login`, which
+`gh attestation verify` needs. While the packages are still private (until the owner makes them
+public), `docker login ghcr.io` is needed too. For each image, with the release's version in place
+of `<version>` (for example `1.0.0`):
 
 ```bash
 cosign verify --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" \

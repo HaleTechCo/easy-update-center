@@ -15,7 +15,7 @@ the interface.
 - The project lives on GitHub, https://github.com/HaleTechCo/easy-update-center (default branch
   `main`); security reports go through GitHub's private vulnerability reporting (SECURITY.md).
 - The project is now **Easy Update Center for Jenkins** (`easy-update-center`), named in the
-  "<name> for Jenkins" form the Jenkins trademark guidelines ask for. The Compose project is
+  `<name> for Jenkins` form the Jenkins trademark guidelines ask for. The Compose project is
   `easy-update-center`, so a running stack's containers and volumes change name: carry the data
   across as in [Upgrading from jenkins-update-center](docs/how-to/upgrade.md#upgrading-from-jenkins-update-center).
   The local images are `easy-update-center/uc:local`, `easy-update-center/uc-test:local` and
@@ -24,7 +24,6 @@ the interface.
   `easy-update-center` and `easy-update-center-procurement`; and uc's HTTP User-Agent is
   `easy-update-center/<version> (+https://github.com/HaleTechCo/easy-update-center)` instead of
   `jenkins-uc/1`.
-
 - `PUBLIC_URL`, `REPO_URL`, `DOWNLOAD_BACKEND_URL` and `PROCUREMENT_SOURCE_URL` refuse any `@`
   (`uc: error: <setting> must not contain credentials or an @`), so none of them can carry
   credentials, not even a password holding a `#`, `?` or `/`, which a URL parser takes for the end
