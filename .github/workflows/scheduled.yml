@@ -1,0 +1,63 @@
+---
+# Weekly, and by hand: the online integration test, which needs a Jenkins community account and so
+# cannot run on pull requests, and a watch on update-center2 releases
+# (docs/development/upgrading-upstream.md).
+name: Scheduled
+
+on:
+  schedule:
+    - cron: '23 4 * * 1' # Mondays, 04:23 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  it-online:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Check for the community account
+        id: account
+        env:
+          USERNAME: ${{ secrets.JENKINS_COMMUNITY_USERNAME }}
+          PASSWORD: ${{ secrets.JENKINS_COMMUNITY_PASSWORD }}
+        run: |
+          if [[ -n "${USERNAME}" && -n "${PASSWORD}" ]]; then
+              echo "present=true" >> "${GITHUB_OUTPUT}"
+          else
+              message="it-online skipped: add the JENKINS_COMMUNITY_USERNAME and JENKINS_COMMUNITY_PASSWORD"
+              message+=" repository secrets (docs/development/github-setup.md)"
+              echo "::notice::${message}"
+              echo "present=false" >> "${GITHUB_OUTPUT}"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.account.outputs.present == 'true'
+        with:
+          persist-credentials: false
+      - name: make it-online
+        if: steps.account.outputs.present == 'true'
+        env:
+          JENKINS_COMMUNITY_USERNAME: ${{ secrets.JENKINS_COMMUNITY_USERNAME }}
+          JENKINS_COMMUNITY_PASSWORD: ${{ secrets.JENKINS_COMMUNITY_PASSWORD }}
+        run: make it-online
+
+  upstream-watch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Compare update-center2 with the pin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: .github/scripts/upstream-watch.sh

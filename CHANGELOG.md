@@ -120,6 +120,9 @@ once releases are published.
 - CI on GitHub Actions (`.github/workflows/ci.yml`): every pull request and push to `main` runs the
   pre-commit hooks, `make test`'s suites, `make compose-check` and `make it-airgapped` for both
   repository types; `make <target> PREBUILT=1` uses images that already exist.
+- A weekly Scheduled workflow runs `make it-online` (when the community account's secrets are set)
+  and opens an issue when update-center2 publishes a release newer than the pin; Dependabot
+  proposes updates for the workflows' actions, the Docker base images and the lint tools.
 - `uc --version` and status.json's `uc_version` report the release the uc image was built as (`dev`
   for an image built from source; `make build UC_VERSION=...` sets it).
 - `config/uc.toml`: every setting can be set there as well as in `.env`, whose variables win.
