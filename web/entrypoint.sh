@@ -10,6 +10,10 @@ die() {
 }
 
 [[ -n "${PUBLIC_URL:-}" ]] || die "PUBLIC_URL must be set"
+case "${MODE:-}" in
+    '' | online | airgapped) ;;
+    *) die "MODE must be online or airgapped (got '${MODE}')" ;;
+esac
 export PUBLIC_URL="${PUBLIC_URL%/}"
 # The mode's default backend, the rule uc's settings registry has (uc/uc/settings.py: DOWNLOAD_BACKEND).
 if [[ -z "${DOWNLOAD_BACKEND:-}" ]]; then
