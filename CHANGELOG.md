@@ -8,6 +8,8 @@ once releases are published.
 
 ### Changed
 
+- The project lives on GitHub, https://github.com/HaleTechCo/easy-update-center (default branch
+  `main`); security reports go through GitHub's private vulnerability reporting (SECURITY.md).
 - The project is now **Easy Update Center for Jenkins** (`easy-update-center`), named in the
   "<name> for Jenkins" form the Jenkins trademark guidelines ask for. The Compose project is
   `easy-update-center`, so a running stack's containers and volumes change name: carry the data

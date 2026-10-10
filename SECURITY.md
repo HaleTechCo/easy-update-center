@@ -4,13 +4,14 @@ How to report a vulnerability in this project, and what its security design reli
 
 ## Reporting a vulnerability
 
-Open a **confidential issue** in this project's GitLab issue tracker (tick "This issue is
-confidential" when creating it). Only maintainers can see it. Please include the version (commit),
-the mode, what an attacker can do, and how to reproduce it. Do not open a public issue or merge
-request for a vulnerability.
+Report it privately through GitHub's private vulnerability reporting: the **Security** tab of
+[the repository](https://github.com/HaleTechCo/easy-update-center), **Report a vulnerability**
+(https://github.com/HaleTechCo/easy-update-center/security/advisories/new). Only maintainers can see
+it. Please include the version (commit), the mode, what an attacker can do, and how to reproduce it.
+Do not open a public issue or pull request for a vulnerability.
 
 This is a volunteer project: reports are handled on a best-effort basis, with no response-time
-guarantee. You will get an answer in the issue, and credit in the fix's changelog entry unless you
+guarantee. You will get an answer in the report, and credit in the fix's changelog entry unless you
 ask otherwise.
 
 Vulnerabilities in Jenkins itself or in update-center2 belong to the Jenkins project:
@@ -18,7 +19,7 @@ https://www.jenkins.io/security/reporting/
 
 ## Supported versions
 
-Only the latest commit on `master` is supported until versioned releases exist.
+The latest release. Fixes ship in a new release; earlier releases get no backports.
 
 ## Security design
 

@@ -45,7 +45,7 @@ Which page to read for which job. New here? Start with the [README](../README.md
 
 ## Development
 
-- [Contributing](../CONTRIBUTING.md) - setup, tests, lint, merge requests
+- [Contributing](../CONTRIBUTING.md) - setup, tests, lint, pull requests
 - [Upgrading update-center2](development/upgrading-upstream.md)
 
 ## Troubleshooting

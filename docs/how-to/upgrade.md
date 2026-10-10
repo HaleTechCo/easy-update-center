@@ -10,7 +10,7 @@ the revision you move to first.
 
 ```bash
 git fetch
-git log --oneline HEAD..origin/master                # what changes
+git log --oneline HEAD..origin/main                # what changes
 git pull
 docker compose build                                 # or: make build
 docker compose run --rm setup                        # or: make setup; safe to repeat
@@ -50,7 +50,7 @@ Air-gapped hosts without internet access cannot `git pull`: the clone came from 
 Then, on the air-gapped host:
 
 ```bash
-git pull ../easy-update-center.bundle master            # the Compose files and docs change too
+git pull ../easy-update-center.bundle main            # the Compose files and docs change too
 gunzip -c ../easy-update-center-images.tar.gz | docker load
 docker compose run --rm setup
 docker compose run --rm --no-deps uc config --check
