@@ -104,6 +104,8 @@ once releases are published.
 
 ### Added
 
+- `uc --version` and status.json's `uc_version` report the release the uc image was built as (`dev`
+  for an image built from source; `make build UC_VERSION=...` sets it).
 - `config/uc.toml`: every setting can be set there as well as in `.env`, whose variables win.
   `config/uc.example.toml` and both `.env` examples list every setting; they are generated from one
   settings registry (`make examples`).

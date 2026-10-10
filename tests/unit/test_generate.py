@@ -68,6 +68,7 @@ def test_airgapped_generation_publishes(tmp_path, secrets_dir):
     assert status['live_release'] == rid
     assert status['last_run']['result'] == 'success'
     assert status['update_center2'] == '3.18.4+patches'
+    assert status['uc_version'] == 'dev'
     assert status['resources']['source'] == 'bundled'
     assert status['tiers'] == {'weekly': ['2.540'], 'stable': ['2.528.1']}
     assert status['plugin_count'] == 2
@@ -79,6 +80,12 @@ def test_airgapped_generation_publishes(tmp_path, secrets_dir):
     assert any('GitHub credentials not set' in w for w in status['warnings'])
     assert (data / 'resources' / 'last-good' / 'warnings.json').is_file()
     assert not list((data / 'releases').glob('*.staging'))
+
+
+def test_status_reports_the_uc_version(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir)
+    generate(settings, tools=tools_for(settings), now=T1, base_env={'UC2_VERSION': '3.18.4+patches', 'UC_VERSION': '0.1.0'})
+    assert read_status(settings.data_dir)['uc_version'] == '0.1.0'
 
 
 def test_jar_receives_download_root_and_credentials(tmp_path, secrets_dir):

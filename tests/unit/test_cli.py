@@ -57,6 +57,17 @@ def test_status_prints_json(monkeypatch, tmp_path, secrets_dir, capsys):
     assert json.loads(capsys.readouterr().out) == {'live_release': 'x'}
 
 
+@pytest.mark.parametrize(('value', 'shown'), [(None, 'uc dev\n'), ('', 'uc dev\n'), ('0.1.0', 'uc 0.1.0\n')])
+def test_version_prints_the_release_the_image_was_built_as(monkeypatch, capsys, value, shown):
+    monkeypatch.delenv('UC_VERSION', raising=False)
+    if value is not None:
+        monkeypatch.setenv('UC_VERSION', value)
+    with pytest.raises(SystemExit) as exit_info:
+        main(['--version'])
+    assert exit_info.value.code == 0
+    assert capsys.readouterr().out == shown
+
+
 def test_configuration_errors_exit_1(monkeypatch, capsys):
     monkeypatch.setenv('MODE', 'bogus')
     assert main(['status']) == 1

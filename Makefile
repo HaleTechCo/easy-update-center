@@ -5,6 +5,8 @@ UC_IMAGE ?= jenkins-uc/uc:local
 UC_TEST_IMAGE ?= jenkins-uc/uc-test:local
 WEB_IMAGE ?= jenkins-uc/web:local
 export UC_IMAGE UC_TEST_IMAGE WEB_IMAGE
+# The release the uc images report (uc --version, status.json uc_version): make build UC_VERSION=0.1.0.
+UC_VERSION ?= dev
 
 .DEFAULT_GOAL := help
 
@@ -36,8 +38,8 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
 build: build-uc build-web ## Build the uc, uc-test and web images; works before .env exists
 
 build-uc:
-	docker build --target runtime -t $(UC_IMAGE) uc
-	docker build --target test -t $(UC_TEST_IMAGE) uc
+	docker build --target runtime --build-arg UC_VERSION=$(UC_VERSION) -t $(UC_IMAGE) uc
+	docker build --target test --build-arg UC_VERSION=$(UC_VERSION) -t $(UC_TEST_IMAGE) uc
 
 build-web:
 	docker build -t $(WEB_IMAGE) web
