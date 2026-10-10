@@ -17,5 +17,5 @@ pre-commit
 pre-commit-hooks   # the hygiene hooks the local config calls (trailing-whitespace-fixer, ...)
 ruff               # Python lint + format (config in pyproject.toml's [tool.ruff])
 shellcheck-py      # vendored shellcheck binary, on PATH inside the venv
-actionlint-py>=1.7.12  # vendored actionlint binary, on PATH inside the venv (GitHub Actions workflows); the floor: older releases reject the ubuntu-24.04 runner label
+actionlint-py>=1.7.12.25  # vendored actionlint binary, on PATH inside the venv (GitHub Actions workflows); the floor: older releases reject the ubuntu-24.04 runner label
 yamllint           # YAML style hook
