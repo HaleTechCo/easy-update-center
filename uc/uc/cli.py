@@ -28,6 +28,7 @@ from .schedule import run_schedule
 from .settings import MODES, REGISTRY
 from .timeutil import iso, utcnow
 from .validate import count_plugins
+from .version import uc_version
 from .versions import VersionTool
 from .webenv import web_env, write_web_env
 
@@ -55,6 +56,7 @@ NOTHING_TO_STAGE = 'nothing to stage: choose with --poms, --dependencies or --wa
 def build_parser() -> argparse.ArgumentParser:
     """Build the argument parser for every uc subcommand."""
     parser = argparse.ArgumentParser(prog='uc', description='Self-hosted Jenkins update center')
+    parser.add_argument('--version', action='version', version=f'uc {uc_version()}', help='print the release this image was built as (dev for a build from source) and exit')
     sub = parser.add_subparsers(dest='command', required=True)
 
     generate_cmd = sub.add_parser('generate', help='build, validate and publish a new release')

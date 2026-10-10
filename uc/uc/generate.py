@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from . import aql, args, doctor, downloadmap, errors, htaccess, http, jar, layout, pki, preflight, publish, resources, status, validate
 from .timeutil import iso, utcnow
+from .version import uc_version
 from .versions import VersionTool
 
 if TYPE_CHECKING:
@@ -179,6 +180,7 @@ def _build_and_publish(
             'last_run': {'id': release_id, 'result': 'success', 'error': None, 'finished_at': iso(finished)},
             'generated_at': iso(now),
             'update_center2': base_env.get('UC2_VERSION', 'unknown'),
+            'uc_version': uc_version(base_env),
             'resources': {
                 'source': prepared.info.source,
                 'ref': prepared.info.ref,

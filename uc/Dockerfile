@@ -4,6 +4,9 @@
 ARG UC2_VERSION=3.18.4
 ARG UC2_COMMIT=b2c8ad2b2feb425b471e6dcc9174c50dc3b3c1dd
 ARG SUPERCRONIC_VERSION=v0.2.49
+# The release uc reports (uc --version, status.json uc_version): the Release workflow sets it; dev for a
+# build from source (make build UC_VERSION=... to set it).
+ARG UC_VERSION=dev
 
 FROM maven:3.9-eclipse-temurin-21 AS jar-build
 ARG UC2_VERSION
@@ -53,6 +56,7 @@ FROM eclipse-temurin:21-jre AS runtime
 ARG UC2_VERSION
 ARG SUPERCRONIC_VERSION
 ARG TARGETARCH
+ARG UC_VERSION
 # hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 openssl tini ca-certificates curl acl \
@@ -84,7 +88,8 @@ RUN chmod 0755 /usr/local/bin/uc /usr/local/bin/uc-setup /usr/local/bin/secrets-
 ENV PYTHONPATH=/opt/uc/python \
     PYTHONDONTWRITEBYTECODE=1 \
     UC_APP_DIR=/opt/uc \
-    UC2_VERSION=${UC2_VERSION}+patches
+    UC2_VERSION=${UC2_VERSION}+patches \
+    UC_VERSION=${UC_VERSION}
 USER 10001:10001
 WORKDIR /data
 ENTRYPOINT ["/usr/bin/tini", "--", "uc"]

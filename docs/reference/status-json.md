@@ -32,6 +32,7 @@ is empty (`{}`).
 | `last_run.finished_at` | string | When it finished (ISO 8601, UTC). |
 | `generated_at` | string | When the live release's generation started (ISO 8601, UTC). |
 | `update_center2` | string | The generator version, for example `3.18.4+patches`. |
+| `uc_version` | string | The release of the uc image, for example `0.1.0`; `dev` for an image built from source. |
 | `resources` | object | The upstream data (security warnings, suspensions, labels) the live release was built with. |
 | `resources.source` | string | `github`, `url` or `bundled`: where this copy came from. When a fetch fails, the run uses the last good copy (and says so in `warnings`), so this field names that copy's source. |
 | `resources.ref` | string | The upstream commit, or the tarball's checksum. |
@@ -117,6 +118,7 @@ An air-gapped deployment after a successful run, with the doctor report schedule
   },
   "tiers": {"stable": ["2.528.1", "2.528.3"], "weekly": []},
   "update_center2": "3.18.4+patches",
+  "uc_version": "0.1.0",
   "warnings": [
     "1 artifact(s) in the source are dropped by the generator; run 'uc doctor'"
   ]

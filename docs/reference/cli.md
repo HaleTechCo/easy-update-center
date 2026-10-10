@@ -23,6 +23,8 @@ Without it, add `-f compose.yaml -f compose.airgapped.yaml` to every command.
 - The `uc` service sits in the `tools` profile, so `docker compose up` does not start it; `run`
   does. Running it starts the `repo-adapter` first.
 - With no command, the image runs `uc status`.
+- `uc --version` prints the release the image was built as, such as `uc 0.1.0`, or `uc dev` for an
+  image built from source.
 - Every command except `uc pki` reads the [configuration](configuration.md) and fails at once with
   `uc: error: ...` when it is invalid.
 
