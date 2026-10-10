@@ -44,12 +44,18 @@ def jar_environment(settings: Settings, creds: Credentials, base_env: Mapping[st
     return env
 
 
+CONNECT_TIMEOUT_MS = 10000
+"""How long the generator's HttpURLConnection clients wait for a connection: a host the air-gapped extra_hosts list misses stalls seconds, not minutes (docs/architecture/modes.md#fast-failure-for-blocked-hosts)."""
+
+
 def java_command(settings: Settings, *args: str) -> list[str]:
     """Return the java command line that runs the update-center2 jar with args."""
+    timeout = [] if 'sun.net.client.defaultConnectTimeout' in settings.java_tool_options else [f'-Dsun.net.client.defaultConnectTimeout={CONNECT_TIMEOUT_MS}']
     return [
         'java',
         '-Dfile.encoding=UTF-8',
         f'-DCERTIFICATE_MINIMUM_VALID_DAYS={settings.certificate_minimum_valid_days}',
+        *timeout,
         '-jar',
         str(settings.jar),
         *args,

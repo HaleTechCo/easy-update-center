@@ -33,6 +33,17 @@ listed below, and whether the patches still apply. Review each diff:
 | `Popularities.java` | Whether `0001-popularity-configurable-and-optional.patch` still applies, or is no longer needed. |
 | `json/TieredUpdateSitesGenerator.java` | Whether `0002-core-age-configurable.patch` still applies, or is no longer needed. |
 
+Then, in a checkout of the new tag, search the sources for internet hosts:
+
+```bash
+grep -rhoE "https?://[a-z0-9.-]+" src/main/java | sort -u
+```
+
+Add any new host the generator fetches to `x-blocked-hosts` in `compose.airgapped.yaml` and in
+`tests/integration/airgapped.yaml`, and to the list in
+[Fast failure for blocked hosts](../architecture/modes.md#fast-failure-for-blocked-hosts). Hosts
+that appear only in comments or in links the generator writes need no entry.
+
 ## 2. Update the pin
 
 In `uc/Dockerfile`, set `UC2_VERSION` to the new version, and `UC2_COMMIT` to the tag's commit:

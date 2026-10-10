@@ -49,10 +49,16 @@ def test_java_command(tmp_path, secrets_dir):
         'java',
         '-Dfile.encoding=UTF-8',
         '-DCERTIFICATE_MINIMUM_VALID_DAYS=30',
+        '-Dsun.net.client.defaultConnectTimeout=10000',
         '-jar',
         '/opt/uc/generator/update-center2.jar',
         '--x',
     ]
+
+
+def test_java_command_leaves_a_connect_timeout_the_operator_set(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir, JAVA_TOOL_OPTIONS='-Xmx4g -Dsun.net.client.defaultConnectTimeout=30000')
+    assert not any('defaultConnectTimeout' in arg for arg in java_command(settings))
 
 
 def test_run_jar_streams_and_logs(tmp_path, capfd):

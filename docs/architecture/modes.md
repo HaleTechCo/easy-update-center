@@ -74,6 +74,13 @@ drops packets would stall each of those clients for the operating system's conne
 two minutes each), because the generator sets no timeouts of its own. Every other name, your
 repository included, still resolves normally.
 
+uc also gives the generator a 10-second connect timeout
+(`-Dsun.net.client.defaultConnectTimeout=10000`), as a backstop for a host the list misses. It
+covers the generator's `HttpURLConnection` clients, which read the issue tracker and maintainer
+data, but not its `java.net.http` clients (popularity, GitHub, health scores and the repository), so
+the list stays the main guard. To use another value, set that property in `JAVA_TOOL_OPTIONS`; uc
+then adds none.
+
 ## Core age
 
 Tiers come from the core versions plugin releases declare as their minimum, when the repository holds
