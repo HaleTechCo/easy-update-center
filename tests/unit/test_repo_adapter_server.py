@@ -6,6 +6,7 @@ import re
 import socket
 import stat
 import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
@@ -20,7 +21,7 @@ from uc.doctor import ArtifactSource
 from uc.errors import UcError
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import read_report
-from uc.repo_adapter.server import Adapter, RecordPortError, UnhealthyError, ensure_token, healthcheck, make_handler, make_server, record_port
+from uc.repo_adapter.server import REQUEST_TIMEOUT, Adapter, AdapterServer, RecordPortError, UnhealthyError, ensure_token, healthcheck, make_handler, make_server, record_port
 from ucsupport import make_settings
 
 NOW = dt.datetime(2026, 9, 23, tzinfo=dt.UTC)
@@ -226,3 +227,72 @@ def test_a_failed_replace_is_reported_and_removes_the_temporary_port_file(tmp_pa
     assert written == [('adapter.port.tmp', '4321\n')]
     assert [entry.name for entry in tmp_path.iterdir()] == ['adapter.port']
     assert path.is_dir()
+
+
+def raw(port, request, timeout=10):
+    """Send request bytes to the server on port; return the status line it answers with."""
+    with socket.create_connection(('127.0.0.1', port), timeout=timeout) as sock:
+        sock.sendall(request)
+        return sock.makefile('rb').readline().decode().strip()
+
+
+def served(port, request, deadline=5.0):
+    """Return the first status line that is not 503, retrying while the server is busy for up to deadline seconds (a handler thread may still be finishing the previous request)."""
+    end = time.monotonic() + deadline
+    while True:
+        status = raw(port, request)
+        if not status.startswith('HTTP/1.1 503') or time.monotonic() > end:
+            return status
+        time.sleep(0.05)
+
+
+@pytest.fixture
+def capped():
+    started = []
+
+    def start(max_requests, adapter=None):
+        server = AdapterServer(('127.0.0.1', 0), make_handler(adapter, key=KEY, token=TOKEN), max_requests=max_requests)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        started.append(server)
+        return server.server_address[1]
+
+    yield start
+    for server in started:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.parametrize('length', ['-1', 'many'])
+def test_a_listing_with_a_bad_content_length_is_refused(running, length):
+    _, url = running({})
+    port = int(url.split(':')[2].split('/')[0])
+    auth = base64.b64encode(f'uc:{TOKEN}'.encode()).decode()
+    assert raw(port, f'POST /artifactory/api/search/aql HTTP/1.1\r\nHost: x\r\nAuthorization: Basic {auth}\r\nContent-Length: {length}\r\n\r\n'.encode()) == 'HTTP/1.0 400 Bad Request'
+
+
+def test_requests_beyond_the_cap_get_503_at_once(capped):
+    port = capped(1)
+    with socket.create_connection(('127.0.0.1', port)) as idle:  # holds the only slot: it sends no end of headers
+        idle.sendall(b'GET /healthz HTTP/1.1\r\n')
+        assert served(port, b'GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n', deadline=0) == 'HTTP/1.1 503 Service Unavailable'
+
+
+def test_a_slot_comes_back_after_failed_requests(capped):
+    port = capped(1)
+    for _ in range(3):  # a leaked slot would leave every later request at 503
+        assert served(port, b'POST /nowhere HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n') == 'HTTP/1.0 404 Not Found'
+        assert served(port, b'BREW / HTTP/1.1\r\nHost: x\r\n\r\n').startswith('HTTP/1.0 501')
+    assert served(port, b'GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n') == 'HTTP/1.0 200 OK'
+
+
+def test_connections_time_out():
+    assert REQUEST_TIMEOUT == 120
+    assert make_handler(None, key=KEY, token=TOKEN).timeout == REQUEST_TIMEOUT
+
+
+def test_make_server_caps_the_requests(tmp_path, secrets_dir):
+    server = make_server(make_settings(tmp_path, secrets_dir), port=0, host='127.0.0.1')
+    try:
+        assert isinstance(server, AdapterServer)
+    finally:
+        server.server_close()

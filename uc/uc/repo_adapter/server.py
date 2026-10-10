@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import hmac
 import http.client
 import json
@@ -41,6 +42,40 @@ PORT_FILE = Path('/tmp/uc-repo-adapter.port')  # noqa: S108 - the container's ro
 HEALTH_TIMEOUT = 3
 """Seconds uc repo-adapter --healthcheck waits for the adapter to answer."""
 HTTP_OK = 200
+MAX_REQUESTS = 32
+"""Requests handled at once; more get 503 straight away instead of a thread each."""
+REQUEST_TIMEOUT = 120
+"""Seconds a connection may wait for the client before it is closed."""
+BUSY = b'HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'
+
+
+class AdapterServer(ThreadingHTTPServer):
+    """A threading HTTP server that handles at most max_requests requests at once and answers the rest 503."""
+
+    def __init__(self, address: tuple[str, int], handler: type[BaseHTTPRequestHandler], *, max_requests: int = MAX_REQUESTS) -> None:
+        """Bind to address and serve with handler, max_requests at a time."""
+        super().__init__(address, handler)
+        self.slots = threading.BoundedSemaphore(max_requests)
+
+    def process_request(self, request, client_address) -> None:
+        """Start a thread for the request when a slot is free; otherwise answer 503 and close it."""
+        if not self.slots.acquire(blocking=False):
+            with contextlib.suppress(OSError):
+                request.sendall(BUSY)
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self.slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address) -> None:
+        """Handle the request, then give its slot back, whatever happened."""
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self.slots.release()
 
 
 class RecordPortError(UcError):
@@ -133,6 +168,7 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
 
     class Handler(BaseHTTPRequestHandler):
         server_version = 'uc-repo-adapter'
+        timeout = REQUEST_TIMEOUT
 
         def log_message(self, format: str, *args) -> None:  # noqa: A002 - http.server's signature
             sys.stderr.write(f'repo-adapter: {self.address_string()} {format % args}\n')
@@ -200,7 +236,12 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
             if adapter is None:
                 msg = '_refuse answers every request while the adapter is idle'
                 raise RuntimeError(msg)
-            length = int(self.headers.get('Content-Length') or 0)
+            try:
+                length = int(self.headers.get('Content-Length') or 0)
+            except ValueError:
+                length = -1
+            if length < 0:
+                return self._send(400, b'bad Content-Length\n', 'text/plain')
             if length > QUERY_LIMIT:
                 return self._send(413)
             query = self.rfile.read(length).decode('utf-8', 'replace')
@@ -230,13 +271,13 @@ def create_adapter(settings: Settings) -> Adapter:
     return Adapter(backend, Cache(settings.repo_adapter_dir / 'cache'), key=settings.repo_key, report_file=settings.repo_adapter_report_file)
 
 
-def make_server(settings: Settings, port: int = PORT, host: str = '0.0.0.0') -> ThreadingHTTPServer:  # noqa: S104 - the repo-adapter listens on every interface of its container by design
+def make_server(settings: Settings, port: int = PORT, host: str = '0.0.0.0') -> AdapterServer:  # noqa: S104 - the repo-adapter listens on every interface of its container by design
     """Bind the repo-adapter's HTTP server; it stays idle, answering 503, while REPO_ADAPTER is off."""
     if not settings.repo_adapter:
-        return ThreadingHTTPServer((host, port), make_handler(None, key=settings.repo_key, token=None))
+        return AdapterServer((host, port), make_handler(None, key=settings.repo_key, token=None))
     adapter = create_adapter(settings)
     token = ensure_token(settings.repo_adapter_token_file)
-    return ThreadingHTTPServer((host, port), make_handler(adapter, key=settings.repo_key, token=token))
+    return AdapterServer((host, port), make_handler(adapter, key=settings.repo_key, token=token))
 
 
 def record_port(port: int, path: Path | None = None) -> None:

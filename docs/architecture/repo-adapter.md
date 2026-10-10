@@ -125,6 +125,9 @@ Archives are untrusted input.
 | The zip directory read for dates | 16 MiB; larger falls back to the repository's time |
 | The listing response | 256 MiB |
 | Backend request timeout | 60 s; 600 s for archive downloads and the listing |
+| Requests handled at once | 32; more get 503 |
+| An idle connection | closed after 120 s |
+| A listing request's `Content-Length` | at most 64 KiB (413); not a number, or negative: 400 |
 
 Reads stop at the limit plus one byte whatever the archive claims, only named entries are read, and
 nothing is ever extracted to a path taken from an archive. Every fetched file must return HTTP 200
