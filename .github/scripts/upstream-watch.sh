@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Opens, or updates, one issue when update-center2 has a release newer than the pin in uc/Dockerfile.
+# Opens, or updates, one issue (and leaves a closed one alone) when update-center2 has a release newer than the pin in uc/Dockerfile.
 # Run weekly by .github/workflows/scheduled.yml from the repository root, with GH_TOKEN and GH_REPO.
 # Moving to the new release: docs/development/upgrading-upstream.md.
 # shellcheck disable=SC2154 # GITHUB_SERVER_URL, GITHUB_REPOSITORY and GITHUB_RUN_ID are set by GitHub Actions
@@ -42,10 +42,14 @@ repository_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
 truncate --size='<60000' "${body}" # an issue body holds at most 65536 characters
 
 title="update-center2 ${newest} is available"
-number="$(gh issue list --state open --search "${title} in:title" --json number,title --jq ".[] | select(.title == \"${title}\") | .number" | head -n 1)"
-if [[ -n "${number}" ]]; then
+found="$(gh issue list --state all --search "${title} in:title" --json number,title,state --jq ".[] | select(.title == \"${title}\") | \"\(.number) \(.state)\"" | head -n 1)"
+number="${found%% *}"
+state="${found#* }"
+if [[ -z "${found}" ]]; then
+    gh issue create --title "${title}" --body-file "${body}"
+elif [[ "${state}" == "OPEN" ]]; then
     gh issue edit "${number}" --body-file "${body}"
 else
-    gh issue create --title "${title}" --body-file "${body}"
+    echo "issue #${number} for ${title%% is available} is ${state,,}: leaving it alone"
 fi
 exit "${rc}"

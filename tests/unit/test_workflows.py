@@ -206,7 +206,7 @@ def test_it_online_is_skipped_with_a_notice_without_the_community_account(tmp_pa
 
 
 def run_upstream_watch(tmp_path: Path, pinned: str, issue: str = '') -> subprocess.CompletedProcess[str]:
-    """Run upstream-watch.sh in a project pinning update-center2 at pinned, with stub git, make and gh; issue is the open issue's number gh finds."""
+    """Run upstream-watch.sh in a project pinning update-center2 at pinned, with stub git, make and gh; issue is the "number STATE" line gh finds for the title, if any."""
     project = tmp_path / 'project'
     (project / 'uc').mkdir(parents=True)
     (project / 'uc' / 'Dockerfile').write_text(f'ARG UC2_VERSION={pinned}\nARG UC2_COMMIT=abc\n', encoding='utf-8')
@@ -239,9 +239,18 @@ def test_upstream_watch_opens_an_issue_for_a_newer_release(tmp_path):
 
 
 def test_upstream_watch_updates_the_open_issue_for_that_release(tmp_path):
-    result = run_upstream_watch(tmp_path, '3.18.4', issue='12')
+    result = run_upstream_watch(tmp_path, '3.18.4', issue='12 OPEN')
     assert result.returncode == 0, result.stdout
     assert (tmp_path / 'gh.log').read_text(encoding='utf-8').splitlines()[-1].startswith('issue edit 12 --body-file ')
+
+
+def test_upstream_watch_leaves_a_closed_issue_for_that_release_alone(tmp_path):
+    result = run_upstream_watch(tmp_path, '3.18.4', issue='12 CLOSED')
+    assert result.returncode == 0, result.stdout
+    assert 'issue #12 for update-center2 3.19 is closed' in result.stdout
+    calls = (tmp_path / 'gh.log').read_text(encoding='utf-8').splitlines()
+    assert [call for call in calls if call.startswith(('issue create', 'issue edit'))] == []
+    assert '--state all' in calls[0]
 
 
 def test_upstream_watch_does_nothing_when_the_pin_is_the_newest_release(tmp_path):
