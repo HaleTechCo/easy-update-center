@@ -48,6 +48,8 @@ Which page to read for which job. New here? Start with the [README](../README.md
 
 - [Contributing](../CONTRIBUTING.md) - setup, tests, lint, pull requests
 - [Upgrading update-center2](development/upgrading-upstream.md)
+- [Releasing](development/releasing.md) - cutting a release, re-publishing, the first-release rehearsal
+- [GitHub setup](development/github-setup.md) - the repository's one-time settings
 
 ## Troubleshooting
 

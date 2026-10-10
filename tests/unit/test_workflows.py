@@ -1,4 +1,4 @@
-"""The GitHub Actions workflows (.github/workflows): pinned actions, least permissions, the CI gate, the scheduled jobs and the release."""
+"""The GitHub Actions workflows (.github/workflows): pinned actions, least permissions, the CI gate, the scheduled jobs and the release (docs/development/releasing.md)."""
 
 import itertools
 import re

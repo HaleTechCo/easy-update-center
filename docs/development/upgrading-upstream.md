@@ -1,6 +1,9 @@
 # Upgrading update-center2
 
-Maintainer guide: moving the pinned update-center2 generator to a newer release.
+Maintainer guide: moving the pinned update-center2 generator to a newer release. The Scheduled
+workflow (`.github/workflows/scheduled.yml`) checks weekly for an update-center2 release newer than
+the pin, and opens an issue titled "update-center2 <version> is available" with `make
+upstream-diff`'s summary and whether the patches still apply.
 
 The generator is pinned in `uc/Dockerfile` (`UC2_VERSION`, `UC2_COMMIT`). Upstream's security
 releases change the generated HTML and JSON, so upgrade promptly. Resource data (security warnings,
