@@ -99,7 +99,7 @@ FROM runtime AS test
 USER 0:0
 # hadolint ignore=DL3008
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3-pytest git \
+ && apt-get install -y --no-install-recommends python3-pytest python3-yaml git \
  && rm -rf /var/lib/apt/lists/*
 USER 10001:10001
 WORKDIR /tmp

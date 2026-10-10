@@ -1,0 +1,181 @@
+---
+# Every pull request and every push to main runs the checks contributors run locally
+# (CONTRIBUTING.md#tests): the pre-commit hooks, make test's suites, make compose-check, and make
+# it-airgapped for both repository types. The images are built once, with the GitHub Actions build
+# cache, and every test job loads them; PREBUILT=1 tells make to use them instead of building.
+# The Release workflow runs this one on the commit it publishes (the ref input). The ci job is the
+# one check the branch ruleset requires (docs/development/github-setup.md).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or commit to check (empty for the branch selected above)
+        type: string
+        default: ''
+  workflow_call:
+    inputs:
+      ref:
+        description: Branch, tag or commit to check
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install the lint tools
+        run: pip install -r requirements-dev.txt
+      # shfmt is a Go binary, not a pip package: the release binary, checked against its SHA-256.
+      - name: Install shfmt
+        env:
+          SHFMT_VERSION: v3.14.1
+          SHFMT_SHA256: 76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf
+        run: |
+          mkdir -p "${RUNNER_TEMP}/bin"
+          curl -fsSL -o "${RUNNER_TEMP}/bin/shfmt" "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
+          echo "${SHFMT_SHA256}  ${RUNNER_TEMP}/bin/shfmt" | sha256sum --check --strict -
+          chmod 0755 "${RUNNER_TEMP}/bin/shfmt"
+          echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
+      - name: pre-commit
+        run: pre-commit run --all-files --show-diff-on-failure
+
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build the uc image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: uc
+          target: runtime
+          tags: easy-update-center/uc:local
+          load: true
+          cache-from: type=gha,scope=uc
+          cache-to: type=gha,mode=max,scope=uc
+      - name: Build the uc test image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: uc
+          target: test
+          tags: easy-update-center/uc-test:local
+          load: true
+          cache-from: |
+            type=gha,scope=uc
+            type=gha,scope=uc-test
+          cache-to: type=gha,mode=max,scope=uc-test
+      - name: Build the web image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: web
+          tags: easy-update-center/web:local
+          load: true
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+      - name: Save the images
+        run: docker save easy-update-center/uc:local easy-update-center/uc-test:local easy-update-center/web:local | gzip -1 > "${RUNNER_TEMP}/images.tar.gz"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: images
+          path: ${{ runner.temp }}/images.tar.gz
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  test:
+    needs: images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [test-unit, test-web, test-routing, test-secrets, test-setup, compose-check]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: images
+          path: ${{ runner.temp }}
+      - name: Load the images
+        run: gunzip -c "${RUNNER_TEMP}/images.tar.gz" | docker load
+      - name: make ${{ matrix.target }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: make "${TARGET}" PREBUILT=1
+
+  it-airgapped:
+    needs: images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        type: [artifactory, artifact-keeper]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: images
+          path: ${{ runner.temp }}
+      - name: Load the images
+        run: gunzip -c "${RUNNER_TEMP}/images.tar.gz" | docker load
+      - name: make it-airgapped IT_TYPES=${{ matrix.type }}
+        env:
+          IT_TYPE: ${{ matrix.type }}
+        run: make it-airgapped PREBUILT=1 IT_TYPES="${IT_TYPE}"
+
+  # The one check the branch ruleset requires: it fails unless every job above succeeded, so a
+  # skipped or cancelled job cannot let a pull request through.
+  ci:
+    needs: [lint, images, test, it-airgapped]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          read -ra results <<< "${RESULTS}"
+          for result in "${results[@]}"; do
+              if [[ "${result}" != success ]]; then
+                  echo "::error::a CI job ended with ${result}: see the jobs above"
+                  exit 1
+              fi
+          done
+          echo "every CI job succeeded"

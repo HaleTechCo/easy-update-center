@@ -355,6 +355,15 @@ repos:
             pass_filenames: false
             files: '^(go\.mod|go\.sum)$|\.go$'
 
+          # ── GitHub Actions ──────────────────────────────────────────────────────
+          # actionlint checks the workflows' syntax, expressions, job graph and action inputs, and runs
+          # the venv's shellcheck on every run: script. actionlint-py ships the binary.
+          - id: actionlint
+            name: actionlint (GitHub Actions workflows)
+            entry: actionlint
+            language: system
+            files: '^\.github/workflows/.*\.ya?ml$'
+
           # ── Docker (needs Docker running) ───────────────────────────────────────
           # hadolint lints uc/Dockerfile and web/Dockerfile (piped via stdin by run_hadolint.py;
           # inline `# hadolint ignore=` directives in the Dockerfile apply). Takes the staged paths,

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from shellrun import run_bash, stub
 from uc.procure.staging import DEFAULT_STAGING, review_line
 
 PIPELINES = Path('/examples/pipelines')
@@ -175,21 +176,6 @@ def gitlab_script(block: str, key: str) -> list[str]:
         else:
             commands[-1] += line[6:] + '\n'
     return commands
-
-
-def stub(tmp_path: Path, name: str, body: str) -> Path:
-    """Write an executable stub command into tmp_path/bin; return that directory."""
-    stubs = tmp_path / 'bin'
-    stubs.mkdir(exist_ok=True)
-    (stubs / name).write_text(body, encoding='utf-8')
-    (stubs / name).chmod(0o755)
-    return stubs
-
-
-def run_bash(tmp_path: Path, script: str, env: dict[str, str], cwd: Path) -> subprocess.CompletedProcess[str]:
-    """Run a script as a GitHub bash step or a GitLab shell runner job runs it: bash with -e and pipefail."""
-    (tmp_path / 'step.sh').write_text(script, encoding='utf-8')
-    return subprocess.run(['bash', '--noprofile', '--norc', '-eo', 'pipefail', str(tmp_path / 'step.sh')], cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False, timeout=30)
 
 
 def run_reviewers_check(tmp_path: Path) -> subprocess.CompletedProcess[str]:

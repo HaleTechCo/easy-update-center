@@ -117,6 +117,9 @@ once releases are published.
 
 ### Added
 
+- CI on GitHub Actions (`.github/workflows/ci.yml`): every pull request and push to `main` runs the
+  pre-commit hooks, `make test`'s suites, `make compose-check` and `make it-airgapped` for both
+  repository types; `make <target> PREBUILT=1` uses images that already exist.
 - `uc --version` and status.json's `uc_version` report the release the uc image was built as (`dev`
   for an image built from source; `make build UC_VERSION=...` sets it).
 - `config/uc.toml`: every setting can be set there as well as in `.env`, whose variables win.
