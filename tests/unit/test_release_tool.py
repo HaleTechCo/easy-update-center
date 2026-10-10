@@ -91,6 +91,33 @@ def test_notes_are_one_version_section_without_its_heading():
     assert release.notes(PREPARED, '0.1.0') == '### Added\n\n- The first release.\n'
 
 
+BASE = 'https://github.com/HaleTechCo/easy-update-center/blob/v0.2.0/'
+
+
+def linked(text: str) -> str:
+    """Return the 0.2.0 notes of a CHANGELOG whose only entry is text."""
+    changelog = f'## Unreleased\n\n## [0.2.0] - 2026-11-02\n\n{text}\n'
+    return release.notes(changelog, '0.2.0')
+
+
+def test_notes_point_a_relative_link_at_the_files_of_the_release():
+    assert linked('- See [the guide](docs/how-to/verify-a-release.md).') == f'- See [the guide]({BASE}docs/how-to/verify-a-release.md).\n'
+
+
+def test_notes_keep_the_anchor_of_a_relative_link():
+    assert linked('- [Upgrading](docs/how-to/upgrade.md#upgrade-from-source) now.') == f'- [Upgrading]({BASE}docs/how-to/upgrade.md#upgrade-from-source) now.\n'
+
+
+@pytest.mark.parametrize('text', ['- [site](https://example.org/a.md#b)', '- [mail](mailto:a@example.org)', '- [here](#anchor)', '- [plain](http://example.org)', '- no link (README.md)'])
+def test_notes_leave_other_links_alone(text):
+    assert linked(text) == text + '\n'
+
+
+def test_notes_leave_links_in_inline_code_and_fenced_blocks_alone():
+    text = '- Write `[a](README.md)` as [b](CHANGELOG.md).\n\n```md\n[c](LICENSE)\n```'
+    assert linked(text) == f'- Write `[a](README.md)` as [b]({BASE}CHANGELOG.md).\n\n```md\n[c](LICENSE)\n```\n'
+
+
 def test_notes_refuse_a_version_the_changelog_lacks():
     with pytest.raises(release.ReleaseError, match=r'no section for 0\.3\.0'):
         release.notes(PREPARED, '0.3.0')

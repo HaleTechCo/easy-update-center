@@ -8,7 +8,8 @@
         minor_latest=true|false for $GITHUB_OUTPUT: whether VERSION is the highest release, and the
         highest in its X.Y, so the workflow moves the latest and X.Y image tags only then.
     python3 tools/release.py notes VERSION
-        Print that version's CHANGELOG.md section without its heading: the GitHub Release's notes.
+        Print that version's CHANGELOG.md section without its heading: the GitHub Release's notes,
+        with relative links to repository files pointed at that file in the version's tag.
     python3 tools/release.py latest
         Print the highest released version (from the vX.Y.Z tags), or nothing.
 
@@ -34,6 +35,11 @@ VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 TAG = re.compile(r'v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))')
 UNRELEASED = re.compile(r'^## Unreleased[ \t]*\n', re.MULTILINE)
 NEXT_SECTION = re.compile(r'^## ', re.MULTILINE)
+REPOSITORY_URL = 'https://github.com/HaleTechCo/easy-update-center'
+INLINE_CODE = re.compile(r'(`+)(?:(?!\1).)+?\1', re.DOTALL)
+LINK_TARGET = re.compile(r'(\]\()([^)\s]+)(\))')
+ABSOLUTE_TARGET = re.compile(r'(?:[A-Za-z][A-Za-z0-9+.-]*:|#|//)')
+FENCE = re.compile(r'^ {0,3}(```|~~~)')
 
 
 class ReleaseError(Exception):
@@ -90,15 +96,47 @@ def prepare(text: str, version: str, date: str) -> str:
     return f'{text[:start]}\n## [{version}] - {date}\n{text[start:]}'
 
 
+def _absolute_links(text: str, version: str) -> str:
+    """Return text with each relative Markdown link target pointing at that file in the version's tag, since a GitHub Release does not resolve relative links.
+
+    Links in inline code spans and fenced blocks, and every other byte, stay as they are.
+    """
+
+    def point(match: re.Match[str]) -> str:
+        target = match[2]
+        if ABSOLUTE_TARGET.match(target):
+            return match[0]
+        return f'{match[1]}{REPOSITORY_URL}/blob/v{version}/{target.removeprefix("./").lstrip("/")}{match[3]}'
+
+    def prose(chunk: str) -> str:
+        parts, last = [], 0
+        for code in INLINE_CODE.finditer(chunk):
+            parts += [LINK_TARGET.sub(point, chunk[last : code.start()]), code[0]]
+            last = code.end()
+        return ''.join([*parts, LINK_TARGET.sub(point, chunk[last:])])
+
+    lines, fence = [], None
+    for line in text.splitlines(keepends=True):
+        opening = FENCE.match(line)
+        if fence is None and opening:
+            fence = opening[1]
+        elif fence is not None and opening and opening[1] == fence:
+            fence = None
+        elif fence is None:
+            line = prose(line)  # noqa: PLW2901
+        lines.append(line)
+    return ''.join(lines)
+
+
 def notes(text: str, version: str) -> str:
-    """Return the body of version's section, without its heading or the blank lines around it."""
+    """Return the body of version's section, without its heading or the blank lines around it, with relative links made absolute."""
     parse_version(version)
     body = _body(text, _version_heading(version))
     if body is None:
         msg = f'CHANGELOG.md has no section for {version}'
         raise ReleaseError(msg)
     start, end = body
-    return text[start:end].strip('\n') + '\n'
+    return _absolute_links(text[start:end].strip('\n') + '\n', version)
 
 
 def check(version: str, tags: Sequence[str], text: str, *, publish_only: bool) -> dict[str, bool]:
