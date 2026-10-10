@@ -19,14 +19,13 @@ git checkout v<new version>                     # the Compose files and docs of 
 docker compose pull                             # air-gapped: docker load -i images.tar from the new bundle, and unpack its source
 docker compose run --rm setup
 docker compose run --rm --no-deps uc config --check
-make reload                                     # or: docker compose up -d
+docker compose up -d
 docker compose run --rm uc status               # uc_version names the new release
 ```
 
 `setup` creates what the new release needs, such as a credential file it added, and leaves what
 exists. `uc config --check` prints `configuration ok`, or names the setting a newer release refuses.
-`make reload` checks the settings once more before it recreates anything, and recreates nothing when
-they are invalid; `docker compose up -d` does not check. You can verify the new images first:
+You can verify the new images first:
 [Verify a release](verify-a-release.md).
 
 Air-gapped hosts cannot `git fetch`, and a bundle's source is an unpacked folder, not a clone. On a
@@ -74,8 +73,7 @@ already run by then, and the error names the fallback: `make procure-stage`, `pr
 Check the settings before `docker compose up -d`: a newer revision can refuse a value an older one
 loaded, and a service whose settings do not load exits with an error instead of running.
 `uc config --check` prints `configuration ok`, or `uc: error: ...` naming the setting to fix in
-`.env`. Instead of `docker compose up -d` you can run `make reload`, which
-checks the settings first and recreates nothing when they are invalid.
+`.env`.
 
 `docker compose up -d` recreates the services whose image or configuration changed. Check that
 `last_run.result` is `success` and that `update_center2` names the version you expect.

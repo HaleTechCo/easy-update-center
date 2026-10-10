@@ -7,9 +7,7 @@ TOOL_INSTALLERS_URL).
 
 from __future__ import annotations
 
-import hashlib
 import ipaddress
-import json
 import os
 import re
 from dataclasses import dataclass
@@ -18,7 +16,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import unquote, urlsplit, urlunsplit
 
 from .errors import ConfigError
-from .settings import CORE_VERSION, REGISTRY, SETTINGS
+from .settings import CORE_VERSION, REGISTRY
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -639,25 +637,3 @@ def read_secret(path: Path) -> str | None:
     except FileNotFoundError:
         return None
     return value or None
-
-
-def settings_digest(settings: Settings, environ: Mapping[str, str]) -> str:
-    """Return a fingerprint of what a running service keeps from when it started: the effective values of the restart settings, and every registry setting in environ.
-
-    Each environment value is taken as Resolver.raw takes it: stripped, and absent when blank, so an empty `RETAIN_RELEASES=` in .env
-    changes nothing; a blank POPULARITY_JSON_URL or TOOL_INSTALLERS_URL is a real value (off) and stays.
-    environ is the environment the container received (its env_file), which is fixed when the container is created, so
-    a change in .env needs a recreate whatever the setting; a change in uc.toml matters only for the restart settings.
-    Pass a snapshot taken before apply_process_env exports anything from uc.toml. The scheduler records the digest, and
-    uc config compares it to tell whether the running services use the current settings.
-    """
-    marked = {setting.env: getattr(settings, setting.attribute) for setting in SETTINGS if setting.restart and setting.attribute}
-    given = {}
-    for name, setting in REGISTRY.items():
-        if name not in environ:
-            continue
-        value = environ[name].strip()
-        if value or setting.empty_means_off:
-            given[name] = value
-    text = json.dumps({'effective': marked, 'environment': given}, default=str, sort_keys=True)
-    return hashlib.sha256(text.encode('utf-8')).hexdigest()

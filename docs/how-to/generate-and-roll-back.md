@@ -25,7 +25,7 @@ Set `GENERATE_SCHEDULE` (a cron expression, or an `@macro` such as `@daily`) in 
 recreate the services so the scheduler reads it:
 
 ```bash
-docker compose up -d --force-recreate      # or: make reload
+docker compose up -d
 ```
 
 The scheduler can also run a read-only `uc doctor` report on its own schedule, `DOCTOR_SCHEDULE`

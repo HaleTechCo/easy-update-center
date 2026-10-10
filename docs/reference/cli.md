@@ -269,13 +269,8 @@ setting the new revision refuses would show as Compose's `dependency failed to s
 Shows every setting with its value and where it came from: `environment`, `mode`
 (the default for the mode), `derived` (worked out from other settings, as `REPO_URL` and the secret
 paths are) or `default`. For a secret file it shows the path and whether the file is `present`,
-`empty` or `missing`, never its contents. A setting read only when a service starts shows `restart`
-after its source (`environment; restart`). A change in `.env` needs `make reload`, because a
-container's environment is fixed when it is created. When the scheduler started with other values
-than these, it ends with the command that applies them. Set settings in `.env`, not under one
-service's `environment:` in a Compose override: `uc config` compares its own container's settings
-with the scheduler's, so a value only one of them receives makes that note permanent (the TLS and
-proxy-CA overrides set variables on `web` alone, which neither compares).
+`empty` or `missing`, never its contents. How a change in `.env` takes effect:
+[When changes apply](configuration.md#when-changes-apply).
 Credentials inside a URL setting are shown as `***`, taken as everything before the URL's last `@`
 (after any `scheme://`), so an `@` in a path also hides the part before it:
 `https://cdn.example/gh/repo@1.0/data.json` shows as `https://***@1.0/data.json`.
@@ -285,7 +280,7 @@ there even when they are set up.
 
 | Option | Meaning |
 |---|---|
-| `--json` | The same as a JSON list of objects with `env`, `value`, `source`, `note` and `restart` (true or false). |
+| `--json` | The same as a JSON list of objects with `env`, `value`, `source` and `note`. |
 | `--check` | Only check the settings: prints `configuration ok`, or the error. |
 | `--example` | Print an example `.env` that lists every setting, with the settings the mode needs set and the rest commented out at their defaults. It reads no settings, so it works before any exist. |
 | `--mode` | With `--example`: the mode the example is for, `online` (the default) or `airgapped`. |
@@ -301,9 +296,8 @@ How settings combine: [How settings are read](configuration.md#how-settings-are-
 uc schedule
 ```
 
-The `scheduler` service's command; you do not run it by hand. It records when it started, and
-with which settings, in `/data/scheduler.json` (so `uc config` can tell when the running services
-use older settings). When no release is live it generates one at once, in its own process: that
+The `scheduler` service's command; you do not run it by hand. When no release is live it generates
+one at once, in its own process: that
 first run prints no `published release` line, and a failure is logged as a traceback while
 scheduling continues. It then hands over to supercronic, which runs:
 
@@ -312,9 +306,7 @@ scheduling continues. It then hands over to supercronic, which runs:
 - `uc doctor --record` on `DOCTOR_SCHEDULE`, when it is set: a read-only report whose counts go
   into `status.json`.
 
-A bad schedule stops the scheduler at start, with a message naming the setting. A start it cannot
-record (an unwritable data directory) is reported on one line, and the scheduler runs anyway; `uc
-config` then cannot tell when a restart is needed. supercronic never starts a job while its
+A bad schedule stops the scheduler at start, with a message naming the setting. supercronic never starts a job while its
 previous run is still going, and a scheduled generation that finds another generation or a
 rollback running waits for it.
 

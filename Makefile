@@ -10,7 +10,7 @@ UC_VERSION ?= dev
 
 .DEFAULT_GOAL := help
 
-# The targets that run your own Compose project (setup, secrets, pki-*, reload, procure-*) leave the images
+# The targets that run your own Compose project (setup, secrets, pki-*, procure-*) leave the images
 # to .env and compose.yaml: they unset UC_IMAGE and WEB_IMAGE, unless you gave them on make's command
 # line or in the environment. Their one-shot runs print only the command's output, without Compose's
 # container lines (older Compose releases ignore COMPOSE_PROGRESS).
@@ -32,7 +32,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
 
-.PHONY: help build build-uc build-web uc-image stack-uc-image setup secrets pki-init pki-rotate reload procure-stage procure-record procure-push procure-clean test test-unit test-web test-routing test-secrets test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
+.PHONY: help build build-uc build-web uc-image stack-uc-image setup secrets pki-init pki-rotate procure-stage procure-record procure-push procure-clean test test-unit test-web test-routing test-secrets test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
 
 # PREBUILT=1 (CI, after `docker load`): build-uc and build-web keep an image that already exists
 # instead of building it again. Without it they always build.
@@ -118,16 +118,6 @@ pki-init: stack-uc-image ## Create the root CA and signing certificate in secret
 pki-rotate: stack-uc-image ## Issue a new signing certificate from the root key in ROOT=<dir>
 	$(IN_SETUP) -v "$(call HOST_PATH,$(PKI_ROOT)):/setup/secrets/root:ro" setup pki-rotate --root-display-dir "$(PKI_ROOT)"; rc=$$?; \
 	  rmdir secrets/root 2>/dev/null; exit $$rc
-
-##@ Running
-
-# Check the settings, then recreate every service so it reads the current .env and config/uc.toml
-# (docs/reference/configuration.md#when-changes-apply). A failed check stops here, leaving every
-# service running as it was; web-config runs the check, needing no network and no secrets.
-# A generation in progress restarts.
-reload: stack-uc-image ## Check the settings, then recreate every service so it reads them
-	$(STACK_RUN) web-config config --check
-	$(STACK_ENV) docker compose up -d --force-recreate
 
 ##@ Procurement
 

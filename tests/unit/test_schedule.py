@@ -1,11 +1,7 @@
-"""Unit tests for uc.schedule: the crontab, the recorded start, and the first run before handing over to supercronic."""
-
-import json
-import os
+"""Unit tests for uc.schedule: the crontab, and the first run before handing over to supercronic."""
 
 import pytest
 
-from uc.config import settings_digest
 from uc.schedule import ScheduleError, crontab_text, job_line, run_schedule
 from ucsupport import make_settings
 
@@ -32,7 +28,7 @@ def test_crontab_rejects_nonsense(tmp_path, secrets_dir, name, value):
 
 def run(settings, tmp_path, generate_once):
     calls = []
-    run_schedule(settings, generate_once=lambda: (calls.append('generate'), generate_once()), exec_=lambda _file, argv, _env: calls.append(argv), crontab=tmp_path / 'crontab', environ=os.environ)
+    run_schedule(settings, generate_once=lambda: (calls.append('generate'), generate_once()), exec_=lambda _file, argv, _env: calls.append(argv), crontab=tmp_path / 'crontab')
     return calls
 
 
@@ -43,19 +39,11 @@ def test_first_run_generates_then_hands_over_to_supercronic(tmp_path, secrets_di
     assert (tmp_path / 'crontab').read_text() == '0 */6 * * * uc generate --wait\n'
 
 
-def test_the_start_is_recorded_for_uc_config(tmp_path, secrets_dir):
-    settings = make_settings(tmp_path, secrets_dir)
-    run(settings, tmp_path, lambda: None)
-    state = json.loads((settings.data_dir / 'scheduler.json').read_text(encoding='utf-8'))
-    assert state['settings_digest'] == settings_digest(settings, os.environ)
-    assert state['started_at'].endswith('Z')
-
-
 def test_a_bad_schedule_stops_before_the_first_run(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, DOCTOR_SCHEDULE='nightly')
     with pytest.raises(ScheduleError):
         run(settings, tmp_path, lambda: None)
-    assert not (settings.data_dir / 'scheduler.json').exists()
+    assert not (tmp_path / 'crontab').exists()
 
 
 def test_existing_release_skips_the_first_run(tmp_path, secrets_dir):
@@ -76,23 +64,8 @@ def test_failed_first_run_still_schedules(tmp_path, secrets_dir):
     assert calls[-1][0] == 'supercronic'
 
 
-def test_an_unwritable_data_directory_does_not_stop_the_scheduler(tmp_path, secrets_dir, capsys):
-    if os.geteuid() == 0:
-        pytest.skip('root can write anywhere')
-    settings = make_settings(tmp_path, secrets_dir)
-    settings.data_dir.mkdir(parents=True)
-    settings.data_dir.chmod(0o555)
-    try:
-        calls = run(settings, tmp_path, lambda: None)
-    finally:
-        settings.data_dir.chmod(0o755)
-    assert calls[-1][0] == 'supercronic'
-    out = capsys.readouterr().out
-    assert f'uc schedule: could not record the start in {settings.data_dir / "scheduler.json"}: ' in out
-    assert '; uc config cannot tell when a restart is needed' in out
-    assert not [path for path in settings.data_dir.iterdir() if path.name.startswith('.scheduler')]
-
-
-def test_run_schedule_requires_the_environment_the_container_received(tmp_path, secrets_dir):
-    with pytest.raises(TypeError, match='environ'):
-        run_schedule(make_settings(tmp_path, secrets_dir), generate_once=lambda: None, exec_=lambda *_: None, crontab=tmp_path / 'crontab')  # type: ignore[call-arg]
+def test_the_scheduler_hands_supercronic_its_environment(tmp_path, secrets_dir, monkeypatch):
+    monkeypatch.setenv('HTTPS_PROXY', 'http://proxy:3128')
+    seen = []
+    run_schedule(make_settings(tmp_path, secrets_dir), generate_once=lambda: None, exec_=lambda _file, _argv, env: seen.append(env), crontab=tmp_path / 'crontab')
+    assert seen[0]['HTTPS_PROXY'] == 'http://proxy:3128'

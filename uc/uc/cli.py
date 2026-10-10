@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,7 +24,7 @@ from .procure.plan import check_war_args, suggest_stage
 from .procure.push import push
 from .repo_adapter.server import healthcheck, serve
 from .schedule import run_schedule
-from .settings import MODES, REGISTRY
+from .settings import MODES
 from .timeutil import iso, utcnow
 from .validate import count_plugins
 from .version import uc_version
@@ -147,7 +146,6 @@ def _dispatch(args: argparse.Namespace) -> int:
         healthcheck(args.port)  # reads no settings: health is the running server's, not the files'
         return 0
     settings = load_settings()
-    received = {name: os.environ[name] for name in REGISTRY if name in os.environ}  # what the container was given, for the scheduler's settings digest
     if args.command == 'generate':
         print(f'published release {generate(settings, force=args.force, wait=args.wait)}')
         return 0
@@ -166,7 +164,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(json.dumps(status.read_status(settings.data_dir), indent=2, sort_keys=True))
         return 0
     if args.command == 'schedule':
-        run_schedule(settings, environ=received)
+        run_schedule(settings)
         return 0
     if args.command == 'repo-adapter':
         serve(settings, port=settings.repo_adapter_port if args.port is None else args.port)

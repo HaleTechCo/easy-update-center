@@ -2,23 +2,17 @@
 
 from __future__ import annotations
 
-import json
 import os
-import tempfile
 import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import publish
-from .config import settings_digest
-from .configview import SCHEDULER_STATE
 from .errors import UcError
 from .generate import generate
-from .timeutil import iso, utcnow
 
 if TYPE_CHECKING:
-    import datetime as dt
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable
 
     from .config import Settings
 
@@ -47,42 +41,19 @@ def crontab_text(settings: Settings) -> str:
     return text
 
 
-def write_state(settings: Settings, now: dt.datetime, environ: Mapping[str, str]) -> None:
-    """Record when the scheduler started and with which settings, in data/scheduler.json, for uc config's reload hint; a failed write is reported and the scheduler goes on."""
-    path = settings.data_dir / SCHEDULER_STATE
-    text = json.dumps({'started_at': iso(now), 'settings_digest': settings_digest(settings, environ)}, indent=2, sort_keys=True) + '\n'
-    tmp = None
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, name = tempfile.mkstemp(dir=path.parent, prefix=f'.{SCHEDULER_STATE}.', suffix='.tmp')
-        tmp = Path(name)
-        with os.fdopen(descriptor, 'w', encoding='utf-8') as handle:
-            handle.write(text)
-        tmp.chmod(0o644)
-        tmp.replace(path)
-    except OSError as exc:
-        print(f'uc schedule: could not record the start in {path}: {exc.strerror or exc}; uc config cannot tell when a restart is needed', flush=True)
-        if tmp is not None:
-            tmp.unlink(missing_ok=True)
-
-
 def run_schedule(
     settings: Settings,
     *,
     generate_once: Callable[[], object] | None = None,
     exec_: Callable[[str, list[str], dict[str, str]], object] = os.execvpe,
     crontab: Path = CRONTAB,
-    now: Callable[[], dt.datetime] = utcnow,
-    environ: Mapping[str, str],
 ) -> None:
-    """Check the schedules, record the start, generate a first release if none is live, then replace this process with supercronic.
+    """Check the schedules, generate a first release if none is live, then replace this process with supercronic.
 
     A bad schedule raises ScheduleError before anything else; a failed first run is logged and scheduling goes ahead.
-    environ is the environment the container received, for the digest.
     With the default exec_ (os.execvpe) this never returns.
     """
     text = crontab_text(settings)
-    write_state(settings, now(), environ)
     if publish.live_release(settings.data_dir) is None:
         print('uc schedule: no release is live yet, generating now', flush=True)
         try:

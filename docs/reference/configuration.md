@@ -35,23 +35,18 @@ and which you can run by hand; "doctor" means `uc doctor`; "procure" means `uc p
 
 ## When changes apply
 
-- A container's environment is fixed when it is created, so a change in `.env` needs the services
-  recreated:
+Commands (`uc generate`, `uc doctor`, `uc procure`) read the settings each time they run; the
+services read them when they start. After editing `.env`, check the settings, then let Compose
+recreate every service whose settings changed:
 
-  ```bash
-  docker compose up -d --force-recreate      # or: make reload
-  ```
+```bash
+docker compose run --rm --no-deps uc config --check
+docker compose up -d
+```
 
-  `make reload` checks the settings first and recreates nothing when they are invalid. A
-  generation in progress restarts, as it always has when the scheduler is recreated.
-- `uc config` marks `restart` the settings that are read when a service starts, and ends with that
-  command when the scheduler started with other values than the current ones.
-- Set settings in `.env`, not under one service's `environment:` in a Compose override: `uc config`
-  compares its own container's settings with the scheduler's, so a value only one of them receives
-  makes it end with that command every time. The TLS and proxy-CA overrides set variables on `web`
-  alone, which neither of them reads, so they do not count.
-- `PUBLIC_URL` and the download settings are written into each release: after changing them,
-  also publish a new release with `docker compose run --rm uc generate`.
+A generation in progress restarts when the scheduler is recreated. `PUBLIC_URL` and the download
+settings are written into each release: after changing them, also publish a new release with
+`docker compose run --rm uc generate`.
 
 ## Required
 
@@ -96,7 +91,7 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 | `REPO_ADAPTER` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter | Whether the generator reads the repository through the [repo-adapter](../architecture/repo-adapter.md). `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is refused. The service stays idle when off. |
 | `REPO_ADAPTER_URL` | `http://repo-adapter:${REPO_ADAPTER_PORT}/artifactory/` | generate, doctor, procure | Where `uc` finds the adapter; it follows `REPO_ADAPTER_PORT`. Change it only with a non-default Compose layout. |
 | `REPO_ADAPTER_DIR` | `/data/repo-adapter` | generate, doctor, procure, repo-adapter | The adapter's token, cache and `report.json`. |
-| `REPO_ADAPTER_PORT` | `8081` | generate, doctor, procure, repo-adapter | The port the repo-adapter listens on; `--port` overrides it. The default `REPO_ADAPTER_URL`, which generate and doctor use, follows it, and the `repo-adapter` healthcheck (`uc repo-adapter --healthcheck`) probes the port the running adapter bound; a change applies after `make reload`. Nothing else needs to change with it. Minimum 1. |
+| `REPO_ADAPTER_PORT` | `8081` | generate, doctor, procure, repo-adapter | The port the repo-adapter listens on; `--port` overrides it. The default `REPO_ADAPTER_URL`, which generate and doctor use, follows it, and the `repo-adapter` healthcheck (`uc repo-adapter --healthcheck`) probes the port the running adapter bound; a change applies after `docker compose up -d`. Nothing else needs to change with it. Minimum 1. |
 | `REPO_CA_FILE` | none | repo-adapter, procure | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca): set it in `.env`, and mount the file with `compose.repo-ca.yaml`. `uc procure push` and `clean`, and the downloads of `uc procure stage`, verify against it too. |
 | `REPO_MAX_ARCHIVE_MB` | `512` | repo-adapter, procure | Archives larger than this are skipped and reported. `uc procure stage --dependencies` and `--war` download none larger either. Minimum 1. |
 
@@ -164,7 +159,7 @@ See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).
 
 These are read by `docker compose` itself, from the shell environment or from `.env` in the project
 directory, not by the containers. The `make` targets that run your stack (`setup`, `secrets` and
-its aliases, `pki-*`, `reload`, `procure-*`) leave `UC_IMAGE` and `WEB_IMAGE` to `.env` too, unless
+its aliases, `pki-*`, `procure-*`) leave `UC_IMAGE` and `WEB_IMAGE` to `.env` too, unless
 you set them on make's command line or in the shell. When the uc image they resolve is missing, they
 build it if it is `easy-update-center/uc:local` and pull it otherwise. `make build` does not read `.env`,
 and tags the images it builds with these defaults unless you pass `UC_IMAGE=...` or `WEB_IMAGE=...`

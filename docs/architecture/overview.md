@@ -79,7 +79,6 @@ All state lives on one Compose volume, `uc-data`, mounted at `/data`:
 | `doctor/report.json` | The last report `uc doctor --record` saved. Not served. |
 | `.status.lock` | Held briefly by every write to `status.json`. |
 | `status.json` | The public [status](../reference/status-json.md), served at `/status.json`. |
-| `scheduler.json` | When the scheduler started and a digest of its settings, for `uc config`. |
 | `.lock` | The run lock: one `uc generate` or `uc rollback` at a time. |
 
 Everything is on one filesystem so that publishing is a rename, never a copy: the web container

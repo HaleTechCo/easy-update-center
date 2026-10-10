@@ -6,7 +6,7 @@ from urllib.parse import unquote
 
 import pytest
 
-from uc.config import PkiSettings, _proxy_hostport, load_pki_settings, load_settings, load_web_settings, read_secret, settings_digest, split_userinfo, with_explicit_port
+from uc.config import PkiSettings, _proxy_hostport, load_pki_settings, load_settings, load_web_settings, read_secret, split_userinfo, with_explicit_port
 from uc.errors import ConfigError
 from uc.settings import SETTINGS
 
@@ -585,33 +585,6 @@ def test_a_malformed_public_url_is_a_configuration_error(load, value):
 def test_an_unset_public_url_is_still_reported_as_unset(load):
     with pytest.raises(ConfigError, match=r'^PUBLIC_URL must be set$'):
         load({'MODE': 'online', 'PUBLIC_URL': ' '})
-
-
-def digest(env):
-    return settings_digest(load_settings(env), env)
-
-
-def test_equal_settings_have_equal_digests():
-    assert digest(AIRGAPPED) == digest(dict(AIRGAPPED))
-
-
-@pytest.mark.parametrize(('name', 'value'), [('GENERATE_SCHEDULE', '0 1 * * *'), ('DOWNLOAD_ACCESS', 'proxy'), ('REPO_MAX_ARCHIVE_MB', '64'), ('HTTPS_PROXY', 'http://proxy:3128')])
-def test_changing_a_restart_setting_changes_the_digest(name, value):
-    assert digest({**AIRGAPPED, name: value}) != digest(AIRGAPPED)
-
-
-@pytest.mark.parametrize('blank', ['', '   '])
-def test_a_blank_environment_value_leaves_the_digest_as_if_absent(blank):
-    assert digest({**AIRGAPPED, 'RETAIN_RELEASES': blank}) == digest(AIRGAPPED)
-
-
-def test_an_environment_value_is_taken_stripped_in_the_digest():
-    assert digest({**AIRGAPPED, 'RETAIN_RELEASES': ' 5'}) == digest({**AIRGAPPED, 'RETAIN_RELEASES': '5'})
-
-
-@pytest.mark.parametrize('name', ['POPULARITY_JSON_URL', 'TOOL_INSTALLERS_URL'])
-def test_an_empty_value_that_turns_a_setting_off_stays_in_the_digest(name):
-    assert digest({**AIRGAPPED, name: ''}) != digest(AIRGAPPED)
 
 
 def test_every_setting_has_a_settings_field():

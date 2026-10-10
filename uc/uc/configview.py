@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from .config import make_resolver, read_secret, settings_digest, settings_from, split_userinfo
+from .config import make_resolver, read_secret, settings_from, split_userinfo
 from .errors import ConfigError
 from .settings import GROUPS, REGISTRY, SETTINGS
 
@@ -18,9 +18,6 @@ if TYPE_CHECKING:
     from .config import Resolver, Settings
     from .settings import Setting
 
-SCHEDULER_STATE = 'scheduler.json'
-"""Written to the data directory by uc schedule when it starts: when, and with which settings (settings_digest)."""
-RELOAD = 'docker compose up -d --force-recreate (make reload)'
 SOURCE_NAMES = {'env': 'environment'}
 
 
@@ -32,7 +29,6 @@ class Row:
     value: str
     source: str  # env, mode, derived or default
     note: str = ''  # for secret files: present, empty, missing or unreadable
-    restart: bool = False  # read when a service starts: a change needs make reload
 
 
 def rows(r: Resolver, settings: Settings | None) -> list[Row]:
@@ -43,7 +39,7 @@ def rows(r: Resolver, settings: Settings | None) -> list[Row]:
 def _row(setting: Setting, r: Resolver, settings: Settings | None) -> Row:
     if setting.env_only:
         given = r.env.get(setting.env, '').strip()
-        return Row(setting.env, _redact(setting, given or setting.default), 'env' if given else 'default', restart=setting.restart)
+        return Row(setting.env, _redact(setting, given or setting.default), 'env' if given else 'default')
     source = r.source(setting.env)
     if source == 'default' and setting.derived:
         source = 'derived'
@@ -51,7 +47,7 @@ def _row(setting: Setting, r: Resolver, settings: Settings | None) -> Row:
         source = 'mode'
     value = _show(getattr(settings, setting.attribute)) if settings is not None and setting.attribute else r.raw(setting.env)
     note = _presence(Path(value)) if setting.secret_file and value else ''
-    return Row(setting.env, _redact(setting, value), source, note, setting.restart)
+    return Row(setting.env, _redact(setting, value), source, note)
 
 
 def _redact(setting: Setting, value: str) -> str:
@@ -89,25 +85,9 @@ def format_rows(shown: list[Row]) -> str:
         lines += ['', group]
         for row in members:
             where = SOURCE_NAMES.get(row.source, row.source)
-            notes = ''.join(f'; {note}' for note in (row.note, 'restart' if row.restart else '') if note)
+            notes = f'; {row.note}' if row.note else ''
             lines.append(f'  {row.env} = {row.value}  ({where}{notes})')
     return '\n'.join(lines).lstrip('\n') + '\n'
-
-
-def reload_hint(settings: Settings, environ: Mapping[str, str]) -> str | None:
-    """Return a note when the running services were started with different settings, else None.
-
-    That is a change to a setting in .env (a container's environment is fixed when it is created, and environ is this process's own,
-    never exported to; an empty value counts as unset, except where empty means off), or a uc.toml change to a setting marked
-    restart; the note says that make reload applies them.
-    """
-    try:
-        state = json.loads((settings.data_dir / SCHEDULER_STATE).read_text(encoding='utf-8'))
-    except (OSError, ValueError):
-        return None
-    if not isinstance(state, dict) or state.get('settings_digest') in {None, settings_digest(settings, environ)}:
-        return None
-    return f'note: the scheduler started at {state.get("started_at", "an unknown time")} with different settings (a change in .env, or in uc.toml to a setting marked restart); to apply them, run: {RELOAD}'
 
 
 def run(
@@ -136,7 +116,4 @@ def run(
         out.write(json.dumps([asdict(row) for row in rows(r, settings)], indent=2) + '\n')
         return 0
     out.write(format_rows(rows(r, settings)))
-    hint = reload_hint(settings, r.env)
-    if hint:
-        out.write(f'\n{hint}\n')
     return 0
