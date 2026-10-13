@@ -94,6 +94,14 @@ contents="$(cat "${secrets}/repo_username")"
 same "second run: repo_username keeps its contents" svc-uc "${contents}"
 stat_is "second run: repo_username is 0600 again" %a 600 "${secrets}/repo_username"
 
+# 2b. A run that stops early still warns about the root key: a usage error, and an error.
+run bogus
+same "usage with the root key here: exits 2" 2 "${rc}"
+says "usage with the root key here: still warns about it" "warning: secrets/root/root-ca.key is on this host"
+run pki-rotate
+same "a refused pki-rotate with the root key here: exits 1" 1 "${rc}"
+says "a refused pki-rotate with the root key here: still warns about it" "warning: secrets/root/root-ca.key is on this host"
+
 # 3. A secrets/ the setup user cannot write (UC_UID unset or wrong): stop, naming UC_UID; nothing created.
 fresh
 chown 0:0 "${secrets}" && chmod 0755 "${secrets}"

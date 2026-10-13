@@ -23,6 +23,15 @@ die() {
     echo "uc-setup: error: $*" >&2
     exit 1
 }
+warn_root_key() { # warn while the root CA's key is on this host
+    if [ -e "${secrets}/root/root-ca.key" ]; then
+        echo "uc-setup: warning: secrets/root/root-ca.key is on this host: anyone who holds it can sign metadata every controller accepts. Move secrets/root/ to offline storage (docs/how-to/rotate-signing-certificate.md#where-the-root-key-lives)" >&2
+    fi
+}
+# Every run warns, the ones that stop on an error or a usage mistake too, and last, so the run that
+# creates the key warns as well. The exit status stays the run's.
+trap warn_root_key EXIT
+
 uid="$(id -u)"
 [ "${uid}" != 0 ] || die "setup must not run as root: set UC_UID and UC_GID in .env to your own user (id -u, id -g)"
 
@@ -78,12 +87,6 @@ clear_stale_init() { # clear_stale_init DIR - remove what a killed pki init left
         rm -rf "${stale}"
         echo "uc-setup: removed ${stale#/setup/}, left by an interrupted pki init"
     done
-}
-
-warn_root_key() { # warn while the root CA's key is on this host
-    if [ -e "${secrets}/root/root-ca.key" ]; then
-        echo "uc-setup: warning: secrets/root/root-ca.key is on this host: anyone who holds it can sign metadata every controller accepts. Move secrets/root/ to offline storage (docs/how-to/rotate-signing-certificate.md#where-the-root-key-lives)" >&2
-    fi
 }
 
 do_secrets() {
@@ -142,5 +145,3 @@ case ${command} in
     pki-rotate) do_pki_rotate "$@" ;;
     *) usage ;;
 esac
-
-warn_root_key
