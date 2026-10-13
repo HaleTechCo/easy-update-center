@@ -17,6 +17,9 @@ signs:
   air-gapped bundles and the SBOM files. It is signed with cosign `sign-blob`, and the signature is
   `SHA256SUMS.sigstore.json`.
 
+Release candidates (`v<version>` such as `v0.2.0-rc.1`) are signed the same way; verify them with
+their own tag.
+
 The identity every check below expects is the workflow on that tag, and its issuer. With the
 release's version in place of `<version>` (for example `1.0.0`):
 
@@ -38,12 +41,15 @@ of `<version>` (for example `1.0.0`):
 cosign verify --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" \
   ghcr.io/haletechco/easy-update-center-uc:<version>
 gh attestation verify oci://ghcr.io/haletechco/easy-update-center-uc:<version> \
-  --repo HaleTechCo/easy-update-center --signer-workflow HaleTechCo/easy-update-center/.github/workflows/release.yml
+  --repo HaleTechCo/easy-update-center --source-ref refs/tags/v<version> \
+  --signer-workflow HaleTechCo/easy-update-center/.github/workflows/release.yml
 gh attestation verify oci://ghcr.io/haletechco/easy-update-center-uc:<version> \
-  --repo HaleTechCo/easy-update-center --predicate-type https://spdx.dev/Document/v2.3
+  --repo HaleTechCo/easy-update-center --source-ref refs/tags/v<version> \
+  --signer-workflow HaleTechCo/easy-update-center/.github/workflows/release.yml \
+  --predicate-type https://spdx.dev/Document/v2.3
 ```
 
-Then the same three commands with `easy-update-center-web` in place of `easy-update-center-uc`.
+Then the same three commands (the `cosign` command and the two `gh` commands) with `easy-update-center-web` in place of `easy-update-center-uc`.
 
 Success: `cosign verify` prints the checks it made and the signature's JSON, and each
 `gh attestation verify` prints `Verification succeeded!` with the attestation it matched. The first
@@ -53,6 +59,20 @@ Release as `easy-update-center-uc-<version>.spdx.json`.
 A failure, whatever the message, means **do not run the image**: it was not signed by this
 project's workflow, or it is not the image that was signed. Check the version and the image name for
 a typo first; if they are right, report it as a security issue ([SECURITY.md](../../SECURITY.md)).
+
+## Run the digests you verified
+
+A tag can be moved later; a digest cannot. After the checks pass, read each image's digest and pin
+it in `.env`, so `docker compose pull` fetches exactly what you verified:
+
+```bash
+docker buildx imagetools inspect ghcr.io/haletechco/easy-update-center-uc:<version> --format '{{.Manifest.Digest}}'
+```
+
+```bash
+UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc@sha256:<digest>
+WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web@sha256:<digest>
+```
 
 ## The air-gapped bundle and other assets
 

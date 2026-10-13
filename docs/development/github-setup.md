@@ -23,8 +23,8 @@ the release builds on are free only for public repositories.
 
 - The same Actions settings as in step 1, if the organization's do not already apply.
 - Features: Issues on, Wikis off.
-- Leave "Immutable releases" off. Running the Release workflow again on a tag replaces the
-  Release's assets (`gh release upload --clobber`), which immutable releases forbid.
+- Turn **Immutable releases** on: a published Release's assets and tag can never change. The Release
+  workflow uploads to a draft and publishes it last, which immutable releases allow.
 
 ## 4. Branch ruleset
 
@@ -38,13 +38,15 @@ Settings > Rules > Rulesets > New branch ruleset.
 
 ## 5. Tag ruleset
 
-Name `release tags`, target `v*`, rules: restrict creations, restrict updates, restrict deletions.
+Name `release tags`, target `v*` (which covers release-candidate tags such as `v0.1.0-rc.1` too),
+rules: restrict creations, restrict updates, restrict deletions.
 Bypass list: the **Repository admin** role, bypass mode Always. Only admins can then push, move or
 delete a release tag, and pushing one is what publishes a release
 ([Releasing](releasing.md#cut-a-release)).
 
-Why this holds: no workflow token can push to `main` or create a tag. Only `release.yml`'s `release`
-job holds `contents: write`, to create the GitHub Release on the tag that already exists, and the
+Why this holds: no workflow token can push to `main` or create a tag. Only `release.yml`'s `draft`
+and `publish` jobs hold `contents: write`, to create and publish the GitHub Release on the tag that
+already exists, and the
 Release workflow's `check` job refuses a tag on a commit that is not on `main`. Keep the admin role
 to people you would let publish a release (today one maintainer, with members' base permission
 Read).
@@ -54,6 +56,8 @@ Read).
 - Settings > Advanced Security: enable private vulnerability reporting
   ([SECURITY.md](../../SECURITY.md) points reporters to it) and Dependabot alerts. Secret scanning and
   push protection are already on for public repositories.
+- Settings > Advanced Security > Code scanning: **CodeQL analysis**, Default setup, with the
+  languages Python and GitHub Actions. Free for public repositories.
 - Settings > Moderation options > Reported content: accept reports from **All users**, so anyone can
   report a comment, issue or pull request to the admins privately, as the Enforcement section of
   [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md) says (free for public repositories owned by an

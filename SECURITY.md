@@ -21,6 +21,15 @@ https://www.jenkins.io/security/reporting/
 
 The latest release. Fixes ship in a new release; earlier releases get no backports.
 
+## How fixes are announced
+
+Each fixed vulnerability is published as a GitHub Security Advisory on the repository, with a CVE
+requested through GitHub, and ships in a release whose CHANGELOG entry is under `### Security`.
+Watch the repository's releases and security advisories to hear of them.
+
+We aim to publish a fix and its advisory within 90 days of confirming a report, coordinated with the
+reporter; this is a volunteer project, so that is a goal, not a guarantee.
+
 ## Security design
 
 The internet-facing `web` container never receives the signing key, and the root CA key is meant to

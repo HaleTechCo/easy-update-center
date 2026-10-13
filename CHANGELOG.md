@@ -50,5 +50,13 @@ the interface.
   `SHA256SUMS` ([Verify a release](docs/how-to/verify-a-release.md)). A release's `compose.yaml`
   runs that release's images; `compose.build.yaml` builds them from your checkout instead. The base
   images are pinned by digest.
+- Hardened containers: none runs as root, every one drops all Linux capabilities and privilege gain,
+  caps its processes and rotates its logs; the repo-adapter has a volume of its own.
+- Signing certificates last 180 days; `setup` warns while the root CA's key is on the host
+  ([Rotate the signing certificate](docs/how-to/rotate-signing-certificate.md)).
+- With TLS in the web container, port 8080 only redirects to HTTPS
+  ([Enable TLS](docs/how-to/enable-tls.md)).
+- Release candidates (`vX.Y.Z-rc.N`), and releases that publish exactly the images CI tested
+  ([Verify a release](docs/how-to/verify-a-release.md)).
 - Third-party notices in the uc image, `/opt/uc/licenses/`.
 - Unit, routing and end-to-end tests, run by CI on every pull request; this documentation.
