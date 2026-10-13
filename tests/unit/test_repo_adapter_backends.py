@@ -394,3 +394,14 @@ def test_a_range_reader_stops_at_its_limit(monkeypatch):
         reader = RangeReader(Http(None), stub.url + '/big', {}, len(data))
         with pytest.raises(BackendError, match='Range requests'):
             reader.read()
+
+
+def test_an_artifact_keeper_download_that_differs_from_its_listing_is_refused(tmp_path):
+    hpi = make_hpi(*GIT)
+    listed = entry(hpi)
+    path = f'/maven/jenkins-prod-local/{HPI_PATH}'
+    with (
+        StubServer({('GET', path): (200, {}, hpi + b'tampered')}) as stub,
+        pytest.raises(HttpError, match='does not match'),
+    ):
+        keeper(stub, tmp_path).facts(listed, GIT, plugin=True)

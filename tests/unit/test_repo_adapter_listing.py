@@ -84,7 +84,7 @@ def test_the_operators_test_repository(tmp_path):
 def test_a_usable_repository_pom_wins(tmp_path):
     own = pom_xml(*AD_GAV, name="The repository's own POM")
     _, index = index_of({f'{AD}.hpi': make_hpi(*AD_GAV), f'{AD}.pom': own}, tmp_path)
-    assert index.poms[f'{AD}.pom'] is None  # forwarded to the repository, not derived
+    assert index.poms[f'{AD}.pom'] == own  # the repository's, as checked, not derived
     assert index.report.derived_poms == []
     assert index.report.replaced_poms == []
 
@@ -283,7 +283,7 @@ def test_parent_poms_pass_through_and_bogus_ones_are_reported(tmp_path):
     }
     _, index = index_of(files, tmp_path)
     assert [r['name'] for r in index.rows] == ['plugin-4.88.pom']
-    assert index.poms[parent] is None
+    assert index.poms[parent] == files[parent]
     assert index.report.replaced_poms == [
         {'path': bogus, 'reason': 'not XML', 'url': f'{RELEASES}{bogus}'}
     ]
@@ -320,3 +320,51 @@ def test_report_is_written_privately(tmp_path):
     ]
     assert json.loads(path.read_text())['generated_at'] == '2026-09-23T00:00:00Z'
     assert read_report(tmp_path / 'missing.json') is None
+
+
+CHECKED_GAV = ('io.jenkins.plugins', 'caffeine-api', '3.2.4')
+CHECKED_POM_PATH = 'io/jenkins/plugins/caffeine-api/3.2.4/caffeine-api-3.2.4.pom'
+CHECKED_HPI_PATH = 'io/jenkins/plugins/caffeine-api/3.2.4/caffeine-api-3.2.4.hpi'
+
+
+def checked_files():
+    return {
+        CHECKED_HPI_PATH: make_hpi(*CHECKED_GAV),
+        CHECKED_POM_PATH: pom_xml(*CHECKED_GAV),
+    }
+
+
+def test_the_repository_pom_is_served_as_it_was_checked(tmp_path):
+    backend, index = index_of(checked_files(), tmp_path)
+    checked = backend.files[CHECKED_POM_PATH]
+    backend.files[CHECKED_POM_PATH] = (
+        b'<!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc">]><project/>'
+    )
+    assert index.poms[CHECKED_POM_PATH] == checked
+
+
+def test_a_pom_whose_bytes_differ_from_the_listing_is_replaced(tmp_path):
+    class Swapping(FakeBackend):
+        def get(self, path, limit):
+            data = super().get(path, limit)
+            return data + b'<!-- swapped -->' if path.endswith('.pom') else data
+
+    index = build_index(
+        Swapping(checked_files()), Cache(tmp_path / 'cache'), key='jenkins', now=NOW
+    )
+    reasons = [entry['reason'] for entry in index.report.replaced_poms]
+    assert any('sha256' in reason for reason in reasons)
+    # the POM derived from the archive, if any, never the swapped bytes
+    swapped = checked_files()[CHECKED_POM_PATH] + b'<!-- swapped -->'
+    assert index.poms.get(CHECKED_POM_PATH) != swapped
+
+
+def test_a_usable_verdict_cached_without_its_bytes_is_checked_again(tmp_path):
+    # A cache written before the adapter kept the checked bytes.
+    files = checked_files()
+    cache = Cache(tmp_path / 'cache')
+    cache.store_pom_verdict(hashlib.sha256(files[CHECKED_POM_PATH]).hexdigest(), None)
+    backend = FakeBackend(files)
+    index = build_index(backend, cache, key='jenkins', now=NOW)
+    assert ('get', CHECKED_POM_PATH) in backend.calls
+    assert index.poms[CHECKED_POM_PATH] == files[CHECKED_POM_PATH]

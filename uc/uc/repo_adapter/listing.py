@@ -68,8 +68,9 @@ class Index:
     """
 
     rows: list[dict] = field(default_factory=list)
-    # path -> derived bytes, None: the repository's
-    poms: dict[str, bytes | None] = field(default_factory=dict)
+    # path -> the bytes GETs serve: derived from the archive, or the repository's
+    # as checked
+    poms: dict[str, bytes] = field(default_factory=dict)
     # archive path -> MANIFEST.MF
     manifests: dict[str, bytes] = field(default_factory=dict)
     # plugin -> index.jelly from its .hpi
@@ -138,21 +139,34 @@ def _sha1(backend: Backend, cache: Cache, entry: RepoEntry) -> str:
     return cached
 
 
-def _pom_verdict(
+def _repository_pom(
     backend: Backend, cache: Cache, entry: RepoEntry, coordinates: Coordinates
-) -> str | None:
-    """None for a usable repository POM, otherwise the reason it is not (rule 3)."""
+) -> tuple[bytes | None, str | None]:
+    """Return a repository POM's checked bytes and None, or None and why it is unusable.
+
+    Rule 3. The bytes returned match the listing's sha256, are at most SMALL_ENTRY_LIMIT
+    and pass unusable_reason; the adapter serves exactly them.
+    """
     cached = cache.pom_verdict(entry.sha256)
-    if cached is not None:
-        return cached or None
+    if cached:
+        return None, cached
+    if cached == '':
+        data = cache.repository_pom(entry.sha256)
+        if data is not None:
+            return data, None
     data = backend.get(entry.path, SMALL_ENTRY_LIMIT)
-    reason = (
-        'missing from the repository'
-        if data is None
-        else unusable_reason(data, coordinates)
-    )
+    if data is None:
+        reason = 'missing from the repository'
+    elif hashlib.sha256(data).hexdigest() != entry.sha256:
+        reason = "its content does not match the listing's sha256"
+    else:
+        reason = unusable_reason(data, coordinates)
+    if reason is None and data is not None:
+        cache.store_repository_pom(entry.sha256, data)
+        cache.store_pom_verdict(entry.sha256, None)
+        return data, None
     cache.store_pom_verdict(entry.sha256, reason)
-    return reason
+    return None, reason
 
 
 def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -> Index:
@@ -231,13 +245,13 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
         real = poms.get(pom_path)
         if real is not None:
             try:
-                verdict = _pom_verdict(backend, cache, real, coordinates)
+                data, verdict = _repository_pom(backend, cache, real, coordinates)
                 real_sha1 = _sha1(backend, cache, real) if verdict is None else ''
             # an unreadable POM must not stop the listing: it is replaced and reported
             except Exception as exc:  # noqa: BLE001
-                verdict = f'unreadable: {_reason(exc)}'
-            if verdict is None:
-                index.poms[pom_path] = None
+                data, verdict = None, f'unreadable: {_reason(exc)}'
+            if verdict is None and data is not None:
+                index.poms[pom_path] = data
                 index.rows.append(
                     _row(
                         key,
@@ -289,15 +303,15 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
         if gav is None:
             continue
         try:
-            verdict = _pom_verdict(
+            data, verdict = _repository_pom(
                 backend, cache, entry, (gav.group_id, gav.artifact_id, gav.version)
             )
             sha1 = _sha1(backend, cache, entry) if verdict is None else ''
         # an unreadable POM must not stop the listing: it is left out and reported
         except Exception as exc:  # noqa: BLE001
-            verdict, sha1 = f'unreadable: {_reason(exc)}', ''
-        if verdict is None:
-            index.poms[path] = None
+            data, verdict, sha1 = None, f'unreadable: {_reason(exc)}', ''
+        if verdict is None and data is not None:
+            index.poms[path] = data
             index.rows.append(
                 _row(
                     key,

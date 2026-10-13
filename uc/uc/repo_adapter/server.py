@@ -29,7 +29,7 @@ from uc.http import Http
 from uc.preflight import ADAPTER_USERNAME, load_repository_credentials
 from uc.timeutil import utcnow
 
-from .archive import MANIFEST, SMALL_ENTRY_LIMIT
+from .archive import MANIFEST
 from .backends import ArtifactKeeperBackend, ArtifactoryBackend, Backend
 from .cache import Cache
 from .listing import Index, build_index, write_report
@@ -175,19 +175,11 @@ class Adapter:
         return self.index or self.refresh()
 
     def pom(self, path: str) -> bytes | None:
-        """Return a listed POM.
+        """Return a listed POM, None when not listed.
 
-        The one derived from its archive, else the repository's; None when not listed.
+        The one derived from its archive, or the repository's as the listing checked it.
         """
-        index = self.current()
-        if path not in index.poms:
-            return None
-        derived = index.poms[path]
-        return (
-            derived
-            if derived is not None
-            else self.backend.get(path, SMALL_ENTRY_LIMIT)
-        )
+        return self.current().poms.get(path)
 
     def manifest(self, archive_path: str) -> bytes | None:
         """Return a listed archive's MANIFEST.MF, None when the listing has none."""

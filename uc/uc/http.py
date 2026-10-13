@@ -6,6 +6,7 @@ Credentials never follow a redirect to another host, or from https to http
 
 from __future__ import annotations
 
+import hashlib
 import http.client
 import ssl
 import urllib.error
@@ -165,15 +166,23 @@ class Http:
         )
 
     def download(
-        self, url: str, *, headers: dict[str, str], out: BinaryIO, limit: int
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        out: BinaryIO,
+        limit: int,
+        sha256: str | None = None,
     ) -> None:
         """Stream url's body into out.
 
-        HttpError on an HTTP error or beyond limit bytes.
+        HttpError on an HTTP error, beyond limit bytes, or when the body's sha256 is not
+        sha256.
         """
         request = urllib.request.Request(
             url, headers={'User-Agent': USER_AGENT, **headers}
         )
+        digest = hashlib.sha256()
         try:
             with self.opener.open(request, timeout=LONG_TIMEOUT) as response:
                 total = 0
@@ -182,6 +191,7 @@ class Http:
                     if total > limit:
                         msg = f'{url} is larger than {limit} bytes'
                         raise HttpError(msg)
+                    digest.update(chunk)
                     out.write(chunk)
         except urllib.error.HTTPError as exc:
             exc.close()  # it holds the response
@@ -190,3 +200,6 @@ class Http:
         except (OSError, ValueError, http.client.HTTPException) as exc:
             msg = f'GET {url} failed: {exc!r}'
             raise HttpError(msg) from exc
+        if sha256 is not None and digest.hexdigest() != sha256:
+            msg = f'{url} does not match its listed sha256'
+            raise HttpError(msg)

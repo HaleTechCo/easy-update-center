@@ -131,6 +131,14 @@ class Cache:
         """Cache why a repository POM is unusable; reason None records a usable one."""
         self._write(sha256, 'pom-verdict', (reason or '').encode())
 
+    def repository_pom(self, sha256: str) -> bytes | None:
+        """Return a usable repository POM's bytes as they were checked, when cached."""
+        return self._read(sha256, 'repository.pom')
+
+    def store_repository_pom(self, sha256: str, data: bytes) -> None:
+        """Keep a usable repository POM's bytes, so GETs serve what was checked."""
+        self._write(sha256, 'repository.pom', data)
+
     def description(self, sha256: str) -> bytes | None:
         """index.jelly extracted from a repository .jar (rule 6), when cached."""
         return self._read(sha256, 'jar-index.jelly')

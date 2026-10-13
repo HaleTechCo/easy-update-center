@@ -478,6 +478,7 @@ class ArtifactKeeperBackend:
                 headers=self.basic,
                 out=out,
                 limit=self.max_archive_bytes,
+                sha256=entry.sha256,
             )
             archive = open_archive(out)
             return extract_facts(
