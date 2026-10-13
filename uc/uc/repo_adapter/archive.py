@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, BinaryIO
 
 from uc.doctor import parse_manifest
 from uc.errors import UcError
+from uc.pom import COORDINATE, GROUP_ID
 
 if TYPE_CHECKING:
     from uc.pom import Coordinates
@@ -215,6 +216,13 @@ def manifest_coordinates(manifest: bytes | None) -> Coordinates | None:
     group, artifact = attributes.get('Group-Id'), attributes.get('Artifact-Id')
     version = attributes.get('Plugin-Version', '').split(' ')[0]
     if not group or not artifact or not version:
+        return None
+    # they become entry names in !/ requests (extract_facts): never a path
+    if not (
+        GROUP_ID.match(group)
+        and COORDINATE.match(artifact)
+        and COORDINATE.match(version)
+    ):
         return None
     return group, artifact, version
 

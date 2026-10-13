@@ -226,3 +226,22 @@ def test_a_zip64_record_counts_even_when_the_classic_record_looks_complete():
     assert central_directory_size(io.BytesIO(data)) == huge
     with pytest.raises(ArchiveError, match='exceeds'):
         open_archive(io.BytesIO(data))
+
+
+@pytest.mark.parametrize(
+    ('group', 'artifact', 'version'),
+    [
+        ('../../etc', 'git', '1.0'),
+        ('org.jenkins-ci.plugins', 'git/../x', '1.0'),
+        ('org.jenkins-ci.plugins', 'git', '../1.0'),
+        ('org..x', 'git', '1.0'),
+    ],
+)
+def test_manifest_coordinates_that_could_leave_their_path_are_ignored(
+    group, artifact, version
+):
+    manifest = (
+        f'Manifest-Version: 1.0\r\nGroup-Id: {group}\r\nArtifact-Id: {artifact}\r\n'
+        f'Plugin-Version: {version}\r\n\r\n'
+    ).encode()
+    assert manifest_coordinates(manifest) is None

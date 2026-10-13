@@ -6,13 +6,12 @@ At the highest minimum any plugin declares, and theirs in turn.
 from __future__ import annotations
 
 import dataclasses
-import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from uc.aql import Gav, RepoFile, to_gav
 from uc.doctor import parse_dependencies, parse_manifest, required_jenkins_version
-from uc.pom import dependency_group
+from uc.pom import COORDINATE, GROUP_ID, dependency_group
 from uc.repo_adapter.archive import (
     MANIFEST,
     SMALL_ENTRY_LIMIT,
@@ -40,10 +39,6 @@ FALLBACK_GROUPS = (
     'io.jenkins.blueocean',
 )
 ARCHIVE_EXTENSIONS = ('hpi', 'jpi')
-# untrusted manifest values: safe in a path and in VersionTool's line protocol
-_COORDINATE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.+-]*$')
-# untrusted POM values: dot-separated names, each a path segment
-_GROUP = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*$')
 
 
 @dataclass(frozen=True)
@@ -115,12 +110,12 @@ def resolve_dependencies(
 def _valid(needs: list[Need], stager: Stager) -> list[Need]:
     kept = []
     for need in needs:
-        if _COORDINATE.match(need.artifact) and _COORDINATE.match(need.version):
+        if COORDINATE.match(need.artifact) and COORDINATE.match(need.version):
             # a group that is not one never reaches a URL:
             # the known groups are tried instead
             kept.append(
                 need
-                if need.group is None or _GROUP.match(need.group)
+                if need.group is None or GROUP_ID.match(need.group)
                 else dataclasses.replace(need, group=None)
             )
         else:

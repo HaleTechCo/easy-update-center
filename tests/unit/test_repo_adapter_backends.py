@@ -17,7 +17,7 @@ import pytest
 from archivefixture import make_hpi, make_jar
 from httpstub import StubServer, serve_bytes
 from uc.aql import AQL_TEMPLATE
-from uc.http import Http, HttpError, forwards_credentials
+from uc.http import Http, HttpError
 from uc.repo_adapter import backends
 from uc.repo_adapter.backends import (
     ArtifactKeeperBackend,
@@ -220,23 +220,6 @@ def test_a_private_ca_is_added_to_the_system_bundle(pki_material):
     system = len(Http(None).context.get_ca_certs())
     assert system > 0
     assert len(Http(pki_material / 'root-ca.crt').context.get_ca_certs()) == system + 1
-
-
-@pytest.mark.parametrize(
-    ('old', 'new', 'expected'),
-    [
-        ('https://art.corp/a', 'https://art.corp/b', True),
-        ('http://art.corp/a', 'https://art.corp/b', True),  # an upgrade
-        ('https://art.corp/a', 'https://s3.example.com/b', False),  # another host
-        (
-            'https://art.corp/a',
-            'http://art.corp/b',
-            False,
-        ),  # a downgrade would send them in the clear
-    ],
-)
-def test_which_redirects_keep_the_credentials(old, new, expected):
-    assert forwards_credentials(old, new) is expected
 
 
 def test_redirects_to_another_host_drop_the_credentials():

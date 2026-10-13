@@ -9,6 +9,10 @@ import re
 import xml.etree.ElementTree as ET
 
 Coordinates = tuple[str, str, str]  # groupId, artifactId, version
+GROUP_ID = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*$')
+"""A Maven groupId uc accepts: dot-separated names, never a path."""
+COORDINATE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.+-]*$')
+"""An artifactId or version uc accepts: no slash, so never a path."""
 # Encodings expat reads natively that are ASCII-compatible, so the byte check below
 # still sees every declaration. Old POMs sometimes declare ISO-8859-1 for a developer's
 # name.

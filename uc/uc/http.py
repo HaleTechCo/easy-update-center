@@ -48,15 +48,28 @@ class Response:
     body: bytes
 
 
-def forwards_credentials(old_url: str, new_url: str) -> bool:
-    """Return whether a redirect may carry the repository credentials.
+_DEFAULT_PORTS = {'http': 80, 'https': 443}
 
-    The redirect is from old_url to new_url. Only to the same host, and never from https
-    to http, where they would cross the network in the clear.
+
+def _origin(url: str) -> tuple[str, str | None, int | None]:
+    parts = urlsplit(url)
+    return parts.scheme, parts.hostname, parts.port or _DEFAULT_PORTS.get(parts.scheme)
+
+
+def forwards_credentials(old_url: str, new_url: str) -> bool:
+    """Return whether a redirect from old_url to new_url may carry the credentials.
+
+    Only within one origin (scheme, host and port), or from http to https on the same
+    host and the default ports; never from https to http, where they would cross the
+    network in the clear.
     """
-    old, new = urlsplit(old_url), urlsplit(new_url)
-    return new.hostname == old.hostname and not (
-        old.scheme == 'https' and new.scheme != 'https'
+    old, new = _origin(old_url), _origin(new_url)
+    if old == new:
+        return True
+    return (
+        (old[0], new[0]) == ('http', 'https')
+        and old[1] == new[1]
+        and (old[2], new[2]) == (80, 443)
     )
 
 

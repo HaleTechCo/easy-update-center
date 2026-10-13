@@ -41,3 +41,19 @@ def test_get_keeps_an_authorization_header_off_another_host():
 def test_an_unreadable_ca_file_is_an_http_error(tmp_path):
     with pytest.raises(http.HttpError, match='cannot be read'):
         http.Http(tmp_path / 'missing.crt')
+
+
+@pytest.mark.parametrize(
+    ('old', 'new', 'expected'),
+    [
+        ('https://art.corp/a', 'https://art.corp/b', True),
+        ('https://art.corp:8443/a', 'https://art.corp:8443/b', True),
+        ('http://art.corp/a', 'https://art.corp/b', True),  # an upgrade, default ports
+        ('https://art.corp/a', 'https://art.corp:9443/b', False),  # another port
+        ('http://art.corp:8081/a', 'https://art.corp:8443/b', False),
+        ('https://art.corp/a', 'https://s3.example.com/b', False),  # another host
+        ('https://art.corp/a', 'http://art.corp/b', False),  # in the clear
+    ],
+)
+def test_credentials_follow_a_redirect_only_within_one_origin(old, new, expected):
+    assert http.forwards_credentials(old, new) is expected
