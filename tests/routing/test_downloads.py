@@ -158,3 +158,29 @@ def test_status_landing_page_and_uctest():
 
 def test_unknown_download_paths_are_404():
     assert fetch('web-full', '/download/something.zip').status == 404
+
+
+@pytest.mark.parametrize('method', ['PUT', 'POST', 'DELETE', 'PATCH'])
+@pytest.mark.parametrize('host', ['web-proxy', 'web-artifactory', 'web-full'])
+def test_downloads_refuse_every_method_but_get_and_head(host, method):
+    # 405 from Apache, not the stub backend's 501 for a method it does not handle:
+    # nothing reaches the repository with the proxy credential.
+    response = fetch(host, '/download/plugins/git/5.2.0/git.hpi', method=method)
+    assert response.status == 405
+
+
+def test_head_still_reaches_a_download_redirect():
+    response = fetch('web-full', '/download/plugins/git/5.2.0/git.hpi', method='HEAD')
+    assert response.status == 302
+
+
+def test_proxy_mode_drops_the_query_string():
+    response = fetch('web-proxy', '/download/plugins/git/5.2.0/git.hpi?properties&x=1')
+    assert response.status == 200
+    assert '?' not in json.loads(response.body)['path']
+
+
+def test_redirects_drop_the_query_string():
+    response = fetch('web-full', '/download/plugins/git/5.2.0/git.hpi?x=1')
+    assert response.status == 302
+    assert '?' not in response.location

@@ -20,11 +20,16 @@ class Response:
         return self.headers.get('location')
 
 
-def fetch(host: str, path: str, headers: dict[str, str] | None = None) -> Response:
+def fetch(
+    host: str,
+    path: str,
+    headers: dict[str, str] | None = None,
+    method: str = 'GET',
+) -> Response:
     connection = http.client.HTTPConnection(host, 8080, timeout=10)
     try:
         connection.request(
-            'GET', path, headers={'User-Agent': 'uc-routing-test', **(headers or {})}
+            method, path, headers={'User-Agent': 'uc-routing-test', **(headers or {})}
         )
         response = connection.getresponse()
         return Response(
