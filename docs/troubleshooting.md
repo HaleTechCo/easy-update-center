@@ -12,6 +12,14 @@ Start with `docker compose run --rm uc status`. `status.json` names only a failu
 
 Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](reference/configuration.md#compose)).
 
+## Users and volumes
+
+| Symptom | Cause and fix |
+|---|---|
+| `uc must not run as root`, `setup must not run as root` or `web must not run as root` | The container runs as uid 0. With Compose, set `UC_UID` and `UC_GID` in `.env` to your own user (`id -u`, `id -g`); with `docker run`, pass `--user $(id -u):$(id -g)`. |
+| `UC_UID must not be 0: every container would run as root` (or `UC_GID`) | Set it to the output of `id -u` (`id -g` for `UC_GID`) in `.env`. If the volumes already hold data, give them to that user ([Compose](reference/configuration.md#compose)). |
+| `/data is not writable by uid N` or `/data/repo-adapter is not writable by uid N` | `UC_UID` changed after the volumes were created. Set it back to the volumes' owner, or give both volumes to the new user ([Compose](reference/configuration.md#compose)). |
+
 ## Generation
 
 | Symptom | Cause and fix |

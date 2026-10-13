@@ -328,10 +328,12 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = build_parser()
     args = parser.parse_args(argv)
-    if os.getuid() == 0 and not os.environ.get('UC_ALLOW_ROOT'):
+    # UC_ALLOW_ROOT=1 only: the integration stacks run uc as root on purpose
+    if os.getuid() == 0 and os.environ.get('UC_ALLOW_ROOT') != '1':
         print(
             'uc: error: uc must not run as root: set UC_UID and UC_GID in .env to your '
-            'own user (id -u, id -g); docs/reference/configuration.md#compose',
+            'own user (id -u, id -g), or pass --user $(id -u):$(id -g) to docker run; '
+            'docs/reference/configuration.md#compose',
             file=sys.stderr,
         )
         return 1

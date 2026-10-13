@@ -1691,6 +1691,18 @@ def test_uc_refuses_to_run_as_root(monkeypatch, capsys):
     assert 'uc must not run as root' in capsys.readouterr().err
 
 
+@pytest.mark.parametrize('value', ['0', 'true', 'yes', ' 1'])
+def test_only_uc_allow_root_1_lets_uc_run_as_root(monkeypatch, capsys, value):
+    monkeypatch.setattr(cli.os, 'getuid', lambda: 0)
+    monkeypatch.setenv('UC_ALLOW_ROOT', value)
+    monkeypatch.setattr(cli, '_dispatch', lambda _args: 0)
+    assert cli.main(['status']) == 1
+    assert (
+        'uc must not run as root: set UC_UID and UC_GID in .env to your own user '
+        '(id -u, id -g), or pass --user $(id -u):$(id -g) to docker run'
+    ) in capsys.readouterr().err
+
+
 def test_the_tests_may_run_uc_as_root(monkeypatch):
     monkeypatch.setattr(cli.os, 'getuid', lambda: 0)
     monkeypatch.setenv('UC_ALLOW_ROOT', '1')
