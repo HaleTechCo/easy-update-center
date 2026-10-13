@@ -174,8 +174,19 @@ class Staging:
         return cls(root, source, files)
 
     def file(self, path: str) -> Path:
-        """Return where path lives in the folder."""
-        return self.root / check_path(path)
+        """Return where path lives in the folder.
+
+        ProcureError when a folder on its way is a link out of the staging folder: a
+        download or a delete must never land outside it.
+        """
+        target = self.root / check_path(path)
+        if not target.parent.resolve().is_relative_to(self.root.resolve()):
+            msg = (
+                f'{path}: a folder on its way is a link out of {self.root}; '
+                'remove the link'
+            )
+            raise ProcureError(msg)
+        return target
 
     def intact(self, path: str) -> bool:
         """Return whether path is recorded and its file is present.

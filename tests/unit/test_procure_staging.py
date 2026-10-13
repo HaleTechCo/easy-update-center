@@ -185,3 +185,30 @@ def test_an_unwritable_folder_says_how_to_fix_it(tmp_path):
         ),
     ):
         Staging.open(root, SOURCE).temporary()
+
+
+def linked_out(tmp_path):
+    """Make a staging folder whose org/x is a link to a folder outside it."""
+    outside = tmp_path / 'outside'
+    (outside / '1').mkdir(parents=True)
+    root = tmp_path / 'procurement'
+    (root / 'org').mkdir(parents=True)
+    (root / 'org' / 'x').symlink_to(outside)
+    return root, outside
+
+
+def test_a_download_never_lands_through_a_symlinked_folder(tmp_path):
+    root, outside = linked_out(tmp_path)
+    staging = Staging.open(root, SOURCE)
+    with pytest.raises(ProcureError, match='link out of'):
+        stage(staging, 'org/x/1/x-1.pom', b'<project/>')
+    assert list((outside / '1').iterdir()) == []
+
+
+def test_a_delete_never_follows_a_symlinked_folder(tmp_path):
+    root, outside = linked_out(tmp_path)
+    (outside / '1' / 'x-1.pom').write_text('<project/>')
+    staging = Staging.open(root, SOURCE)
+    with pytest.raises(ProcureError, match='link out of'):
+        staging.remove('org/x/1/x-1.pom')
+    assert (outside / '1' / 'x-1.pom').exists()
