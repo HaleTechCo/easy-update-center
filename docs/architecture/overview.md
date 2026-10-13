@@ -92,7 +92,9 @@ The boundaries they and the images draw:
 - Every container runs as the operator's own user, `UC_UID`:`UC_GID`, none as root, with a
   read-only root filesystem. Only `/data` and `/tmp` are writable (`setup`: `/setup/secrets`, and a directory you mount at
   `/setup/out` for a new PKI), and `web` mounts `/data` read-only. Apache serves only the live
-  release, never the rest of `/data`.
+  release, never the rest of `/data`. Every container also drops all Linux capabilities, cannot
+  gain privileges through setuid files (`no-new-privileges`), may run at most 512 processes, and
+  keeps at most 30 MB of logs.
 - The repo-adapter's file reads need no credentials, because the generator cannot answer an
   authentication challenge on them. They are reachable only on the internal `repo` network, which
   `web` is not attached to, and they serve only POMs, manifests and descriptions, never archives.

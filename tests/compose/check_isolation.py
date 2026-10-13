@@ -81,6 +81,45 @@ def adapter_volume_problems(services: dict) -> list[str]:
     return problems
 
 
+HARDENING = {
+    'cap_drop': ['ALL'],
+    'security_opt': ['no-new-privileges:true'],
+    'pids_limit': 512,
+}
+LOGGING = {'driver': 'json-file', 'options': {'max-size': '10m', 'max-file': '3'}}
+
+
+def hardening_problems(services: dict) -> list[str]:
+    """Check every service drops capabilities and privilege gain, caps processes.
+
+    Every service also rotates its logs.
+    """
+    problems = [
+        f'{name} needs {key}: {expected!r}, not {service.get(key)!r}'
+        for name, service in sorted(services.items())
+        for key, expected in HARDENING.items()
+        if service.get(key) != expected
+    ]
+    problems += [
+        f'{name} needs logging {LOGGING!r}, not {service.get("logging")!r}'
+        for name, service in sorted(services.items())
+        if service.get('logging') != LOGGING
+    ]
+    return problems
+
+
+def web_problems(web: dict) -> list[str]:
+    """web: a read-only root filesystem, a /tmp tmpfs and the data volume read-only."""
+    problems = []
+    if not web.get('read_only'):
+        problems.append('web must run with a read-only root filesystem')
+    if '/tmp' not in (web.get('tmpfs') or []):  # noqa: S108
+        problems.append('web needs a tmpfs at /tmp')
+    if volume_mounts(web).get('/data') != ('uc-data', True):
+        problems.append('web must mount uc-data at /data read-only')
+    return problems
+
+
 def networks(service: dict) -> set[str]:
     return set(service.get('networks') or {})
 
@@ -222,6 +261,7 @@ def main() -> None:
     elif next(iter(users.values())).split(':')[0] == '0':
         problems.append('the services must not run as root (UC_UID=0)')
     problems += adapter_volume_problems(services)
+    problems += hardening_problems(services) + web_problems(web)
     problems += build_problems(services, build=build)
     label = f'{mode}, build' if build else mode
     for problem in problems:

@@ -7,7 +7,18 @@
 # built from this checkout instead, add compose.build.yaml (docs/getting-started/online.md#or-build-from-source).
 name: easy-update-center
 
+# Every service: no Linux capabilities, no privilege gain through setuid files, a cap on processes,
+# and rotated logs (docs/architecture/overview.md#networks-and-trust-boundaries).
+x-hardened: &hardened
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 512
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+
 x-uc: &uc
+  <<: *hardened
   image: ${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}
   user: "${UC_UID:-10001}:${UC_GID:-10001}"  # docs/reference/configuration.md#compose
   env_file: ${UC_ENV_FILE:-.env}
@@ -32,6 +43,7 @@ x-uc: &uc
 
 services:
   web:
+    <<: *hardened
     image: ${WEB_IMAGE:-ghcr.io/haletechco/easy-update-center-web:0.1.0}
     user: "${UC_UID:-10001}:${UC_GID:-10001}"
     read_only: true
@@ -61,6 +73,7 @@ services:
   # `setup secrets | pki-init | pki-rotate` (docs/reference/cli.md#the-setup-service). No network, no
   # compose secrets, no settings; it writes only ./secrets.
   setup:
+    <<: *hardened
     image: ${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}
     user: "${UC_UID:-10001}:${UC_GID:-10001}"
     profiles: ["setup"]
@@ -75,6 +88,7 @@ services:
   # Answers the generator's Artifactory requests from Artifactory or Artifact Keeper and fills in POMs,
   # descriptions and release dates from the archives. Idle when REPO_ADAPTER is off (the online default).
   repo-adapter:
+    <<: *hardened
     image: ${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}
     user: "${UC_UID:-10001}:${UC_GID:-10001}"
     env_file: ${UC_ENV_FILE:-.env}
