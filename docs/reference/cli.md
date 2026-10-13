@@ -322,7 +322,7 @@ no network, no Compose secrets and no settings, and it mounts only `./secrets`, 
 docker compose run --rm setup
 docker compose run --rm setup secrets
 docker compose run --rm setup pki-init [--org ORG] [--root-days N] [--signing-days N]
-mkdir -p newpki && docker compose run --rm -v "$PWD/newpki:/setup/out" setup pki-init --out /setup/out
+docker compose run --rm -v "<empty folder>:/setup/out" setup pki-init --out /setup/out [--org ORG] [--root-days N] [--signing-days N]
 docker compose run --rm -v "<folder holding root-ca.key>:/setup/root:ro" setup pki-rotate [--days N] [--org ORG]
 ```
 
@@ -330,7 +330,7 @@ docker compose run --rm -v "<folder holding root-ca.key>:/setup/root:ro" setup p
 |---|---|
 | (none) | First-time setup, safe to repeat: `secrets`, then `pki-init` unless `secrets/update-center.key` exists. |
 | `secrets` | Creates the missing credential files empty and sets the modes of the files in `secrets/` ([File modes](secrets.md#file-modes)). |
-| `pki-init` | Runs `uc pki init` in `secrets/`, then the `secrets` step; or with `--out DIR` in that directory (one you mount, for a new PKI), then sets only the key and certificate modes there. `--org`, `--root-days` and `--signing-days` pass through. |
+| `pki-init` | Runs `uc pki init` in `secrets/`, then the `secrets` step; or with `--out DIR` in that directory (one you mount), then sets only the key and certificate modes there. `--org`, `--root-days` and `--signing-days` pass through. Either way the new root key is on this host, which suits a trial: for production, or a new PKI after a leak, create it on an offline machine instead ([Create the PKI on an offline machine](../how-to/rotate-signing-certificate.md#create-the-pki-on-an-offline-machine)). |
 | `pki-rotate` | Runs `uc pki rotate` on `secrets/` with the root key from `/setup/root`, which you mount read-only, then the `secrets` step. Without that mount, or with a file there, it exits 1 and says how to mount the folder. `--days` and `--org` pass through. |
 
 When `secrets/` (or the `--out` directory) is not writable by the user it runs as, `uc-setup` exits 1:

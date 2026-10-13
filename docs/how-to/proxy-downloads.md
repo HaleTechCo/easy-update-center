@@ -28,10 +28,13 @@ repository.
    `setup secrets` makes the file readable by you, the user the containers run as, alone
    ([File modes](../reference/secrets.md#file-modes)).
 
-2. Set `DOWNLOAD_ACCESS=proxy` in `.env`.
+2. Set `DOWNLOAD_ACCESS=proxy` in `.env`, and set `DOWNLOAD_BACKEND_URL` there explicitly, even
+   where the mode has a default for it: web sends the account to that URL, so proxy mode never
+   uses a default.
 3. Recreate the web container: `docker compose up -d`.
 
-The web container refuses to start in proxy mode if the file does not hold `username:password`. To
+The web container refuses to start in proxy mode without an explicit `DOWNLOAD_BACKEND_URL`, or if
+the file does not hold `username:password`. To
 check, download a plugin you know the repository holds through it, using your own `PUBLIC_URL`:
 
 ```bash

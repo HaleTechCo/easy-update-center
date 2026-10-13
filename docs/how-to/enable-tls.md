@@ -42,8 +42,8 @@ Otherwise restrict it in the
 ## In the web container
 
 With TLS on, port 8080 answers every request with a redirect to
-`PUBLIC_URL`, which must then start with `https://`. Jenkins controllers do not follow a redirect
-from http to https, so change each controller's update site to the https URL.
+`PUBLIC_URL`, which must then start with `https://`. Do not rely on the redirect: change each
+controller's update site to the https URL.
 
 Mount a certificate and key and point `TLS_CERT_FILE` and `TLS_KEY_FILE` at them, in a Compose
 override file next to `compose.yaml`:

@@ -57,7 +57,8 @@ Download routes are handled at server level (`web/conf/uc-site.conf`), before th
 
 `/download/plugins/<id>/latest/<id>.hpi` and `/download/war/latest/jenkins.war` first redirect to
 `/latest/`, whose generated rules redirect to the versioned URL. Anything else under `/download/`
-that looks like a binary returns 404; the index pages are static files in the release.
+that looks like a binary returns 404; the index pages are static files in the release. Under
+`/download/`, methods other than GET and HEAD get 405, and the client's query string is dropped.
 
 ```mermaid
 sequenceDiagram

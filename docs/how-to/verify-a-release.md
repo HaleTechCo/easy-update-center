@@ -34,22 +34,32 @@ You need [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 
 workflow signs with a cosign that writes the newer bundle format, which older versions cannot read)
 and the [GitHub CLI](https://cli.github.com/) (`gh`), signed in with `gh auth login`, which
 `gh attestation verify` needs. While the packages are still private (until the owner makes them
-public), `docker login ghcr.io` is needed too. For each image, with the release's version in place
-of `<version>` (for example `1.0.0`):
+public), `docker login ghcr.io` is needed too.
+
+A tag can be moved later; a digest cannot. So read each image's digest from its tag once, then
+verify and run that digest, never the tag again. For the uc image, with the release's version in
+place of `<version>` (for example `1.0.0`):
 
 ```bash
-cosign verify --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" \
-  ghcr.io/haletechco/easy-update-center-uc:<version>
-gh attestation verify oci://ghcr.io/haletechco/easy-update-center-uc:<version> \
+docker buildx imagetools inspect ghcr.io/haletechco/easy-update-center-uc:<version> --format '{{.Manifest.Digest}}'
+```
+
+It prints `sha256:` and 64 hex digits. With that digest in place of `<digest>`:
+
+```bash
+UC=ghcr.io/haletechco/easy-update-center-uc@sha256:<digest>
+cosign verify --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$UC"
+gh attestation verify "oci://$UC" \
   --repo HaleTechCo/easy-update-center --source-ref refs/tags/v<version> \
   --signer-workflow HaleTechCo/easy-update-center/.github/workflows/release.yml
-gh attestation verify oci://ghcr.io/haletechco/easy-update-center-uc:<version> \
+gh attestation verify "oci://$UC" \
   --repo HaleTechCo/easy-update-center --source-ref refs/tags/v<version> \
   --signer-workflow HaleTechCo/easy-update-center/.github/workflows/release.yml \
   --predicate-type https://spdx.dev/Document/v2.3
 ```
 
-Then the same three commands (the `cosign` command and the two `gh` commands) with `easy-update-center-web` in place of `easy-update-center-uc`.
+Then the same for the web image: its digest from `ghcr.io/haletechco/easy-update-center-web:<version>`,
+and the three checks against `ghcr.io/haletechco/easy-update-center-web@sha256:<digest>`.
 
 Success: `cosign verify` prints the checks it made and the signature's JSON, and each
 `gh attestation verify` prints `Verification succeeded!` with the attestation it matched. The first
@@ -62,12 +72,7 @@ a typo first; if they are right, report it as a security issue ([SECURITY.md](..
 
 ## Run the digests you verified
 
-A tag can be moved later; a digest cannot. After the checks pass, read each image's digest and pin
-it in `.env`, so `docker compose pull` fetches exactly what you verified:
-
-```bash
-docker buildx imagetools inspect ghcr.io/haletechco/easy-update-center-uc:<version> --format '{{.Manifest.Digest}}'
-```
+Pin the two digests you verified in `.env`, so `docker compose pull` fetches exactly those images:
 
 ```bash
 UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc@sha256:<digest>

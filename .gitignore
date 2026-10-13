@@ -7,8 +7,9 @@
 data/
 secrets/*
 !secrets/README.md
-# A new PKI from `docker compose run --rm -v "$PWD/newpki:/setup/out" setup pki-init --out /setup/out`
-# (docs/how-to/rotate-signing-certificate.md): it holds a root CA's private key.
+# A PKI made on this host with `setup pki-init --out` (docs/reference/cli.md) holds a root CA's
+# private key: keep it out of git. Make a production PKI on an offline machine instead
+# (docs/how-to/rotate-signing-certificate.md#create-the-pki-on-an-offline-machine).
 newpki/
 
 # A TLS certificate and key mounted into web (docs/how-to/enable-tls.md): the key is private.

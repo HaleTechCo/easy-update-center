@@ -109,7 +109,9 @@ the overlap. This applies whether the signing key or the root key leaked:
 2. Create a new PKI on the offline machine, as in
    [Create the PKI on an offline machine](#create-the-pki-on-an-offline-machine).
 3. Copy its `root-ca.crt`, `update-center.key` and `update-center.cert` into `secrets/` on the host,
-   run `docker compose run --rm setup secrets`, start the scheduler and run `uc generate`.
+   run `docker compose run --rm setup secrets`, then
+   `docker compose up -d --force-recreate scheduler` (a container keeps the secret files it started
+   with, so a plain start would sign with the old key) and `docker compose run --rm uc generate`.
 4. On every controller, in one change: add the new `root-ca.crt` to `update-center-rootCAs/` **and
    remove the old root**. A controller refuses this update center's metadata until it has the new
    root; the leaked key is worthless to it from then on.

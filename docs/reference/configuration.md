@@ -160,8 +160,19 @@ directory, not by the containers.
 | `HTTP_PORT` | `8080` | Host port published for the web container's HTTP listener. |
 | `HTTPS_PORT` | `8443` | Host port published for the web container's TLS listener. |
 
-Changing `UC_UID` later: give the data volume to the new user once:
-`docker compose run --rm --no-deps --user 0:0 --entrypoint chown uc -R <uid>:<gid> /data`.
+Changing `UC_UID` later: give both volumes to the new user once, then `docker compose up -d`. Every
+service drops all Linux capabilities, so each command runs as root with just the two that changing
+owners needs:
+
+```sh
+docker compose run --rm --no-deps --user 0:0 --cap-add CHOWN --cap-add DAC_READ_SEARCH \
+  --entrypoint find uc /data -path /data/repo-adapter -prune -o -exec chown -h <uid>:<gid> '{}' +
+docker compose run --rm --no-deps --user 0:0 --cap-add CHOWN --cap-add DAC_READ_SEARCH \
+  --entrypoint chown repo-adapter -R <uid>:<gid> /data/repo-adapter
+```
+
+The first gives the data volume to the new user, skipping the repo-adapter's volume, which `uc`
+mounts read-only; the second gives the repo-adapter's volume from the repo-adapter service.
 
 ## Testing and evaluation
 

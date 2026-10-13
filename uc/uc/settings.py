@@ -280,7 +280,8 @@ SETTINGS: tuple[Setting, ...] = (
         'Downloads',
         (
             'redirect sends controllers to the backend; proxy streams each file '
-            'through the web container.'
+            'through the web container and needs DOWNLOAD_BACKEND_URL set explicitly, '
+            'since web sends download_proxy_auth to it.'
         ),
         default='redirect',
         choices=ACCESS_MODES,
