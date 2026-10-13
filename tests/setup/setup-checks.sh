@@ -136,6 +136,14 @@ run pki-rotate
 same "pki-rotate with a file at /setup/root: exits 1" 1 "${rc}"
 says "pki-rotate with a file at /setup/root: says to mount the folder" "/setup/root is a file: mount the folder that holds root-ca.key"
 
+# 7. The uc image never imports from the working directory: uc runs from /data, where other
+# containers write, and python3 -m would put it first on sys.path.
+mkdir -p /tmp/planted/uc && printf 'raise SystemExit("planted")\n' > /tmp/planted/uc/__init__.py
+output="$(setpriv --reuid="${host%%:*}" --regid="${host##*:}" --clear-groups env HOME=/tmp sh -c 'cd /tmp/planted && uc --version' 2>&1)"
+says "PYTHONSAFEPATH: uc ignores a uc package in the working directory" "uc "
+if [[ "${output}" == *planted* ]]; then fail "PYTHONSAFEPATH: the planted package ran"; fi
+rm -rf /tmp/planted
+
 # 6. Usage.
 fresh
 expect_usage bogus

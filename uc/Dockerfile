@@ -87,8 +87,10 @@ RUN chmod 0755 /usr/local/bin/uc /usr/local/bin/uc-setup /opt/uc/site/generate-h
  && mkdir -p /data /config/overlay \
  && chmod 1777 /data
 # Any UC_UID can write a new data volume (Docker copies /data's mode into it), and HOME is writable
-# for a uid with no entry in /etc/passwd.
+# for a uid with no entry in /etc/passwd. PYTHONSAFEPATH: python3 -m uc never imports from the
+# working directory, /data, which other containers can write.
 ENV PYTHONPATH=/opt/uc/python \
+    PYTHONSAFEPATH=1 \
     HOME=/tmp \
     PYTHONDONTWRITEBYTECODE=1 \
     UC2_VERSION=${UC2_VERSION}+patches \
