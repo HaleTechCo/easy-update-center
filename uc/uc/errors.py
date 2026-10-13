@@ -1,4 +1,7 @@
-"""Exception types shared by the uc CLI. Every expected failure is a UcError subclass."""
+"""Exception types shared by the uc CLI.
+
+Every expected failure is a UcError subclass.
+"""
 
 
 class UcError(Exception):
@@ -6,7 +9,10 @@ class UcError(Exception):
 
 
 class UsageError(UcError):
-    """The command line asks for nothing, or for something that cannot be done; uc exits 2, as for a bad argument."""
+    """The command line asks for nothing, or for something that cannot be done.
+
+    uc exits 2, as for a bad argument.
+    """
 
 
 class ConfigError(UcError):
@@ -14,7 +20,9 @@ class ConfigError(UcError):
 
 
 def public_summary(exc: BaseException) -> str:
-    """Return what /status.json may say about a failure: the class, never the message (docs/reference/status-json.md).
+    """Return what /status.json may say about a failure.
+
+    The class, never the message (docs/reference/status-json.md).
 
     The full text reaches the container log, since generate() re-raises.
     """

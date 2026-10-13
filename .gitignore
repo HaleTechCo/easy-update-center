@@ -19,12 +19,6 @@ procurement/*
 tests/integration/.versions.env
 tests/integration/.results/
 
-# Agent scratch
-.superpowers/
-
-# Local working notes
-todo.txt
-
 # Python: the parts of github/gitignore's Python.gitignore that apply here. uc is
 # stdlib-only and its tests run in containers; editors and ad-hoc runs on the host
 # still write these.
@@ -32,11 +26,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
-# Lint tooling (pre-commit; see tools/README.md). The hooks run from a host venv, under
-# any of the names .pre-commit-config.yaml excludes (.venv, .venv313, venv, ...), and ruff
-# caches at the root. Every other hook rewrites files in place or writes outside the tree.
+# Lint tooling (pre-commit; see CONTRIBUTING.md#set-up): a venv for pre-commit, under any of
+# the names .pre-commit-config.yaml excludes (.venv, .venv313, venv, ...), and ruff's cache at
+# the root. pre-commit keeps the hooks' environments outside the tree.
 .venv*/
 venv*/
 .ruff_cache/
-
-download/

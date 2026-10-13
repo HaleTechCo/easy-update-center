@@ -1,4 +1,7 @@
-"""Shared unit-test fixtures: a session-wide signing PKI, a per-test secrets directory, and fake repositories."""
+"""Shared unit-test fixtures.
+
+A session-wide signing PKI, a per-test secrets directory, and fake repositories.
+"""
 
 import shutil
 import sys
@@ -18,7 +21,10 @@ from fake_artifactory import make_handler as artifactory_handler
 
 
 def serve(handler):
-    """Serve handler on a free local port in a background thread; return the server and its URL."""
+    """Serve handler on a free local port in a background thread.
+
+    Return the server and its URL.
+    """
     httpd = ThreadingHTTPServer(('127.0.0.1', 0), handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     return httpd, f'http://127.0.0.1:{httpd.server_address[1]}/'
@@ -49,7 +55,10 @@ def secrets_dir(tmp_path, pki_material):
 
 @pytest.fixture
 def releases(tmp_path):
-    """Serve a fake repo.jenkins-ci.org: files put under root at url, with generated .sha1 files."""
+    """Serve a fake repo.jenkins-ci.org.
+
+    Files put under root at url, with generated .sha1 files.
+    """
     base = tmp_path / 'source'
     httpd, url = serve(keeper_handler(base, 'unused', 'unused', anonymous_read=True))
     yield base / 'releases', url + 'maven/releases/'
@@ -58,23 +67,40 @@ def releases(tmp_path):
 
 @pytest.fixture
 def keeper(tmp_path):
-    """Serve a fake Artifact Keeper that needs the account uc:tok; yield the folder of its repository jenkins and its URL."""
-    httpd, url = serve(keeper_handler(tmp_path / 'repo', 'uc', 'tok', anonymous_read=False))
+    """Serve a fake Artifact Keeper that needs the account uc:tok.
+
+    Yield the folder of its repository jenkins and its URL.
+    """
+    httpd, url = serve(
+        keeper_handler(tmp_path / 'repo', 'uc', 'tok', anonymous_read=False)
+    )
     yield tmp_path / 'repo' / 'jenkins', url
     stop(httpd)
 
 
 @pytest.fixture
 def artifactory(tmp_path):
-    """Serve a fake Artifactory that needs the account uc:tok; yield the folder of its repository jenkins and its URL."""
-    httpd, url = serve(artifactory_handler(tmp_path / 'repo', 'uc:tok', anonymous_read=False))
+    """Serve a fake Artifactory that needs the account uc:tok.
+
+    Yield the folder of its repository jenkins and its URL.
+    """
+    httpd, url = serve(
+        artifactory_handler(tmp_path / 'repo', 'uc:tok', anonymous_read=False)
+    )
     yield tmp_path / 'repo' / 'jenkins', url + 'artifactory/'
     stop(httpd)
 
 
 @pytest.fixture
 def client_checksums(tmp_path):
-    """Serve a fake Artifactory with the client checksum policy, the default for Artifactory's local repositories."""
-    httpd, url = serve(artifactory_handler(tmp_path / 'repo', 'uc:tok', anonymous_read=False, checksum_policy='client'))
+    """Serve a fake Artifactory with the client checksum policy.
+
+    That policy is the default for Artifactory's local repositories.
+    """
+    httpd, url = serve(
+        artifactory_handler(
+            tmp_path / 'repo', 'uc:tok', anonymous_read=False, checksum_policy='client'
+        )
+    )
     yield tmp_path / 'repo' / 'jenkins', url + 'artifactory/'
     stop(httpd)

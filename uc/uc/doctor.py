@@ -1,4 +1,7 @@
-"""uc doctor: what the generator will and won't see in the source repository (docs/reference/cli.md#uc-doctor)."""
+"""uc doctor: what the generator will and won't see in the source repository.
+
+See docs/reference/cli.md#uc-doctor.
+"""
 
 from __future__ import annotations
 
@@ -34,7 +37,10 @@ if TYPE_CHECKING:
 
 HTTP_NOT_FOUND = 404
 REPORT_FILE = Path('doctor') / 'report.json'
-"""Where uc doctor --record saves the full report, under the data directory; web does not serve it."""
+"""Where uc doctor --record saves the full report, under the data directory.
+
+Web does not serve it.
+"""
 
 
 class DoctorError(UcError):
@@ -43,7 +49,10 @@ class DoctorError(UcError):
 
 @dataclass
 class DoctorReport:
-    """What the generator will publish from the source repository, what it drops, and why."""
+    """What the generator will publish from the source repository.
+
+    Also what it drops, and why.
+    """
 
     plugins: int = 0
     cores: list[str] = field(default_factory=list)
@@ -54,18 +63,23 @@ class DoctorReport:
     missing_dependencies: list[str] = field(default_factory=list)
     unchecked: int = 0  # newest releases whose POM or manifest was unavailable
     tiers: dict | None = None
-    # From the repo-adapter's report.json (docs/architecture/repo-adapter.md#report); None when the adapter is off.
+    # From the repo-adapter's report.json (docs/architecture/repo-adapter.md#report);
+    # None when the adapter is off.
     repo_adapter: dict | None = None
-    # Each required dependency that is absent or too old, as data (uc procure stage --dependencies).
+    # Each required dependency that is absent or too old, as data
+    # (uc procure stage --dependencies).
     missing_dependency_details: list[dict] = field(default_factory=list)
-    # Core versions plugin releases require, ascending, with the releases requiring each; None when not
-    # checked (the public repository). See docs/architecture/modes.md#core-age.
+    # Core versions plugin releases require, ascending, with the releases requiring
+    # each; None when not checked (the public repository). See
+    # docs/architecture/modes.md#core-age.
     required_cores: dict[str, list[str]] | None = None
     core_floor: str | None = None
     missing_cores: list[dict] = field(default_factory=list)
     missing_cores_below_floor: int = 0
-    oldest_core_below_floor: str | None = None  # the oldest of those: the --since that stages them all
-    cores_unchecked: int = 0  # plugin releases whose manifest was unavailable for the core check
+    # the oldest of those: the --since that stages them all
+    oldest_core_below_floor: str | None = None
+    # plugin releases whose manifest was unavailable for the core check
+    cores_unchecked: int = 0
 
     def _adapter(self, name: str) -> list:
         return (self.repo_adapter or {}).get(name) or []
@@ -73,8 +87,15 @@ class DoctorReport:
     @property
     def dropped(self) -> int:
         """Number of files in the source that the generator will not publish."""
-        # needs_pom archives already count as hpi_without_pom: no POM reaches the listing for them.
-        return len(self.hpi_without_pom) + len(self.war_without_pom) + len(self.non_maven) + len(self._adapter('misplaced')) + len(self._adapter('skipped'))
+        # needs_pom archives already count as hpi_without_pom: no POM reaches the
+        # listing for them.
+        return (
+            len(self.hpi_without_pom)
+            + len(self.war_without_pom)
+            + len(self.non_maven)
+            + len(self._adapter('misplaced'))
+            + len(self._adapter('skipped'))
+        )
 
     def exit_code(self) -> int:
         """Return 1 when anything is dropped or a dependency is missing, else 0."""
@@ -91,9 +112,17 @@ class DoctorReport:
             'stub_poms': len(self.stub_poms),
             'missing_dependencies': len(self.missing_dependencies),
             'unchecked': self.unchecked,
-            'missing_cores': len(self.missing_cores) if self.required_cores is not None else None,
-            'cores_unchecked': self.cores_unchecked if self.required_cores is not None else None,
-            'repo_adapter': ({name: len(self._adapter(name)) for name in ADAPTER_SECTIONS} if self.repo_adapter is not None else None),
+            'missing_cores': len(self.missing_cores)
+            if self.required_cores is not None
+            else None,
+            'cores_unchecked': self.cores_unchecked
+            if self.required_cores is not None
+            else None,
+            'repo_adapter': (
+                {name: len(self._adapter(name)) for name in ADAPTER_SECTIONS}
+                if self.repo_adapter is not None
+                else None
+            ),
         }
 
     def to_dict(self) -> dict:
@@ -101,13 +130,24 @@ class DoctorReport:
         return asdict(self)
 
 
-ADAPTER_SECTIONS = ('derived_poms', 'replaced_poms', 'needs_pom', 'misplaced', 'skipped', 'dates_from_repository')
+ADAPTER_SECTIONS = (
+    'derived_poms',
+    'replaced_poms',
+    'needs_pom',
+    'misplaced',
+    'skipped',
+    'dates_from_repository',
+)
 
 
 def attach_adapter_report(report: DoctorReport, settings: Settings) -> DoctorReport:
-    """Add the repo-adapter's report of what it filled in and what it dropped, when the adapter is on."""
+    """Add the repo-adapter's report of what it filled in and what it dropped.
+
+    Only when the adapter is on.
+    """
     if settings.repo_adapter:
-        from .repo_adapter.listing import read_report  # noqa: PLC0415 - circular: repo_adapter.archive imports parse_manifest from this module
+        # circular: repo_adapter.archive imports parse_manifest from this module
+        from .repo_adapter.listing import read_report  # noqa: PLC0415
 
         data = read_report(settings.repo_adapter_report_file) or {}
         report.repo_adapter = {name: data.get(name) or [] for name in ADAPTER_SECTIONS}
@@ -121,37 +161,73 @@ class Source(Protocol):
         """Return the release's POM, or None when it is unavailable."""
 
     def manifest(self, gav: Gav) -> str | None:
-        """Return the text of the archive's META-INF/MANIFEST.MF, or None when it is unavailable."""
+        """Return the text of the archive's META-INF/MANIFEST.MF.
+
+        None when it is unavailable.
+        """
 
 
 class ArtifactSource:
     """Reads POMs and MANIFEST.MF the way update-center2 does, from its cache first."""
 
-    def __init__(self, artifactory_url: str, repository: str, username: str, password: str, *, cache_dir: Path | None, allow_network: bool, timeout: float = 60) -> None:
-        """Read from repository at artifactory_url; with allow_network False, only what cache_dir already holds."""
+    def __init__(
+        self,
+        artifactory_url: str,
+        repository: str,
+        username: str,
+        password: str,
+        *,
+        cache_dir: Path | None,
+        allow_network: bool,
+        timeout: float = 60,
+    ) -> None:
+        """Read from repository at artifactory_url.
+
+        With allow_network False, only what cache_dir already holds.
+        """
         self.base = f'{artifactory_url}{repository}/'
         self.cache_dir = cache_dir
         self.allow_network = allow_network
         self.timeout = timeout
-        self._auth = 'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()
+        self._auth = (
+            'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()
+        )
 
     @classmethod
-    def from_settings(cls, settings: Settings, creds: Credentials, *, allow_network: bool) -> ArtifactSource:
+    def from_settings(
+        cls, settings: Settings, creds: Credentials, *, allow_network: bool
+    ) -> ArtifactSource:
         """Build a source reading the repository and cache the generator uses."""
         # Same URL the jar uses, so cache keys (sha256 of the URL path) match.
-        return cls(settings.source_url, settings.repo_key, creds.repo_username, creds.repo_password, cache_dir=settings.cache_dir, allow_network=allow_network)
+        return cls(
+            settings.source_url,
+            settings.repo_key,
+            creds.repo_username,
+            creds.repo_password,
+            cache_dir=settings.cache_dir,
+            allow_network=allow_network,
+        )
 
     def pom(self, gav: Gav) -> bytes | None:
-        """Return the .pom beside gav, or None when it is neither cached nor fetchable."""
+        """Return the .pom beside gav.
+
+        None when it is neither cached nor fetchable.
+        """
         return self._get(self.base + gav.with_extension('pom').maven_path)
 
     def manifest(self, gav: Gav) -> str | None:
-        """Return the archive's META-INF/MANIFEST.MF as text, or None when it is neither cached nor fetchable."""
+        """Return the archive's META-INF/MANIFEST.MF as text.
+
+        None when it is neither cached nor fetchable.
+        """
         data = self._get(self.base + gav.maven_path + '!/META-INF/MANIFEST.MF')
         return data.decode('utf-8', 'replace') if data is not None else None
 
     def cache_file(self, url: str) -> Path | None:
-        """Return where update-center2's cache keeps url (keyed by the sha256 of its path), or None with no cache."""
+        """Return where update-center2's cache keeps url.
+
+        Keyed by the sha256 of its path; None with no cache.
+        """
         if self.cache_dir is None:
             return None
         digest = hashlib.sha256(urlsplit(url).path.encode('utf-8')).hexdigest()
@@ -162,11 +238,14 @@ class ArtifactSource:
         if cached is not None:
             if cached.is_file():
                 return cached.read_bytes()
-            if cached.is_dir():  # update-center2 records failed downloads as directories
+            # update-center2 records failed downloads as directories
+            if cached.is_dir():
                 return None
         if not self.allow_network:
             return None
-        request = urllib.request.Request(url, headers={'Authorization': self._auth, 'User-Agent': http.USER_AGENT})
+        request = urllib.request.Request(
+            url, headers={'Authorization': self._auth, 'User-Agent': http.USER_AGENT}
+        )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 return response.read()
@@ -182,7 +261,10 @@ class ArtifactSource:
 
 
 def parse_manifest(text: str) -> dict[str, str]:
-    """Return the main section of a JAR manifest, joining 72-column continuation lines."""
+    """Return the main section of a JAR manifest.
+
+    Joins 72-column continuation lines.
+    """
     attributes: dict[str, str] = {}
     key: str | None = None
     for raw in text.replace('\r\n', '\n').replace('\r', '\n').split('\n'):
@@ -215,11 +297,17 @@ def is_stub_pom(data: bytes) -> bool:
     root = safe_root(data)
     if root is None:
         return True
-    return all(not (child.tag.rsplit('}', 1)[-1] == 'name' and (child.text or '').strip()) for child in root)
+    return all(
+        not (child.tag.rsplit('}', 1)[-1] == 'name' and (child.text or '').strip())
+        for child in root
+    )
 
 
 def analyze(listing: Listing, versions: VersionTool, source: Source) -> DoctorReport:
-    """Report what the listing drops, and check each plugin's newest release for a stub POM and unmet required dependencies."""
+    """Report what the listing drops, and check each plugin's newest release.
+
+    The check is for a stub POM and unmet required dependencies.
+    """
     report = DoctorReport()
     report.non_maven = sorted(f'{f.path}/{f.name}' for f in listing.rejected)
     report.hpi_without_pom = sorted(g.maven_path for g in listing.plugins_without_pom)
@@ -229,10 +317,13 @@ def analyze(listing: Listing, versions: VersionTool, source: Source) -> DoctorRe
     report.plugins = len(newest)
     latest: dict[str, Gav] = {}
     for gav in listing.plugins:
-        if newest.get(gav.artifact_id) == gav.version and (gav.artifact_id not in latest or gav.extension == 'hpi'):
+        if newest.get(gav.artifact_id) == gav.version and (
+            gav.artifact_id not in latest or gav.extension == 'hpi'
+        ):
             latest[gav.artifact_id] = gav
 
-    checks: list[tuple[Gav, str, str, str]] = []  # plugin release, dependency, required, available
+    # plugin release, dependency, required, available
+    checks: list[tuple[Gav, str, str, str]] = []
     for artifact_id, gav in sorted(latest.items()):
         pom, manifest = source.pom(gav), source.manifest(gav)
         if pom is None or manifest is None:
@@ -241,37 +332,68 @@ def analyze(listing: Listing, versions: VersionTool, source: Source) -> DoctorRe
             report.stub_poms.append(f'{artifact_id}:{gav.version}')
         if manifest is None:
             continue
-        for name, required, optional in parse_dependencies(parse_manifest(manifest).get('Plugin-Dependencies', '')):
+        for name, required, optional in parse_dependencies(
+            parse_manifest(manifest).get('Plugin-Dependencies', '')
+        ):
             if optional:
                 continue
             if name not in latest:
-                report.missing_dependencies.append(f'{artifact_id}:{gav.version} requires {name} {required} (not in the repository)')
-                report.missing_dependency_details.append(dependency_detail(gav, name, required))
+                report.missing_dependencies.append(
+                    f'{artifact_id}:{gav.version} requires {name} {required} '
+                    '(not in the repository)'
+                )
+                report.missing_dependency_details.append(
+                    dependency_detail(gav, name, required)
+                )
             else:
                 checks.append((gav, name, required, latest[name].version))
-    results = versions.compare_many([(available, required) for _, _, required, available in checks])
+    results = versions.compare_many(
+        [(available, required) for _, _, required, available in checks]
+    )
     for (gav, name, required, available), cmp in zip(checks, results, strict=False):
         if cmp < 0:
-            report.missing_dependencies.append(f'{gav.artifact_id}:{gav.version} requires {name} >= {required} (newest available: {available})')
-            report.missing_dependency_details.append(dependency_detail(gav, name, required))
+            report.missing_dependencies.append(
+                f'{gav.artifact_id}:{gav.version} requires {name} >= {required} '
+                f'(newest available: {available})'
+            )
+            report.missing_dependency_details.append(
+                dependency_detail(gav, name, required)
+            )
     return report
 
 
 def dependency_detail(gav: Gav, dependency: str, required: str) -> dict[str, str]:
-    """Return one missing or too-old required dependency as data, naming the plugin release that requires it."""
-    return {'plugin': gav.artifact_id, 'plugin_group': gav.group_id, 'plugin_version': gav.version, 'dependency': dependency, 'required': required}
+    """Return one missing or too-old required dependency as data.
+
+    Names the plugin release that requires it.
+    """
+    return {
+        'plugin': gav.artifact_id,
+        'plugin_group': gav.group_id,
+        'plugin_version': gav.version,
+        'dependency': dependency,
+        'required': required,
+    }
 
 
 def required_jenkins_version(attributes: Mapping[str, str]) -> str | None:
-    """Return the core a plugin release requires: Jenkins-Version, or Hudson-Version for old builds; None unless a plain version."""
-    value = (attributes.get('Jenkins-Version') or attributes.get('Hudson-Version') or '').strip()
+    """Return the core a plugin release requires.
+
+    Jenkins-Version, or Hudson-Version for old builds; None unless a plain version.
+    """
+    value = (
+        attributes.get('Jenkins-Version') or attributes.get('Hudson-Version') or ''
+    ).strip()
     return value if CORE_VERSION.match(value) else None
 
 
-def required_cores(listing: Listing, source: Source) -> tuple[dict[str, list[str]], int]:
-    """Map each core the repository's plugin releases require to those releases, and count releases whose manifest is unavailable.
+def required_cores(
+    listing: Listing, source: Source
+) -> tuple[dict[str, list[str]], int]:
+    """Map each core the repository's plugin releases require to those releases.
 
-    Every release counts, as update-center2's TieredUpdateSitesGenerator counts them when it picks tiers.
+    Also count releases whose manifest is unavailable. Every release counts, as
+    update-center2's TieredUpdateSitesGenerator counts them when it picks tiers.
     """
     required: dict[str, list[str]] = {}
     unchecked = 0
@@ -298,8 +420,17 @@ def check_since(since: str | None) -> None:
         raise DoctorError(msg)
 
 
-def find_missing_cores(required: Mapping[str, list[str]], stocked: Sequence[str], since: str | None, versions: VersionTool) -> tuple[str | None, list[dict], int, str | None]:
-    """Return the floor (since, else the oldest stocked core), the required cores the repository lacks at or above it, and how many it lacks below it and the oldest of those."""
+def find_missing_cores(
+    required: Mapping[str, list[str]],
+    stocked: Sequence[str],
+    since: str | None,
+    versions: VersionTool,
+) -> tuple[str | None, list[dict], int, str | None]:
+    """Return the floor and the required cores the repository lacks at or above it.
+
+    The floor is since, else the oldest stocked core. Also return how many it lacks
+    below it and the oldest of those.
+    """
     check_since(since)
     floor = since or (stocked[0] if stocked else None)
     if floor is None:
@@ -307,22 +438,53 @@ def find_missing_cores(required: Mapping[str, list[str]], stocked: Sequence[str]
     have = set(stocked)
     lacking = versions.sort(version for version in required if version not in have)
     order = versions.compare_many([(version, floor) for version in lacking])
-    missing = [{'version': version, 'url': PUBLIC_RELEASES_URL + aql.Gav(aql.WAR_GROUP, aql.WAR_ARTIFACT, version, 'war').maven_path, 'required_by': len(required[version]), 'example': min(required[version])} for version, cmp in zip(lacking, order, strict=True) if cmp >= 0]
+    missing = [
+        {
+            'version': version,
+            'url': PUBLIC_RELEASES_URL
+            + aql.Gav(aql.WAR_GROUP, aql.WAR_ARTIFACT, version, 'war').maven_path,
+            'required_by': len(required[version]),
+            'example': min(required[version]),
+        }
+        for version, cmp in zip(lacking, order, strict=True)
+        if cmp >= 0
+    ]
     below = sum(1 for cmp in order if cmp < 0)
-    return floor, missing, below, lacking[0] if below else None  # lacking is ascending: those below the floor come first
+    # lacking is ascending: those below the floor come first
+    return floor, missing, below, lacking[0] if below else None
 
 
-def attach_core_check(report: DoctorReport, listing: Listing, source: Source, versions: VersionTool, *, since: str | None) -> DoctorReport:
-    """Add the cores plugin releases require, and those the repository lacks at or above the floor, to the report."""
+def attach_core_check(
+    report: DoctorReport,
+    listing: Listing,
+    source: Source,
+    versions: VersionTool,
+    *,
+    since: str | None,
+) -> DoctorReport:
+    """Add the cores plugin releases require to the report.
+
+    Also add those the repository lacks at or above the floor.
+    """
     required, report.cores_unchecked = required_cores(listing, source)
-    report.required_cores = {version: required[version] for version in versions.sort(required)}
-    report.core_floor, report.missing_cores, report.missing_cores_below_floor, report.oldest_core_below_floor = find_missing_cores(required, report.cores, since, versions)
+    report.required_cores = {
+        version: required[version] for version in versions.sort(required)
+    }
+    (
+        report.core_floor,
+        report.missing_cores,
+        report.missing_cores_below_floor,
+        report.oldest_core_below_floor,
+    ) = find_missing_cores(required, report.cores, since, versions)
     return report
 
 
 @dataclass(frozen=True)
 class Inspection:
-    """One doctor run: the report, and the listing and source it was built from (uc procure stage)."""
+    """One doctor run: the report, and the listing and source it was built from.
+
+    uc procure stage uses it.
+    """
 
     report: DoctorReport
     listing: Listing
@@ -338,9 +500,18 @@ def inspect_repository(
     since: str | None = None,
     query: Callable[..., list[aql.RepoFile]] = aql.query_repository,
 ) -> Inspection:
-    """List the source repository and analyze it, adding the repo-adapter's report, the core check (not for the public repository) and the live release's tiers."""
+    """List the source repository and analyze it.
+
+    Adds the repo-adapter's report, the core check (not for the public repository) and
+    the live release's tiers.
+    """
     check_since(since)
-    files = query(settings.source_api_url, settings.repo_key, creds.repo_username, creds.repo_password)
+    files = query(
+        settings.source_api_url,
+        settings.repo_key,
+        creds.repo_username,
+        creds.repo_password,
+    )
     listing = aql.classify(files)
     source = ArtifactSource.from_settings(settings, creds, allow_network=fetch)
     report = analyze(listing, versions, source)
@@ -364,16 +535,24 @@ def run_doctor(
     query: Callable[..., list[aql.RepoFile]] = aql.query_repository,
 ) -> DoctorReport:
     """List the source repository and analyze it (see inspect_repository)."""
-    return inspect_repository(settings, creds, fetch=fetch, versions=versions, since=since, query=query).report
+    return inspect_repository(
+        settings, creds, fetch=fetch, versions=versions, since=since, query=query
+    ).report
 
 
 RECORD_LOCK_FILE = REPORT_FILE.with_name('.record.lock')
-"""Held while a recorded report is saved; not the status lock, which `record` takes inside it through status.update_status."""
+"""Held while a recorded report is saved.
+
+Not the status lock, which `record` takes inside it through status.update_status.
+"""
 
 
 @contextlib.contextmanager
 def record_locked(data_dir: Path) -> Iterator[None]:
-    """Hold data_dir/doctor/.record.lock, waiting while another uc doctor --record holds it."""
+    """Hold data_dir/doctor/.record.lock.
+
+    Waits while another uc doctor --record holds it.
+    """
     lock = data_dir / RECORD_LOCK_FILE
     lock.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(lock, os.O_RDWR | os.O_CREAT, 0o644)
@@ -385,9 +564,14 @@ def record_locked(data_dir: Path) -> Iterator[None]:
 
 
 def record(report: DoctorReport, data_dir: Path, now: dt.datetime) -> Path:
-    """Save report as the latest: in full as data_dir/doctor/report.json, its counts in status.json's doctor block; return the report's path.
+    """Save report as the latest, and return the report's path.
 
-    The block's recorded_at says when. Generations keep it and the block's missing_cores and cores_unchecked, which only a recorded report works out (docs/reference/status-json.md).
+    It is saved in full as data_dir/doctor/report.json, its counts in status.json's
+    doctor block.
+
+    The block's recorded_at says when. Generations keep it and the block's
+    missing_cores and cores_unchecked, which only a recorded report works out
+    (docs/reference/status-json.md).
     Overlapping runs take turns, so report.json always matches the last doctor block.
     """
     path = data_dir / REPORT_FILE
@@ -402,19 +586,36 @@ def record(report: DoctorReport, data_dir: Path, now: dt.datetime) -> Path:
         except BaseException:
             tmp.unlink(missing_ok=True)
             raise
-        status.update_status(data_dir, doctor={**report.summary(), 'checked_at': iso(now), 'recorded_at': iso(now)})
+        status.update_status(
+            data_dir,
+            doctor={
+                **report.summary(),
+                'checked_at': iso(now),
+                'recorded_at': iso(now),
+            },
+        )
     return path
 
 
 def format_report(report: DoctorReport, settings: Settings) -> str:
     """Render the report as the human-readable text uc doctor prints."""
     lines = [
-        f'Source: {settings.repo_type} repository {settings.repo_key} at {settings.repo_url}' + (' (through repo-adapter)' if settings.repo_adapter else ''),
+        (
+            f'Source: {settings.repo_type} repository {settings.repo_key} '
+            f'at {settings.repo_url}'
+        )
+        + (' (through repo-adapter)' if settings.repo_adapter else ''),
         f'Plugins with a POM: {report.plugins}',
-        'Jenkins cores with a POM: ' + (', '.join(report.cores) or 'none (the site will offer no core and no tiers)'),
+        'Jenkins cores with a POM: '
+        + (
+            ', '.join(report.cores) or 'none (the site will offer no core and no tiers)'
+        ),
     ]
     if report.tiers is not None:
-        lines.append(f'Tiers in the live release: weekly {report.tiers.get("weeklyCores", [])}, stable {report.tiers.get("stableCores", [])}')
+        lines.append(
+            f'Tiers in the live release: weekly {report.tiers.get("weeklyCores", [])}, '
+            f'stable {report.tiers.get("stableCores", [])}'
+        )
 
     def section(title: str, items: list[str], indent: str = '') -> None:
         if items:
@@ -426,9 +627,24 @@ def format_report(report: DoctorReport, settings: Settings) -> str:
     if report.dropped:
         lines.append(f'Dropped by the generator: {report.dropped}')
         if adapter is not None:
-            section('no POM in the repository or the archive: procure the real .pom', [f'{item["gav"]}  {item["url"]}' for item in adapter['needs_pom']], '  ')
-            section('misplaced: move to the path its manifest names', [f'{item["path"]}  ->  {item["correct_path"]}' for item in adapter['misplaced']], '  ')
-            section('skipped', [f'{item["path"]}: {item["reason"]}' for item in adapter['skipped']], '  ')
+            section(
+                'no POM in the repository or the archive: procure the real .pom',
+                [f'{item["gav"]}  {item["url"]}' for item in adapter['needs_pom']],
+                '  ',
+            )
+            section(
+                'misplaced: move to the path its manifest names',
+                [
+                    f'{item["path"]}  ->  {item["correct_path"]}'
+                    for item in adapter['misplaced']
+                ],
+                '  ',
+            )
+            section(
+                'skipped',
+                [f'{item["path"]}: {item["reason"]}' for item in adapter['skipped']],
+                '  ',
+            )
         else:
             section('.hpi/.jpi without a .pom', report.hpi_without_pom, '  ')
         section('jenkins-war without a .pom', report.war_without_pom, '  ')
@@ -436,15 +652,33 @@ def format_report(report: DoctorReport, settings: Settings) -> str:
     else:
         lines.append('Nothing in the source is dropped by the generator.')
     if adapter is not None:
-        section('POMs filled in from archives; the real .pom is optional', [f'{item["gav"]}  {item["url"]}' for item in adapter['derived_poms']])
-        section('.pom files ignored (not usable); replace with the real .pom', [f'{item["path"]}: {item["reason"]}  {item["url"]}' for item in adapter['replaced_poms']])
-        section('dates from the repository (no usable archive date)', [f'{item["path"]}: {item["reason"]}' for item in adapter['dates_from_repository']])
+        section(
+            'POMs filled in from archives; the real .pom is optional',
+            [f'{item["gav"]}  {item["url"]}' for item in adapter['derived_poms']],
+        )
+        section(
+            '.pom files ignored (not usable); replace with the real .pom',
+            [
+                f'{item["path"]}: {item["reason"]}  {item["url"]}'
+                for item in adapter['replaced_poms']
+            ],
+        )
+        section(
+            'dates from the repository (no usable archive date)',
+            [
+                f'{item["path"]}: {item["reason"]}'
+                for item in adapter['dates_from_repository']
+            ],
+        )
     section('Stub POMs (degraded names, descriptions, SCM links)', report.stub_poms)
     section('Dependency problems', report.missing_dependencies)
     if report.required_cores is not None:
         lines.extend(core_lines(report))
     if report.unchecked:
-        lines.append(f'Not checked (POM or manifest unavailable; run with --fetch): {report.unchecked}')
+        lines.append(
+            'Not checked (POM or manifest unavailable; run with --fetch): '
+            f'{report.unchecked}'
+        )
     return '\n'.join(lines)
 
 
@@ -454,21 +688,57 @@ def core_lines(report: DoctorReport) -> list[str]:
     lines: list[str] = []
     if report.core_floor is None:
         if required:
-            lines.append(f'No Jenkins core in the repository: plugins require {len(required)} cores, from {required[0]} to {required[-1]}. Stage the ones your controllers need with: uc procure stage --war required --since <oldest version your controllers run>')
+            lines.append(
+                f'No Jenkins core in the repository: plugins require {len(required)} '
+                f'cores, from {required[0]} to {required[-1]}. Stage the ones your '
+                'controllers need with: uc procure stage --war required --since '
+                '<oldest version your controllers run>'
+            )
     else:
         if report.missing_cores:
-            lines.append(f'Cores plugins require that the repository lacks, at or above {report.core_floor} ({len(report.missing_cores)}):')
-            lines.extend(f'  {core["version"]}  {core["url"]}  (required by {core["required_by"]} release{"" if core["required_by"] == 1 else "s"}, e.g. {core["example"]})' for core in report.missing_cores)
+            lines.append(
+                'Cores plugins require that the repository lacks, at or above '
+                f'{report.core_floor} ({len(report.missing_cores)}):'
+            )
+            lines.extend(
+                (
+                    f'  {core["version"]}  {core["url"]}  (required by '
+                    f'{core["required_by"]} '
+                    f'release{"" if core["required_by"] == 1 else "s"}, '
+                    f'e.g. {core["example"]})'
+                )
+                for core in report.missing_cores
+            )
         below, oldest = report.missing_cores_below_floor, report.oldest_core_below_floor
         if below:
             if below == 1:
-                lines.append(f'1 older required core below {report.core_floor} not listed: {oldest}')
-                lines.append(f'  To stage it: uc procure stage --war required --since {oldest}')
+                lines.append(
+                    f'1 older required core below {report.core_floor} '
+                    f'not listed: {oldest}'
+                )
+                lines.append(
+                    f'  To stage it: uc procure stage --war required --since {oldest}'
+                )
             else:
-                lines.append(f'{below} older required cores below {report.core_floor} not listed, the oldest {oldest}')
-                lines.append(f'  To stage them: uc procure stage --war required --since {oldest} (a later version stages only those from it up)')
-            if report.cores and report.core_floor == report.cores[0]:  # the floor is the repository's oldest core, which an older one replaces
-                lines.append(f'  Warning: once pushed, {oldest} is the oldest core in the repository, and so the floor: every later uc procure stage --war required also stages the missing cores plugins require from {oldest} up, for plugins you add later too')
+                lines.append(
+                    f'{below} older required cores below {report.core_floor} '
+                    f'not listed, the oldest {oldest}'
+                )
+                lines.append(
+                    '  To stage them: uc procure stage --war required --since '
+                    f'{oldest} (a later version stages only those from it up)'
+                )
+            # the floor is the repository's oldest core, which an older one replaces
+            if report.cores and report.core_floor == report.cores[0]:
+                lines.append(
+                    f'  Warning: once pushed, {oldest} is the oldest core in the '
+                    'repository, and so the floor: every later uc procure stage --war '
+                    'required also stages the missing cores plugins require from '
+                    f'{oldest} up, for plugins you add later too'
+                )
     if report.cores_unchecked:
-        lines.append(f'Required cores not checked (manifest unavailable; run with --fetch): {report.cores_unchecked}')
+        lines.append(
+            'Required cores not checked (manifest unavailable; run with --fetch): '
+            f'{report.cores_unchecked}'
+        )
     return lines

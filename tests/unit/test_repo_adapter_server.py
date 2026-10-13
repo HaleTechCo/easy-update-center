@@ -1,4 +1,7 @@
-"""Unit tests for uc.repo_adapter.server: the adapter's HTTP endpoints, the credentials they need and its token."""
+"""Unit tests for uc.repo_adapter.server.
+
+The adapter's HTTP endpoints, the credentials they need and its token.
+"""
 
 import base64
 import datetime as dt
@@ -21,7 +24,18 @@ from uc.doctor import ArtifactSource
 from uc.errors import UcError
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import read_report
-from uc.repo_adapter.server import REQUEST_TIMEOUT, Adapter, AdapterServer, RecordPortError, UnhealthyError, ensure_token, healthcheck, make_handler, make_server, record_port
+from uc.repo_adapter.server import (
+    REQUEST_TIMEOUT,
+    Adapter,
+    AdapterServer,
+    RecordPortError,
+    UnhealthyError,
+    ensure_token,
+    healthcheck,
+    make_handler,
+    make_server,
+    record_port,
+)
 from ucsupport import make_settings
 
 NOW = dt.datetime(2026, 9, 23, tzinfo=dt.UTC)
@@ -37,8 +51,20 @@ def running(tmp_path):
 
     def start(files, *, backend_type='artifact-keeper', adapter_on=True):
         backend = FakeBackend(files, backend_type=backend_type)
-        adapter = Adapter(backend, Cache(tmp_path / 'cache'), key=KEY, report_file=tmp_path / 'report.json', clock=lambda: NOW) if adapter_on else None
-        server = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(adapter, key=KEY, token=TOKEN))
+        adapter = (
+            Adapter(
+                backend,
+                Cache(tmp_path / 'cache'),
+                key=KEY,
+                report_file=tmp_path / 'report.json',
+                clock=lambda: NOW,
+            )
+            if adapter_on
+            else None
+        )
+        server = ThreadingHTTPServer(
+            ('127.0.0.1', 0), make_handler(adapter, key=KEY, token=TOKEN)
+        )
         threading.Thread(target=server.serve_forever, daemon=True).start()
         started.append(server)
         return backend, f'http://127.0.0.1:{server.server_address[1]}/artifactory/'
@@ -50,7 +76,11 @@ def running(tmp_path):
 
 
 def fetch(url, *, token=TOKEN, data=None):
-    headers = {'Authorization': 'Basic ' + base64.b64encode(f'uc:{token}'.encode()).decode()} if token else {}
+    headers = (
+        {'Authorization': 'Basic ' + base64.b64encode(f'uc:{token}'.encode()).decode()}
+        if token
+        else {}
+    )
     request = urllib.request.Request(url, data=data, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
@@ -73,18 +103,26 @@ def test_health_needs_no_credentials(running):
 
 def test_the_listing_needs_the_token(running):
     _, url = running({})
-    status, headers, _ = fetch(url + 'api/search/aql', token=None, data=(AQL_TEMPLATE % KEY).encode())
+    status, headers, _ = fetch(
+        url + 'api/search/aql', token=None, data=(AQL_TEMPLATE % KEY).encode()
+    )
     assert status == 401
     assert headers['WWW-Authenticate'] == 'Basic realm="repo-adapter"'
     assert fetch(url + 'api/search/aql', token='wrong', data=b'x')[0] == 401
 
 
 def test_file_reads_need_no_credentials(running):
-    """Upstream sends none, and cannot answer a challenge (its Authenticator NPEs on Java's HttpClient)."""
+    """Upstream sends none, and cannot answer a challenge.
+
+    Its Authenticator NPEs on Java's HttpClient.
+    """
     _, url = running({f'{BASE}.hpi': make_hpi(*GAV)})
     aql(url)
     assert fetch(f'{url}{KEY}/{BASE}.pom', token=None)[2] == pom_xml(*GAV)
-    assert b'Group-Id' in fetch(f'{url}{KEY}/{BASE}.hpi!/META-INF/MANIFEST.MF', token=None)[2]
+    assert (
+        b'Group-Id'
+        in fetch(f'{url}{KEY}/{BASE}.hpi!/META-INF/MANIFEST.MF', token=None)[2]
+    )
 
 
 def test_only_upstreams_query_for_the_configured_repository_is_answered(running):
@@ -95,15 +133,26 @@ def test_only_upstreams_query_for_the_configured_repository_is_answered(running)
 
 def test_upstream_and_uc_read_the_gap_filled_listing(running, tmp_path):
     _, url = running({f'{BASE}.hpi': make_hpi(*GAV)})
-    listing = classify(query_repository(url + 'api/', KEY, 'uc', TOKEN))  # uc's own AQL client
-    assert [g.artifact_id for g in listing.plugins] == ['caffeine-api']  # paired with its derived POM
-    assert read_report(tmp_path / 'report.json')['derived_poms'] == [{'gav': ':'.join(GAV), 'url': f'https://repo.jenkins-ci.org/releases/{BASE}.pom'}]
+    listing = classify(
+        query_repository(url + 'api/', KEY, 'uc', TOKEN)
+    )  # uc's own AQL client
+    assert [g.artifact_id for g in listing.plugins] == [
+        'caffeine-api'
+    ]  # paired with its derived POM
+    assert read_report(tmp_path / 'report.json')['derived_poms'] == [
+        {
+            'gav': ':'.join(GAV),
+            'url': f'https://repo.jenkins-ci.org/releases/{BASE}.pom',
+        }
+    ]
 
 
 def test_derived_poms_manifests_and_descriptions_are_served(running):
     _, url = running({f'{BASE}.hpi': make_hpi(*GAV)})
     aql(url)
-    source = ArtifactSource(url, KEY, 'uc', TOKEN, cache_dir=None, allow_network=True)  # what uc doctor reads with
+    source = ArtifactSource(
+        url, KEY, 'uc', TOKEN, cache_dir=None, allow_network=True
+    )  # what uc doctor reads with
     gav = Gav(*GAV, 'hpi')
     assert source.pom(gav) == pom_xml(*GAV)
     assert 'Group-Id: io.jenkins.plugins' in source.manifest(gav)
@@ -112,15 +161,25 @@ def test_derived_poms_manifests_and_descriptions_are_served(running):
 
 
 def test_a_repository_jar_wins_for_the_description(running):
-    _, url = running({f'{BASE}.hpi': make_hpi(*GAV), f'{BASE}.jar': make_jar(b'<div>From the jar.</div>')})
+    _, url = running(
+        {
+            f'{BASE}.hpi': make_hpi(*GAV),
+            f'{BASE}.jar': make_jar(b'<div>From the jar.</div>'),
+        }
+    )
     aql(url)
-    assert fetch(f'{url}{KEY}/{BASE}.jar!/index.jelly')[2] == b'<div>From the jar.</div>'
+    assert (
+        fetch(f'{url}{KEY}/{BASE}.jar!/index.jelly')[2] == b'<div>From the jar.</div>'
+    )
 
 
 def test_artifactory_descriptions_try_the_repository_jar_first(running):
     backend, url = running({f'{BASE}.hpi': make_hpi(*GAV)}, backend_type='artifactory')
     aql(url)
-    assert fetch(f'{url}{KEY}/{BASE}.jar!/index.jelly')[2] == b'<div>An excellent plugin.</div>'
+    assert (
+        fetch(f'{url}{KEY}/{BASE}.jar!/index.jelly')[2]
+        == b'<div>An excellent plugin.</div>'
+    )
     assert ('jar', f'{BASE}.jar') in backend.calls
 
 
@@ -129,14 +188,23 @@ def test_repository_poms_are_forwarded_and_archives_are_not_served(running):
     _backend, url = running({f'{BASE}.hpi': make_hpi(*GAV), f'{BASE}.pom': own})
     aql(url)
     assert fetch(f'{url}{KEY}/{BASE}.pom')[2] == own
-    assert fetch(f'{url}{KEY}/{BASE}.hpi')[0] == 404  # upstream never downloads whole archives
-    assert fetch(f'{url}{KEY}/{BASE}.hpi!/WEB-INF/lib/caffeine-api.jar')[0] == 404  # not an entry upstream reads
-    assert fetch(f'{url}{KEY}/org/jenkins-ci/plugins/plugin/4.88/plugin-4.88.pom')[0] == 404
+    assert (
+        fetch(f'{url}{KEY}/{BASE}.hpi')[0] == 404
+    )  # upstream never downloads whole archives
+    assert (
+        fetch(f'{url}{KEY}/{BASE}.hpi!/WEB-INF/lib/caffeine-api.jar')[0] == 404
+    )  # not an entry upstream reads
+    assert (
+        fetch(f'{url}{KEY}/org/jenkins-ci/plugins/plugin/4.88/plugin-4.88.pom')[0]
+        == 404
+    )
 
 
 def test_a_get_before_any_listing_builds_one(running):
     backend, url = running({f'{BASE}.hpi': make_hpi(*GAV)})
-    assert fetch(f'{url}{KEY}/{BASE}.pom')[2] == pom_xml(*GAV)  # as after an adapter restart
+    assert fetch(f'{url}{KEY}/{BASE}.pom')[2] == pom_xml(
+        *GAV
+    )  # as after an adapter restart
     assert backend.calls[0] == ('list', '')
 
 
@@ -152,13 +220,18 @@ def test_a_listing_that_fails_unexpectedly_answers_502(running):
 
 
 def test_descriptions_are_only_fetched_for_listed_plugins(running):
-    """Forwarding carries the service account, so it must not reach paths the listing does not hold."""
+    """Forwarding carries the service account.
+
+    So it must not reach paths the listing does not hold.
+    """
     backend, url = running({f'{BASE}.hpi': make_hpi(*GAV)}, backend_type='artifactory')
     aql(url)
     assert fetch(f'{url}{KEY}/../other-repo/org/x/a/1/a-1.jar!/index.jelly')[0] == 404
     assert fetch(f'{url}{KEY}/org/x/unlisted/1/unlisted-1.jar!/index.jelly')[0] == 404
     assert [call for call in backend.calls if call[0] == 'jar'] == []
-    assert fetch(f'{url}{KEY}/{BASE}.jar!/index.jelly')[0] == 200  # a listed plugin still works
+    assert (
+        fetch(f'{url}{KEY}/{BASE}.jar!/index.jelly')[0] == 200
+    )  # a listed plugin still works
 
 
 def test_an_idle_adapter_only_answers_health(running):
@@ -176,7 +249,11 @@ def test_ensure_token_creates_a_private_token_once(tmp_path):
 
 
 def test_make_server_needs_repository_credentials_only_when_on(tmp_path, secrets_dir):
-    idle = make_server(make_settings(tmp_path, secrets_dir, MODE='online', REPO_URL='', REPO_KEY=''), port=0, host='127.0.0.1')
+    idle = make_server(
+        make_settings(tmp_path, secrets_dir, MODE='online', REPO_URL='', REPO_KEY=''),
+        port=0,
+        host='127.0.0.1',
+    )
     idle.server_close()
     settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on')
     server = make_server(settings, port=0, host='127.0.0.1')
@@ -198,7 +275,9 @@ def test_healthcheck_reports_a_listener_that_does_not_speak_http():
 
         thread = threading.Thread(target=answer, daemon=True)
         thread.start()
-        with pytest.raises(UnhealthyError, match=f'^repo-adapter is not healthy on port {port}: '):
+        with pytest.raises(
+            UnhealthyError, match=f'^repo-adapter is not healthy on port {port}: '
+        ):
             healthcheck(port)
         thread.join(timeout=10)
 
@@ -207,13 +286,18 @@ def test_record_port_into_a_missing_directory_is_a_uc_error(tmp_path):
     path = tmp_path / 'missing' / 'adapter.port'
     with pytest.raises(UcError) as caught:
         record_port(4321, path)
-    assert str(caught.value).startswith(f'repo-adapter cannot record its port in {path}: ')
+    assert str(caught.value).startswith(
+        f'repo-adapter cannot record its port in {path}: '
+    )
     assert not path.with_name('adapter.port.tmp').exists()
 
 
-def test_a_failed_replace_is_reported_and_removes_the_temporary_port_file(tmp_path, monkeypatch):
+def test_a_failed_replace_is_reported_and_removes_the_temporary_port_file(
+    tmp_path, monkeypatch
+):
     path = tmp_path / 'adapter.port'
-    path.mkdir()  # the temporary file is written beside it, then cannot replace a directory
+    # the temporary file is written beside it, then cannot replace a directory
+    path.mkdir()
     replace = Path.replace
     written = []
 
@@ -222,7 +306,13 @@ def test_a_failed_replace_is_reported_and_removes_the_temporary_port_file(tmp_pa
         return replace(self, target)
 
     monkeypatch.setattr(Path, 'replace', watched_replace)
-    with pytest.raises(RecordPortError, match=rf'^repo-adapter cannot record its port in {re.escape(str(path))}: Is a directory$'):
+    with pytest.raises(
+        RecordPortError,
+        match=(
+            r'^repo-adapter cannot record its port in '
+            rf'{re.escape(str(path))}: Is a directory$'
+        ),
+    ):
         record_port(4321, path)
     assert written == [('adapter.port.tmp', '4321\n')]
     assert [entry.name for entry in tmp_path.iterdir()] == ['adapter.port']
@@ -230,14 +320,21 @@ def test_a_failed_replace_is_reported_and_removes_the_temporary_port_file(tmp_pa
 
 
 def raw(port, request, timeout=10):
-    """Send request bytes to the server on port; return the status line it answers with."""
+    """Send request bytes to the server on port.
+
+    Return the status line it answers with.
+    """
     with socket.create_connection(('127.0.0.1', port), timeout=timeout) as sock:
         sock.sendall(request)
         return sock.makefile('rb').readline().decode().strip()
 
 
 def served(port, request, deadline=5.0):
-    """Return the first status line that is not 503, retrying while the server is busy for up to deadline seconds (a handler thread may still be finishing the previous request)."""
+    """Return the first status line that is not 503.
+
+    Retrying while the server is busy for up to deadline seconds (a handler thread may
+    still be finishing the previous request).
+    """
     end = time.monotonic() + deadline
     while True:
         status = raw(port, request)
@@ -251,7 +348,11 @@ def capped():
     started = []
 
     def start(max_requests, adapter=None):
-        server = AdapterServer(('127.0.0.1', 0), make_handler(adapter, key=KEY, token=TOKEN), max_requests=max_requests)
+        server = AdapterServer(
+            ('127.0.0.1', 0),
+            make_handler(adapter, key=KEY, token=TOKEN),
+            max_requests=max_requests,
+        )
         threading.Thread(target=server.serve_forever, daemon=True).start()
         started.append(server)
         return server.server_address[1]
@@ -267,22 +368,45 @@ def test_a_listing_with_a_bad_content_length_is_refused(running, length):
     _, url = running({})
     port = int(url.split(':')[2].split('/')[0])
     auth = base64.b64encode(f'uc:{TOKEN}'.encode()).decode()
-    assert raw(port, f'POST /artifactory/api/search/aql HTTP/1.1\r\nHost: x\r\nAuthorization: Basic {auth}\r\nContent-Length: {length}\r\n\r\n'.encode()) == 'HTTP/1.0 400 Bad Request'
+    assert (
+        raw(
+            port,
+            (
+                'POST /artifactory/api/search/aql HTTP/1.1\r\nHost: x\r\n'
+                f'Authorization: Basic {auth}\r\nContent-Length: {length}\r\n\r\n'
+            ).encode(),
+        )
+        == 'HTTP/1.0 400 Bad Request'
+    )
 
 
 def test_requests_beyond_the_cap_get_503_at_once(capped):
     port = capped(1)
-    with socket.create_connection(('127.0.0.1', port)) as idle:  # holds the only slot: it sends no end of headers
+    with socket.create_connection(
+        ('127.0.0.1', port)
+    ) as idle:  # holds the only slot: it sends no end of headers
         idle.sendall(b'GET /healthz HTTP/1.1\r\n')
-        assert served(port, b'GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n', deadline=0) == 'HTTP/1.1 503 Service Unavailable'
+        assert (
+            served(port, b'GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n', deadline=0)
+            == 'HTTP/1.1 503 Service Unavailable'
+        )
 
 
 def test_a_slot_comes_back_after_failed_requests(capped):
     port = capped(1)
     for _ in range(3):  # a leaked slot would leave every later request at 503
-        assert served(port, b'POST /nowhere HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n') == 'HTTP/1.0 404 Not Found'
-        assert served(port, b'BREW / HTTP/1.1\r\nHost: x\r\n\r\n').startswith('HTTP/1.0 501')
-    assert served(port, b'GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n') == 'HTTP/1.0 200 OK'
+        assert (
+            served(
+                port, b'POST /nowhere HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n'
+            )
+            == 'HTTP/1.0 404 Not Found'
+        )
+        assert served(port, b'BREW / HTTP/1.1\r\nHost: x\r\n\r\n').startswith(
+            'HTTP/1.0 501'
+        )
+    assert (
+        served(port, b'GET /healthz HTTP/1.1\r\nHost: x\r\n\r\n') == 'HTTP/1.0 200 OK'
+    )
 
 
 def test_connections_time_out():

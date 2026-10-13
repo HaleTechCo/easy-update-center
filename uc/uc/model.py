@@ -7,7 +7,10 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Tiers:
-    """Tier list from `update-center2 --dynamic-tier-list-file`, in upstream (ascending) order."""
+    """Tier list from `update-center2 --dynamic-tier-list-file`.
+
+    In upstream (ascending) order.
+    """
 
     weekly: tuple[str, ...] = ()
     stable: tuple[str, ...] = ()
@@ -20,7 +23,10 @@ class Tiers:
 
 @dataclass(frozen=True)
 class Credentials:
-    """What uc and the jar present to Settings.source_url: the repository's account, or the adapter token."""
+    """What uc and the jar present to Settings.source_url.
+
+    The repository's account, or the adapter token.
+    """
 
     repo_username: str
     repo_password: str

@@ -7,12 +7,13 @@ on 2026-09-24 produced. Pins are enforced at build time.
 
 ## uc image
 
-The image behind the `uc`, `scheduler`, `repo-adapter` and `setup` services. Built by
-`docker compose build` from [`uc/Dockerfile`](../../uc/Dockerfile).
+The image behind the `uc`, `scheduler`, `repo-adapter` and `setup` services. Built from
+[`uc/Dockerfile`](../../uc/Dockerfile) by the Release workflow, or by `docker compose build` with
+`compose.build.yaml`.
 
 | Component | Version or pin | Pinned in | License | Why |
 |---|---|---|---|---|
-| `eclipse-temurin:21-jre` base image | tag `21-jre`, floats (Ubuntu 26.04, OpenJDK 21.0.12) | `uc/Dockerfile` | GPL-2.0-only WITH Classpath-exception-2.0 | The Java runtime for the generator. |
+| `eclipse-temurin:21-jre` base image | tag `21-jre`, pinned by digest (Ubuntu 26.04, OpenJDK 21.0.12) | `uc/Dockerfile` | GPL-2.0-only WITH Classpath-exception-2.0 | The Java runtime for the generator. |
 | update-center2 | `3.18.4`, commit `b2c8ad2b2feb425b471e6dcc9174c50dc3b3c1dd`, checked at build | `uc/Dockerfile` (`UC2_VERSION`, `UC2_COMMIT`) | MIT, under the Jenkins project's governance (see [note](#note-on-update-center2s-license)) | The generator Jenkins' own update center runs, built from source. |
 | `0001-popularity-configurable-and-optional.patch` | in this repository | `uc/patches/` | MIT | Makes the popularity URL configurable (`POPULARITY_JSON_URL`) and its absence non-fatal. |
 | `0002-core-age-configurable.patch` | in this repository | `uc/patches/` | MIT | Makes the 400-day core age for tiers configurable (`CORE_AGE_DAYS`, `0` for no limit). |
@@ -32,7 +33,7 @@ The image behind the `web` service. Built from [`web/Dockerfile`](../../web/Dock
 
 | Component | Version or pin | Pinned in | License | Why |
 |---|---|---|---|---|
-| `httpd:2.4` base image | tag `2.4`, floats (Debian 13, Apache 2.4.68) | `web/Dockerfile` | Apache-2.0 | Serves the release and runs upstream's `.htaccess` routing. |
+| `httpd:2.4` base image | tag `2.4`, pinned by digest (Debian 13, Apache 2.4.68) | `web/Dockerfile` | Apache-2.0 | Serves the release and runs upstream's `.htaccess` routing. |
 | ca-certificates | distribution package, floats | not pinned | MPL-2.0 (certificate data), GPL-2.0-or-later (scripts) | Verifies the download backend in proxy mode. |
 | curl | distribution package, floats | not pinned | curl | The container health check. |
 | openssl | distribution package, floats | not pinned | Apache-2.0 | Only for the configuration check during the build. |
@@ -44,7 +45,7 @@ Used while building the images, not shipped in the runtime images.
 
 | Component | Version or pin | License | Why |
 |---|---|---|---|
-| `maven:3.9-eclipse-temurin-21` | tag, floats | Apache-2.0 (Maven), GPL-2.0-only WITH Classpath-exception-2.0 (JDK) | Builds and tests update-center2 with the patches applied, and compiles VersionTool. |
+| `maven:3.9-eclipse-temurin-21` | tag, pinned by digest in `uc/Dockerfile` | Apache-2.0 (Maven), GPL-2.0-only WITH Classpath-exception-2.0 (JDK) | Builds and tests update-center2 with the patches applied, and compiles VersionTool. |
 | git | distribution package, floats | GPL-2.0-only | Clones update-center2 at the pinned tag. |
 
 The Maven build downloads update-center2's dependencies; see
@@ -56,36 +57,44 @@ The Maven build downloads update-center2's dependencies; see
 |---|---|---|---|
 | python3-pytest | distribution package in the `test` image stage | MIT | Runs the unit, routing and integration suites. |
 | git | distribution package in the `test` image stage | GPL-2.0-only | Used by tests and by `make upstream-diff`. |
+| jq | distribution package in the `test` image stage | MIT | Reads Grype's reports in the tests of `.github/scripts/image-scan.sh`, as the runner does. |
 | `jenkins/jenkins` images | `lts` and `latest` tags | MIT | Real controllers in `make it-airgapped` and `make it-online`. |
 | Fake Artifactory and Artifact Keeper | in this repository | MIT | Stand-ins for the repository in `make it-airgapped`. |
 
 ## Development tools
 
-Installed on the developer's machine for the pre-commit hooks; see [CONTRIBUTING](../../CONTRIBUTING.md).
-`requirements-dev.txt` leaves them unpinned on purpose: it is a local lint environment, not a
-delivered artifact, and an unpinned one picks up checker fixes without a bump commit.
+The lint tools behind the pre-commit hooks; see [CONTRIBUTING](../../CONTRIBUTING.md). A developer
+installs only pre-commit, pinned in `requirements-dev.txt`. pre-commit installs each hook from its
+repository at the commit `.pre-commit-config.yaml` pins, and Dependabot proposes newer ones weekly.
 
 | Tool | Source | License | Required? |
 |---|---|---|---|
-| pre-commit, pre-commit-hooks | `requirements-dev.txt` | MIT | yes |
-| ruff | `requirements-dev.txt` | MIT | yes |
-| yamllint | `requirements-dev.txt` | GPL-3.0-or-later | yes |
-| ShellCheck (via shellcheck-py) | `requirements-dev.txt` | GPL-3.0-or-later (shellcheck-py wrapper: MIT) | yes |
+| pre-commit | `requirements-dev.txt` | MIT | yes |
+| pre-commit-hooks | `.pre-commit-config.yaml` | MIT | yes |
+| ruff | `.pre-commit-config.yaml` (ruff-pre-commit) | MIT | yes |
+| yamllint | `.pre-commit-config.yaml` | GPL-3.0-or-later | yes |
+| ShellCheck | `.pre-commit-config.yaml` (shellcheck-py) | GPL-3.0-or-later (shellcheck-py wrapper: MIT) | yes |
+| shfmt | `.pre-commit-config.yaml` (pre-commit-shfmt) | BSD-3-Clause | yes |
+| actionlint | `.pre-commit-config.yaml` (actionlint-py) | MIT | yes |
+| zizmor | `.pre-commit-config.yaml` (zizmor-pre-commit) | MIT | yes |
 | hadolint | run as a container by the hook | GPL-3.0-only | when a Dockerfile changes |
-| shfmt | installed separately | BSD-3-Clause | optional (the hook skips when absent) |
-| PSScriptAnalyzer | installed separately | MIT | optional |
-| golangci-lint | installed separately | GPL-3.0-only | optional (no Go code today) |
 
 ## Pinning policy
 
 - **Pinned:** update-center2's tag, with its commit checked during the build, and the two patches,
   which must apply cleanly or the build fails; supercronic's version and per-architecture SHA-256.
   These are what decide the generated metadata and what runs with the signing key.
-- **Floating:** the base image tags (`eclipse-temurin:21-jre`, `httpd:2.4`,
-  `maven:3.9-eclipse-temurin-21`) and every distribution package. The distributions drop superseded
-  package versions from their archives, so a pinned package version breaks the build as soon as the
-  base image moves on. Rebuilding (`docker compose build`) picks up their security
-  fixes.
+- **Pinned by digest:** the base images (`eclipse-temurin:21-jre`, `httpd:2.4`,
+  `maven:3.9-eclipse-temurin-21`), so a commit always builds from the same base. Dependabot's weekly
+  pull request moves each to its tag's newest digest, which is how the images get the base's
+  security fixes. It never proposes a new major version: a new Java, Maven or Apache is a deliberate
+  change, made by hand.
+- **Floating:** every distribution package. The distributions drop superseded package versions from
+  their archives, so a pinned package version breaks the build as soon as the base image moves on.
+  A build installs the current ones.
+- A release's images keep what they were built with. The Scheduled workflow scans the latest
+  release's images every week and opens an issue when a fix is waiting:
+  [Security fixes in the base images](../development/releasing.md#security-fixes-in-the-base-images).
 - Upgrading update-center2 is a deliberate step: [Upgrading update-center2](../development/upgrading-upstream.md).
 
 ## List the generator's Java libraries

@@ -1,4 +1,7 @@
-"""Unit tests for uc.procure.stager: staging one file, keeping intact ones, failing cleanly."""
+"""Unit tests for uc.procure.stager.
+
+Staging one file, keeping intact ones, failing cleanly.
+"""
 
 import io
 
@@ -14,7 +17,9 @@ POM = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.pom'
 
 def stager_for(stage_dir, url):
     out = io.StringIO()
-    return Stager(Staging.open(stage_dir, url), Upstream(url, Http(None), limit=1 << 20), out), out
+    return Stager(
+        Staging.open(stage_dir, url), Upstream(url, Http(None), limit=1 << 20), out
+    ), out
 
 
 def test_a_file_is_downloaded_recorded_and_reported(releases, tmp_path):
@@ -23,7 +28,12 @@ def test_a_file_is_downloaded_recorded_and_reported(releases, tmp_path):
     stager, out = stager_for(tmp_path / 'stage', url)
     assert stager.stage(Wanted(POM, 'pom', 'real POM for mailer'))
     staged = stager.staging.files[POM]
-    assert (staged.url, staged.size, staged.kind, staged.reason) == (url + POM, 10, 'pom', 'real POM for mailer')
+    assert (staged.url, staged.size, staged.kind, staged.reason) == (
+        url + POM,
+        10,
+        'pom',
+        'real POM for mailer',
+    )
     assert (tmp_path / 'stage' / POM).read_bytes() == b'<project/>'
     assert out.getvalue() == f'staged    {POM}  (real POM for mailer)\n'
     assert (stager.staged, stager.kept, stager.problems) == (1, 0, 0)
@@ -37,7 +47,9 @@ def test_an_intact_file_is_kept_without_the_source(releases, tmp_path):
     first.staging.save()
     (root / POM).unlink()  # keeping it must not need the source
     again, out = stager_for(tmp_path / 'stage', url)
-    assert again.stage(Wanted(POM, 'pom', 'replaces an unusable .pom', replaces_unusable=True))
+    assert again.stage(
+        Wanted(POM, 'pom', 'replaces an unusable .pom', replaces_unusable=True)
+    )
     assert out.getvalue() == f'kept      {POM}  (already staged)\n'
     assert again.staging.files[POM].replaces_unusable is True
     assert again.kept == 1
@@ -57,7 +69,10 @@ def test_a_changed_file_is_downloaded_again(releases, tmp_path):
 
 
 def test_a_failed_download_leaves_nothing_behind(tmp_path):
-    routes = {('GET', '/r/' + POM + '.sha1'): (200, {}, b'0' * 40), ('GET', '/r/' + POM): (200, {}, b'<project/>')}
+    routes = {
+        ('GET', '/r/' + POM + '.sha1'): (200, {}, b'0' * 40),
+        ('GET', '/r/' + POM): (200, {}, b'<project/>'),
+    }
     with StubServer(routes) as stub:
         stager, out = stager_for(tmp_path / 'stage', stub.url + '/r/')
         assert not stager.stage(Wanted(POM, 'pom', 'x'))

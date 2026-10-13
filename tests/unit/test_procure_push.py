@@ -1,4 +1,7 @@
-"""Unit tests for uc.procure.push: uploading exactly the staged files, never overwriting."""
+"""Unit tests for uc.procure.push.
+
+Uploading exactly the staged files, never overwriting.
+"""
 
 import hashlib
 import io
@@ -38,7 +41,14 @@ def sha1(data):
 
 def keeper_settings(tmp_path, secrets_dir, url, auth='uc:tok'):
     (secrets_dir / 'repo_push_auth').write_text(auth + '\n')
-    return make_settings(tmp_path, secrets_dir, REPO_TYPE='artifact-keeper', REPO_URL=url, REPO_KEY='jenkins', REPO_ADAPTER='on')
+    return make_settings(
+        tmp_path,
+        secrets_dir,
+        REPO_TYPE='artifact-keeper',
+        REPO_URL=url,
+        REPO_KEY='jenkins',
+        REPO_ADAPTER='on',
+    )
 
 
 def staged(stage_dir, files, **fields):
@@ -50,7 +60,9 @@ def staged(stage_dir, files, **fields):
 
 def run(settings, stage_dir, *, dry_run=False, http=None):
     out = io.StringIO()
-    return push(settings, stage_dir, dry_run=dry_run, out=out, http=http), out.getvalue().splitlines()
+    return push(
+        settings, stage_dir, dry_run=dry_run, out=out, http=http
+    ), out.getvalue().splitlines()
 
 
 def artifactory_settings(tmp_path, secrets_dir, url):
@@ -58,7 +70,9 @@ def artifactory_settings(tmp_path, secrets_dir, url):
     return make_settings(tmp_path, secrets_dir, REPO_URL=url, REPO_KEY='jenkins')
 
 
-def test_push_uploads_what_the_repository_lacks_and_verifies_it(keeper, tmp_path, secrets_dir):
+def test_push_uploads_what_the_repository_lacks_and_verifies_it(
+    keeper, tmp_path, secrets_dir
+):
     repo, url = keeper
     staged(tmp_path / 'stage', {POM: b'<project/>', HPI: b'hpi bytes'})
     code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
@@ -67,11 +81,18 @@ def test_push_uploads_what_the_repository_lacks_and_verifies_it(keeper, tmp_path
     assert (repo / HPI).read_bytes() == b'hpi bytes'
     assert f'uploaded  {HPI}' in lines
     assert f'uploaded  {POM}' in lines
-    assert f'2 uploaded, 0 already present, 0 problem(s) -> {url}maven/jenkins/' in lines
-    assert lines[-1] == 'next: uc generate (or wait for the schedule), then uc procure clean'
+    assert (
+        f'2 uploaded, 0 already present, 0 problem(s) -> {url}maven/jenkins/' in lines
+    )
+    assert (
+        lines[-1]
+        == 'next: uc generate (or wait for the schedule), then uc procure clean'
+    )
 
 
-def test_a_file_already_there_with_the_same_content_is_present(keeper, tmp_path, secrets_dir):
+def test_a_file_already_there_with_the_same_content_is_present(
+    keeper, tmp_path, secrets_dir
+):
     repo, url = keeper
     publish(repo, POM, b'<project/>')
     staged(tmp_path / 'stage', {POM: b'<project/>'})
@@ -89,17 +110,28 @@ def test_a_different_file_is_left_alone(keeper, tmp_path, secrets_dir):
     assert not [line for line in lines if line.startswith('next:')]
     assert (repo / POM).read_bytes() == b'<html>404</html>'
     digest = hashlib.sha1(b'<html>404</html>', usedforsecurity=False).hexdigest()
-    assert f"DIFFERENT {POM}  (the repository holds another file (sha1 {digest}); delete it in the repository first, then run Artifact Keeper's storage garbage collection)" in lines
+    assert (
+        f'DIFFERENT {POM}  (the repository holds another file (sha1 {digest}); '
+        "delete it in the repository first, then run Artifact Keeper's storage "
+        'garbage collection)'
+    ) in lines
 
 
-def test_on_artifactory_a_different_file_only_needs_deleting(artifactory, tmp_path, secrets_dir):
+def test_on_artifactory_a_different_file_only_needs_deleting(
+    artifactory, tmp_path, secrets_dir
+):
     repo, url = artifactory
     publish(repo, POM, b'<html>404</html>')
     staged(tmp_path / 'stage', {POM: b'<project/>'}, replaces_unusable=True)
-    code, lines = run(artifactory_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
+    code, lines = run(
+        artifactory_settings(tmp_path, secrets_dir, url), tmp_path / 'stage'
+    )
     assert code == 1
     digest = hashlib.sha1(b'<html>404</html>', usedforsecurity=False).hexdigest()
-    assert f'DIFFERENT {POM}  (the repository holds another file (sha1 {digest}); delete it in the repository first)' in lines
+    assert (
+        f'DIFFERENT {POM}  (the repository holds another file (sha1 {digest}); '
+        'delete it in the repository first)'
+    ) in lines
 
 
 def test_a_file_changed_after_download_is_refused(keeper, tmp_path, secrets_dir):
@@ -109,13 +141,20 @@ def test_a_file_changed_after_download_is_refused(keeper, tmp_path, secrets_dir)
     code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
     assert code == 1
     assert not (repo / POM).exists()
-    assert f'TAMPERED  {POM}  (changed or missing since it was downloaded; download it again)' in lines
+    assert (
+        f'TAMPERED  {POM}  (changed or missing since it was downloaded; '
+        'download it again)'
+    ) in lines
 
 
-def test_an_authentication_failure_is_an_error_not_an_absence(keeper, tmp_path, secrets_dir):
+def test_an_authentication_failure_is_an_error_not_an_absence(
+    keeper, tmp_path, secrets_dir
+):
     repo, url = keeper
     staged(tmp_path / 'stage', {POM: b'<project/>'})
-    code, lines = run(keeper_settings(tmp_path, secrets_dir, url, auth='uc:wrong'), tmp_path / 'stage')
+    code, lines = run(
+        keeper_settings(tmp_path, secrets_dir, url, auth='uc:wrong'), tmp_path / 'stage'
+    )
     assert code == 1
     assert not (repo / POM).exists()
     assert f'ERROR     {POM}  (the repository answered HTTP 401)' in lines
@@ -124,19 +163,29 @@ def test_an_authentication_failure_is_an_error_not_an_absence(keeper, tmp_path, 
 def test_a_dry_run_uploads_nothing(keeper, tmp_path, secrets_dir):
     repo, url = keeper
     staged(tmp_path / 'stage', {POM: b'<project/>'})
-    code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage', dry_run=True)
+    code, lines = run(
+        keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage', dry_run=True
+    )
     assert code == 0
     assert f'would put {POM}' in lines
     assert not [line for line in lines if line.startswith('next:')]
-    assert f'0 uploaded, 1 would put, 0 already present, 0 problem(s) -> {url}maven/jenkins/' in lines
+    assert (
+        '0 uploaded, 1 would put, 0 already present, 0 problem(s) -> '
+        f'{url}maven/jenkins/'
+    ) in lines
     assert not (repo / POM).exists()
 
 
-def test_artifactory_is_pushed_under_its_repository_key(artifactory, tmp_path, secrets_dir):
+def test_artifactory_is_pushed_under_its_repository_key(
+    artifactory, tmp_path, secrets_dir
+):
     repo, url = artifactory
     (secrets_dir / 'repo_push_auth').write_text('uc:tok')
     staged(tmp_path / 'stage', {POM: b'<project/>'})
-    code, _ = run(make_settings(tmp_path, secrets_dir, REPO_URL=url, REPO_KEY='jenkins'), tmp_path / 'stage')
+    code, _ = run(
+        make_settings(tmp_path, secrets_dir, REPO_URL=url, REPO_KEY='jenkins'),
+        tmp_path / 'stage',
+    )
     assert code == 0
     assert (repo / POM).read_bytes() == b'<project/>'
 
@@ -146,11 +195,21 @@ def test_the_push_account_must_be_user_and_token(keeper, tmp_path, secrets_dir, 
     _, url = keeper
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     with pytest.raises(ProcureError, match='must hold user:token'):
-        push(keeper_settings(tmp_path, secrets_dir, url, auth=secret), tmp_path / 'stage', dry_run=True)
+        push(
+            keeper_settings(tmp_path, secrets_dir, url, auth=secret),
+            tmp_path / 'stage',
+            dry_run=True,
+        )
 
 
 def test_the_public_repository_is_never_a_push_target(tmp_path, secrets_dir):
-    settings = make_settings(tmp_path, secrets_dir, MODE='online', REPO_URL='https://repo.jenkins-ci.org/', REPO_KEY='releases')
+    settings = make_settings(
+        tmp_path,
+        secrets_dir,
+        MODE='online',
+        REPO_URL='https://repo.jenkins-ci.org/',
+        REPO_KEY='releases',
+    )
     with pytest.raises(ProcureError, match=r'public repo\.jenkins-ci\.org'):
         push(settings, tmp_path, dry_run=True)
 
@@ -158,25 +217,45 @@ def test_the_public_repository_is_never_a_push_target(tmp_path, secrets_dir):
 def test_nothing_staged_is_an_error(keeper, tmp_path, secrets_dir):
     _, url = keeper
     with pytest.raises(ProcureError, match='nothing to push'):
-        push(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'empty', dry_run=False)
+        push(
+            keeper_settings(tmp_path, secrets_dir, url),
+            tmp_path / 'empty',
+            dry_run=False,
+        )
 
 
 def test_a_conflict_with_the_same_content_is_present(tmp_path, secrets_dir):
     data = b'<project/>'
-    answers = iter([(404, {}, b''), (200, {}, hashlib.sha1(data, usedforsecurity=False).hexdigest().encode())])
-    routes = {('GET', f'/maven/jenkins/{POM}.sha1'): lambda _headers, _body: next(answers), ('PUT', f'/maven/jenkins/{POM}'): (409, {}, b'{"code":"CONFLICT"}')}
+    answers = iter(
+        [
+            (404, {}, b''),
+            (200, {}, hashlib.sha1(data, usedforsecurity=False).hexdigest().encode()),
+        ]
+    )
+    routes = {
+        ('GET', f'/maven/jenkins/{POM}.sha1'): lambda _headers, _body: next(answers),
+        ('PUT', f'/maven/jenkins/{POM}'): (409, {}, b'{"code":"CONFLICT"}'),
+    }
     staged(tmp_path / 'stage', {POM: data})
     with StubServer(routes) as stub:
-        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+        code, lines = run(
+            keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage'
+        )
     assert code == 0
     assert f'present   {POM}  (the same file arrived while pushing)' in lines
 
 
 class TamperingHttp:
-    """Wraps a real Http, corrupting a file on disk right after the first request goes out."""
+    """Wraps a real Http, corrupting a file on disk.
+
+    Right after the first request goes out.
+    """
 
     def __init__(self, real, file, data):
-        """Forward every request to real; before the very first one, replace file's content with data."""
+        """Forward every request to real.
+
+        Before the very first one, replace file's content with data.
+        """
         self.real, self.file, self.data, self.calls = real, file, data, 0
 
     def request(self, *args, **kwargs):
@@ -187,22 +266,34 @@ class TamperingHttp:
         return self.real.request(*args, **kwargs)
 
 
-def test_push_uploads_the_bytes_it_verified_even_if_the_file_changes_after(keeper, tmp_path, secrets_dir):
+def test_push_uploads_the_bytes_it_verified_even_if_the_file_changes_after(
+    keeper, tmp_path, secrets_dir
+):
     repo, url = keeper
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     file = tmp_path / 'stage' / POM
     http = TamperingHttp(Http(None), file, b'<evil/>')
     out = io.StringIO()
-    code = push(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage', dry_run=False, out=out, http=http)
+    code = push(
+        keeper_settings(tmp_path, secrets_dir, url),
+        tmp_path / 'stage',
+        dry_run=False,
+        out=out,
+        http=http,
+    )
     assert code == 0
     assert (repo / POM).read_bytes() == b'<project/>'
     assert f'uploaded  {POM}' in out.getvalue().splitlines()
 
 
-def test_artifactory_with_client_checksums_records_the_sha1_sent_with_the_upload(client_checksums, tmp_path, secrets_dir):
+def test_artifactory_with_client_checksums_records_the_sha1_sent_with_the_upload(
+    client_checksums, tmp_path, secrets_dir
+):
     repo, url = client_checksums
     staged(tmp_path / 'stage', {POM: b'<project/>', HPI: b'hpi bytes'})
-    code, lines = run(artifactory_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
+    code, lines = run(
+        artifactory_settings(tmp_path, secrets_dir, url), tmp_path / 'stage'
+    )
     assert code == 0, lines
     assert (repo / POM).read_bytes() == b'<project/>'
     assert (repo / f'{POM}.sha1').read_text() == sha1(b'<project/>')
@@ -211,106 +302,228 @@ def test_artifactory_with_client_checksums_records_the_sha1_sent_with_the_upload
 
 
 @pytest.mark.parametrize('dry_run', [False, True])
-def test_a_path_the_repository_holds_without_a_checksum_is_never_uploaded(client_checksums, tmp_path, secrets_dir, dry_run):
+def test_a_path_the_repository_holds_without_a_checksum_is_never_uploaded(
+    client_checksums, tmp_path, secrets_dir, dry_run
+):
     repo, url = client_checksums
     publish(repo, POM, b'<other/>')
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     http = RecordingHttp()
-    code, lines = run(artifactory_settings(tmp_path, secrets_dir, url), tmp_path / 'stage', dry_run=dry_run, http=http)
+    code, lines = run(
+        artifactory_settings(tmp_path, secrets_dir, url),
+        tmp_path / 'stage',
+        dry_run=dry_run,
+        http=http,
+    )
     assert code == 1
-    assert f'ERROR     {POM}  (the repository holds this path but publishes no checksum for it; check it by hand)' in lines
+    assert (
+        f'ERROR     {POM}  (the repository holds this path but publishes no '
+        'checksum for it; check it by hand)'
+    ) in lines
     assert (repo / POM).read_bytes() == b'<other/>'
     assert [method for method, _ in http.calls] == ['GET', 'HEAD']
 
 
-def test_an_unreachable_repository_is_an_error_and_nothing_is_uploaded(tmp_path, secrets_dir):
+def test_an_unreachable_repository_is_an_error_and_nothing_is_uploaded(
+    tmp_path, secrets_dir
+):
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0))
         port = sock.getsockname()[1]
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     http = RecordingHttp()
-    code, lines = run(keeper_settings(tmp_path, secrets_dir, f'http://127.0.0.1:{port}/'), tmp_path / 'stage', http=http)
+    code, lines = run(
+        keeper_settings(tmp_path, secrets_dir, f'http://127.0.0.1:{port}/'),
+        tmp_path / 'stage',
+        http=http,
+    )
     assert code == 1
-    assert [line for line in lines if line.startswith(f'ERROR     {POM}  (GET http://127.0.0.1:{port}/maven/jenkins/{POM}.sha1 failed: ')]
+    assert [
+        line
+        for line in lines
+        if line.startswith(
+            f'ERROR     {POM}  (GET '
+            f'http://127.0.0.1:{port}/maven/jenkins/{POM}.sha1 failed: '
+        )
+    ]
     assert [method for method, _ in http.calls] == ['GET']
 
 
-def test_an_upload_the_repository_then_reports_with_another_sha1_failed(tmp_path, secrets_dir):
+def test_an_upload_the_repository_then_reports_with_another_sha1_failed(
+    tmp_path, secrets_dir
+):
     data = b'<project/>'
     answers = iter([(404, {}, b''), (200, {}, b'0' * 40)])
-    routes = {('GET', f'/maven/jenkins/{POM}.sha1'): lambda _headers, _body: next(answers), ('HEAD', f'/maven/jenkins/{POM}'): (404, {}, b''), ('PUT', f'/maven/jenkins/{POM}'): (201, {}, b'')}
+    routes = {
+        ('GET', f'/maven/jenkins/{POM}.sha1'): lambda _headers, _body: next(answers),
+        ('HEAD', f'/maven/jenkins/{POM}'): (404, {}, b''),
+        ('PUT', f'/maven/jenkins/{POM}'): (201, {}, b''),
+    }
     staged(tmp_path / 'stage', {POM: data})
     with StubServer(routes) as stub:
-        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+        code, lines = run(
+            keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage'
+        )
     assert code == 1
     assert f'FAILED    {POM}  (HTTP 201, repository sha1 {"0" * 40})' in lines
-    [(_, _, headers, body)] = [request for request in stub.requests if request[0] == 'PUT']
+    [(_, _, headers, body)] = [
+        request for request in stub.requests if request[0] == 'PUT'
+    ]
     assert body == data
-    assert {key.lower(): value for key, value in headers.items()}['x-checksum-sha1'] == sha1(data)
+    assert {key.lower(): value for key, value in headers.items()}[
+        'x-checksum-sha1'
+    ] == sha1(data)
 
 
 def test_an_unexpected_answer_to_the_existence_check_is_an_error(tmp_path, secrets_dir):
-    routes = {('GET', f'/maven/jenkins/{POM}.sha1'): (404, {}, b''), ('HEAD', f'/maven/jenkins/{POM}'): (403, {}, b'')}
+    routes = {
+        ('GET', f'/maven/jenkins/{POM}.sha1'): (404, {}, b''),
+        ('HEAD', f'/maven/jenkins/{POM}'): (403, {}, b''),
+    }
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     with StubServer(routes) as stub:
-        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+        code, lines = run(
+            keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage'
+        )
     assert code == 1
     assert f'ERROR     {POM}  (the repository answered HTTP 403)' in lines
     assert [request[0] for request in stub.requests] == ['GET', 'HEAD']
 
 
-def test_an_unreadable_staged_file_is_reported_and_the_push_goes_on(keeper, tmp_path, secrets_dir):
+def test_an_unreadable_staged_file_is_reported_and_the_push_goes_on(
+    keeper, tmp_path, secrets_dir
+):
     repo, url = keeper
     staged(tmp_path / 'stage', {POM: b'<project/>', HPI: b'hpi bytes'})
-    (tmp_path / 'stage' / HPI).chmod(0o000)  # the unit tests run as uid 10001, so this really is unreadable
+    (tmp_path / 'stage' / HPI).chmod(
+        0o000
+    )  # the unit tests run as uid 10001, so this really is unreadable
     code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
     assert code == 1
-    assert [line for line in lines if line.startswith(f'TAMPERED  {HPI}  (cannot read it: [Errno 13] Permission denied')]
+    assert [
+        line
+        for line in lines
+        if line.startswith(
+            f'TAMPERED  {HPI}  (cannot read it: [Errno 13] Permission denied'
+        )
+    ]
     assert not (repo / HPI).exists()
     assert (repo / POM).read_bytes() == b'<project/>'
-    assert f'1 uploaded, 0 already present, 1 problem(s) -> {url}maven/jenkins/' in lines
+    assert (
+        f'1 uploaded, 0 already present, 1 problem(s) -> {url}maven/jenkins/' in lines
+    )
 
 
-TOMBSTONE = 'Artifact Keeper keeps a deleted release as a tombstone until its storage garbage collection runs'
+TOMBSTONE = (
+    'Artifact Keeper keeps a deleted release as a tombstone until its storage '
+    'garbage collection runs'
+)
 
 
 @pytest.mark.parametrize(
     ('artifact_keeper', 'reply', 'detail'),
     [
-        (True, (409, {'Content-Type': 'application/json'}, b'{"code":"CONFLICT","message":"Artifact version already exists and is immutable"}'), f'HTTP 409: Artifact version already exists and is immutable, repository sha1 none; {TOMBSTONE}'),
-        (False, (409, {'Content-Type': 'application/json'}, b'{"errors":[{"status":409,"message":"Checksum policy rejects the upload"}]}'), 'HTTP 409: Checksum policy rejects the upload, repository sha1 none'),
-        (True, (500, {'Content-Type': 'text/html'}, b'<html><body>Internal Server Error</body></html>'), 'HTTP 500, repository sha1 none'),
-        (False, (400, {'Content-Type': 'text/plain'}, b'  Bad\n request:   path   rejected  '), 'HTTP 400: Bad request: path rejected, repository sha1 none'),
+        (
+            True,
+            (
+                409,
+                {'Content-Type': 'application/json'},
+                (
+                    b'{"code":"CONFLICT","message":"Artifact version already exists '
+                    b'and is immutable"}'
+                ),
+            ),
+            (
+                'HTTP 409: Artifact version already exists and is immutable, '
+                f'repository sha1 none; {TOMBSTONE}'
+            ),
+        ),
+        (
+            False,
+            (
+                409,
+                {'Content-Type': 'application/json'},
+                (
+                    b'{"errors":[{"status":409,"message":"Checksum policy rejects '
+                    b'the upload"}]}'
+                ),
+            ),
+            'HTTP 409: Checksum policy rejects the upload, repository sha1 none',
+        ),
+        (
+            True,
+            (
+                500,
+                {'Content-Type': 'text/html'},
+                b'<html><body>Internal Server Error</body></html>',
+            ),
+            'HTTP 500, repository sha1 none',
+        ),
+        (
+            False,
+            (
+                400,
+                {'Content-Type': 'text/plain'},
+                b'  Bad\n request:   path   rejected  ',
+            ),
+            'HTTP 400: Bad request: path rejected, repository sha1 none',
+        ),
     ],
 )
-def test_a_refused_upload_reports_the_repositorys_reason(tmp_path, secrets_dir, artifact_keeper, reply, detail):
+def test_a_refused_upload_reports_the_repositorys_reason(
+    tmp_path, secrets_dir, artifact_keeper, reply, detail
+):
     prefix = '/maven/jenkins/' if artifact_keeper else '/artifactory/jenkins/'
-    routes = {('GET', f'{prefix}{POM}.sha1'): (404, {}, b''), ('HEAD', f'{prefix}{POM}'): (404, {}, b''), ('PUT', f'{prefix}{POM}'): reply}
+    routes = {
+        ('GET', f'{prefix}{POM}.sha1'): (404, {}, b''),
+        ('HEAD', f'{prefix}{POM}'): (404, {}, b''),
+        ('PUT', f'{prefix}{POM}'): reply,
+    }
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     with StubServer(routes) as stub:
-        settings = keeper_settings(tmp_path, secrets_dir, stub.url + '/') if artifact_keeper else artifactory_settings(tmp_path, secrets_dir, stub.url + '/artifactory/')
+        settings = (
+            keeper_settings(tmp_path, secrets_dir, stub.url + '/')
+            if artifact_keeper
+            else artifactory_settings(tmp_path, secrets_dir, stub.url + '/artifactory/')
+        )
         code, lines = run(settings, tmp_path / 'stage')
     assert code == 1
     assert f'FAILED    {POM}  ({detail})' in lines
 
 
-def test_files_procurement_json_does_not_list_are_reported_not_pushed(keeper, tmp_path, secrets_dir):
+def test_files_procurement_json_does_not_list_are_reported_not_pushed(
+    keeper, tmp_path, secrets_dir
+):
     repo, url = keeper
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     publish(tmp_path / 'stage', HPI, b'hpi bytes')  # copied in by hand
     (tmp_path / 'stage' / 'notes.txt').write_text('reviewed')
-    (tmp_path / 'stage' / '.part-abc123').write_bytes(b'')  # a download interrupted mid-way
+    (tmp_path / 'stage' / '.part-abc123').write_bytes(
+        b''
+    )  # a download interrupted mid-way
     code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
     assert code == 0
     assert not (repo / HPI).exists()
-    assert f'unlisted  {HPI}  (not in procurement.json, so not pushed; record it with uc procure record)' in lines
-    assert 'unlisted  notes.txt  (not in procurement.json, so not pushed; not a Maven path)' in lines
+    assert (
+        f'unlisted  {HPI}  (not in procurement.json, so not pushed; '
+        'record it with uc procure record)'
+    ) in lines
+    assert (
+        'unlisted  notes.txt  (not in procurement.json, so not pushed; '
+        'not a Maven path)'
+    ) in lines
     assert not [line for line in lines if '.part-' in line]
-    assert f'1 uploaded, 0 already present, 0 problem(s), 2 not in procurement.json -> {url}maven/jenkins/' in lines
+    assert (
+        '1 uploaded, 0 already present, 0 problem(s), 2 not in procurement.json '
+        f'-> {url}maven/jenkins/'
+    ) in lines
 
 
 def unrecorded(stored, *, recorded=b'<project/>'):
-    """Artifact Keeper serving bytes it stored without recording them: no .sha1 until an upload records the file."""
+    """Artifact Keeper serving bytes it stored without recording them.
+
+    No .sha1 until an upload records the file.
+    """
     answers = iter([(404, {}, b''), (200, {}, sha1(recorded).encode())])
     return {
         ('GET', f'/maven/jenkins/{POM}.sha1'): lambda _headers, _body: next(answers),
@@ -321,42 +534,87 @@ def unrecorded(stored, *, recorded=b'<project/>'):
 
 
 def calls(stub):
-    return [(method, path.removeprefix(f'/maven/jenkins/{POM}') or 'file') for method, path, _, _ in stub.requests]
+    return [
+        (method, path.removeprefix(f'/maven/jenkins/{POM}') or 'file')
+        for method, path, _, _ in stub.requests
+    ]
 
 
-def test_bytes_artifact_keeper_stored_without_recording_them_are_uploaded_again_to_record_them(tmp_path, secrets_dir):
+def test_bytes_artifact_keeper_stored_unrecorded_are_uploaded_again_to_record_them(
+    tmp_path, secrets_dir
+):
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     with StubServer(unrecorded(b'<project/>')) as stub:
-        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+        code, lines = run(
+            keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage'
+        )
     assert code == 0
-    assert f'uploaded  {POM}  (Artifact Keeper had stored the same bytes without recording them)' in lines
-    assert calls(stub) == [('GET', '.sha1'), ('HEAD', 'file'), ('GET', 'file'), ('PUT', 'file'), ('GET', '.sha1')]
+    assert (
+        f'uploaded  {POM}  (Artifact Keeper had stored the same bytes without '
+        'recording them)'
+    ) in lines
+    assert calls(stub) == [
+        ('GET', '.sha1'),
+        ('HEAD', 'file'),
+        ('GET', 'file'),
+        ('PUT', 'file'),
+        ('GET', '.sha1'),
+    ]
     [(_, _, _, body)] = [request for request in stub.requests if request[0] == 'PUT']
     assert body == b'<project/>'
 
 
-def test_a_dry_run_compares_the_unrecorded_bytes_and_uploads_nothing(tmp_path, secrets_dir):
+def test_a_dry_run_compares_the_unrecorded_bytes_and_uploads_nothing(
+    tmp_path, secrets_dir
+):
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     with StubServer(unrecorded(b'<project/>')) as stub:
-        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage', dry_run=True)
+        code, lines = run(
+            keeper_settings(tmp_path, secrets_dir, stub.url + '/'),
+            tmp_path / 'stage',
+            dry_run=True,
+        )
     assert code == 0
-    assert f'would put {POM}  (Artifact Keeper stored the same bytes without recording them; uploading them again records them)' in lines
+    assert (
+        f'would put {POM}  (Artifact Keeper stored the same bytes without '
+        'recording them; uploading them again records them)'
+    ) in lines
     assert ('PUT', 'file') not in calls(stub)
 
 
-def test_other_bytes_artifact_keeper_stored_without_recording_them_are_left_alone(tmp_path, secrets_dir):
+def test_other_bytes_artifact_keeper_stored_without_recording_them_are_left_alone(
+    tmp_path, secrets_dir
+):
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     with StubServer(unrecorded(b'<other/>')) as stub:
-        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+        code, lines = run(
+            keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage'
+        )
     assert code == 1
-    assert f'DIFFERENT {POM}  (Artifact Keeper stored other bytes here without recording them (sha1 {sha1(b"<other/>")}); delete them from its storage, then push again)' in lines
+    assert (
+        f'DIFFERENT {POM}  (Artifact Keeper stored other bytes here without '
+        f'recording them (sha1 {sha1(b"<other/>")}); delete them from its '
+        'storage, then push again)'
+    ) in lines
     assert ('PUT', 'file') not in calls(stub)
 
 
-def test_unrecorded_bytes_larger_than_the_staged_file_stop_the_comparison(tmp_path, secrets_dir):
+def test_unrecorded_bytes_larger_than_the_staged_file_stop_the_comparison(
+    tmp_path, secrets_dir
+):
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     with StubServer(unrecorded(b'<project/>' + b' ' * (3 << 20))) as stub:
-        code, lines = run(keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage')
+        code, lines = run(
+            keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage'
+        )
     assert code == 1
-    assert [line for line in lines if line.startswith(f'ERROR     {POM}  (cannot compare the copy Artifact Keeper stored without recording it: ') and line.endswith('is larger than 10 bytes)')], lines
+    assert [
+        line
+        for line in lines
+        if line.startswith(
+            f'ERROR     {POM}  (cannot compare the copy Artifact Keeper stored '
+            'without recording it: '
+        )
+        and line.endswith('is larger than 10 bytes)')
+    ], lines
     assert ('PUT', 'file') not in calls(stub)

@@ -47,6 +47,8 @@ the interface.
   `uc_version` name the release the uc image was built as.
 - Releases: uc and web images on GHCR for linux/amd64 and linux/arm64, signed with cosign, with
   build-provenance and SBOM attestations, and an air-gapped bundle per architecture with a signed
-  `SHA256SUMS` ([Verify a release](docs/how-to/verify-a-release.md)).
+  `SHA256SUMS` ([Verify a release](docs/how-to/verify-a-release.md)). A release's `compose.yaml`
+  runs that release's images; `compose.build.yaml` builds them from your checkout instead. The base
+  images are pinned by digest.
 - Third-party notices in the uc image, `/opt/uc/licenses/`.
 - Unit, routing and end-to-end tests, run by CI on every pull request; this documentation.

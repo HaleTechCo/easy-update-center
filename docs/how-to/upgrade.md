@@ -13,9 +13,7 @@ Then, from the folder you deployed in:
 
 ```bash
 git fetch --tags
-git checkout v<new version>                     # the Compose files and docs of that release
-# in .env: UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<new version>
-#          WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<new version>
+git checkout v<new version>                     # the Compose files, which name its images, and docs of that release
 docker compose pull                             # air-gapped: docker load -i images.tar from the new bundle, and unpack its source
 docker compose run --rm setup
 docker compose run --rm --no-deps uc config --check
@@ -43,11 +41,14 @@ you added stay:
 - `.env`, `secrets/`, `config/overlay/` and `procurement/`;
 - the Compose overrides you created beside `compose.yaml`, and the folders they mount, such as `tls/`.
 
-Files a release dropped are not deleted: remove any you recognise. Then set `UC_IMAGE` and
-`WEB_IMAGE` in `.env` and run the commands from `setup` on, in that folder. The data volume stays
-the same: `compose.yaml` names the Compose project `easy-update-center`.
+Files a release dropped are not deleted: remove any you recognise. Then run the commands from
+`setup` on, in that folder. The data volume stays the same: `compose.yaml` names the Compose
+project `easy-update-center`.
 
 ## Upgrade from source
+
+For a deployment built from source, with `compose.build.yaml` in `COMPOSE_FILE`
+([Or build from source](../getting-started/online.md#or-build-from-source)):
 
 ```bash
 git fetch
@@ -85,12 +86,10 @@ docker compose run --rm uc generate
 
 ## Go back to the previous revision
 
-For a release, check out the previous tag and set the previous image tags in `.env`:
+For a release, check out the previous tag, whose `compose.yaml` names its images:
 
 ```bash
 git checkout v<previous version>
-# in .env: UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<previous version>
-#          WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<previous version>
 docker compose pull
 docker compose up -d
 ```

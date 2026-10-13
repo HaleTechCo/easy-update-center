@@ -1,4 +1,7 @@
-"""uc config: each setting's value and source, and secret files only as present or not (docs/reference/cli.md#uc-config)."""
+"""uc config: each setting's value and source, and secret files only as present or not.
+
+See docs/reference/cli.md#uc-config.
+"""
 
 import io
 import json
@@ -30,11 +33,25 @@ def test_json_rows_give_each_value_and_its_source():
     assert code == 0
     rows = {row['env']: row for row in json.loads(out)}
     assert rows['MODE'] == {'env': 'MODE', 'value': 'airgapped', 'source': 'env'}
-    assert rows['RETAIN_RELEASES'] == {'env': 'RETAIN_RELEASES', 'value': '7', 'source': 'env'}
-    assert (rows['CORE_AGE_DAYS']['value'], rows['CORE_AGE_DAYS']['source']) == ('0', 'mode')
-    assert (rows['REPO_ADAPTER']['value'], rows['REPO_ADAPTER']['source']) == ('true', 'derived')
+    assert rows['RETAIN_RELEASES'] == {
+        'env': 'RETAIN_RELEASES',
+        'value': '7',
+        'source': 'env',
+    }
+    assert (rows['CORE_AGE_DAYS']['value'], rows['CORE_AGE_DAYS']['source']) == (
+        '0',
+        'mode',
+    )
+    assert (rows['REPO_ADAPTER']['value'], rows['REPO_ADAPTER']['source']) == (
+        'true',
+        'derived',
+    )
     assert (rows['UC_ID']['value'], rows['UC_ID']['source']) == ('default', 'default')
-    assert rows['UC_IMAGE'] == {'env': 'UC_IMAGE', 'value': 'easy-update-center/uc:local', 'source': 'default'}
+    assert rows['HTTP_PORT'] == {
+        'env': 'HTTP_PORT',
+        'value': '8080',
+        'source': 'default',
+    }
 
 
 def test_text_groups_the_settings():
@@ -92,22 +109,41 @@ def test_credentials_in_a_proxy_without_a_scheme_are_not_shown():
 
 
 @pytest.mark.parametrize('delimiter', ['#', '?', '/', '[', ']'])
-@pytest.mark.parametrize(('form', 'shown'), [('http://proxyuser:{}@proxy.corp:3128', 'http://***@proxy.corp:3128'), ('proxyuser:{}@proxy.corp:3128', '***@proxy.corp:3128')], ids=['scheme', 'no-scheme'])  # pragma: allowlist secret
-def test_a_proxy_password_that_holds_a_url_delimiter_loads_and_is_not_shown(delimiter, form, shown):
+@pytest.mark.parametrize(
+    ('form', 'shown'),
+    [
+        (
+            'http://proxyuser:{}@proxy.corp:3128',  # pragma: allowlist secret
+            'http://***@proxy.corp:3128',
+        ),
+        ('proxyuser:{}@proxy.corp:3128', '***@proxy.corp:3128'),
+    ],
+    ids=['scheme', 'no-scheme'],
+)
+def test_a_proxy_password_that_holds_a_url_delimiter_loads_and_is_not_shown(
+    delimiter, form, shown
+):
     value = form.format(f'S3cret{delimiter}Tail9z')
     env = env_for(HTTPS_PROXY=value)
     assert show(env, check=True) == (0, 'configuration ok\n', '')
     _, text, _ = show(env)
     _, as_json, _ = show(env, as_json=True)
     assert f'  HTTPS_PROXY = {shown}  (' in text
-    assert {row['env']: row['value'] for row in json.loads(as_json)}['HTTPS_PROXY'] == shown
+    assert {row['env']: row['value'] for row in json.loads(as_json)}[
+        'HTTPS_PROXY'
+    ] == shown
     for part in ('proxyuser', 'S3cret', 'Tail9z'):
         assert part not in text + as_json
 
 
 @pytest.mark.parametrize('delimiter', ['#', '?', '/'])
 def test_credentials_that_end_the_host_early_in_an_invalid_url_are_not_shown(delimiter):
-    env = env_for(REPO_URL=f'https://admin:S3cret{delimiter}Tail9z@artifactory:8081/artifactory/')  # pragma: allowlist secret
+    env = env_for(
+        REPO_URL=(
+            f'https://admin:S3cret{delimiter}Tail9z@'  # pragma: allowlist secret
+            'artifactory:8081/artifactory/'
+        )
+    )
     code, out, err = show(env)
     assert code == 1
     assert 'REPO_URL = https://***@artifactory:8081/artifactory/' in out
@@ -133,16 +169,30 @@ def test_check_reports_a_missing_download_url():
     del env['DOWNLOAD_BACKEND_URL']
     code, out, err = show(env, check=True)
     assert (code, out) == (1, '')
-    assert err.splitlines()[-1] == 'uc: error: DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL'
+    assert (
+        err.splitlines()[-1]
+        == 'uc: error: DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL'
+    )
 
 
 def test_internal_paths_left_in_the_environment_are_noted():
-    # Names an older release documented; uc still follows them, so one left in .env changes where it looks.
-    code, out, err = show(env_for(REPO_ADAPTER_URL='http://repo-adapter:9091/artifactory/'), check=True)
+    # Names an older release documented; uc still follows them, so one left in .env
+    # changes where it looks.
+    code, out, err = show(
+        env_for(REPO_ADAPTER_URL='http://repo-adapter:9091/artifactory/'), check=True
+    )
     assert (code, out) == (0, 'configuration ok\n')
-    assert err == 'uc: note: not settings, but uc still follows them: REPO_ADAPTER_URL; remove them from .env (only the tests set them)\n'
+    assert err == (
+        'uc: note: not settings, but uc still follows them: REPO_ADAPTER_URL; '
+        'remove them from .env (only the tests set them)\n'
+    )
 
 
 def test_internal_paths_at_their_defaults_are_not_noted():
-    env = env_for(UC_DATA_DIR='/data', SECRETS_DIR='/run/secrets', REPO_ADAPTER_URL='http://repo-adapter:8081/artifactory/', REPO_ADAPTER_DIR='')
+    env = env_for(
+        UC_DATA_DIR='/data',
+        SECRETS_DIR='/run/secrets',
+        REPO_ADAPTER_URL='http://repo-adapter:8081/artifactory/',
+        REPO_ADAPTER_DIR='',
+    )
     assert show(env, check=True) == (0, 'configuration ok\n', '')

@@ -1,4 +1,7 @@
-"""Staging one file: keep it when already staged intact, else download it, check it and record it."""
+"""Staging one file.
+
+Keep it when already staged intact, else download it, check it and record it.
+"""
 
 from __future__ import annotations
 
@@ -18,7 +21,10 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Wanted:
-    """A file to stage: its Maven path, its kind (pom, dependency, core) and why, for procurement.json."""
+    """A file to stage.
+
+    Its Maven path, its kind (pom, dependency, core) and why, for procurement.json.
+    """
 
     path: str
     kind: str
@@ -27,7 +33,10 @@ class Wanted:
 
 
 class Stager:
-    """Stages files into a Staging from an Upstream, printing one line per file and counting problems."""
+    """Stages files into a Staging from an Upstream.
+
+    Printing one line per file and counting problems.
+    """
 
     def __init__(self, staging: Staging, upstream: Upstream, out: TextIO) -> None:
         """Stage into staging from upstream, reporting to out."""
@@ -52,7 +61,12 @@ class Stager:
             return False
         if self.staging.intact(wanted.path):
             existing = self.staging.files[wanted.path]
-            self.staging.files[wanted.path] = dataclasses.replace(existing, kind=wanted.kind, reason=wanted.reason, replaces_unusable=wanted.replaces_unusable)
+            self.staging.files[wanted.path] = dataclasses.replace(
+                existing,
+                kind=wanted.kind,
+                reason=wanted.reason,
+                replaces_unusable=wanted.replaces_unusable,
+            )
             self.kept += 1
             self.say('kept', wanted.path, 'already staged')
             return True
@@ -63,7 +77,16 @@ class Stager:
             part.unlink(missing_ok=True)
             self.problem(wanted.path, str(exc))
             return False
-        staged = StagedFile(path=wanted.path, url=self.upstream.url(wanted.path), sha1=sha1, size=size, kind=wanted.kind, reason=wanted.reason, staged_at=iso(utcnow()), replaces_unusable=wanted.replaces_unusable)
+        staged = StagedFile(
+            path=wanted.path,
+            url=self.upstream.url(wanted.path),
+            sha1=sha1,
+            size=size,
+            kind=wanted.kind,
+            reason=wanted.reason,
+            staged_at=iso(utcnow()),
+            replaces_unusable=wanted.replaces_unusable,
+        )
         self.staging.commit(staged, part)
         self.staged += 1
         self.say('staged', wanted.path, wanted.reason)

@@ -1,4 +1,7 @@
-"""Artifactory listing through the same AQL query update-center2 runs (ArtifactoryRepositoryImpl.java)."""
+"""Artifactory listing through the same AQL query update-center2 runs.
+
+See ArtifactoryRepositoryImpl.java.
+"""
 
 from __future__ import annotations
 
@@ -16,7 +19,13 @@ from .errors import UcError
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-AQL_TEMPLATE = 'items.find({"repo":{"$eq":"%s"},"$or":[{"name":{"$match":"*.hpi"}},{"name":{"$match":"*.jpi"}},{"name":{"$match":"*.war"}},{"name":{"$match":"*.pom"}}]}).include("repo", "path", "name", "modified", "created", "sha256", "actual_sha1", "size")'
+AQL_TEMPLATE = (
+    'items.find({"repo":{"$eq":"%s"},"$or":['
+    '{"name":{"$match":"*.hpi"}},{"name":{"$match":"*.jpi"}},'
+    '{"name":{"$match":"*.war"}},{"name":{"$match":"*.pom"}}]})'
+    '.include("repo", "path", "name", "modified", "created", '
+    '"sha256", "actual_sha1", "size")'
+)
 WAR_GROUP = 'org.jenkins-ci.main'
 WAR_ARTIFACT = 'jenkins-war'
 _ALLOWED = re.compile(r'^[0-9A-Za-z+\-./_]*$')
@@ -29,7 +38,10 @@ class AqlError(UcError):
 
 @dataclass(frozen=True)
 class RepoFile:
-    """One file from the AQL listing: its repository path, name, checksums, size and modification time."""
+    """One file from the AQL listing.
+
+    Its repository path, name, checksums, size and modification time.
+    """
 
     path: str
     name: str
@@ -41,7 +53,10 @@ class RepoFile:
 
 @dataclass(frozen=True)
 class Gav:
-    """Maven coordinates of one artifact file: groupId, artifactId, version and extension."""
+    """Maven coordinates of one artifact file.
+
+    groupId, artifactId, version and extension.
+    """
 
     group_id: str
     artifact_id: str
@@ -51,15 +66,24 @@ class Gav:
     @property
     def maven_path(self) -> str:
         """Return the file's path in Maven repository layout."""
-        return f'{self.group_id.replace(".", "/")}/{self.artifact_id}/{self.version}/{self.artifact_id}-{self.version}.{self.extension}'
+        return (
+            f'{self.group_id.replace(".", "/")}/{self.artifact_id}/{self.version}/'
+            f'{self.artifact_id}-{self.version}.{self.extension}'
+        )
 
     def with_extension(self, extension: str) -> Gav:
-        """Return the same coordinates with another extension (the .pom beside an .hpi, say)."""
+        """Return the same coordinates with another extension.
+
+        The .pom beside an .hpi, say.
+        """
         return Gav(self.group_id, self.artifact_id, self.version, extension)
 
 
 def to_gav(f: RepoFile) -> Gav | None:
-    """Port of ArtifactoryRepositoryImpl.toGav: None when the file is not in Maven layout."""
+    """Port of ArtifactoryRepositoryImpl.toGav.
+
+    None when the file is not in Maven layout.
+    """
     if not _ALLOWED.match(f.name) or not _ALLOWED.match(f.path):
         return None
     cut = f.path.rfind('/')
@@ -79,8 +103,13 @@ def to_gav(f: RepoFile) -> Gav | None:
     return Gav(group, artifact, version, extension)
 
 
-def query_repository(api_url: str, repository: str, username: str, password: str, timeout: float = 600) -> list[RepoFile]:
-    """Run the AQL query against api_url with basic auth and return every .hpi, .jpi, .war and .pom in repository."""
+def query_repository(
+    api_url: str, repository: str, username: str, password: str, timeout: float = 600
+) -> list[RepoFile]:
+    """Run the AQL query against api_url with basic auth.
+
+    Return every .hpi, .jpi, .war and .pom in repository.
+    """
     if not _REPOSITORY.match(repository):
         msg = f'unsupported repository name {repository!r}'
         raise AqlError(msg)
@@ -89,7 +118,12 @@ def query_repository(api_url: str, repository: str, username: str, password: str
         api_url + 'search/aql',
         data=(AQL_TEMPLATE % repository).encode(),
         method='POST',
-        headers={'Content-Type': 'text/plain', 'Accept': 'application/json', 'Authorization': f'Basic {token}', 'User-Agent': http.USER_AGENT},
+        headers={
+            'Content-Type': 'text/plain',
+            'Accept': 'application/json',
+            'Authorization': f'Basic {token}',
+            'User-Agent': http.USER_AGENT,
+        },
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -108,7 +142,17 @@ def query_repository(api_url: str, repository: str, username: str, password: str
     if not isinstance(results, list):
         msg = 'AQL response has no results list'
         raise AqlError(msg)
-    return [RepoFile(r.get('path', ''), r.get('name', ''), r.get('sha256'), r.get('actual_sha1'), int(r.get('size') or 0), r.get('modified') or '') for r in results]
+    return [
+        RepoFile(
+            r.get('path', ''),
+            r.get('name', ''),
+            r.get('sha256'),
+            r.get('actual_sha1'),
+            int(r.get('size') or 0),
+            r.get('modified') or '',
+        )
+        for r in results
+    ]
 
 
 @dataclass(frozen=True)
@@ -123,7 +167,10 @@ class Listing:
 
 
 def classify(files: Iterable[RepoFile]) -> Listing:
-    """Split files into plugins and jenkins-war cores, each with or without a matching .pom, plus the files not in Maven layout."""
+    """Split files into plugins and jenkins-war cores.
+
+    Each with or without a matching .pom, plus the files not in Maven layout.
+    """
     gavs: list[Gav] = []
     rejected: list[RepoFile] = []
     for f in files:
@@ -132,16 +179,28 @@ def classify(files: Iterable[RepoFile]) -> Listing:
             rejected.append(f)
         else:
             gavs.append(gav)
-    poms = {(g.group_id, g.artifact_id, g.version) for g in gavs if g.extension == 'pom'}
+    poms = {
+        (g.group_id, g.artifact_id, g.version) for g in gavs if g.extension == 'pom'
+    }
 
     def has_pom(g: Gav) -> bool:
         return (g.group_id, g.artifact_id, g.version) in poms
 
     def ordered(items: Iterable[Gav]) -> tuple[Gav, ...]:
-        return tuple(sorted(items, key=lambda g: (g.artifact_id, g.version, g.group_id, g.extension)))
+        return tuple(
+            sorted(
+                items, key=lambda g: (g.artifact_id, g.version, g.group_id, g.extension)
+            )
+        )
 
     plugins = [g for g in gavs if g.extension in ('hpi', 'jpi')]
-    wars = [g for g in gavs if g.extension == 'war' and g.group_id == WAR_GROUP and g.artifact_id == WAR_ARTIFACT]
+    wars = [
+        g
+        for g in gavs
+        if g.extension == 'war'
+        and g.group_id == WAR_GROUP
+        and g.artifact_id == WAR_ARTIFACT
+    ]
     return Listing(
         ordered(g for g in plugins if has_pom(g)),
         ordered(g for g in plugins if not has_pom(g)),

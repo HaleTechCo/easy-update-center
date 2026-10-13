@@ -1,4 +1,8 @@
-"""uc repo-adapter: upstream's three Artifactory requests, answered from either repository type (docs/architecture/repo-adapter.md#requests-it-answers)."""
+"""uc repo-adapter: upstream's three Artifactory requests.
+
+Answered from either repository type
+(docs/architecture/repo-adapter.md#requests-it-answers).
+"""
 
 from __future__ import annotations
 
@@ -37,8 +41,12 @@ PREFIX = '/artifactory/'
 QUERY_LIMIT = 64 * 1024
 PORT = 8081
 HEALTH_PATH = '/healthz'
-PORT_FILE = Path('/tmp/uc-repo-adapter.port')  # noqa: S108 - the container's root is read-only; /tmp is its private tmpfs (compose.yaml)
-"""Where the running adapter records the port it bound, for --healthcheck: health follows the server, not the settings files."""
+# the container's root is read-only; /tmp is its private tmpfs (compose.yaml)
+PORT_FILE = Path('/tmp/uc-repo-adapter.port')  # noqa: S108
+"""Where the running adapter records the port it bound, for --healthcheck.
+
+Health follows the server, not the settings files.
+"""
 HEALTH_TIMEOUT = 3
 """Seconds uc repo-adapter --healthcheck waits for the adapter to answer."""
 HTTP_OK = 200
@@ -46,19 +54,34 @@ MAX_REQUESTS = 32
 """Requests handled at once; more get 503 straight away instead of a thread each."""
 REQUEST_TIMEOUT = 120
 """Seconds a connection may wait for the client before it is closed."""
-BUSY = b'HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n'
+BUSY = (
+    b'HTTP/1.1 503 Service Unavailable\r\n'
+    b'Content-Length: 0\r\nConnection: close\r\n\r\n'
+)
 
 
 class AdapterServer(ThreadingHTTPServer):
-    """A threading HTTP server that handles at most max_requests requests at once and answers the rest 503."""
+    """A threading HTTP server that handles at most max_requests requests at once.
 
-    def __init__(self, address: tuple[str, int], handler: type[BaseHTTPRequestHandler], *, max_requests: int = MAX_REQUESTS) -> None:
+    It answers the rest 503.
+    """
+
+    def __init__(
+        self,
+        address: tuple[str, int],
+        handler: type[BaseHTTPRequestHandler],
+        *,
+        max_requests: int = MAX_REQUESTS,
+    ) -> None:
         """Bind to address and serve with handler, max_requests at a time."""
         super().__init__(address, handler)
         self.slots = threading.BoundedSemaphore(max_requests)
 
     def process_request(self, request, client_address) -> None:
-        """Start a thread for the request when a slot is free; otherwise answer 503 and close it."""
+        """Start a thread for the request when a slot is free.
+
+        Otherwise answer 503 and close it.
+        """
         if not self.slots.acquire(blocking=False):
             with contextlib.suppress(OSError):
                 request.sendall(BUSY)
@@ -87,7 +110,10 @@ class UnhealthyError(UcError):
 
 
 def ensure_token(path: Path) -> str:
-    """Return the generator's credential for the adapter: 32 random bytes, created once, mode 0600."""
+    """Return the generator's credential for the adapter.
+
+    32 random bytes, created once, mode 0600.
+    """
     existing = read_secret(path)
     if existing:
         return existing
@@ -104,16 +130,38 @@ def ensure_token(path: Path) -> str:
 class Adapter:
     """Upstream's requests, answered from the latest listing of one repository."""
 
-    def __init__(self, backend: Backend, cache: Cache, *, key: str, report_file: Path, clock: Callable[[], dt.datetime] = utcnow) -> None:
-        """Serve repository key from backend; each listing's report goes to report_file."""
-        self.backend, self.cache, self.key, self.report_file, self.clock = backend, cache, key, report_file, clock
+    def __init__(
+        self,
+        backend: Backend,
+        cache: Cache,
+        *,
+        key: str,
+        report_file: Path,
+        clock: Callable[[], dt.datetime] = utcnow,
+    ) -> None:
+        """Serve repository key from backend.
+
+        Each listing's report goes to report_file.
+        """
+        self.backend, self.cache, self.key, self.report_file, self.clock = (
+            backend,
+            cache,
+            key,
+            report_file,
+            clock,
+        )
         self.index: Index | None = None
         self.lock = threading.Lock()
 
     def refresh(self) -> Index:
-        """Build a new listing, one at a time, write its report and serve GETs from it."""
+        """Build a new listing, write its report and serve GETs from it.
+
+        One at a time.
+        """
         with self.lock:
-            index = build_index(self.backend, self.cache, key=self.key, now=self.clock())
+            index = build_index(
+                self.backend, self.cache, key=self.key, now=self.clock()
+            )
             if index.report is None:
                 msg = 'build_index returned a listing without a report'
                 raise RuntimeError(msg)
@@ -126,7 +174,10 @@ class Adapter:
         return self.index or self.refresh()
 
     def pom(self, path: str) -> bytes | None:
-        """Return a listed POM: the one derived from its archive, else the repository's; None when not listed."""
+        """Return a listed POM.
+
+        The one derived from its archive, else the repository's; None when not listed.
+        """
         index = self.current()
         if path not in index.poms:
             return None
@@ -138,14 +189,18 @@ class Adapter:
         return self.current().manifests.get(archive_path)
 
     def description(self, jar_path: str) -> bytes | None:
-        """<artifactId>-<version>.jar!/index.jelly: from the repository's .jar, else from the .hpi (rule 6)."""
+        """<artifactId>-<version>.jar!/index.jelly.
+
+        From the repository's .jar, else from the .hpi (rule 6).
+        """
         index = self.current()
         directory, _, name = jar_path.rpartition('/')
         gav = to_gav(RepoFile(directory, name))
         if gav is None or gav.extension != 'jar':
             return None
         coordinates = (gav.group_id, gav.artifact_id, gav.version)
-        if coordinates not in index.plugins:  # never forward a path the listing does not hold, ".." included
+        # never forward a path the listing does not hold, ".." included
+        if coordinates not in index.plugins:
             return None
         jar = index.jars.get(jar_path)
         if self.backend.type == 'artifactory':
@@ -154,7 +209,9 @@ class Adapter:
                 return found
         elif jar is not None:
             if not self.cache.has_description(jar.sha256):
-                self.cache.store_description(jar.sha256, self.backend.jar_description(jar_path))
+                self.cache.store_description(
+                    jar.sha256, self.backend.jar_description(jar_path)
+                )
             found = self.cache.description(jar.sha256)
             if found is not None:
                 return found
@@ -162,18 +219,31 @@ class Adapter:
 
 
 def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
-    """Return the request handler class; with adapter None, it answers the repository requests with 503."""
-    expected = ('Basic ' + base64.b64encode(f'{ADAPTER_USERNAME}:{token}'.encode()).decode()) if token else ''
+    """Return the request handler class.
+
+    With adapter None, it answers the repository requests with 503.
+    """
+    expected = (
+        ('Basic ' + base64.b64encode(f'{ADAPTER_USERNAME}:{token}'.encode()).decode())
+        if token
+        else ''
+    )
     repo_prefix = f'{PREFIX}{key}/'
 
     class Handler(BaseHTTPRequestHandler):
         server_version = 'uc-repo-adapter'
         timeout = REQUEST_TIMEOUT
 
-        def log_message(self, format: str, *args) -> None:  # noqa: A002 - http.server's signature
+        # http.server's signature
+        def log_message(self, format: str, *args) -> None:  # noqa: A002
             sys.stderr.write(f'repo-adapter: {self.address_string()} {format % args}\n')
 
-        def _send(self, status: int, body: bytes = b'', content_type: str = 'application/octet-stream') -> None:
+        def _send(
+            self,
+            status: int,
+            body: bytes = b'',
+            content_type: str = 'application/octet-stream',
+        ) -> None:
             self.send_response(status)
             self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(body)))
@@ -182,16 +252,22 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 self.wfile.write(body)
 
         def _refuse(self, *, authenticate: bool) -> bool:
-            """Return True when the request was answered already: idle adapter, or no valid credentials.
+            """Return True when the request was answered already.
 
-            Only the listing is authenticated. Upstream cannot answer an authentication challenge for
-            file reads: its Authenticator dereferences the requesting site, which Java's HttpClient
-            always passes as null. GETs serve metadata only, on the internal repo network (docs/architecture/repo-adapter.md#security).
+            Idle adapter, or no valid credentials.
+
+            Only the listing is authenticated. Upstream cannot answer an authentication
+            challenge for file reads: its Authenticator dereferences the requesting
+            site, which Java's HttpClient always passes as null. GETs serve metadata
+            only, on the internal repo network
+            (docs/architecture/repo-adapter.md#security).
             """
             if adapter is None:
                 self._send(503, b'REPO_ADAPTER is off\n', 'text/plain')
                 return True
-            if authenticate and not hmac.compare_digest(self.headers.get('Authorization', ''), expected):
+            if authenticate and not hmac.compare_digest(
+                self.headers.get('Authorization', ''), expected
+            ):
                 self.send_response(401)
                 self.send_header('WWW-Authenticate', 'Basic realm="repo-adapter"')
                 self.send_header('Content-Length', '0')
@@ -210,7 +286,9 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 raise RuntimeError(msg)
             if not path.startswith(repo_prefix):
                 return self._send(404)
-            archive, separator, entry = urllib.parse.unquote(path[len(repo_prefix) :]).partition('!/')
+            archive, separator, entry = urllib.parse.unquote(
+                path[len(repo_prefix) :]
+            ).partition('!/')
             try:
                 if not separator:
                     data = adapter.pom(archive) if archive.endswith('.pom') else None
@@ -221,7 +299,8 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 else:
                     self.log_message('refused archive entry %s!/%s', archive, entry)
                     data = None
-            except Exception as exc:  # noqa: BLE001 - any failure is the repository's, reported as a 502
+            # any failure is the repository's, reported as a 502
+            except Exception as exc:  # noqa: BLE001
                 self.log_message('GET %s failed: %r', path, exc)
                 return self._send(502, b'repository error\n', 'text/plain')
             return self._send(200, data) if data is not None else self._send(404)
@@ -249,10 +328,14 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 return self._send(400, b'unsupported query\n', 'text/plain')
             try:
                 rows = adapter.refresh().rows
-            except Exception as exc:  # noqa: BLE001 - any failure is the repository's, reported as a 502
+            # any failure is the repository's, reported as a 502
+            except Exception as exc:  # noqa: BLE001
                 self.log_message('listing failed: %r', exc)
                 return self._send(502, b'repository error\n', 'text/plain')
-            body = {'results': rows, 'range': {'start_pos': 0, 'end_pos': len(rows), 'total': len(rows)}}
+            body = {
+                'results': rows,
+                'range': {'start_pos': 0, 'end_pos': len(rows), 'total': len(rows)},
+            }
             return self._send(200, json.dumps(body).encode(), 'application/json')
 
     return Handler
@@ -265,23 +348,59 @@ def create_adapter(settings: Settings) -> Adapter:
     max_bytes = settings.repo_max_archive_mb * 1024 * 1024
     backend: Backend
     if settings.repo_type == 'artifact-keeper':
-        backend = ArtifactKeeperBackend(http, settings.repo_url, settings.repo_key, username=username, token=password, tmp_dir=settings.repo_adapter_dir / 'tmp', max_archive_bytes=max_bytes)
+        backend = ArtifactKeeperBackend(
+            http,
+            settings.repo_url,
+            settings.repo_key,
+            username=username,
+            token=password,
+            tmp_dir=settings.repo_adapter_dir / 'tmp',
+            max_archive_bytes=max_bytes,
+        )
     else:
-        backend = ArtifactoryBackend(http, settings.repo_url, settings.repo_api_url, settings.repo_key, username=username, password=password, max_archive_bytes=max_bytes)
-    return Adapter(backend, Cache(settings.repo_adapter_dir / 'cache'), key=settings.repo_key, report_file=settings.repo_adapter_report_file)
+        backend = ArtifactoryBackend(
+            http,
+            settings.repo_url,
+            settings.repo_api_url,
+            settings.repo_key,
+            username=username,
+            password=password,
+            max_archive_bytes=max_bytes,
+        )
+    return Adapter(
+        backend,
+        Cache(settings.repo_adapter_dir / 'cache'),
+        key=settings.repo_key,
+        report_file=settings.repo_adapter_report_file,
+    )
 
 
-def make_server(settings: Settings, port: int = PORT, host: str = '0.0.0.0') -> AdapterServer:  # noqa: S104 - the repo-adapter listens on every interface of its container by design
-    """Bind the repo-adapter's HTTP server; it stays idle, answering 503, while REPO_ADAPTER is off."""
+def make_server(
+    settings: Settings,
+    port: int = PORT,
+    # the repo-adapter listens on every interface of its container by design
+    host: str = '0.0.0.0',  # noqa: S104
+) -> AdapterServer:
+    """Bind the repo-adapter's HTTP server.
+
+    It stays idle, answering 503, while REPO_ADAPTER is off.
+    """
     if not settings.repo_adapter:
-        return AdapterServer((host, port), make_handler(None, key=settings.repo_key, token=None))
+        return AdapterServer(
+            (host, port), make_handler(None, key=settings.repo_key, token=None)
+        )
     adapter = create_adapter(settings)
     token = ensure_token(settings.repo_adapter_token_file)
-    return AdapterServer((host, port), make_handler(adapter, key=settings.repo_key, token=token))
+    return AdapterServer(
+        (host, port), make_handler(adapter, key=settings.repo_key, token=token)
+    )
 
 
 def record_port(port: int, path: Path | None = None) -> None:
-    """Record the port the server is listening on, atomically, where --healthcheck finds it."""
+    """Record the port the server is listening on, where --healthcheck finds it.
+
+    Atomically.
+    """
     path = PORT_FILE if path is None else path
     temporary = path.with_name(path.name + '.tmp')
     try:
@@ -294,7 +413,10 @@ def record_port(port: int, path: Path | None = None) -> None:
 
 
 def recorded_port(path: Path | None = None) -> int:
-    """Return the port record_port saved; raise UnhealthyError when the adapter has not recorded one."""
+    """Return the port record_port saved.
+
+    Raise UnhealthyError when the adapter has not recorded one.
+    """
     path = PORT_FILE if path is None else path
     try:
         return int(path.read_text(encoding='utf-8').strip())
@@ -304,21 +426,27 @@ def recorded_port(path: Path | None = None) -> int:
 
 
 def healthcheck(port: int | None = None) -> None:
-    """Raise UnhealthyError unless the repo-adapter on this host answers 200 within HEALTH_TIMEOUT seconds.
+    """Raise UnhealthyError unless the repo-adapter on this host answers 200.
 
-    It probes port, else the port the running adapter recorded; it reads no settings, never starts a server and
-    ignores the proxy settings.
+    Within HEALTH_TIMEOUT seconds. It probes port, else the port the running adapter
+    recorded; it reads no settings, never starts a server and ignores the proxy
+    settings.
     """
     port = recorded_port() if port is None else port
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        with opener.open(f'http://127.0.0.1:{port}{HEALTH_PATH}', timeout=HEALTH_TIMEOUT) as response:
+        with opener.open(
+            f'http://127.0.0.1:{port}{HEALTH_PATH}', timeout=HEALTH_TIMEOUT
+        ) as response:
             status = response.status
     except urllib.error.HTTPError as exc:
         status = exc.code
         exc.close()  # it holds the response
-    except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:  # HTTPException: something on the port answers with bytes that are not HTTP
-        reason = (exc.reason if isinstance(exc, urllib.error.URLError) else exc) or type(exc).__name__
+    # HTTPException: something on the port answers with bytes that are not HTTP
+    except (urllib.error.URLError, OSError, http.client.HTTPException) as exc:
+        reason = (
+            exc.reason if isinstance(exc, urllib.error.URLError) else exc
+        ) or type(exc).__name__
         msg = f'repo-adapter is not healthy on port {port}: {reason}'
         raise UnhealthyError(msg) from None
     if status != HTTP_OK:
@@ -334,6 +462,10 @@ def serve(settings: Settings, port: int = PORT) -> None:
     except RecordPortError:
         server.server_close()
         raise
-    state = f'{settings.repo_type} repository {settings.repo_key} at {settings.repo_url}' if settings.repo_adapter else 'idle (REPO_ADAPTER is off)'
+    state = (
+        f'{settings.repo_type} repository {settings.repo_key} at {settings.repo_url}'
+        if settings.repo_adapter
+        else 'idle (REPO_ADAPTER is off)'
+    )
     print(f'repo-adapter: listening on :{port}, {state}', flush=True)
     server.serve_forever()

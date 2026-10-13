@@ -1,4 +1,7 @@
-"""A live symlink swap, and the RewriteMap behind it, take effect without restarting Apache (docs/architecture/request-routing.md#live-swap)."""
+"""A live symlink swap takes effect without restarting Apache.
+
+So does the RewriteMap behind it (docs/architecture/request-routing.md#live-swap).
+"""
 
 from pathlib import Path
 
@@ -25,7 +28,9 @@ def test_live_swap_needs_no_restart():
         assert fetch('web-artifactory', '/current/marker.txt').body == R2.encode()
         response = fetch('web-artifactory', NEW)
         assert response.status == 302
-        assert response.location.endswith('/org/jenkins-ci/plugins/git/5.3.0/git-5.3.0.hpi')
+        assert response.location.endswith(
+            '/org/jenkins-ci/plugins/git/5.3.0/git-5.3.0.hpi'
+        )
     finally:
         swap(R1)
     assert fetch('web-artifactory', NEW).status == 404

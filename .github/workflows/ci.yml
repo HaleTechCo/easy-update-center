@@ -49,20 +49,13 @@ jobs:
           python-version: '3.13'
           cache: pip
           cache-dependency-path: requirements-dev.txt
-      - name: Install the lint tools
+      - name: Install pre-commit
         run: pip install -r requirements-dev.txt
-      # shfmt is a Go binary, not a pip package: the release binary, checked against its SHA-256.
-      - name: Install shfmt
-        env:
-          SHFMT_VERSION: v3.14.1
-          SHFMT_SHA256: 76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf
-        run: |
-          mkdir -p "${RUNNER_TEMP}/bin"
-          curl -fsSL -o "${RUNNER_TEMP}/bin/shfmt" "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
-          echo "${SHFMT_SHA256}  ${RUNNER_TEMP}/bin/shfmt" | sha256sum --check --strict -
-          chmod 0755 "${RUNNER_TEMP}/bin/shfmt"
-          echo "${RUNNER_TEMP}/bin" >> "${GITHUB_PATH}"
+      # pre-commit installs each hook's pinned version. With GH_TOKEN, zizmor also runs its online
+      # audits (known-vulnerable actions, impostor commits); the token only reads.
       - name: pre-commit
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: pre-commit run --all-files --show-diff-on-failure
 
   images:

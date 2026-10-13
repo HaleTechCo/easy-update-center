@@ -1,4 +1,7 @@
-"""Unit tests for uc.publish: staging, the atomic live swap, pruning, rollback and the run lock."""
+"""Unit tests for uc.publish.
+
+Staging, the atomic live swap, pruning, rollback and the run lock.
+"""
 
 import datetime as dt
 import threading
@@ -24,7 +27,12 @@ from uc.publish import (
     swap_live,
 )
 
-R1, R2, R3, R4 = '20260922T010000Z', '20260922T020000Z', '20260922T030000Z', '20260922T040000Z'
+R1, R2, R3, R4 = (
+    '20260922T010000Z',
+    '20260922T020000Z',
+    '20260922T030000Z',
+    '20260922T040000Z',
+)
 
 
 def make_release(data, rid):
@@ -35,7 +43,10 @@ def make_release(data, rid):
 
 
 def test_release_id():
-    assert new_release_id(dt.datetime(2026, 9, 22, 3, 4, 5, tzinfo=dt.UTC)) == '20260922T030405Z'
+    assert (
+        new_release_id(dt.datetime(2026, 9, 22, 3, 4, 5, tzinfo=dt.UTC))
+        == '20260922T030405Z'
+    )
 
 
 def test_publish_swaps_live_atomically(tmp_path):
@@ -82,7 +93,9 @@ def test_mark_failed_keeps_only_the_latest_failure(tmp_path):
     mark_failed(tmp_path, R1)
     create_staging(tmp_path, R2)
     mark_failed(tmp_path, R2)
-    assert sorted(p.name for p in releases_dir(tmp_path).glob('.failed-*')) == [f'.failed-{R2}']
+    assert sorted(p.name for p in releases_dir(tmp_path).glob('.failed-*')) == [
+        f'.failed-{R2}'
+    ]
 
 
 def test_reclaim_orphans_removes_stale_staging_and_work(tmp_path):
@@ -127,7 +140,11 @@ def test_swap_to_missing_release(tmp_path):
 
 
 def test_run_lock_is_exclusive(tmp_path):
-    with RunLock(tmp_path), pytest.raises(LockBusyError, match='another generation'), RunLock(tmp_path):
+    with (
+        RunLock(tmp_path),
+        pytest.raises(LockBusyError, match='another generation'),
+        RunLock(tmp_path),
+    ):
         pass
     with RunLock(tmp_path):
         pass

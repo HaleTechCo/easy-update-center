@@ -1,4 +1,7 @@
-"""Checks run before every generation (docs/architecture/generation-pipeline.md#step-1-preflight)."""
+"""Checks run before every generation.
+
+See docs/architecture/generation-pipeline.md#step-1-preflight.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +24,7 @@ ADAPTER_USERNAME = 'uc'
 
 
 class PreflightError(UcError):
-    """The configuration, signing material or credentials are not fit to generate a release."""
+    """Configuration, signing material or credentials not fit to generate a release."""
 
 
 def _is_local(host: str) -> bool:
@@ -34,9 +37,12 @@ def _is_local(host: str) -> bool:
 
 
 def check_public_url(url: str, *, allow_local: bool) -> list[str]:
-    """Require PUBLIC_URL to be a bare http(s) origin that controllers can reach; return warnings (plain http).
+    """Require PUBLIC_URL to be a bare http(s) origin that controllers can reach.
 
-    Any '@' is refused first, as the settings refuse it, so the messages that quote the URL never quote credentials.
+    Return warnings (plain http).
+
+    Any '@' is refused first, as the settings refuse it, so the messages that quote the
+    URL never quote credentials.
     """
     if '@' in url:
         msg = f'PUBLIC_URL {NO_CREDENTIALS}'
@@ -46,19 +52,38 @@ def check_public_url(url: str, *, allow_local: bool) -> list[str]:
         msg = f'PUBLIC_URL must be an http(s) URL with a host (got {url!r})'
         raise PreflightError(msg)
     if parts.path not in ('', '/') or parts.query or parts.fragment:
-        msg = f'PUBLIC_URL must be a bare origin such as https://uc.example.com (got {url!r}); upstream routing and jenkins-plugin-cli do not support a path prefix'
+        msg = (
+            'PUBLIC_URL must be a bare origin such as https://uc.example.com '
+            f'(got {url!r}); upstream routing and jenkins-plugin-cli do not support '
+            'a path prefix'
+        )
         raise PreflightError(msg)
     if not allow_local and _is_local(parts.hostname):
-        msg = f'PUBLIC_URL points at {parts.hostname}, which Jenkins controllers cannot reach; set ALLOW_LOCAL_PUBLIC_URL=true for tests'
+        msg = (
+            f'PUBLIC_URL points at {parts.hostname}, which Jenkins controllers '
+            'cannot reach; set ALLOW_LOCAL_PUBLIC_URL=true for tests'
+        )
         raise PreflightError(msg)
     if parts.scheme == 'http':
-        return ['PUBLIC_URL uses plain http; signatures protect integrity, but TLS is recommended']
+        return [
+            (
+                'PUBLIC_URL uses plain http; signatures protect integrity, '
+                'but TLS is recommended'
+            )
+        ]
     return []
 
 
 def check_signing(settings: Settings, now: dt.datetime) -> CertInfo:
-    """Require a matching key and certificate, issued by the root CA and valid long enough; return the certificate's info."""
-    for path in (settings.signing_key_file, settings.signing_cert_file, settings.root_ca_file):
+    """Require a matching key and certificate, issued by the root CA, valid long enough.
+
+    Return the certificate's info.
+    """
+    for path in (
+        settings.signing_key_file,
+        settings.signing_cert_file,
+        settings.root_ca_file,
+    ):
         if not path.is_file():
             msg = f"missing signing material: {path} (see 'uc pki init')"
             raise PreflightError(msg)
@@ -68,7 +93,10 @@ def check_signing(settings: Settings, now: dt.datetime) -> CertInfo:
     info = cert_info(settings.signing_cert_file)
     days = info.days_left(now)
     if days < settings.certificate_minimum_valid_days:
-        msg = f"signing certificate expires in {days} days (minimum {settings.certificate_minimum_valid_days}); run 'uc pki rotate'"
+        msg = (
+            f'signing certificate expires in {days} days (minimum '
+            f"{settings.certificate_minimum_valid_days}); run 'uc pki rotate'"
+        )
         raise PreflightError(msg)
     if not verify_chain(settings.root_ca_file, settings.signing_cert_file):
         msg = f'{settings.signing_cert_file} is not issued by {settings.root_ca_file}'
@@ -77,11 +105,17 @@ def check_signing(settings: Settings, now: dt.datetime) -> CertInfo:
 
 
 def load_repository_credentials(settings: Settings) -> tuple[str, str]:
-    """Return the repository account (username, password); with the adapter on, only the adapter needs it."""
+    """Return the repository account (username, password).
+
+    With the adapter on, only the adapter needs it.
+    """
     user = read_secret(settings.repo_username_file)
     password = read_secret(settings.repo_password_file)
     if not user or not password:
-        msg = f'Repository credentials missing: provide {settings.repo_username_file} and {settings.repo_password_file}'
+        msg = (
+            f'Repository credentials missing: provide {settings.repo_username_file} '
+            f'and {settings.repo_password_file}'
+        )
         raise PreflightError(msg)
     return user, password
 
@@ -90,13 +124,19 @@ def load_adapter_token(settings: Settings) -> str:
     """Return the token the repo-adapter service writes when it starts."""
     token = read_secret(settings.repo_adapter_token_file)
     if not token:
-        msg = f'repo-adapter token missing: {settings.repo_adapter_token_file}; the repo-adapter service creates it when it starts'
+        msg = (
+            f'repo-adapter token missing: {settings.repo_adapter_token_file}; '
+            'the repo-adapter service creates it when it starts'
+        )
         raise PreflightError(msg)
     return token
 
 
 def load_credentials(settings: Settings) -> Credentials:
-    """Return the credentials for the repository (or the adapter) and GitHub, with placeholders when GitHub has none."""
+    """Return the credentials for the repository (or the adapter) and GitHub.
+
+    With placeholders when GitHub has none.
+    """
     if settings.repo_adapter:
         user, password = ADAPTER_USERNAME, load_adapter_token(settings)
     else:
@@ -105,11 +145,28 @@ def load_credentials(settings: Settings) -> Credentials:
     gh_token = read_secret(settings.github_token_file)
     if gh_user and gh_token:
         return Credentials(user, password, gh_user, gh_token, github_placeholder=False)
-    return Credentials(user, password, GITHUB_PLACEHOLDER, GITHUB_PLACEHOLDER, github_placeholder=True)
+    return Credentials(
+        user, password, GITHUB_PLACEHOLDER, GITHUB_PLACEHOLDER, github_placeholder=True
+    )
 
 
-DATA_ENTRIES = ('.lock', '.status.lock', 'status.json', 'live', 'releases', 'work', 'cache', 'resources', 'repo-adapter', 'doctor')
-"""What uc keeps at the top of the data volume. On a volume this release creates, /data itself is world-writable and sticky, so these are what another uid owns."""
+DATA_ENTRIES = (
+    '.lock',
+    '.status.lock',
+    'status.json',
+    'live',
+    'releases',
+    'work',
+    'cache',
+    'resources',
+    'repo-adapter',
+    'doctor',
+)
+"""What uc keeps at the top of the data volume.
+
+On a volume this release creates, /data itself is world-writable and sticky, so these
+are what another uid owns.
+"""
 
 
 def _owner(path: Path) -> int | None:
@@ -120,11 +177,23 @@ def _owner(path: Path) -> int | None:
 
 
 def check_data_dir(data_dir: Path) -> None:
-    """Raise PreflightError unless this process can write the data volume: create files in data_dir, and own what uc keeps there (a missing one is created later)."""
+    """Raise PreflightError unless this process can write the data volume.
+
+    That is, create files in data_dir, and own what uc keeps there (a missing one is
+    created later).
+    """
     if not data_dir.is_dir():
         return
     uid = os.getuid()
-    others = {owner for name in DATA_ENTRIES if (owner := _owner(data_dir / name)) not in (None, uid)}
+    others = {
+        owner
+        for name in DATA_ENTRIES
+        if (owner := _owner(data_dir / name)) not in (None, uid)
+    }
     if others or not os.access(data_dir, os.W_OK | os.X_OK):
-        msg = f'{data_dir} is not writable by uid {uid}: the data volume belongs to another user; set UC_UID and UC_GID in .env to its owner, or give it to yours (docs/reference/configuration.md#compose)'
+        msg = (
+            f'{data_dir} is not writable by uid {uid}: the data volume belongs to '
+            'another user; set UC_UID and UC_GID in .env to its owner, or give it to '
+            'yours (docs/reference/configuration.md#compose)'
+        )
         raise PreflightError(msg)

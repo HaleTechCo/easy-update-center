@@ -1,4 +1,7 @@
-"""Jenkins version comparisons through the generator's own hudson.util.VersionNumber (VersionTool.java)."""
+"""Jenkins version comparisons through the generator's own hudson.util.VersionNumber.
+
+See VersionTool.java.
+"""
 
 from __future__ import annotations
 
@@ -19,10 +22,13 @@ class VersionToolError(UcError):
 
 
 class VersionTool:
-    """Runs the VersionTool class compiled at image build time (tool_dir) against the generator jars."""
+    """Runs the VersionTool class against the generator jars.
+
+    The class is compiled at image build time (tool_dir).
+    """
 
     def __init__(self, jar_dir: Path, tool_dir: Path, java: str = 'java') -> None:
-        """Put every jar in jar_dir and the compiled class in tool_dir on the classpath."""
+        """Put every jar in jar_dir and tool_dir's compiled class on the classpath."""
         self._cmd = [java, '-cp', f'{jar_dir}/*:{tool_dir}', 'VersionTool']
 
     def _run(self, mode: str, lines: Sequence[str]) -> list[str]:
@@ -32,14 +38,23 @@ class VersionTool:
             if '\n' in line:
                 msg = f'version input contains a newline: {line!r}'
                 raise VersionToolError(msg)
-        proc = subprocess.run([*self._cmd, mode], input='\n'.join(lines) + '\n', capture_output=True, text=True, check=False)
+        proc = subprocess.run(
+            [*self._cmd, mode],
+            input='\n'.join(lines) + '\n',
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         if proc.returncode != 0:
             msg = f'VersionTool {mode} failed: {proc.stderr.strip()}'
             raise VersionToolError(msg)
         return proc.stdout.splitlines()
 
     def compare_many(self, pairs: Sequence[tuple[str, str]]) -> list[int]:
-        """Compare each (a, b) pair as VersionNumbers; return -1, 0 or 1 for each, in order."""
+        """Compare each (a, b) pair as VersionNumbers.
+
+        Return -1, 0 or 1 for each, in order.
+        """
         return [int(x) for x in self._run('compare', [f'{a}\t{b}' for a, b in pairs])]
 
     def sort(self, versions: Iterable[str]) -> list[str]:
@@ -56,5 +71,8 @@ class VersionTool:
 
     @classmethod
     def from_settings(cls, settings: Settings) -> VersionTool:
-        """Build the tool from the image's generator jars and compiled VersionTool class."""
+        """Build the tool from the image's generator jars.
+
+        And from the image's compiled VersionTool class.
+        """
         return cls(settings.jar_dir, settings.version_tool_dir)

@@ -7,50 +7,21 @@
 # adding one would silently make every [tool.ruff] table below dead.
 
 [tool.ruff]
-# The uc image runs the distribution's python3, which follows the unpinned eclipse-temurin:21-jre
-# base (currently Ubuntu 26.04, Python 3.14). 3.13 stays below it.
+# The uc image runs the distribution's python3 of its eclipse-temurin:21-jre base (currently
+# Ubuntu 26.04, Python 3.14). 3.13 stays below it.
 target-version = "py313"
-line-length = 320
+# No line-length: ruff's default, 88, Black's convention. The formatter wraps code to it; comments,
+# docstrings and long strings are wrapped by hand, and E501 (line-too-long) holds them to it.
 
 # First-party resolution for isort. `uc` is imported from uc/ (the image puts /opt/uc/python on
 # PYTHONPATH), and the test helpers are imported by bare module name after each suite's conftest or
 # script puts its own directory on sys.path. Without these, those imports sort as third-party.
 src = [".", "uc", "tests/support", "tests/integration", "tests/routing"]
 
-exclude = [
-    ".bzr",
-    ".direnv",
-    ".eggs",
-    ".git",
-    ".git-rewrite",
-    ".hg",
-    ".ipynb_checkpoints",
-    ".mypy_cache",
-    ".nox",
-    ".pants.d",
-    ".pyenv",
-    ".pytest_cache",
-    ".pytype",
-    ".ruff_cache",
-    ".svn",
-    ".tox",
-    ".venv",
-    ".vscode",
-    "__pycache__",
-    "__pypackages__",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-    "node_modules",
-    "site-packages",
-    "venv",
-    # Ruff formats fenced Python blocks inside Markdown. Snippets in docs are hand-aligned
-    # for readability, so reformatting them is pure churn on documentation. The pre-commit
-    # hook already limits itself to `types_or: [python, pyi]`; this keeps a bare
-    # `ruff format .` idempotent too.
-    "*.md",
-]
+# Ruff formats fenced Python blocks inside Markdown. Snippets in docs are hand-aligned for
+# readability, so reformatting them is pure churn on documentation. The pre-commit hook already
+# limits itself to `types_or: [python, pyi]`; this keeps a bare `ruff format .` idempotent too.
+extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -70,7 +41,6 @@ ignore = [
     "E111",   # indentation-with-invalid-multiple
     "E114",   # indentation-with-invalid-multiple-comment
     "E117",   # over-indented
-    "E501",   # line-too-long
     "ISC001", # single-line-implicit-string-concatenation
     "ISC002", # multi-line-implicit-string-concatenation
     "Q000",   # bad-quotes-inline-string
@@ -129,7 +99,7 @@ ignore = [
 "uc/uc/http.py" = ["S310"]
 "uc/uc/repo_adapter/backends.py" = ["S310"]
 # Same reasoning for the pre-commit hook shims under tools/: they exist to launch other tools
-# (shfmt, golangci-lint, docker, pwsh) resolved from PATH. tools/ is not a package (INP001).
+# (shfmt, docker) resolved from PATH. tools/ is not a package (INP001).
 "tools/*.py" = ["INP001", "S603", "S607"]
 # Tests are not a package (INP001), use bare asserts (S101), and compare against
 # literal expected values (PLR2004) - that is what makes them readable as specs. Individual
@@ -157,4 +127,3 @@ split-on-trailing-comma = true
 quote-style = "single"
 indent-style = "space"
 docstring-code-format = true
-docstring-code-line-length = 120

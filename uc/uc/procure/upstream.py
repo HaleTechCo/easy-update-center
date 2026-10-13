@@ -1,4 +1,7 @@
-"""Downloads from repo.jenkins-ci.org (PROCUREMENT_SOURCE_URL) by Maven path, each checked against the .sha1 beside it."""
+"""Downloads from repo.jenkins-ci.org (PROCUREMENT_SOURCE_URL) by Maven path.
+
+Each checked against the .sha1 beside it.
+"""
 
 from __future__ import annotations
 
@@ -23,7 +26,10 @@ class NotFoundError(ProcureError):
 
 
 def parse_sha1(body: bytes) -> str:
-    """Return the digest a .sha1 file holds ('<digest>' or '<digest>  <name>', any case); raise ProcureError otherwise."""
+    """Return the digest a .sha1 file holds.
+
+    '<digest>' or '<digest>  <name>', any case; raise ProcureError otherwise.
+    """
     words = body.decode('ascii', 'replace').split()
     value = words[0].lower() if words else ''
     if not SHA1.match(value):
@@ -36,7 +42,10 @@ class Upstream:
     """Reads files by Maven path from a repository, anonymously."""
 
     def __init__(self, base_url: str, http: Http, *, limit: int) -> None:
-        """Read from base_url (ending in /) through http, accepting no archive over limit bytes."""
+        """Read from base_url (ending in /) through http.
+
+        Accepting no archive over limit bytes.
+        """
         self.base, self.http, self.limit = base_url, http, limit
 
     def url(self, path: str) -> str:
@@ -44,10 +53,15 @@ class Upstream:
         return self.base + path
 
     def sha1(self, path: str) -> str | None:
-        """Return the sha1 the source publishes for path, None when it has no such file; raise ProcureError on anything else."""
+        """Return the sha1 the source publishes for path.
+
+        None when it has no such file; raise ProcureError on anything else.
+        """
         url = self.url(path) + '.sha1'
         try:
-            response = self.http.request(url, headers={}, limit=SIDE_FILE_LIMIT, timeout=TIMEOUT)
+            response = self.http.request(
+                url, headers={}, limit=SIDE_FILE_LIMIT, timeout=TIMEOUT
+            )
         except BackendError as exc:
             raise ProcureError(str(exc)) from exc
         if response.status == HTTPStatus.NOT_FOUND:
@@ -62,7 +76,11 @@ class Upstream:
             raise ProcureError(msg) from exc
 
     def fetch(self, path: str, part: Path) -> tuple[str, int]:
-        """Download path into part and return its (sha1, size); NotFoundError when the source lacks it, ProcureError when it does not match its .sha1."""
+        """Download path into part and return its (sha1, size).
+
+        NotFoundError when the source lacks it, ProcureError when it does not match
+        its .sha1.
+        """
         expected = self.sha1(path)
         if expected is None:
             msg = f'{self.url(path)} not found'
@@ -75,6 +93,9 @@ class Upstream:
             raise ProcureError(str(exc)) from exc
         actual = sha1_of(part)
         if actual != expected:
-            msg = f'{self.url(path)} does not match its .sha1 (got {actual}, published {expected})'
+            msg = (
+                f'{self.url(path)} does not match its .sha1 '
+                f'(got {actual}, published {expected})'
+            )
             raise ProcureError(msg)
         return actual, part.stat().st_size

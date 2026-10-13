@@ -1,7 +1,11 @@
-"""Test-only stand-in for the Artifact Keeper 1.10 calls the repo-adapter makes (docs/architecture/repo-adapter.md#requests-it-answers).
+"""Test-only stand-in for the Artifact Keeper 1.10 calls the repo-adapter makes.
 
-GET /api/v1/repositories/<key>/artifacts (Bearer only, at most 100 per page, keyset cursor) and
-GET or HEAD /maven/<key>/<path> (basic or Bearer; .sha1/.sha256/.md5 side files), and PUT /maven/<key>/<path> (201, or 409 when the path exists, as the real one). Like the real one it ignores Range.
+See docs/architecture/repo-adapter.md#requests-it-answers.
+
+GET /api/v1/repositories/<key>/artifacts (Bearer only, at most 100 per page, keyset
+cursor) and GET or HEAD /maven/<key>/<path> (basic or Bearer; .sha1/.sha256/.md5 side
+files), and PUT /maven/<key>/<path> (201, or 409 when the path exists, as the real one).
+Like the real one it ignores Range.
 """
 
 from __future__ import annotations
@@ -17,7 +21,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 HASHES = {'.sha1': hashlib.sha1, '.sha256': hashlib.sha256, '.md5': hashlib.md5}
-_SHA256: dict[tuple[str, int, int], str] = {}  # (path, size, mtime_ns) -> sha256: WARs are large
+_SHA256: dict[
+    tuple[str, int, int], str
+] = {}  # (path, size, mtime_ns) -> sha256: WARs are large
 
 
 def sha256_of(path: Path) -> str:
@@ -37,7 +43,9 @@ def list_items(root: Path, key: str) -> list[dict]:
             created = dt.datetime.fromtimestamp(path.stat().st_mtime, dt.UTC)
             items.append(
                 {
-                    'id': hashlib.md5(str(path).encode(), usedforsecurity=False).hexdigest(),
+                    'id': hashlib.md5(
+                        str(path).encode(), usedforsecurity=False
+                    ).hexdigest(),
                     'repository_key': key,
                     'path': path.relative_to(base).as_posix(),
                     'name': 'org',
@@ -63,9 +71,20 @@ def page(items: list[dict], query: dict[str, list[str]]) -> dict:
         number = max(1, int(query.get('page', ['1'])[0]))
         remaining = items[(number - 1) * per_page :]
     chunk, more = remaining[:per_page], len(remaining) > per_page
-    body = {'items': chunk, 'pagination': {'page': number or 1, 'per_page': per_page, 'total': len(items), 'total_pages': -(-len(items) // per_page)}, 'has_more': more}
+    body = {
+        'items': chunk,
+        'pagination': {
+            'page': number or 1,
+            'per_page': per_page,
+            'total': len(items),
+            'total_pages': -(-len(items) // per_page),
+        },
+        'has_more': more,
+    }
     if more:
-        body['next_cursor'] = base64.urlsafe_b64encode(chunk[-1]['path'].encode()).decode()
+        body['next_cursor'] = base64.urlsafe_b64encode(
+            chunk[-1]['path'].encode()
+        ).decode()
     return body
 
 
@@ -74,7 +93,12 @@ def make_handler(root: Path, user: str, token: str, *, anonymous_read: bool):
     basic = 'Basic ' + base64.b64encode(f'{user}:{token}'.encode()).decode()
 
     class Handler(BaseHTTPRequestHandler):
-        def _send(self, status: int, body: bytes = b'', content_type: str = 'application/octet-stream') -> None:
+        def _send(
+            self,
+            status: int,
+            body: bytes = b'',
+            content_type: str = 'application/octet-stream',
+        ) -> None:
             self.send_response(status)
             self.send_header('Content-Type', content_type)
             self.send_header('Content-Length', str(len(body)))
@@ -86,12 +110,20 @@ def make_handler(root: Path, user: str, token: str, *, anonymous_read: bool):
             path, _, raw_query = self.path.partition('?')
             auth = self.headers.get('Authorization', '')
             if path == '/health':
-                return self._send(200, b'{"status":"healthy","version":"1.10.0"}', 'application/json')
+                return self._send(
+                    200, b'{"status":"healthy","version":"1.10.0"}', 'application/json'
+                )
             parts = path.strip('/').split('/')
-            if len(parts) == 5 and parts[:3] == ['api', 'v1', 'repositories'] and parts[4] == 'artifacts':
+            if (
+                len(parts) == 5
+                and parts[:3] == ['api', 'v1', 'repositories']
+                and parts[4] == 'artifacts'
+            ):
                 if auth != bearer:
                     return self._send(401, b'Authentication required', 'text/plain')
-                body = page(list_items(root, parts[3]), urllib.parse.parse_qs(raw_query))
+                body = page(
+                    list_items(root, parts[3]), urllib.parse.parse_qs(raw_query)
+                )
                 return self._send(200, json.dumps(body).encode(), 'application/json')
             if len(parts) >= 3 and parts[0] == 'maven':
                 if auth not in (bearer, basic) and not anonymous_read:
@@ -105,7 +137,11 @@ def make_handler(root: Path, user: str, token: str, *, anonymous_read: bool):
                 suffix = target.suffix
                 original = target.with_suffix('')
                 if suffix in HASHES and original.is_file():
-                    return self._send(200, HASHES[suffix](original.read_bytes()).hexdigest().encode(), 'text/plain')
+                    return self._send(
+                        200,
+                        HASHES[suffix](original.read_bytes()).hexdigest().encode(),
+                        'text/plain',
+                    )
                 return self._send(404)
             return self._send(404, b'Repository not found', 'text/plain')
 
@@ -116,29 +152,47 @@ def make_handler(root: Path, user: str, token: str, *, anonymous_read: bool):
                 return self._send(404, b'Repository not found', 'text/plain')
             if self.headers.get('Authorization', '') not in (bearer, basic):
                 return self._send(401, b'Authentication required', 'text/plain')
-            target = (root / parts[1] / urllib.parse.unquote('/'.join(parts[2:]))).resolve()
+            target = (
+                root / parts[1] / urllib.parse.unquote('/'.join(parts[2:]))
+            ).resolve()
             if not target.is_relative_to(root.resolve()):
                 return self._send(400)
             if target.exists():
-                return self._send(409, b'{"code":"CONFLICT","message":"Artifact already exists"}', 'application/json')
+                return self._send(
+                    409,
+                    b'{"code":"CONFLICT","message":"Artifact already exists"}',
+                    'application/json',
+                )
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
             return self._send(201)
 
-        do_HEAD = do_GET  # noqa: N815 - http.server dispatches on the do_<METHOD> name; _send leaves out the body
+        # http.server dispatches on the do_<METHOD> name; _send leaves out the body
+        do_HEAD = do_GET  # noqa: N815
 
     return Handler
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--root', type=Path, required=True, help='directory containing one folder per repository')
+    parser.add_argument(
+        '--root',
+        type=Path,
+        required=True,
+        help='directory containing one folder per repository',
+    )
     parser.add_argument('--port', type=int, default=8081)
     parser.add_argument('--user', required=True)
     parser.add_argument('--token', required=True)
-    parser.add_argument('--anonymous-read', action='store_true', help='allow /maven reads without credentials')
+    parser.add_argument(
+        '--anonymous-read',
+        action='store_true',
+        help='allow /maven reads without credentials',
+    )
     args = parser.parse_args()
-    handler = make_handler(args.root, args.user, args.token, anonymous_read=args.anonymous_read)
+    handler = make_handler(
+        args.root, args.user, args.token, anonymous_read=args.anonymous_read
+    )
     ThreadingHTTPServer(('0.0.0.0', args.port), handler).serve_forever()
 
 

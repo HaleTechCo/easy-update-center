@@ -1,1 +1,4 @@
-"""Easy Update Center for Jenkins: generation, validation and publishing (see docs/architecture/overview.md)."""
+"""Easy Update Center for Jenkins: generation, validation and publishing.
+
+See docs/architecture/overview.md.
+"""

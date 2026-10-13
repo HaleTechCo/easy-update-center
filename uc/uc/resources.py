@@ -1,4 +1,7 @@
-"""Upstream resources/ (security warnings, suspensions, labels) plus the operator overlay (docs/architecture/generation-pipeline.md#step-2-resources)."""
+"""Upstream resources/ (security warnings, suspensions, labels) plus operator overlay.
+
+See docs/architecture/generation-pipeline.md#step-2-resources.
+"""
 
 from __future__ import annotations
 
@@ -32,7 +35,10 @@ class ResourcesError(UcError):
 
 @dataclass(frozen=True)
 class ResourcesInfo:
-    """Where a resources copy came from and how old its data is; saved beside it as .uc-resources.json."""
+    """Where a resources copy came from and how old its data is.
+
+    Saved beside it as .uc-resources.json.
+    """
 
     source: str
     ref: str
@@ -46,7 +52,10 @@ class ResourcesInfo:
 
 @dataclass(frozen=True)
 class PreparedResources:
-    """Resources ready for the generator: the merged copy, the upstream copy, and what was applied or went wrong."""
+    """Resources ready for the generator.
+
+    The merged copy, the upstream copy, and what was applied or went wrong.
+    """
 
     path: Path  # merged copy passed to --resources-dir
     upstream: Path  # upstream copy before the overlay; saved as last-good after publish
@@ -56,7 +65,13 @@ class PreparedResources:
 
 
 def _resources_prefix(members: list[tarfile.TarInfo]) -> str:
-    candidates = [m.name[: -len('warnings.json')] for m in members if m.isfile() and PurePosixPath(m.name).name == 'warnings.json' and PurePosixPath(m.name).parent.name == 'resources']
+    candidates = [
+        m.name[: -len('warnings.json')]
+        for m in members
+        if m.isfile()
+        and PurePosixPath(m.name).name == 'warnings.json'
+        and PurePosixPath(m.name).parent.name == 'resources'
+    ]
     if not candidates:
         msg = 'archive does not contain resources/warnings.json'
         raise ResourcesError(msg)
@@ -95,12 +110,19 @@ def _extract_resources(archive: bytes, dest: Path) -> dt.datetime:
     return dt.datetime.fromtimestamp(newest, dt.UTC)
 
 
-def fetch_upstream(settings: Settings, dest: Path, now: dt.datetime, get: http.Getter = http.get) -> ResourcesInfo:
-    """Put upstream's resources/ into dest from RESOURCES_SOURCE (bundled, a GitHub ref or a URL) and return where they came from."""
+def fetch_upstream(
+    settings: Settings, dest: Path, now: dt.datetime, get: http.Getter = http.get
+) -> ResourcesInfo:
+    """Put upstream's resources/ into dest and return where they came from.
+
+    They come from RESOURCES_SOURCE (bundled, a GitHub ref or a URL).
+    """
     if settings.resources_source == 'bundled':
         shutil.copytree(settings.bundled_resources, dest)
         meta = json.loads((dest / INFO_FILE).read_text(encoding='utf-8'))
-        info = ResourcesInfo('bundled', meta['ref'], iso(parse_iso(meta['data_date'])), iso(now))
+        info = ResourcesInfo(
+            'bundled', meta['ref'], iso(parse_iso(meta['data_date'])), iso(now)
+        )
     elif settings.resources_source == 'github':
         commit = json.loads(
             get(
@@ -112,13 +134,23 @@ def fetch_upstream(settings: Settings, dest: Path, now: dt.datetime, get: http.G
         if not _SHA.match(sha):
             msg = f'unexpected GitHub response for {settings.resources_ref!r}'
             raise ResourcesError(msg)
-        _extract_resources(get(f'https://codeload.github.com/{GITHUB_REPO}/tar.gz/{sha}'), dest)
-        info = ResourcesInfo('github', sha, iso(parse_iso(commit['commit']['committer']['date'])), iso(now))
+        _extract_resources(
+            get(f'https://codeload.github.com/{GITHUB_REPO}/tar.gz/{sha}'), dest
+        )
+        info = ResourcesInfo(
+            'github',
+            sha,
+            iso(parse_iso(commit['commit']['committer']['date'])),
+            iso(now),
+        )
     else:
         archive = get(settings.resources_url)
         digest = hashlib.sha256(archive).hexdigest()
         if settings.resources_sha256 and digest != settings.resources_sha256:
-            msg = f'RESOURCES_URL checksum mismatch: expected {settings.resources_sha256}, got {digest}'
+            msg = (
+                'RESOURCES_URL checksum mismatch: '
+                f'expected {settings.resources_sha256}, got {digest}'
+            )
             raise ResourcesError(msg)
         newest = _extract_resources(archive, dest)
         info = ResourcesInfo('url', f'sha256:{digest}', iso(newest), iso(now))
@@ -151,37 +183,51 @@ def _merge_warnings(base: object, extra: object) -> list:
 def merge_overlay(upstream: Path, overlay: Path, dest: Path) -> list[str]:
     """Copy upstream to dest, apply the overlay and return the overlay files applied.
 
-    .properties files append (later keys win), warnings.json merges by id, and any other file
-    replaces upstream's.
+    .properties files append (later keys win), warnings.json merges by id, and any other
+    file replaces upstream's.
     """
     shutil.copytree(upstream, dest)
     applied: list[str] = []
     if not overlay.is_dir():
         return applied
     for item in sorted(overlay.iterdir()):
-        if not item.is_file() or item.name.startswith('.') or item.name.lower().startswith('readme'):
+        if (
+            not item.is_file()
+            or item.name.startswith('.')
+            or item.name.lower().startswith('readme')
+        ):
             continue
         target = dest / item.name
         if item.suffix == '.properties':
             base = target.read_bytes() if target.exists() else b''
             if base and not base.endswith(b'\n'):
                 base += b'\n'
-            banner = f'\n# ---- overlay: {item.name} (later keys win) ----\n'.encode('ascii')
+            banner = f'\n# ---- overlay: {item.name} (later keys win) ----\n'.encode(
+                'ascii'
+            )
             target.write_bytes(base + banner + item.read_bytes())
         elif item.name == 'warnings.json':
             merged = _merge_warnings(
                 json.loads(target.read_text(encoding='utf-8')),
                 json.loads(item.read_text(encoding='utf-8')),
             )
-            target.write_text(json.dumps(merged, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
+            target.write_text(
+                json.dumps(merged, indent=2, ensure_ascii=False) + '\n',
+                encoding='utf-8',
+            )
         else:
             shutil.copyfile(item, target)
         applied.append(item.name)
     return applied
 
 
-def prepare_resources(settings: Settings, work: Path, now: dt.datetime, get: http.Getter = http.get) -> PreparedResources:
-    """Fetch upstream resources into work, falling back to the last-good copy, and merge the operator overlay."""
+def prepare_resources(
+    settings: Settings, work: Path, now: dt.datetime, get: http.Getter = http.get
+) -> PreparedResources:
+    """Fetch upstream resources into work, falling back to the last-good copy.
+
+    Then merge the operator overlay.
+    """
     upstream = work / 'upstream-resources'
     last_good = settings.data_dir / 'resources' / 'last-good'
     warnings: list[str] = []
@@ -193,8 +239,13 @@ def prepare_resources(settings: Settings, work: Path, now: dt.datetime, get: htt
             raise ResourcesError(msg) from exc
         shutil.rmtree(upstream, ignore_errors=True)
         shutil.copytree(last_good, upstream)
-        info = ResourcesInfo(**json.loads((last_good / INFO_FILE).read_text(encoding='utf-8')))
-        warnings.append(f'resources fetch failed ({exc}); using last-good copy from {info.fetched_at}')
+        info = ResourcesInfo(
+            **json.loads((last_good / INFO_FILE).read_text(encoding='utf-8'))
+        )
+        warnings.append(
+            f'resources fetch failed ({exc}); '
+            f'using last-good copy from {info.fetched_at}'
+        )
     merged = work / 'resources'
     applied = merge_overlay(upstream, settings.overlay_dir, merged)
     return PreparedResources(merged, upstream, info, applied, warnings)
@@ -203,7 +254,8 @@ def prepare_resources(settings: Settings, work: Path, now: dt.datetime, get: htt
 def save_last_good(prepared: PreparedResources, data_dir: Path) -> None:
     """Replace the last-good copy with this run's upstream resources.
 
-    Called only after a successful publish, so a bad upstream change never becomes the fallback.
+    Called only after a successful publish, so a bad upstream change never becomes the
+    fallback.
     """
     target = data_dir / 'resources' / 'last-good'
     staging = target.with_name('last-good.tmp')

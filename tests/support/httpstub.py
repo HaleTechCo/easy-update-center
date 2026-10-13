@@ -1,6 +1,7 @@
 """A threaded HTTP server that answers with canned responses and records every request.
 
-A route is (status, headers, body), or a callable taking (headers, body) and returning one. A HEAD request gets its route's status and headers, without the body.
+A route is (status, headers, body), or a callable taking (headers, body) and returning
+one. A HEAD request gets its route's status and headers, without the body.
 """
 
 from __future__ import annotations
@@ -16,8 +17,13 @@ Route = Reply | Callable[[dict[str, str], bytes], Reply]
 _RANGE = re.compile(r'^bytes=(\d*)-(\d*)$')
 
 
-def serve_bytes(data: bytes, *, ranges: bool = True) -> Callable[[dict[str, str], bytes], Reply]:
-    """Return a route serving data, honouring single `Range: bytes=a-b` / `bytes=-n` requests when ranges is set."""
+def serve_bytes(
+    data: bytes, *, ranges: bool = True
+) -> Callable[[dict[str, str], bytes], Reply]:
+    """Return a route serving data.
+
+    It honours single `Range: bytes=a-b` / `bytes=-n` requests when ranges is set.
+    """
 
     def route(headers: dict[str, str], _body: bytes) -> Reply:
         match = _RANGE.match(headers.get('Range', '')) if ranges else None
@@ -27,17 +33,30 @@ def serve_bytes(data: bytes, *, ranges: bool = True) -> Callable[[dict[str, str]
         if first == '':
             start, end = max(0, len(data) - int(last)), len(data) - 1
         else:
-            start, end = int(first), min(int(last) if last else len(data) - 1, len(data) - 1)
-        return 206, {'Content-Range': f'bytes {start}-{end}/{len(data)}'}, data[start : end + 1]
+            start, end = (
+                int(first),
+                min(int(last) if last else len(data) - 1, len(data) - 1),
+            )
+        return (
+            206,
+            {'Content-Range': f'bytes {start}-{end}/{len(data)}'},
+            data[start : end + 1],
+        )
 
     return route
 
 
 class StubServer:
-    """Serves routes keyed by (method, path) on 127.0.0.1 while in a with block; unknown routes get a 404."""
+    """Serves routes keyed by (method, path) on 127.0.0.1 while in a with block.
+
+    Unknown routes get a 404.
+    """
 
     def __init__(self, routes: dict[tuple[str, str], Route]) -> None:
-        """Bind an ephemeral port (see url) without serving yet; every request is appended to requests."""
+        """Bind an ephemeral port (see url) without serving yet.
+
+        Every request is appended to requests.
+        """
         self.routes = routes
         self.requests: list[tuple[str, str, dict[str, str], bytes]] = []
         stub = self
@@ -49,7 +68,9 @@ class StubServer:
                 headers = dict(self.headers)
                 stub.requests.append((self.command, self.path, headers, body))
                 route = stub.routes.get((self.command, self.path), (404, {}, b''))
-                status, reply_headers, payload = route(headers, body) if callable(route) else route
+                status, reply_headers, payload = (
+                    route(headers, body) if callable(route) else route
+                )
                 self.send_response(status)
                 for key, value in reply_headers.items():
                     self.send_header(key, value)
@@ -58,7 +79,8 @@ class StubServer:
                 if self.command != 'HEAD':
                     self.wfile.write(payload)
 
-            do_GET = _handle  # noqa: N815 - http.server dispatches on the do_<METHOD> name
+            # http.server dispatches on the do_<METHOD> name
+            do_GET = _handle  # noqa: N815
             do_HEAD = _handle  # noqa: N815 - same; headers only
             do_POST = _handle  # noqa: N815 - same
             do_PUT = _handle  # noqa: N815 - same

@@ -1,4 +1,7 @@
-"""Upstream's redirect expectations (site/test/test.sh at 3.18.4), ported so that a mismatch fails."""
+"""Upstream's redirect expectations (site/test/test.sh at 3.18.4).
+
+Ported so that a mismatch fails.
+"""
 
 import pytest
 
@@ -48,7 +51,10 @@ EXPECTED = [
     (ACTUAL + '2.222.1', '/dynamic-stable-2.222.1/update-center.actual.json'),
     (ACTUAL + '2.222-SNAPSHOT', '/dynamic-2.222/update-center.actual.json'),
     (ACTUAL + '2.222.1-SNAPSHOT', '/dynamic-stable-2.222.1/update-center.actual.json'),
-    ('/plugin-documentation-urls.json?version=2.222.1', '/current/plugin-documentation-urls.json'),
+    (
+        '/plugin-documentation-urls.json?version=2.222.1',
+        '/current/plugin-documentation-urls.json',
+    ),
     ('/latestCore.txt?version=2.222.1', '/current/latestCore.txt'),
     (UC + '1.650', '/dynamic-2.172/update-center.json'),
     (UC + '1.650-SNAPSHOT', '/dynamic-2.172/update-center.json'),
@@ -71,7 +77,9 @@ def test_redirect(path, target):
     assert response.location == BASE + target
 
 
-@pytest.mark.parametrize('path', ['/update-center.json?uctest', '/foo/update-center.json?uctest'])
+@pytest.mark.parametrize(
+    'path', ['/update-center.json?uctest', '/foo/update-center.json?uctest']
+)
 def test_uctest_is_a_tiny_ok(path):
     response = fetch(HOST, path)
     assert response.status == 200

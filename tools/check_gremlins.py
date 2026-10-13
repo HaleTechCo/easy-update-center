@@ -119,7 +119,12 @@ SKIP_DIR_SUFFIXES = ('.egg-info',)
 
 def _is_skipped(path: Path) -> bool:
     """Return True if any component of path is a skipped directory."""
-    return any(part in SKIP_DIRS or part.startswith(SKIP_DIR_PREFIXES) or part.endswith(SKIP_DIR_SUFFIXES) for part in path.parts)
+    return any(
+        part in SKIP_DIRS
+        or part.startswith(SKIP_DIR_PREFIXES)
+        or part.endswith(SKIP_DIR_SUFFIXES)
+        for part in path.parts
+    )
 
 
 def iter_files(paths: Iterable[str]) -> Iterator[Path]:
@@ -158,7 +163,10 @@ def process(path: Path, *, fix: bool) -> tuple[int, bool]:
     for lineno, col, ch in found:
         replacement = GREMLINS[ch]
         shown = repr(replacement) if replacement else 'removed'
-        print(f'{path}:{lineno}:{col}: U+{ord(ch):04X} {unicodedata.name(ch, "?")} -> {shown}')
+        print(
+            f'{path}:{lineno}:{col}: U+{ord(ch):04X} '
+            f'{unicodedata.name(ch, "?")} -> {shown}'
+        )
     if not fix:
         return len(found), False
     for ch, replacement in GREMLINS.items():
@@ -179,7 +187,9 @@ def main(argv: list[str]) -> int:
         changed += int(was_changed)
     if fix:
         if changed:
-            print(f'\nfixed unicode gremlins in {changed} file(s) -- review and re-stage.')
+            print(
+                f'\nfixed unicode gremlins in {changed} file(s) -- review and re-stage.'
+            )
             return 1
         return 0
     if total:

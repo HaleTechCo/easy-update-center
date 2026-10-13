@@ -1,4 +1,7 @@
-"""Run CI scripts in tests the way the runners do: stub commands on PATH, and bash with -e and pipefail."""
+"""Run CI scripts in tests the way the runners do.
+
+Stub commands on PATH, and bash with -e and pipefail.
+"""
 
 import subprocess
 from pathlib import Path
@@ -13,7 +16,21 @@ def stub(tmp_path: Path, name: str, body: str) -> Path:
     return stubs
 
 
-def run_bash(tmp_path: Path, script: str, env: dict[str, str], cwd: Path, timeout: float = 30) -> subprocess.CompletedProcess[str]:
-    """Run a script as a GitHub Actions bash step runs it: bash with -e and pipefail, and only env."""
+def run_bash(
+    tmp_path: Path, script: str, env: dict[str, str], cwd: Path, timeout: float = 30
+) -> subprocess.CompletedProcess[str]:
+    """Run a script as a GitHub Actions bash step runs it.
+
+    That is bash with -e and pipefail, and only env.
+    """
     (tmp_path / 'step.sh').write_text(script, encoding='utf-8')
-    return subprocess.run(['bash', '--noprofile', '--norc', '-eo', 'pipefail', str(tmp_path / 'step.sh')], cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False, timeout=timeout)
+    return subprocess.run(
+        ['bash', '--noprofile', '--norc', '-eo', 'pipefail', str(tmp_path / 'step.sh')],
+        cwd=cwd,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+        timeout=timeout,
+    )

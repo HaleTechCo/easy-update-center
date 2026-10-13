@@ -1,4 +1,8 @@
-"""Everything update-center2 does not write itself (docs/architecture/generation-pipeline.md#step-8-layout-and-download-map), as upstream site/generate.sh:135-166."""
+"""Everything update-center2 does not write itself.
+
+As upstream site/generate.sh:135-166. See
+docs/architecture/generation-pipeline.md#step-8-layout-and-download-map.
+"""
 
 from __future__ import annotations
 
@@ -29,12 +33,22 @@ _JSONP_PREFIX = b'downloadService.post('
 
 
 class ToolInstallersError(UcError):
-    """The tool-installer index lists nothing, or a listed file is not tool installer metadata."""
+    """The tool-installer index lists nothing.
+
+    Or a listed file is not tool installer metadata.
+    """
 
 
 def site_dirs(root: Path, tiers: Tiers) -> list[Path]:
-    """Return every update site directory under root: one per weekly and stable tier, experimental, current."""
-    return [root / f'dynamic-{v}' for v in tiers.weekly] + [root / f'dynamic-stable-{v}' for v in tiers.stable] + [root / 'experimental', root / 'current']
+    """Return every update site directory under root.
+
+    One per weekly and stable tier, experimental, current.
+    """
+    return (
+        [root / f'dynamic-{v}' for v in tiers.weekly]
+        + [root / f'dynamic-stable-{v}' for v in tiers.stable]
+        + [root / 'experimental', root / 'current']
+    )
 
 
 def _symlink(target: str, link: Path) -> None:
@@ -44,11 +58,17 @@ def _symlink(target: str, link: Path) -> None:
 
 
 def finalize_layout(staging: Path, tiers: Tiers, templates: Path) -> None:
-    """Add the shared updates/ directory, the stable and top-level symlinks, uctest.json and index.html."""
+    """Add the shared updates/ directory and the stable and top-level symlinks.
+
+    Also add uctest.json and index.html.
+    """
     (staging / 'updates').mkdir(exist_ok=True)
     for site in site_dirs(staging, tiers):
         _symlink('../updates', site / 'updates')
-    _symlink(f'dynamic-stable-{tiers.stable[-1]}' if tiers.stable else 'current', staging / 'stable')
+    _symlink(
+        f'dynamic-stable-{tiers.stable[-1]}' if tiers.stable else 'current',
+        staging / 'stable',
+    )
     for name in TOP_LEVEL_LINKS:
         _symlink(f'current/{name}', staging / name)
     (staging / 'uctest.json').write_text('{}\n')
@@ -56,23 +76,35 @@ def finalize_layout(staging: Path, tiers: Tiers, templates: Path) -> None:
 
 
 def _fetch_tool_installers(index_url: str, get: http.Getter) -> dict[str, bytes]:
-    """Return every file the index links to, by name; raise ToolInstallersError if it lists none or a .json is not JSONP."""
-    names = sorted(set(_INSTALLER_HREF.findall(get(index_url).decode('utf-8', 'replace'))))
+    """Return every file the index links to, by name.
+
+    Raise ToolInstallersError if it lists none or a .json is not JSONP.
+    """
+    names = sorted(
+        set(_INSTALLER_HREF.findall(get(index_url).decode('utf-8', 'replace')))
+    )
     if not names:
         msg = f'{index_url} lists no tool installer files'
         raise ToolInstallersError(msg)
     fetched: dict[str, bytes] = {}
     for name in names:
         body = get(urljoin(index_url, name))
-        if name.endswith('.json') and not body.lstrip(b'\xef\xbb\xbf \r\n\t').startswith(_JSONP_PREFIX):
+        if name.endswith('.json') and not body.lstrip(
+            b'\xef\xbb\xbf \r\n\t'
+        ).startswith(_JSONP_PREFIX):
             msg = f'{name} does not look like tool installer metadata'
             raise ToolInstallersError(msg)
         fetched[name] = body
     return fetched
 
 
-def mirror_tool_installers(index_url: str, dest: Path, previous: Path | None, get: http.Getter = http.get) -> list[str]:
-    """Copy upstream's signed tool-installer metadata unmodified; fall back to the previous copy."""
+def mirror_tool_installers(
+    index_url: str, dest: Path, previous: Path | None, get: http.Getter = http.get
+) -> list[str]:
+    """Copy upstream's signed tool-installer metadata unmodified.
+
+    Fall back to the previous copy.
+    """
     dest.mkdir(parents=True, exist_ok=True)
     try:
         fetched = _fetch_tool_installers(index_url, get)

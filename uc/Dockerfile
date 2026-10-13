@@ -8,12 +8,13 @@ ARG SUPERCRONIC_VERSION=v0.2.49
 # build from source (make build UC_VERSION=... to set it).
 ARG UC_VERSION=dev
 
-FROM maven:3.9-eclipse-temurin-21 AS jar-build
+# Base images are pinned by digest, so a build is reproducible; Dependabot proposes the new digest
+# when a tag moves (docs/reference/dependencies.md#pinning-policy).
+FROM maven:3.9-eclipse-temurin-21@sha256:99e61abcff91a9b1333463bd8451fb18495d6eba9250ac66a338b518f8278320 AS jar-build
 ARG UC2_VERSION
 ARG UC2_COMMIT
-# Distribution packages are not version-pinned (DL3008) in any stage: the base images track their
-# upstream tags, and the Ubuntu archive drops superseded versions, so a pin breaks the build the
-# day the base moves to a newer release.
+# Distribution packages are not version-pinned (DL3008) in any stage: the Ubuntu archive drops
+# superseded versions, so a pin breaks the build as soon as the base image moves on.
 # hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git \
@@ -52,7 +53,7 @@ RUN mvn -B -ntp -q org.codehaus.mojo:license-maven-plugin:2.4.0:add-third-party 
       grep -qxF "${name}" /tmp/listed || { echo "no third-party notice for ${name}" >&2; exit 1; }; \
     done
 
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:21-jre@sha256:cff19e6215689161eb6162c11b86b0c60ddf802164f2eaf48d570f8fb79a36c5 AS runtime
 ARG UC2_VERSION
 ARG SUPERCRONIC_VERSION
 ARG TARGETARCH
@@ -101,7 +102,7 @@ FROM runtime AS test
 USER 0:0
 # hadolint ignore=DL3008
 RUN apt-get update \
- && apt-get install -y --no-install-recommends python3-pytest python3-yaml git \
+ && apt-get install -y --no-install-recommends python3-pytest python3-yaml git jq \
  && rm -rf /var/lib/apt/lists/*
 USER 10001:10001
 WORKDIR /tmp

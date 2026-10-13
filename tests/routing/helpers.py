@@ -23,8 +23,14 @@ class Response:
 def fetch(host: str, path: str, headers: dict[str, str] | None = None) -> Response:
     connection = http.client.HTTPConnection(host, 8080, timeout=10)
     try:
-        connection.request('GET', path, headers={'User-Agent': 'uc-routing-test', **(headers or {})})
+        connection.request(
+            'GET', path, headers={'User-Agent': 'uc-routing-test', **(headers or {})}
+        )
         response = connection.getresponse()
-        return Response(response.status, {k.lower(): v for k, v in response.getheaders()}, response.read())
+        return Response(
+            response.status,
+            {k.lower(): v for k, v in response.getheaders()},
+            response.read(),
+        )
     finally:
         connection.close()

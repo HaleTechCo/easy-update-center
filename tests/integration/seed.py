@@ -1,11 +1,14 @@
-"""Seed data for the air-gapped integration test; runs on a network with internet access.
+"""Seed data for the air-gapped integration test.
+
+Runs on a network with internet access.
 
 seed.py versions   print LTS_OLD, LTS_NEW, WEEKLY (for .versions.env)
-seed.py repo ...   build a Maven-layout repository from jenkins-plugin-cli downloads the way operators
-                   procure plugins: mostly .hpi files without POMs, one real POM, one saved error page
-                   as a POM, a misplaced plugin, POM-less test plugins, and core WARs (two of them
-                   released more than 400 days ago, for CORE_AGE_DAYS), plus the procurement round trip's
-                   upstream (/seed/upstream) and push repository template (/seed/push-template)
+seed.py repo ...   build a Maven-layout repository from jenkins-plugin-cli downloads the
+                   way operators procure plugins: mostly .hpi files without POMs, one
+                   real POM, one saved error page as a POM, a misplaced plugin, POM-less
+                   test plugins, and core WARs (two of them released more than 400 days
+                   ago, for CORE_AGE_DAYS), plus the procurement round trip's upstream
+                   (/seed/upstream) and push repository template (/seed/push-template)
 """
 
 from __future__ import annotations
@@ -21,16 +24,28 @@ from uc.doctor import parse_manifest
 
 UPDATES = 'https://updates.jenkins.io'
 RELEASES = 'https://repo.jenkins-ci.org/releases'
-STUB_POM = b'<project><modelVersion>4.0.0</modelVersion><groupId>io.jenkins.uctest</groupId><artifactId>uc-test-stubpom</artifactId><version>1.0</version><packaging>hpi</packaging></project>'
-# What an operator's download tool saved as a .pom (seen in a real repository, 2026-09-22).
-HTML_404 = b'<html>\r\n<head><title>404 Not Found</title></head>\r\n<body>\r\n<center><h1>404 Not Found</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n'
-# LTS releases from early 2024: always more than 400 days old by the time this test runs.
+STUB_POM = (
+    b'<project><modelVersion>4.0.0</modelVersion><groupId>io.jenkins.uctest</groupId>'
+    b'<artifactId>uc-test-stubpom</artifactId><version>1.0</version>'
+    b'<packaging>hpi</packaging></project>'
+)
+# What an operator's download tool saved as a .pom (seen in a real repository,
+# 2026-09-22).
+HTML_404 = (
+    b'<html>\r\n<head><title>404 Not Found</title></head>\r\n<body>\r\n'
+    b'<center><h1>404 Not Found</h1></center>\r\n<hr><center>nginx</center>\r\n'
+    b'</body>\r\n</html>\r\n'
+)
+# LTS releases from early 2024: always more than 400 days old by the time this test
+# runs.
 OLD_CORES = ('2.426.3', '2.440.3')
 PROCURE_CORE = '2.999.1'  # a core only the procurement test's upstream has
 
 
 def get(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={'User-Agent': 'easy-update-center-seed/1'})
+    request = urllib.request.Request(
+        url, headers={'User-Agent': 'easy-update-center-seed/1'}
+    )
     with urllib.request.urlopen(request, timeout=600) as response:
         return response.read()
 
@@ -42,68 +57,188 @@ def versions() -> None:
     print(f'LTS_OLD={lts_old}\nLTS_NEW={lts_new}\nWEEKLY={weekly}')
 
 
-def put(root: Path, group: str, artifact: str, version: str, extension: str, *, data: bytes) -> None:
-    path = root / group.replace('.', '/') / artifact / version / f'{artifact}-{version}.{extension}'
+def put(
+    root: Path, group: str, artifact: str, version: str, extension: str, *, data: bytes
+) -> None:
+    path = (
+        root
+        / group.replace('.', '/')
+        / artifact
+        / version
+        / f'{artifact}-{version}.{extension}'
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
 
 
-def synthetic_hpi(artifact: str, jenkins_version: str, *, embed_pom: bool = False) -> bytes:
-    """Build a plugin laid out like a pre-2015 build (index.jelly under WEB-INF/classes).
+def synthetic_hpi(
+    artifact: str, jenkins_version: str, *, embed_pom: bool = False
+) -> bytes:
+    """Build a plugin laid out like a pre-2015 build.
 
-    With embed_pom, the archive also carries a POM the repo-adapter can serve.
+    Its index.jelly is under WEB-INF/classes. With embed_pom, the archive also carries a
+    POM the repo-adapter can serve.
     """
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w') as archive:
-        archive.writestr('META-INF/MANIFEST.MF', (f'Manifest-Version: 1.0\r\nGroup-Id: io.jenkins.uctest\r\nArtifact-Id: {artifact}\r\nShort-Name: {artifact}\r\nExtension-Name: {artifact}\r\nLong-Name: UC test {artifact}\r\nPlugin-Version: 1.0\r\nJenkins-Version: {jenkins_version}\r\n\r\n'))
+        archive.writestr(
+            'META-INF/MANIFEST.MF',
+            (
+                'Manifest-Version: 1.0\r\nGroup-Id: io.jenkins.uctest\r\n'
+                f'Artifact-Id: {artifact}\r\nShort-Name: {artifact}\r\n'
+                f'Extension-Name: {artifact}\r\nLong-Name: UC test {artifact}\r\n'
+                f'Plugin-Version: 1.0\r\nJenkins-Version: {jenkins_version}\r\n\r\n'
+            ),
+        )
         if embed_pom:
-            archive.writestr(f'META-INF/maven/io.jenkins.uctest/{artifact}/pom.xml', (f'<project><modelVersion>4.0.0</modelVersion><groupId>io.jenkins.uctest</groupId><artifactId>{artifact}</artifactId><version>1.0</version><packaging>hpi</packaging><name>UC test {artifact}</name></project>'))
-        archive.writestr('WEB-INF/classes/index.jelly', f'<div>uc integration-test plugin {artifact}</div>')
+            archive.writestr(
+                f'META-INF/maven/io.jenkins.uctest/{artifact}/pom.xml',
+                (
+                    '<project><modelVersion>4.0.0</modelVersion>'
+                    '<groupId>io.jenkins.uctest</groupId>'
+                    f'<artifactId>{artifact}</artifactId><version>1.0</version>'
+                    '<packaging>hpi</packaging>'
+                    f'<name>UC test {artifact}</name></project>'
+                ),
+            )
+        archive.writestr(
+            'WEB-INF/classes/index.jelly',
+            f'<div>uc integration-test plugin {artifact}</div>',
+        )
     return buffer.getvalue()
 
 
-def procure_archive(group: str, artifact: str, *, dependencies: str = '', pom: bytes = b'') -> bytes:
-    """Build a procurement-test plugin 1.0 requiring PROCURE_CORE, optionally with dependencies and an embedded POM."""
+def procure_archive(
+    group: str, artifact: str, *, dependencies: str = '', pom: bytes = b''
+) -> bytes:
+    """Build a procurement-test plugin 1.0 requiring PROCURE_CORE.
+
+    Optionally with dependencies and an embedded POM.
+    """
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w') as archive:
         requires = f'Plugin-Dependencies: {dependencies}\r\n' if dependencies else ''
-        archive.writestr('META-INF/MANIFEST.MF', f'Manifest-Version: 1.0\r\nGroup-Id: {group}\r\nArtifact-Id: {artifact}\r\nShort-Name: {artifact}\r\nPlugin-Version: 1.0\r\nJenkins-Version: {PROCURE_CORE}\r\n{requires}\r\n')
+        archive.writestr(
+            'META-INF/MANIFEST.MF',
+            (
+                f'Manifest-Version: 1.0\r\nGroup-Id: {group}\r\n'
+                f'Artifact-Id: {artifact}\r\nShort-Name: {artifact}\r\n'
+                f'Plugin-Version: 1.0\r\nJenkins-Version: {PROCURE_CORE}\r\n'
+                f'{requires}\r\n'
+            ),
+        )
         if pom:
             archive.writestr(f'META-INF/maven/{group}/{artifact}/pom.xml', pom)
-        archive.writestr('WEB-INF/classes/index.jelly', f'<div>uc procurement test plugin {artifact}</div>')
+        archive.writestr(
+            'WEB-INF/classes/index.jelly',
+            f'<div>uc procurement test plugin {artifact}</div>',
+        )
     return buffer.getvalue()
 
 
-def procure_pom(group: str, artifact: str, packaging: str = 'hpi', dependencies: tuple = ()) -> bytes:
-    """Build a real-looking POM for version 1.0 (PROCURE_CORE for the war), naming its dependencies' groups."""
+def procure_pom(
+    group: str, artifact: str, packaging: str = 'hpi', dependencies: tuple = ()
+) -> bytes:
+    """Build a real-looking POM for version 1.0 (PROCURE_CORE for the war).
+
+    It names its dependencies' groups.
+    """
     version = PROCURE_CORE if artifact == 'jenkins-war' else '1.0'
-    deps = ''.join(f'<dependency><groupId>{g}</groupId><artifactId>{a}</artifactId><version>1.0</version></dependency>' for g, a in dependencies)
-    return (f'<project><modelVersion>4.0.0</modelVersion><groupId>{group}</groupId><artifactId>{artifact}</artifactId><version>{version}</version><packaging>{packaging}</packaging><name>UC procurement {artifact}</name>' + (f'<dependencies>{deps}</dependencies>' if deps else '') + '</project>').encode()
+    deps = ''.join(
+        (
+            f'<dependency><groupId>{g}</groupId><artifactId>{a}</artifactId>'
+            '<version>1.0</version></dependency>'
+        )
+        for g, a in dependencies
+    )
+    return (
+        (
+            '<project><modelVersion>4.0.0</modelVersion>'
+            f'<groupId>{group}</groupId><artifactId>{artifact}</artifactId>'
+            f'<version>{version}</version><packaging>{packaging}</packaging>'
+            f'<name>UC procurement {artifact}</name>'
+        )
+        + (f'<dependencies>{deps}</dependencies>' if deps else '')
+        + '</project>'
+    ).encode()
 
 
 def procure_war() -> bytes:
     """Build a small jenkins-war archive for PROCURE_CORE."""
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w') as archive:
-        archive.writestr('META-INF/MANIFEST.MF', f'Manifest-Version: 1.0\r\nJenkins-Version: {PROCURE_CORE}\r\n\r\n')
+        archive.writestr(
+            'META-INF/MANIFEST.MF',
+            f'Manifest-Version: 1.0\r\nJenkins-Version: {PROCURE_CORE}\r\n\r\n',
+        )
     return buffer.getvalue()
 
 
 def procure_fixtures(base: Path) -> None:
-    """Write the round trip's repository template (a plugin missing its real POM, a dependency and its core) and the upstream that has them all."""
-    upstream, template = base / 'upstream' / 'releases', base / 'push-template' / 'procure'
+    """Write the round trip's repository template and the upstream.
+
+    The template is a plugin missing its real POM, a dependency and its core; the
+    upstream has them all.
+    """
+    upstream, template = (
+        base / 'upstream' / 'releases',
+        base / 'push-template' / 'procure',
+    )
     uctest, plugins = 'io.jenkins.uctest', 'org.jenkins-ci.plugins'
-    needs_pom = procure_pom(uctest, 'uc-test-needs-dep', dependencies=((uctest, 'uc-test-dep'),))
-    put(template, uctest, 'uc-test-needs-dep', '1.0', 'hpi', data=procure_archive(uctest, 'uc-test-needs-dep', dependencies='uc-test-dep:1.0', pom=needs_pom))
+    needs_pom = procure_pom(
+        uctest, 'uc-test-needs-dep', dependencies=((uctest, 'uc-test-dep'),)
+    )
+    put(
+        template,
+        uctest,
+        'uc-test-needs-dep',
+        '1.0',
+        'hpi',
+        data=procure_archive(
+            uctest, 'uc-test-needs-dep', dependencies='uc-test-dep:1.0', pom=needs_pom
+        ),
+    )
     put(upstream, uctest, 'uc-test-needs-dep', '1.0', 'pom', data=needs_pom)
-    dep_pom = procure_pom(uctest, 'uc-test-dep')  # names no group for uc-test-dep2: found through the fallback groups
-    put(upstream, uctest, 'uc-test-dep', '1.0', 'hpi', data=procure_archive(uctest, 'uc-test-dep', dependencies='uc-test-dep2:1.0', pom=dep_pom))
+    dep_pom = procure_pom(
+        uctest, 'uc-test-dep'
+    )  # names no group for uc-test-dep2: found through the fallback groups
+    put(
+        upstream,
+        uctest,
+        'uc-test-dep',
+        '1.0',
+        'hpi',
+        data=procure_archive(
+            uctest, 'uc-test-dep', dependencies='uc-test-dep2:1.0', pom=dep_pom
+        ),
+    )
     put(upstream, uctest, 'uc-test-dep', '1.0', 'pom', data=dep_pom)
     dep2_pom = procure_pom(plugins, 'uc-test-dep2')
-    put(upstream, plugins, 'uc-test-dep2', '1.0', 'hpi', data=procure_archive(plugins, 'uc-test-dep2', pom=dep2_pom))
+    put(
+        upstream,
+        plugins,
+        'uc-test-dep2',
+        '1.0',
+        'hpi',
+        data=procure_archive(plugins, 'uc-test-dep2', pom=dep2_pom),
+    )
     put(upstream, plugins, 'uc-test-dep2', '1.0', 'pom', data=dep2_pom)
-    put(upstream, 'org.jenkins-ci.main', 'jenkins-war', PROCURE_CORE, 'war', data=procure_war())
-    put(upstream, 'org.jenkins-ci.main', 'jenkins-war', PROCURE_CORE, 'pom', data=procure_pom('org.jenkins-ci.main', 'jenkins-war', packaging='war'))
+    put(
+        upstream,
+        'org.jenkins-ci.main',
+        'jenkins-war',
+        PROCURE_CORE,
+        'war',
+        data=procure_war(),
+    )
+    put(
+        upstream,
+        'org.jenkins-ci.main',
+        'jenkins-war',
+        PROCURE_CORE,
+        'pom',
+        data=procure_pom('org.jenkins-ci.main', 'jenkins-war', packaging='war'),
+    )
 
 
 def repo(args: argparse.Namespace) -> None:
@@ -111,38 +246,114 @@ def repo(args: argparse.Namespace) -> None:
     seeded, paths = [], {}
     downloads = sorted(args.downloads.glob('*.[hj]pi'))
     if len(downloads) < 3:
-        msg = f'need at least 3 .hpi/.jpi files in {args.downloads}; did the seed-plugins step fail?'
+        msg = (
+            f'need at least 3 .hpi/.jpi files in {args.downloads}; '
+            'did the seed-plugins step fail?'
+        )
         raise SystemExit(msg)
     others = [p.stem for p in downloads if p.stem != args.top_plugin]
-    real_pom, html_pom = others[0], others[1]  # every other plugin gets no POM: the adapter derives it
+    real_pom, html_pom = (
+        others[0],
+        others[1],
+    )  # every other plugin gets no POM: the adapter derives it
     for plugin in downloads:
         data = plugin.read_bytes()
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            manifest = parse_manifest(archive.read('META-INF/MANIFEST.MF').decode('utf-8', 'replace'))
+            manifest = parse_manifest(
+                archive.read('META-INF/MANIFEST.MF').decode('utf-8', 'replace')
+            )
         group = manifest['Group-Id']
-        artifact = manifest.get('Artifact-Id') or manifest.get('Short-Name') or manifest['Extension-Name']
+        artifact = (
+            manifest.get('Artifact-Id')
+            or manifest.get('Short-Name')
+            or manifest['Extension-Name']
+        )
         version = manifest['Plugin-Version'].split(' ')[0]
         put(root, group, artifact, version, 'hpi', data=data)
         if plugin.stem == real_pom:
-            put(root, group, artifact, version, 'pom', data=get(f'{RELEASES}/{group.replace(".", "/")}/{artifact}/{version}/{artifact}-{version}.pom'))
+            put(
+                root,
+                group,
+                artifact,
+                version,
+                'pom',
+                data=get(
+                    f'{RELEASES}/{group.replace(".", "/")}/{artifact}/'
+                    f'{version}/{artifact}-{version}.pom'
+                ),
+            )
         elif plugin.stem == html_pom:
             put(root, group, artifact, version, 'pom', data=HTML_404)
         seeded.append(f'{artifact}:{version}')
-        paths[artifact] = f'{group.replace(".", "/")}/{artifact}/{version}/{artifact}-{version}.hpi'
+        paths[artifact] = (
+            f'{group.replace(".", "/")}/{artifact}/{version}/{artifact}-{version}.hpi'
+        )
     cores = args.cores.split(',')
     for core in cores:
         base = f'{RELEASES}/org/jenkins-ci/main/jenkins-war/{core}/jenkins-war-{core}'
-        put(root, 'org.jenkins-ci.main', 'jenkins-war', core, 'war', data=get(base + '.war'))
-        put(root, 'org.jenkins-ci.main', 'jenkins-war', core, 'pom', data=get(base + '.pom'))
-    for core, plugin_id in zip(OLD_CORES, ('uc-test-old-a', 'uc-test-old-b'), strict=False):
+        put(
+            root,
+            'org.jenkins-ci.main',
+            'jenkins-war',
+            core,
+            'war',
+            data=get(base + '.war'),
+        )
+        put(
+            root,
+            'org.jenkins-ci.main',
+            'jenkins-war',
+            core,
+            'pom',
+            data=get(base + '.pom'),
+        )
+    for core, plugin_id in zip(
+        OLD_CORES, ('uc-test-old-a', 'uc-test-old-b'), strict=False
+    ):
         base = f'{RELEASES}/org/jenkins-ci/main/jenkins-war/{core}/jenkins-war-{core}'
-        put(root, 'org.jenkins-ci.main', 'jenkins-war', core, 'war', data=get(base + '.war'))  # its POM is derived
-        put(root, 'io.jenkins.uctest', plugin_id, '1.0', 'hpi', data=synthetic_hpi(plugin_id, core, embed_pom=True))
-    put(root, 'io.jenkins.uctest', 'uc-test-nopom', '1.0', 'hpi', data=synthetic_hpi('uc-test-nopom', args.jenkins_version))
-    put(root, 'io.jenkins.uctest', 'uc-test-stubpom', '1.0', 'hpi', data=synthetic_hpi('uc-test-stubpom', args.jenkins_version))
+        put(
+            root,
+            'org.jenkins-ci.main',
+            'jenkins-war',
+            core,
+            'war',
+            data=get(base + '.war'),
+        )  # its POM is derived
+        put(
+            root,
+            'io.jenkins.uctest',
+            plugin_id,
+            '1.0',
+            'hpi',
+            data=synthetic_hpi(plugin_id, core, embed_pom=True),
+        )
+    put(
+        root,
+        'io.jenkins.uctest',
+        'uc-test-nopom',
+        '1.0',
+        'hpi',
+        data=synthetic_hpi('uc-test-nopom', args.jenkins_version),
+    )
+    put(
+        root,
+        'io.jenkins.uctest',
+        'uc-test-stubpom',
+        '1.0',
+        'hpi',
+        data=synthetic_hpi('uc-test-stubpom', args.jenkins_version),
+    )
     put(root, 'io.jenkins.uctest', 'uc-test-stubpom', '1.0', 'pom', data=STUB_POM)
-    # Its manifest says io.jenkins.uctest, but it is stored under another group, as happened in practice.
-    put(root, 'org.jenkins-ci.plugins', 'uc-test-misplaced', '1.0', 'hpi', data=synthetic_hpi('uc-test-misplaced', args.jenkins_version, embed_pom=True))
+    # Its manifest says io.jenkins.uctest, but it is stored under another group, as
+    # happened in practice.
+    put(
+        root,
+        'org.jenkins-ci.plugins',
+        'uc-test-misplaced',
+        '1.0',
+        'hpi',
+        data=synthetic_hpi('uc-test-misplaced', args.jenkins_version, embed_pom=True),
+    )
     procure_fixtures(args.out.parent)
     (args.out / 'seeded.json').write_text(
         json.dumps(
@@ -157,11 +368,16 @@ def repo(args: argparse.Namespace) -> None:
             indent=2,
         )
     )
-    print(f'seeded {len(seeded)} plugins and cores {", ".join(cores + list(OLD_CORES))} into {root}')
+    print(
+        f'seeded {len(seeded)} plugins and cores '
+        f'{", ".join(cores + list(OLD_CORES))} into {root}'
+    )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('versions')
     build = sub.add_parser('repo')

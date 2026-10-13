@@ -1,4 +1,7 @@
-"""Artifactory and Artifact Keeper, as the adapter needs them (docs/architecture/repo-adapter.md#requests-it-answers)."""
+"""Artifactory and Artifact Keeper, as the adapter needs them.
+
+See docs/architecture/repo-adapter.md#requests-it-answers.
+"""
 
 from __future__ import annotations
 
@@ -47,7 +50,10 @@ _SHA1 = re.compile(r'^[0-9a-f]{40}$')
 
 
 class BackendError(UcError):
-    """A repository request failed, or was answered with something the adapter cannot use."""
+    """A repository request failed.
+
+    Or it was answered with something the adapter cannot use.
+    """
 
 
 @dataclass(frozen=True)
@@ -74,7 +80,10 @@ class RepoEntry:
 
 
 def artifactory_time(moment: dt.datetime) -> str:
-    """Format a moment the way Artifactory's AQL does, which upstream parses: UTC with milliseconds."""
+    """Format a moment the way Artifactory's AQL does, which upstream parses.
+
+    UTC with milliseconds.
+    """
     utc = moment.astimezone(dt.UTC)
     return utc.strftime('%Y-%m-%dT%H:%M:%S.') + f'{utc.microsecond // 1000:03d}Z'
 
@@ -86,7 +95,10 @@ def parse_time(value: str) -> dt.datetime:
 
 @dataclass
 class Response:
-    """An HTTP response: its status, its headers with lower-cased names, and its body."""
+    """An HTTP response.
+
+    Its status, its headers with lower-cased names, and its body.
+    """
 
     status: int
     headers: dict[str, str]
@@ -94,18 +106,25 @@ class Response:
 
 
 def forwards_credentials(old_url: str, new_url: str) -> bool:
-    """Return whether a redirect from old_url to new_url may carry the repository credentials.
+    """Return whether a redirect may carry the repository credentials.
 
-    Only to the same host, and never from https to http, where they would cross the network in the clear.
+    The redirect is from old_url to new_url. Only to the same host, and never from https
+    to http, where they would cross the network in the clear.
     """
     old, new = urlsplit(old_url), urlsplit(new_url)
-    return new.hostname == old.hostname and not (old.scheme == 'https' and new.scheme != 'https')
+    return new.hostname == old.hostname and not (
+        old.scheme == 'https' and new.scheme != 'https'
+    )
 
 
 class _NoCredentialsAcrossHosts(urllib.request.HTTPRedirectHandler):
-    """Artifactory redirects downloads to object storage; repository credentials must not follow."""
+    """Artifactory redirects downloads to object storage.
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: PLR0917 - urllib.request.HTTPRedirectHandler's signature
+    Repository credentials must not follow.
+    """
+
+    # urllib.request.HTTPRedirectHandler's signature
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: PLR0917
         new = super().redirect_request(req, fp, code, msg, headers, newurl)
         if new is not None and not forwards_credentials(req.full_url, newurl):
             new.remove_header('Authorization')
@@ -113,20 +132,44 @@ class _NoCredentialsAcrossHosts(urllib.request.HTTPRedirectHandler):
 
 
 class Http:
-    """HTTP to the repository, whose credentials never follow a redirect to another host."""
+    """HTTP to the repository.
+
+    Its credentials never follow a redirect to another host.
+    """
 
     def __init__(self, ca_file: Path | None) -> None:
         """Verify TLS against the system bundle, plus ca_file when given."""
-        # REPO_CA_FILE adds to the system bundle: a repository behind a private CA may still redirect
-        # downloads to object storage with a public certificate.
+        # REPO_CA_FILE adds to the system bundle: a repository behind a private CA may
+        # still redirect downloads to object storage with a public certificate.
         self.context = ssl.create_default_context()
         if ca_file:
             self.context.load_verify_locations(cafile=str(ca_file))
-        self.opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=self.context), _NoCredentialsAcrossHosts())
+        self.opener = urllib.request.build_opener(
+            urllib.request.HTTPSHandler(context=self.context),
+            _NoCredentialsAcrossHosts(),
+        )
 
-    def request(self, url: str, *, headers: dict[str, str], limit: int, data: bytes | None = None, method: str | None = None, timeout: float = TIMEOUT, truncate: bool = False) -> Response:
-        """One request; the body is read up to limit bytes (BackendError beyond, unless truncate)."""
-        request = urllib.request.Request(url, data=data, method=method, headers={'User-Agent': uc_http.USER_AGENT, **headers})
+    def request(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str],
+        limit: int,
+        data: bytes | None = None,
+        method: str | None = None,
+        timeout: float = TIMEOUT,
+        truncate: bool = False,
+    ) -> Response:
+        """One request; the body is read up to limit bytes.
+
+        BackendError beyond, unless truncate.
+        """
+        request = urllib.request.Request(
+            url,
+            data=data,
+            method=method,
+            headers={'User-Agent': uc_http.USER_AGENT, **headers},
+        )
         try:
             with self.opener.open(request, timeout=timeout) as response:
                 body = response.read(limit + 1)
@@ -145,11 +188,22 @@ class Http:
         if len(body) > limit and not truncate:
             msg = f'{url} is larger than {limit} bytes'
             raise BackendError(msg)
-        return Response(status, {k.lower(): v for k, v in got.items()}, body[:limit] if truncate else body)
+        return Response(
+            status,
+            {k.lower(): v for k, v in got.items()},
+            body[:limit] if truncate else body,
+        )
 
-    def download(self, url: str, *, headers: dict[str, str], out: BinaryIO, limit: int) -> None:
-        """Stream url's body into out; BackendError on an HTTP error or beyond limit bytes."""
-        request = urllib.request.Request(url, headers={'User-Agent': uc_http.USER_AGENT, **headers})
+    def download(
+        self, url: str, *, headers: dict[str, str], out: BinaryIO, limit: int
+    ) -> None:
+        """Stream url's body into out.
+
+        BackendError on an HTTP error or beyond limit bytes.
+        """
+        request = urllib.request.Request(
+            url, headers={'User-Agent': uc_http.USER_AGENT, **headers}
+        )
         try:
             with self.opener.open(request, timeout=LONG_TIMEOUT) as response:
                 total = 0
@@ -169,9 +223,14 @@ class Http:
 
 
 class RangeReader(io.RawIOBase):
-    """A seekable, read-only view of a remote file, fetched in cached blocks with Range requests."""
+    """A seekable, read-only view of a remote file.
 
-    def __init__(self, http: Http, url: str, headers: dict[str, str], size: int) -> None:
+    Fetched in cached blocks with Range requests.
+    """
+
+    def __init__(
+        self, http: Http, url: str, headers: dict[str, str], size: int
+    ) -> None:
         """View the size bytes at url, sending headers with every request."""
         self.http, self.url, self.headers, self.size = http, url, headers, size
         self.pos = 0
@@ -179,8 +238,13 @@ class RangeReader(io.RawIOBase):
 
     @staticmethod
     def supported(http: Http, url: str, headers: dict[str, str]) -> bool:
-        """Return whether url answers a one-byte Range request with 206 Partial Content."""
-        response = http.request(url, headers={**headers, 'Range': 'bytes=0-0'}, limit=1, truncate=True)
+        """Return whether url answers a one-byte Range request.
+
+        With 206 Partial Content.
+        """
+        response = http.request(
+            url, headers={**headers, 'Range': 'bytes=0-0'}, limit=1, truncate=True
+        )
         return response.status == HTTPStatus.PARTIAL_CONTENT
 
     @override
@@ -205,7 +269,11 @@ class RangeReader(io.RawIOBase):
         if index not in self.blocks:
             start = index * RANGE_BLOCK
             end = min(start + RANGE_BLOCK, self.size) - 1
-            response = self.http.request(self.url, headers={**self.headers, 'Range': f'bytes={start}-{end}'}, limit=RANGE_BLOCK)
+            response = self.http.request(
+                self.url,
+                headers={**self.headers, 'Range': f'bytes={start}-{end}'},
+                limit=RANGE_BLOCK,
+            )
             if response.status != HTTPStatus.PARTIAL_CONTENT:
                 msg = f'{self.url} answered a Range request with HTTP {response.status}'
                 raise BackendError(msg)
@@ -239,7 +307,10 @@ class Backend(Protocol):
     type: str
 
     def list(self) -> list[RepoEntry]:
-        """Return the repository's archives and POMs, and its .jar files where the backend lists them."""
+        """Return the repository's archives and POMs.
+
+        Also its .jar files where the backend lists them.
+        """
 
     def get(self, path: str) -> bytes | None:
         """Return a file's bytes, None when the repository does not have it."""
@@ -247,15 +318,23 @@ class Backend(Protocol):
     def sha1(self, entry: RepoEntry) -> str:
         """Return a file's sha1; BackendError when the repository has none."""
 
-    def facts(self, entry: RepoEntry, path_coordinates: Coordinates, *, plugin: bool) -> ArchiveFacts:
-        """Read what the listing needs from an archive (docs/architecture/repo-adapter.md#filling-gaps)."""
+    def facts(
+        self, entry: RepoEntry, path_coordinates: Coordinates, *, plugin: bool
+    ) -> ArchiveFacts:
+        """Read what the listing needs from an archive.
+
+        See docs/architecture/repo-adapter.md#filling-gaps.
+        """
 
     def jar_description(self, jar_path: str) -> bytes | None:
         """Return the index.jelly of a repository .jar, None when there is none."""
 
 
 def _basic(username: str, password: str) -> dict[str, str]:
-    return {'Authorization': 'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()}
+    return {
+        'Authorization': 'Basic '
+        + base64.b64encode(f'{username}:{password}'.encode()).decode()
+    }
 
 
 def _quote(path: str) -> str:
@@ -263,12 +342,28 @@ def _quote(path: str) -> str:
 
 
 class ArtifactoryBackend:
-    """Artifactory: upstream's own AQL query for the listing, `!/` requests for archive entries."""
+    """Artifactory: upstream's own AQL query for the listing.
+
+    `!/` requests for archive entries.
+    """
 
     type = 'artifactory'
 
-    def __init__(self, http: Http, url: str, api_url: str, key: str, *, username: str, password: str, max_archive_bytes: int) -> None:
-        """Use repository key under url, and its REST API at api_url; a whole file is read up to max_archive_bytes."""
+    def __init__(
+        self,
+        http: Http,
+        url: str,
+        api_url: str,
+        key: str,
+        *,
+        username: str,
+        password: str,
+        max_archive_bytes: int,
+    ) -> None:
+        """Use repository key under url, and its REST API at api_url.
+
+        A whole file is read up to max_archive_bytes.
+        """
         self.http, self.api_url, self.key = http, api_url, key
         self.base = f'{url}{key}/'
         self.auth = _basic(username, password)
@@ -280,7 +375,11 @@ class ArtifactoryBackend:
             self.api_url + 'search/aql',
             method='POST',
             data=(AQL_TEMPLATE % self.key).encode(),
-            headers={**self.auth, 'Content-Type': 'text/plain', 'Accept': 'application/json'},
+            headers={
+                **self.auth,
+                'Content-Type': 'text/plain',
+                'Accept': 'application/json',
+            },
             limit=LISTING_LIMIT,
             timeout=LONG_TIMEOUT,
         )
@@ -289,14 +388,30 @@ class ArtifactoryBackend:
             raise BackendError(msg)
         try:
             results = json.loads(response.body)['results']
-            return [RepoEntry(r['path'], r['name'], r['sha256'], r.get('actual_sha1'), int(r.get('size') or 0), r.get('created') or r['modified'], r['modified']) for r in results]
+            return [
+                RepoEntry(
+                    r['path'],
+                    r['name'],
+                    r['sha256'],
+                    r.get('actual_sha1'),
+                    int(r.get('size') or 0),
+                    r.get('created') or r['modified'],
+                    r['modified'],
+                )
+                for r in results
+            ]
         except (ValueError, KeyError, TypeError) as exc:
             msg = f'unexpected AQL response from {self.api_url}: {exc}'
             raise BackendError(msg) from exc
 
     def get(self, path: str) -> bytes | None:
         """Return a file's bytes, None on HTTP 404."""
-        response = self.http.request(self.base + _quote(path), headers=self.auth, limit=self.max_archive_bytes, timeout=LONG_TIMEOUT)
+        response = self.http.request(
+            self.base + _quote(path),
+            headers=self.auth,
+            limit=self.max_archive_bytes,
+            timeout=LONG_TIMEOUT,
+        )
         if response.status == HTTPStatus.NOT_FOUND:
             return None
         if response.status != HTTPStatus.OK:
@@ -305,8 +420,13 @@ class ArtifactoryBackend:
         return response.body
 
     def entry(self, path: str, name: str, limit: int) -> bytes | None:
-        """Return one entry of the archive at path, read through a `!/` request of up to limit bytes; None on HTTP 404."""
-        response = self.http.request(f'{self.base}{_quote(path)}!/{_quote(name)}', headers=self.auth, limit=limit)
+        """Return one entry of the archive at path.
+
+        Read through a `!/` request of up to limit bytes; None on HTTP 404.
+        """
+        response = self.http.request(
+            f'{self.base}{_quote(path)}!/{_quote(name)}', headers=self.auth, limit=limit
+        )
         if response.status == HTTPStatus.NOT_FOUND:
             return None
         if response.status != HTTPStatus.OK:
@@ -315,25 +435,46 @@ class ArtifactoryBackend:
         return response.body
 
     def sha1(self, entry: RepoEntry) -> str:
-        """Return the sha1 from the AQL listing; BackendError when it has no valid one."""
+        """Return the sha1 from the AQL listing.
+
+        BackendError when it has no valid one.
+        """
         if not entry.sha1 or not _SHA1.match(entry.sha1):
             msg = f'no sha1 for {entry.path} in the AQL listing'
             raise BackendError(msg)
         return entry.sha1
 
     def archive_released(self, entry: RepoEntry) -> dt.datetime | None:
-        """Read the archive date from its central directory via Range requests; None without Range support."""
+        """Read the archive date from its central directory via Range requests.
+
+        None without Range support.
+        """
         url = self.base + _quote(entry.path)
         if not RangeReader.supported(self.http, url, self.auth):
             return None
-        return archive_date(open_archive(RangeReader(self.http, url, self.auth, entry.size)))
+        return archive_date(
+            open_archive(RangeReader(self.http, url, self.auth, entry.size))
+        )
 
-    def facts(self, entry: RepoEntry, path_coordinates: Coordinates, *, plugin: bool) -> ArchiveFacts:
-        """Read an archive's facts through `!/` and Range requests, without downloading it."""
-        return extract_facts(lambda name, limit: self.entry(entry.path, name, limit), path_coordinates, plugin=plugin, released=self.archive_released(entry))
+    def facts(
+        self, entry: RepoEntry, path_coordinates: Coordinates, *, plugin: bool
+    ) -> ArchiveFacts:
+        """Read an archive's facts through `!/` and Range requests.
+
+        Without downloading it.
+        """
+        return extract_facts(
+            lambda name, limit: self.entry(entry.path, name, limit),
+            path_coordinates,
+            plugin=plugin,
+            released=self.archive_released(entry),
+        )
 
     def jar_description(self, jar_path: str) -> bytes | None:
-        """Return a repository .jar's index.jelly through a `!/` request, None on HTTP 404."""
+        """Return a repository .jar's index.jelly through a `!/` request.
+
+        None on HTTP 404.
+        """
         return self.entry(jar_path, 'index.jelly', SMALL_ENTRY_LIMIT)
 
 
@@ -342,8 +483,21 @@ class ArtifactKeeperBackend:
 
     type = 'artifact-keeper'
 
-    def __init__(self, http: Http, url: str, key: str, *, username: str, token: str, tmp_dir: Path, max_archive_bytes: int) -> None:
-        """Use repository key under url with username's token; archives are downloaded into tmp_dir, up to max_archive_bytes."""
+    def __init__(
+        self,
+        http: Http,
+        url: str,
+        key: str,
+        *,
+        username: str,
+        token: str,
+        tmp_dir: Path,
+        max_archive_bytes: int,
+    ) -> None:
+        """Use repository key under url with username's token.
+
+        Archives are downloaded into tmp_dir, up to max_archive_bytes.
+        """
         self.http, self.key, self.tmp_dir = http, key, tmp_dir
         self.api = f'{url}api/v1/repositories/{key}/artifacts'
         self.base = f'{url}maven/{key}/'
@@ -352,8 +506,15 @@ class ArtifactKeeperBackend:
         self.max_archive_bytes = max_archive_bytes
 
     def _page(self, cursor: str | None, page: int) -> dict:
-        query = {'per_page': '100', **({'cursor': cursor} if cursor else {'page': str(page)})}
-        response = self.http.request(f'{self.api}?{urllib.parse.urlencode(query)}', headers={**self.bearer, 'Accept': 'application/json'}, limit=LISTING_LIMIT)
+        query = {
+            'per_page': '100',
+            **({'cursor': cursor} if cursor else {'page': str(page)}),
+        }
+        response = self.http.request(
+            f'{self.api}?{urllib.parse.urlencode(query)}',
+            headers={**self.bearer, 'Accept': 'application/json'},
+            limit=LISTING_LIMIT,
+        )
         if response.status != HTTPStatus.OK:
             msg = f'listing {self.api} failed with HTTP {response.status}'
             raise BackendError(msg)
@@ -364,7 +525,10 @@ class ArtifactKeeperBackend:
             raise BackendError(msg) from exc
 
     def list(self) -> list[RepoEntry]:
-        """Return the archives, POMs and .jar files, through every page of the listing."""
+        """Return the archives, POMs and .jar files.
+
+        Through every page of the listing.
+        """
         entries: list[RepoEntry] = []
         cursor, page = None, 1
         while True:
@@ -374,7 +538,17 @@ class ArtifactKeeperBackend:
                     directory, _, name = item['path'].rpartition('/')
                     if name.endswith((*LISTED_EXTENSIONS, '.jar')) and directory:
                         created = artifactory_time(parse_time(item['created_at']))
-                        entries.append(RepoEntry(directory, name, item['checksum_sha256'], None, int(item['size_bytes']), created, created))
+                        entries.append(
+                            RepoEntry(
+                                directory,
+                                name,
+                                item['checksum_sha256'],
+                                None,
+                                int(item['size_bytes']),
+                                created,
+                                created,
+                            )
+                        )
             except (KeyError, TypeError, ValueError) as exc:
                 msg = f'unexpected listing response from {self.api}: {exc}'
                 raise BackendError(msg) from exc
@@ -388,7 +562,12 @@ class ArtifactKeeperBackend:
 
     def get(self, path: str) -> bytes | None:
         """Return a file's bytes, None on HTTP 404."""
-        response = self.http.request(self.base + _quote(path), headers=self.basic, limit=self.max_archive_bytes, timeout=LONG_TIMEOUT)
+        response = self.http.request(
+            self.base + _quote(path),
+            headers=self.basic,
+            limit=self.max_archive_bytes,
+            timeout=LONG_TIMEOUT,
+        )
         if response.status == HTTPStatus.NOT_FOUND:
             return None
         if response.status != HTTPStatus.OK:
@@ -397,7 +576,10 @@ class ArtifactKeeperBackend:
         return response.body
 
     def sha1(self, entry: RepoEntry) -> str:
-        """Return the sha1 from the file's .sha1 companion; BackendError when it is missing or malformed."""
+        """Return the sha1 from the file's .sha1 companion.
+
+        BackendError when it is missing or malformed.
+        """
         data = self.get(entry.path + '.sha1')
         value = (data or b'').decode('ascii', 'replace').strip().split(' ')[0].lower()
         if not _SHA1.match(value):
@@ -405,16 +587,31 @@ class ArtifactKeeperBackend:
             raise BackendError(msg)
         return value
 
-    def facts(self, entry: RepoEntry, path_coordinates: Coordinates, *, plugin: bool) -> ArchiveFacts:
+    def facts(
+        self, entry: RepoEntry, path_coordinates: Coordinates, *, plugin: bool
+    ) -> ArchiveFacts:
         """Download the archive to a temporary file and read its facts there."""
         self.tmp_dir.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryFile(dir=self.tmp_dir) as out:
-            self.http.download(self.base + _quote(entry.path), headers=self.basic, out=out, limit=self.max_archive_bytes)
+            self.http.download(
+                self.base + _quote(entry.path),
+                headers=self.basic,
+                out=out,
+                limit=self.max_archive_bytes,
+            )
             archive = open_archive(out)
-            return extract_facts(zip_reader(archive), path_coordinates, plugin=plugin, released=archive_date(archive))
+            return extract_facts(
+                zip_reader(archive),
+                path_coordinates,
+                plugin=plugin,
+                released=archive_date(archive),
+            )
 
     def jar_description(self, jar_path: str) -> bytes | None:
-        """Return a repository .jar's index.jelly, None when the jar is absent, unreadable or has none."""
+        """Return a repository .jar's index.jelly.
+
+        None when the jar is absent, unreadable or has none.
+        """
         data = self.get(jar_path)
         if data is None:
             return None

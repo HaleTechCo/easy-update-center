@@ -1,4 +1,7 @@
-"""uc config: every setting, its value and where it came from (docs/reference/cli.md#uc-config)."""
+"""uc config: every setting, its value and where it came from.
+
+See docs/reference/cli.md#uc-config.
+"""
 
 from __future__ import annotations
 
@@ -30,25 +33,43 @@ class Row:
 
 
 def rows(r: Resolver, settings: Settings | None) -> list[Row]:
-    """Return every setting in registry order: its effective value when settings could be built, else its raw value, and its source."""
+    """Return every setting in registry order.
+
+    Its effective value when settings could be built, else its raw value, and its
+    source.
+    """
     return [_row(setting, r, settings) for setting in SETTINGS]
 
 
 def _row(setting: Setting, r: Resolver, settings: Settings | None) -> Row:
     if setting.env_only:
         given = r.env.get(setting.env, '').strip()
-        return Row(setting.env, _redact(setting, given or setting.default), 'env' if given else 'default')
+        return Row(
+            setting.env,
+            _redact(setting, given or setting.default),
+            'env' if given else 'default',
+        )
     source = r.source(setting.env)
     if source == 'default' and setting.derived:
         source = 'derived'
-    elif source == 'default' and (setting.online is not None or setting.airgapped is not None):
+    elif source == 'default' and (
+        setting.online is not None or setting.airgapped is not None
+    ):
         source = 'mode'
-    value = _show(getattr(settings, setting.attribute)) if settings is not None and setting.attribute else r.raw(setting.env)
+    value = (
+        _show(getattr(settings, setting.attribute))
+        if settings is not None and setting.attribute
+        else r.raw(setting.env)
+    )
     return Row(setting.env, _redact(setting, value), source)
 
 
 def _redact(setting: Setting, value: str) -> str:
-    """Return a URL setting's value with its user info, everything before the last '@' (split_userinfo), shown as ***, so credentials never reach a terminal or a log."""
+    """Return a URL setting's value with its user info shown as ***.
+
+    User info is everything before the last '@' (split_userinfo); it is shown as *** so
+    credentials never reach a terminal or a log.
+    """
     if setting.type != 'url':
         return value
     scheme, userinfo, rest = split_userinfo(value)
@@ -64,7 +85,10 @@ def _show(value: object) -> str:
 
 
 def format_rows(shown: list[Row]) -> str:
-    """Return the text uc config prints: each group of settings with its value and source."""
+    """Return the text uc config prints.
+
+    Each group of settings with its value and source.
+    """
     lines: list[str] = []
     for group in GROUPS:
         members = [row for row in shown if REGISTRY[row.env].group == group]
@@ -85,13 +109,25 @@ def run(
     out: TextIO | None = None,
     err: TextIO | None = None,
 ) -> int:
-    """Print every setting (as text or JSON), or only check them; return 0, or 1 when they are invalid."""
+    """Print every setting (as text or JSON), or only check them.
+
+    Return 0, or 1 when they are invalid.
+    """
     out = sys.stdout if out is None else out
     err = sys.stderr if err is None else err
     r = make_resolver(env)
-    leftovers = [name for name, default in INTERNAL.items() if r.env.get(name, '').strip() not in ('', default)]
-    if leftovers:  # names an older release documented: uc still follows them (tests point them at their own paths)
-        err.write(f'uc: note: not settings, but uc still follows them: {", ".join(leftovers)}; remove them from .env (only the tests set them)\n')
+    leftovers = [
+        name
+        for name, default in INTERNAL.items()
+        if r.env.get(name, '').strip() not in ('', default)
+    ]
+    # names an older release documented: uc still follows them (tests point them at
+    # their own paths)
+    if leftovers:
+        err.write(
+            'uc: note: not settings, but uc still follows them: '
+            f'{", ".join(leftovers)}; remove them from .env (only the tests set them)\n'
+        )
     try:
         settings = settings_from(r)
     except ConfigError as exc:
@@ -103,7 +139,9 @@ def run(
         out.write('configuration ok\n')
         return 0
     if as_json:
-        out.write(json.dumps([asdict(row) for row in rows(r, settings)], indent=2) + '\n')
+        out.write(
+            json.dumps([asdict(row) for row in rows(r, settings)], indent=2) + '\n'
+        )
         return 0
     out.write(format_rows(rows(r, settings)))
     return 0

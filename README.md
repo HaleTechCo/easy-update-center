@@ -72,10 +72,8 @@ Online:
 git clone --branch v<version> https://github.com/HaleTechCo/easy-update-center.git
 cd easy-update-center
 cp .env.online.example .env
-# in .env: PUBLIC_URL, on Linux UC_UID and UC_GID (id -u, id -g), and
-#   UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<version>
-#   WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<version>
-docker compose pull
+# in .env: PUBLIC_URL, and on Linux UC_UID and UC_GID (id -u, id -g)
+docker compose pull                                            # the release's images
 docker compose run --rm setup                                  # credential files, signing keys
 printf '%s' 'community-user' > secrets/repo_username           # free: https://accounts.jenkins.io
 printf '%s' 'community-password' > secrets/repo_password
@@ -90,8 +88,8 @@ tar -xf easy-update-center-<version>-airgapped-amd64.tar && cd easy-update-cente
 docker load -i images.tar
 tar -xzf easy-update-center-<version>.tar.gz && cd easy-update-center-<version>
 cp .env.airgapped.example .env
-# in .env: PUBLIC_URL, REPO_URL, REPO_KEY, DOWNLOAD_BACKEND_URL, UC_IMAGE, WEB_IMAGE, on Linux
-#   UC_UID and UC_GID; uncomment COMPOSE_FILE
+# in .env: PUBLIC_URL, REPO_URL, REPO_KEY, DOWNLOAD_BACKEND_URL, on Linux UC_UID and UC_GID;
+#   uncomment COMPOSE_FILE
 docker compose run --rm setup
 printf '%s' 'svc-easy-update-center' > secrets/repo_username
 printf '%s' 'password-or-token' > secrets/repo_password

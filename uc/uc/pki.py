@@ -1,4 +1,7 @@
-"""Signing PKI (docs/architecture/signing.md): an offline root CA and a short-lived signing certificate, via openssl."""
+"""Signing PKI (docs/architecture/signing.md).
+
+An offline root CA and a short-lived signing certificate, via openssl.
+"""
 
 from __future__ import annotations
 
@@ -29,8 +32,10 @@ SIGNING_CERT = 'update-center.cert'
 DEFAULT_ORG = 'Easy Update Center'
 ROOT_DAYS = 3650
 SIGNING_DAYS = 365
-_NO_PASSPHRASE = ('-passin', 'pass:')  # every openssl call that reads a private key: an encrypted key fails instead of asking
-_ENCRYPTED_PEM = (b' ENCRYPTED PRIVATE KEY-----', b'Proc-Type: 4,ENCRYPTED')  # the PEM label of an encrypted PKCS#8 key, and the traditional format's header
+# every openssl call that reads a private key: an encrypted key fails instead of asking
+_NO_PASSPHRASE = ('-passin', 'pass:')
+# the PEM label of an encrypted PKCS#8 key, and the traditional format's header
+_ENCRYPTED_PEM = (b' ENCRYPTED PRIVATE KEY-----', b'Proc-Type: 4,ENCRYPTED')
 
 _EXTENSIONS = """\
 [req]
@@ -53,7 +58,10 @@ class PkiError(UcError):
 
 
 class _StrandedError(PkiError):
-    """Moving back after a failed rename failed too; the work directory, which holds what was set aside, is kept."""
+    """Moving back after a failed rename failed too.
+
+    The work directory, which holds what was set aside, is kept.
+    """
 
 
 @dataclass(frozen=True)
@@ -65,12 +73,17 @@ class CertInfo:
     fingerprint_sha256: str
 
     def days_left(self, now: dt.datetime) -> int:
-        """Return the whole days from now until the certificate expires (negative once expired)."""
+        """Return the whole days from now until the certificate expires.
+
+        Negative once expired.
+        """
         return (self.not_after - now).days
 
 
 def _openssl(*args: str) -> str:
-    proc = subprocess.run(['openssl', *args], capture_output=True, text=True, check=False)
+    proc = subprocess.run(
+        ['openssl', *args], capture_output=True, text=True, check=False
+    )
     if proc.returncode != 0:
         msg = f'openssl {args[0]} failed: {proc.stderr.strip()}'
         raise PkiError(msg)
@@ -99,7 +112,9 @@ def cert_info(cert: Path) -> CertInfo:
         if sep:
             fields[key.strip()] = value.strip()
     try:
-        not_after = dt.datetime.strptime(fields['notAfter'], '%Y-%m-%d %H:%M:%SZ').replace(tzinfo=dt.UTC)
+        not_after = dt.datetime.strptime(
+            fields['notAfter'], '%Y-%m-%d %H:%M:%SZ'
+        ).replace(tzinfo=dt.UTC)
         return CertInfo(fields['subject'], not_after, fields['sha256 Fingerprint'])
     except (KeyError, ValueError) as exc:
         msg = f'could not parse certificate {cert}: {out!r}'
@@ -107,13 +122,20 @@ def cert_info(cert: Path) -> CertInfo:
 
 
 def key_matches_cert(key: Path, cert: Path) -> bool:
-    """Return True when the private key and the certificate share the same public key."""
-    return _openssl('pkey', '-in', str(key), *_NO_PASSPHRASE, '-pubout') == _openssl('x509', '-in', str(cert), '-noout', '-pubkey')
+    """Return True when the private key and certificate share the same public key."""
+    return _openssl('pkey', '-in', str(key), *_NO_PASSPHRASE, '-pubout') == _openssl(
+        'x509', '-in', str(cert), '-noout', '-pubkey'
+    )
 
 
 def verify_chain(root: Path, cert: Path) -> bool:
     """Return True when openssl verifies cert against the root CA certificate."""
-    proc = subprocess.run(['openssl', 'verify', '-CAfile', str(root), str(cert)], capture_output=True, text=True, check=False)
+    proc = subprocess.run(
+        ['openssl', 'verify', '-CAfile', str(root), str(cert)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     return proc.returncode == 0
 
 
@@ -129,17 +151,31 @@ def _check_org(org: str) -> None:
         raise PkiError(msg)
 
 
-def _check_root(root_key: Path, root_cert: Path, shown_key: Path, shown_cert: Path) -> None:
-    """Refuse a root CA key or certificate that is missing, unreadable or not what openssl can use, an encrypted key, and a key that is not the certificate's; messages name them as shown_key and shown_cert."""
+def _check_root(
+    root_key: Path, root_cert: Path, shown_key: Path, shown_cert: Path
+) -> None:
+    """Refuse a root CA key or certificate that is missing or unreadable.
+
+    Also refuse one that is not what openssl can use, an encrypted key, and a key that
+    is not the certificate's; messages name them as shown_key and shown_cert.
+    """
     contents = {}
-    for path, shown, what in ((root_key, shown_key, 'root CA key'), (root_cert, shown_cert, 'root CA certificate')):
+    for path, shown, what in (
+        (root_key, shown_key, 'root CA key'),
+        (root_cert, shown_cert, 'root CA certificate'),
+    ):
         try:
             contents[path] = path.read_bytes()
         except OSError as exc:
-            msg = f'cannot read the {what} {shown}: {exc.strerror or type(exc).__name__}'
+            msg = (
+                f'cannot read the {what} {shown}: {exc.strerror or type(exc).__name__}'
+            )
             raise PkiError(msg) from None
     if any(header in contents[root_key] for header in _ENCRYPTED_PEM):
-        msg = f'the root CA key {shown_key} is encrypted; decrypt it to a temporary file for the rotation (docs/how-to/rotate-signing-certificate.md)'
+        msg = (
+            f'the root CA key {shown_key} is encrypted; decrypt it to a temporary '
+            'file for the rotation (docs/how-to/rotate-signing-certificate.md)'
+        )
         raise PkiError(msg)
     try:
         public_key = _openssl('pkey', '-in', str(root_key), *_NO_PASSPHRASE, '-pubout')
@@ -149,10 +185,16 @@ def _check_root(root_key: Path, root_cert: Path, shown_key: Path, shown_cert: Pa
     try:
         cert_key = _openssl('x509', '-in', str(root_cert), '-noout', '-pubkey')
     except PkiError:
-        msg = f'the root CA certificate {shown_cert} is not a certificate openssl can read'
+        msg = (
+            f'the root CA certificate {shown_cert} '
+            'is not a certificate openssl can read'
+        )
         raise PkiError(msg) from None
     if public_key != cert_key:
-        msg = f'the root CA key {shown_key} is not the key of the root CA certificate {shown_cert}'
+        msg = (
+            f'the root CA key {shown_key} '
+            f'is not the key of the root CA certificate {shown_cert}'
+        )
         raise PkiError(msg)
 
 
@@ -169,10 +211,12 @@ def _cannot(action: str, shown: Path, exc: OSError) -> str:
 
 @contextlib.contextmanager
 def _workdir(out_dir: Path, shown: Path, prefix: str) -> Iterator[Path]:
-    """Yield a new temporary directory inside out_dir, on its filesystem, so the files made there can be renamed into place.
+    """Yield a new temporary directory inside out_dir.
 
-    It is removed afterwards, unless moving back after a failed rename failed too (_StrandedError): then it holds what
-    was set aside, and the error names it.
+    It is on out_dir's filesystem, so the files made there can be renamed into place.
+
+    It is removed afterwards, unless moving back after a failed rename failed too
+    (_StrandedError): then it holds what was set aside, and the error names it.
     """
     try:
         work = Path(tempfile.mkdtemp(prefix=prefix, dir=out_dir))
@@ -183,7 +227,10 @@ def _workdir(out_dir: Path, shown: Path, prefix: str) -> Iterator[Path]:
     try:
         yield work
     except BaseException as exc:
-        keep = isinstance(exc, _StrandedError) or isinstance(exc.__context__, _StrandedError)  # a signal held back during the moves arrives after them
+        # a signal held back during the moves arrives after them
+        keep = isinstance(exc, _StrandedError) or isinstance(
+            exc.__context__, _StrandedError
+        )
         raise
     finally:
         if not keep:
@@ -192,14 +239,21 @@ def _workdir(out_dir: Path, shown: Path, prefix: str) -> Iterator[Path]:
 
 @contextlib.contextmanager
 def _signals_held() -> Iterator[None]:
-    """Hold SIGINT and SIGTERM back until the block ends, so it runs to its end; they are delivered then.
+    """Hold SIGINT and SIGTERM back until the block ends, so it runs to its end.
 
-    Only where the platform can (pthread_sigmask), and only in the main thread, which is where Python runs its signal handlers.
+    They are delivered then.
+
+    Only where the platform can (pthread_sigmask), and only in the main thread, which is
+    where Python runs its signal handlers.
     """
-    if not hasattr(signal, 'pthread_sigmask') or threading.current_thread() is not threading.main_thread():
+    if (
+        not hasattr(signal, 'pthread_sigmask')
+        or threading.current_thread() is not threading.main_thread()
+    ):
         yield
         return
-    previous = signal.pthread_sigmask(signal.SIG_BLOCK, ())  # the current mask, unchanged
+    # the current mask, unchanged
+    previous = signal.pthread_sigmask(signal.SIG_BLOCK, ())
     try:
         signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
         yield
@@ -207,12 +261,17 @@ def _signals_held() -> Iterator[None]:
         signal.pthread_sigmask(signal.SIG_SETMASK, previous)
 
 
-def _move_all(moves: list[tuple[Path, Path]], out_dir: Path, shown: Path, work: Path) -> None:
-    """Rename each source to its target, in order, refusing a target that exists; all of them are under out_dir.
+def _move_all(
+    moves: list[tuple[Path, Path]], out_dir: Path, shown: Path, work: Path
+) -> None:
+    """Rename each source to its target, in order, refusing a target that exists.
 
-    SIGINT and SIGTERM are held back until the renames are done or undone. When a rename fails or is refused, or
-    anything else interrupts them, the renames already done are undone in reverse, so out_dir is left as it was; a
-    failed rename is reported as a PkiError naming shown. When an undo fails too, _StrandedError says what is not back
+    All of them are under out_dir.
+
+    SIGINT and SIGTERM are held back until the renames are done or undone. When a rename
+    fails or is refused, or anything else interrupts them, the renames already done are
+    undone in reverse, so out_dir is left as it was; a failed rename is reported as a
+    PkiError naming shown. When an undo fails too, _StrandedError says what is not back
     and that work, which holds what was set aside, is kept.
     """
 
@@ -232,14 +291,22 @@ def _move_all(moves: list[tuple[Path, Path]], out_dir: Path, shown: Path, work: 
             else:
                 reason = 'interrupted'
             if failed:
-                msg = f'{reason}; moving back failed too for {", ".join(failed)}, so {shown} is not as it was: what was set aside is kept in {show(work)}'
+                msg = (
+                    f'{reason}; moving back failed too for {", ".join(failed)}, '
+                    f'so {shown} is not as it was: what was set aside is '
+                    f'kept in {show(work)}'
+                )
                 raise _StrandedError(msg) from None
             if isinstance(exc, OSError):
                 raise PkiError(reason) from None
             raise
 
 
-def _rename_each(moves: list[tuple[Path, Path]], done: list[tuple[Path, Path]], show: Callable[[Path], Path]) -> None:
+def _rename_each(
+    moves: list[tuple[Path, Path]],
+    done: list[tuple[Path, Path]],
+    show: Callable[[Path], Path],
+) -> None:
     for source, target in moves:
         if os.path.lexists(target):
             msg = f'refusing to overwrite existing files: {show(target)}'
@@ -249,7 +316,10 @@ def _rename_each(moves: list[tuple[Path, Path]], done: list[tuple[Path, Path]], 
 
 
 def _undo(done: list[tuple[Path, Path]], show: Callable[[Path], Path]) -> list[str]:
-    """Rename back each move in done, in reverse, never onto a file that exists; return those that could not be, as 'target to source (reason)'."""
+    """Rename back each move in done, in reverse, never onto a file that exists.
+
+    Return those that could not be, as 'target to source (reason)'.
+    """
     failed = []
     for source, target in reversed(done):
         if os.path.lexists(source):
@@ -258,11 +328,16 @@ def _undo(done: list[tuple[Path, Path]], show: Callable[[Path], Path]) -> list[s
         try:
             target.rename(source)
         except OSError as exc:
-            failed.append(f'{show(target)} to {show(source)} ({exc.strerror or type(exc).__name__})')
+            failed.append(
+                f'{show(target)} to {show(source)} '
+                f'({exc.strerror or type(exc).__name__})'
+            )
     return failed
 
 
-def _issue_signing(root_key: Path, root_cert: Path, out_dir: Path, *, days: int, org: str, cnf: Path) -> None:
+def _issue_signing(
+    root_key: Path, root_cert: Path, out_dir: Path, *, days: int, org: str, cnf: Path
+) -> None:
     key, cert = out_dir / SIGNING_KEY, out_dir / SIGNING_CERT
     csr = cnf.parent / 'signing.csr'
     _openssl(
@@ -306,17 +381,29 @@ def _issue_signing(root_key: Path, root_cert: Path, out_dir: Path, *, days: int,
     )
 
 
-def init_pki(out_dir: Path, *, root_days: int = ROOT_DAYS, signing_days: int = SIGNING_DAYS, org: str = DEFAULT_ORG, display_dir: Path | None = None) -> None:
-    """Create root/root-ca.key, root-ca.crt, update-center.key and update-center.cert in out_dir.
+def init_pki(
+    out_dir: Path,
+    *,
+    root_days: int = ROOT_DAYS,
+    signing_days: int = SIGNING_DAYS,
+    org: str = DEFAULT_ORG,
+    display_dir: Path | None = None,
+) -> None:
+    """Create root/root-ca.key, root-ca.crt, update-center.key and update-center.cert.
 
-    They are created in a temporary directory inside out_dir and moved in only once all four exist; when anything fails,
-    the files already moved are moved back, so out_dir is left as it was (and removed again when this created it).
-    display_dir, when given, is where out_dir is on the host: messages name the files under it.
+    They go in out_dir. They are created in a temporary directory inside out_dir and
+    moved in only once all four exist; when anything fails, the files already moved are
+    moved back, so out_dir is left as it was (and removed again when this created it).
+    display_dir, when given, is where out_dir is on the host: messages name the files
+    under it.
     """
     _check_org(org)
     shown = display_dir or out_dir
-    _refuse_existing(out_dir, shown, Path('root', ROOT_KEY), ROOT_CERT, SIGNING_KEY, SIGNING_CERT)
-    created = [path for path in (out_dir, *out_dir.parents) if not path.exists()]  # deepest first
+    _refuse_existing(
+        out_dir, shown, Path('root', ROOT_KEY), ROOT_CERT, SIGNING_KEY, SIGNING_CERT
+    )
+    # deepest first
+    created = [path for path in (out_dir, *out_dir.parents) if not path.exists()]
     try:
         try:
             out_dir.mkdir(parents=True, exist_ok=True)
@@ -324,7 +411,14 @@ def init_pki(out_dir: Path, *, root_days: int = ROOT_DAYS, signing_days: int = S
             msg = _cannot('create', shown, exc)
             raise PkiError(msg) from None
         with _workdir(out_dir, shown, '.init-') as work:
-            _create_pki(work, out_dir, shown, root_days=root_days, signing_days=signing_days, org=org)
+            _create_pki(
+                work,
+                out_dir,
+                shown,
+                root_days=root_days,
+                signing_days=signing_days,
+                org=org,
+            )
     except BaseException:
         for path in created:
             with contextlib.suppress(OSError):
@@ -332,7 +426,15 @@ def init_pki(out_dir: Path, *, root_days: int = ROOT_DAYS, signing_days: int = S
         raise
 
 
-def _create_pki(work: Path, out_dir: Path, shown: Path, *, root_days: int, signing_days: int, org: str) -> None:
+def _create_pki(
+    work: Path,
+    out_dir: Path,
+    shown: Path,
+    *,
+    root_days: int,
+    signing_days: int,
+    org: str,
+) -> None:
     cnf = work / 'ext.cnf'
     cnf.write_text(_EXTENSIONS)
     (work / 'root').mkdir()
@@ -361,32 +463,85 @@ def _create_pki(work: Path, out_dir: Path, shown: Path, *, root_days: int, signi
     root_key.chmod(0o600)
     _issue_signing(root_key, root_cert, work, days=signing_days, org=org, cnf=cnf)
     root_dir = out_dir / 'root'
-    root_move = (root_key, root_dir / ROOT_KEY) if root_dir.exists() else (work / 'root', root_dir)
-    _move_all([root_move, *((work / name, out_dir / name) for name in (ROOT_CERT, SIGNING_KEY, SIGNING_CERT))], out_dir, shown, work)
+    root_move = (
+        (root_key, root_dir / ROOT_KEY)
+        if root_dir.exists()
+        else (work / 'root', root_dir)
+    )
+    _move_all(
+        [
+            root_move,
+            *(
+                (work / name, out_dir / name)
+                for name in (ROOT_CERT, SIGNING_KEY, SIGNING_CERT)
+            ),
+        ],
+        out_dir,
+        shown,
+        work,
+    )
 
 
-def rotate_signing(out_dir: Path, *, root_dir: Path | None = None, days: int = SIGNING_DAYS, org: str = DEFAULT_ORG, display_dir: Path | None = None) -> None:
-    """Issue a fresh signing key and certificate in out_dir from its root CA (root-ca.crt, and root-ca.key in root_dir, default out_dir/root/); the previous pair is kept as *.old.
+def rotate_signing(
+    out_dir: Path,
+    *,
+    root_dir: Path | None = None,
+    days: int = SIGNING_DAYS,
+    org: str = DEFAULT_ORG,
+    display_dir: Path | None = None,
+) -> None:
+    """Issue a fresh signing key and certificate in out_dir from its root CA.
 
-    Nothing in out_dir changes until the new pair exists: the root files and the current pair are checked first, the
-    new pair is issued in a temporary directory inside out_dir (the same filesystem), and only then is any older *.old
-    pair set aside there (and deleted with it), the current pair renamed to *.old and the new one moved in; when a
-    rename fails, those already done are undone, so out_dir is left as it was. display_dir, when given, is where out_dir
-    is on the host; messages name the files under it, and the root key where root_dir says.
+    Its root CA: root-ca.crt, and root-ca.key in root_dir, default out_dir/root/. The
+    previous pair is kept as *.old.
+
+    Nothing in out_dir changes until the new pair exists: the root files and the current
+    pair are checked first, the new pair is issued in a temporary directory inside
+    out_dir (the same filesystem), and only then is any older *.old pair set aside there
+    (and deleted with it), the current pair renamed to *.old and the new one moved in;
+    when a rename fails, those already done are undone, so out_dir is left as it was.
+    display_dir, when given, is where out_dir is on the host; messages name the files
+    under it, and the root key where root_dir says.
     """
     _check_org(org)
     shown = display_dir or out_dir
     root_key, root_cert = (root_dir or out_dir / 'root') / ROOT_KEY, out_dir / ROOT_CERT
-    _check_root(root_key, root_cert, root_key if root_dir else shown / 'root' / ROOT_KEY, shown / ROOT_CERT)
-    current = [name for name in (SIGNING_KEY, SIGNING_CERT) if (out_dir / name).exists()]
+    _check_root(
+        root_key,
+        root_cert,
+        root_key if root_dir else shown / 'root' / ROOT_KEY,
+        shown / ROOT_CERT,
+    )
+    current = [
+        name for name in (SIGNING_KEY, SIGNING_CERT) if (out_dir / name).exists()
+    ]
     if len(current) == 1:
         missing = SIGNING_CERT if current == [SIGNING_KEY] else SIGNING_KEY
-        msg = f'found {shown / current[0]} without {shown / missing}: put {missing} back, or move {current[0]} away, then rotate again'
+        msg = (
+            f'found {shown / current[0]} without {shown / missing}: put {missing} '
+            f'back, or move {current[0]} away, then rotate again'
+        )
         raise PkiError(msg)
     with _workdir(out_dir, shown, '.rotate-') as work:
         cnf = work / 'ext.cnf'
         cnf.write_text(_EXTENSIONS)
         _issue_signing(root_key, root_cert, work, days=days, org=org, cnf=cnf)
-        older = [(out_dir / f'{name}.old', work / f'{name}.old') for name in current if (out_dir / f'{name}.old').exists()]
+        older = [
+            (out_dir / f'{name}.old', work / f'{name}.old')
+            for name in current
+            if (out_dir / f'{name}.old').exists()
+        ]
         previous = [(out_dir / name, out_dir / f'{name}.old') for name in current]
-        _move_all([*older, *previous, *((work / name, out_dir / name) for name in (SIGNING_KEY, SIGNING_CERT))], out_dir, shown, work)
+        _move_all(
+            [
+                *older,
+                *previous,
+                *(
+                    (work / name, out_dir / name)
+                    for name in (SIGNING_KEY, SIGNING_CERT)
+                ),
+            ],
+            out_dir,
+            shown,
+            work,
+        )

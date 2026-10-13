@@ -1,4 +1,7 @@
-"""Unit tests for uc.resources: fetching upstream resources, the operator overlay and the last-good fallback."""
+"""Unit tests for uc.resources.
+
+Fetching upstream resources, the operator overlay and the last-good fallback.
+"""
 
 import datetime as dt
 import hashlib
@@ -25,7 +28,8 @@ SHA = 'ebc2b7754082994393232c08c13230a9c6299435'
 PREFIX = f'update-center2-{SHA}/'
 UPSTREAM = {
     PREFIX + 'resources/warnings.json': b'[{"id": "w1", "message": "upstream"}]',
-    PREFIX + 'resources/artifact-ignores.properties': b'bad-plugin-1.0 = https://example/\n',
+    PREFIX
+    + 'resources/artifact-ignores.properties': b'bad-plugin-1.0 = https://example/\n',
     PREFIX + 'resources/index-template.html': b'<html>{{ content }}</html>',
     PREFIX + 'src/test/resources/warnings.json': b'[]',
     PREFIX + 'README.adoc': b'readme',
@@ -34,9 +38,17 @@ UPSTREAM = {
 
 def github_getter(tarball):
     def get(url, _headers=None, _timeout=60):
-        if url == 'https://api.github.com/repos/jenkins-infra/update-center2/commits/master':
-            return json.dumps({'sha': SHA, 'commit': {'committer': {'date': '2026-09-16T13:29:23Z'}}}).encode()
-        if url == f'https://codeload.github.com/jenkins-infra/update-center2/tar.gz/{SHA}':
+        if (
+            url
+            == 'https://api.github.com/repos/jenkins-infra/update-center2/commits/master'
+        ):
+            return json.dumps(
+                {'sha': SHA, 'commit': {'committer': {'date': '2026-09-16T13:29:23Z'}}}
+            ).encode()
+        if (
+            url
+            == f'https://codeload.github.com/jenkins-infra/update-center2/tar.gz/{SHA}'
+        ):
             return tarball
         msg = f'unexpected GET {url}'
         raise HttpError(msg)
@@ -60,7 +72,9 @@ def test_github_source(tmp_path, secrets_dir):
         '2026-09-22T12:00:00Z',
     )
     assert info.age_days(NOW) == 5
-    assert json.loads((dest / 'warnings.json').read_text()) == [{'id': 'w1', 'message': 'upstream'}]
+    assert json.loads((dest / 'warnings.json').read_text()) == [
+        {'id': 'w1', 'message': 'upstream'}
+    ]
     assert not (dest / 'README.adoc').exists()
     assert json.loads((dest / INFO_FILE).read_text())['ref'] == SHA
 
@@ -72,12 +86,24 @@ def test_url_source_checks_sha256(tmp_path, secrets_dir):
     def get(_url, _headers=None, _timeout=60):
         return tarball
 
-    ok = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://art/generic/uc2.tgz', RESOURCES_SHA256=digest)
+    ok = make_settings(
+        tmp_path,
+        secrets_dir,
+        RESOURCES_SOURCE='url',
+        RESOURCES_URL='https://art/generic/uc2.tgz',
+        RESOURCES_SHA256=digest,
+    )
     info = fetch_upstream(ok, tmp_path / 'ok', NOW, get=get)
     assert info.ref == f'sha256:{digest}'
     assert info.data_date == iso(dt.datetime.fromtimestamp(1_758_000_000, dt.UTC))
 
-    bad = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://art/generic/uc2.tgz', RESOURCES_SHA256='0' * 64)
+    bad = make_settings(
+        tmp_path,
+        secrets_dir,
+        RESOURCES_SOURCE='url',
+        RESOURCES_URL='https://art/generic/uc2.tgz',
+        RESOURCES_SHA256='0' * 64,
+    )
     with pytest.raises(ResourcesError, match='checksum mismatch'):
         fetch_upstream(bad, tmp_path / 'bad', NOW, get=get)
 
@@ -91,20 +117,29 @@ def test_bundled_source(tmp_path, secrets_dir):
 
 def test_missing_required_file(tmp_path, secrets_dir):
     tarball = make_tar({'resources/warnings.json': b'[]'})
-    settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz')
-    with pytest.raises(ResourcesError, match=re.escape('missing artifact-ignores.properties, index-template.html')):
+    settings = make_settings(
+        tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz'
+    )
+    with pytest.raises(
+        ResourcesError,
+        match=re.escape('missing artifact-ignores.properties, index-template.html'),
+    ):
         fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *_a, **_k: tarball)
 
 
 def test_unsafe_archive_path(tmp_path, secrets_dir):
     tarball = make_tar({'resources/warnings.json': b'[]', 'resources/../../evil': b'x'})
-    settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz')
+    settings = make_settings(
+        tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz'
+    )
     with pytest.raises(ResourcesError, match='unsafe path'):
         fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *_a, **_k: tarball)
 
 
 def test_not_a_tarball(tmp_path, secrets_dir):
-    settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz')
+    settings = make_settings(
+        tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz'
+    )
     with pytest.raises(ResourcesError, match='not a tar'):
         fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *_a, **_k: b'<html>')
 
@@ -132,7 +167,9 @@ def test_overlay_merge(tmp_path):
             ]
         )
     )
-    (overlay / 'artifact-ignores.properties').write_text('internal-bad-plugin = https://corp/why\n')
+    (overlay / 'artifact-ignores.properties').write_text(
+        'internal-bad-plugin = https://corp/why\n'
+    )
     (overlay / 'index-template.html').write_text('ours')
     (overlay / 'README.md').write_text('ignored')
 
@@ -142,13 +179,19 @@ def test_overlay_merge(tmp_path):
         'index-template.html',
         'warnings.json',
     ]
-    assert [w['message'] for w in json.loads((dest / 'warnings.json').read_text())] == ['ours', 'keep', 'new']
+    assert [w['message'] for w in json.loads((dest / 'warnings.json').read_text())] == [
+        'ours',
+        'keep',
+        'new',
+    ]
     props = (dest / 'artifact-ignores.properties').read_text()
     assert props.startswith('old-plugin = https://x/\n')
     assert props.rstrip().endswith('internal-bad-plugin = https://corp/why')
     assert (dest / 'index-template.html').read_text() == 'ours'
     assert not (dest / 'README.md').exists()
-    assert json.loads((upstream / 'warnings.json').read_text())[0]['message'] == 'upstream'
+    assert (
+        json.loads((upstream / 'warnings.json').read_text())[0]['message'] == 'upstream'
+    )
 
 
 def test_overlay_warning_without_id(tmp_path):
@@ -176,7 +219,9 @@ def test_overlay_warning_with_duplicate_id(tmp_path):
             ]
         )
     )
-    with pytest.raises(ResourcesError, match=r'duplicate warning id\(s\) in the overlay: SECURITY-1234'):
+    with pytest.raises(
+        ResourcesError, match=r'duplicate warning id\(s\) in the overlay: SECURITY-1234'
+    ):
         merge_overlay(upstream, overlay, tmp_path / 'merged')
 
 
@@ -189,7 +234,9 @@ def test_missing_overlay_dir_is_fine(tmp_path):
 
 def test_prepare_falls_back_to_last_good(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='github')
-    first = prepare_resources(settings, tmp_path / 'w1', NOW, get=github_getter(make_tar(UPSTREAM)))
+    first = prepare_resources(
+        settings, tmp_path / 'w1', NOW, get=github_getter(make_tar(UPSTREAM))
+    )
     save_last_good(first, settings.data_dir)
     second = prepare_resources(settings, tmp_path / 'w2', NOW, get=offline)
     assert second.info.ref == SHA
@@ -206,8 +253,15 @@ def test_prepare_without_last_good_fails(tmp_path, secrets_dir):
 def test_prepare_applies_overlay_but_keeps_upstream_pristine(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='github')
     settings.overlay_dir.mkdir(parents=True)
-    (settings.overlay_dir / 'artifact-ignores.properties').write_text('corp-bad = https://corp/\n')
-    prepared = prepare_resources(settings, tmp_path / 'w', NOW, get=github_getter(make_tar(UPSTREAM)))
+    (settings.overlay_dir / 'artifact-ignores.properties').write_text(
+        'corp-bad = https://corp/\n'
+    )
+    prepared = prepare_resources(
+        settings, tmp_path / 'w', NOW, get=github_getter(make_tar(UPSTREAM))
+    )
     assert prepared.overlay == ['artifact-ignores.properties']
     assert 'corp-bad' in (prepared.path / 'artifact-ignores.properties').read_text()
-    assert 'corp-bad' not in (prepared.upstream / 'artifact-ignores.properties').read_text()
+    assert (
+        'corp-bad'
+        not in (prepared.upstream / 'artifact-ignores.properties').read_text()
+    )

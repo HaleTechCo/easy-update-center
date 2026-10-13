@@ -41,20 +41,15 @@ The bundle holds `images.tar` (the uc and web images), the source as
 with these steps. `docker load` prints
 `Loaded image: ghcr.io/haletechco/easy-update-center-uc:<version>` and
 `Loaded image: ghcr.io/haletechco/easy-update-center-web:<version>`. These two images are all the
-update center runs; nothing else is pulled. In the new `.env`, set them:
-
-```bash
-UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<version>
-WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<version>
-```
-
-Do not run `docker compose build`; the commands below use the loaded images and need no internet.
+update center runs, and the release's `compose.yaml` names them, so nothing else is pulled and the
+commands below need no internet.
 
 ### Or build from source
 
 To run the current `main`, or a change of your own, build on a machine with internet access and the
 **same CPU architecture** as the Docker host (x86-64 or arm64), and carry two files across: the
-images and the repository itself. Leave `UC_IMAGE` and `WEB_IMAGE` unset.
+images and the repository itself. `compose.build.yaml` builds the images from your checkout and runs
+them instead of the release's; `COMPOSE_FILE` in `.env` makes every command use it.
 
 If the Docker host has internet access, build there:
 
@@ -62,6 +57,7 @@ If the Docker host has internet access, build there:
 git clone https://github.com/HaleTechCo/easy-update-center.git
 cd easy-update-center
 cp .env.airgapped.example .env
+echo 'COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.build.yaml' >> .env
 docker compose build
 ```
 
@@ -73,6 +69,7 @@ you edit it in step 3. If the Docker host has none, build elsewhere and carry th
 git clone https://github.com/HaleTechCo/easy-update-center.git
 cd easy-update-center
 cp .env.airgapped.example .env
+echo 'COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.build.yaml' >> .env
 docker compose build
 docker save easy-update-center/uc:local easy-update-center/web:local \
   | gzip > ../easy-update-center-images.tar.gz
@@ -83,6 +80,7 @@ git clone easy-update-center.bundle easy-update-center
 gunzip -c easy-update-center-images.tar.gz | docker load
 cd easy-update-center
 cp .env.airgapped.example .env
+echo 'COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.build.yaml' >> .env
 ```
 
 The image archive is about 200 MB. `docker load` prints
@@ -108,7 +106,8 @@ that. Then:
 - `DOWNLOAD_ACCESS=proxy` if controllers cannot read the repository without credentials
   ([Proxy plugin downloads](../how-to/proxy-downloads.md)).
 - Uncomment `COMPOSE_FILE=compose.yaml:compose.airgapped.yaml`, so every `docker compose` command
-  uses the air-gapped override ([Compose](../reference/configuration.md#compose)).
+  uses the air-gapped override ([Compose](../reference/configuration.md#compose)). Built from
+  source, leave it: the line you added sets it, with `compose.build.yaml`.
 - Recommended: fresh security warnings through `RESOURCES_SOURCE=url`. The data built into the image
   is only as recent as its update-center2 commit, and `status.json` marks it stale 30 days after
   that. See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).

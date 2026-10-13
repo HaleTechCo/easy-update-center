@@ -1,4 +1,7 @@
-"""The few small entries the adapter reads from untrusted archives (docs/architecture/repo-adapter.md#limits)."""
+"""The few small entries the adapter reads from untrusted archives.
+
+See docs/architecture/repo-adapter.md#limits.
+"""
 
 from __future__ import annotations
 
@@ -25,14 +28,16 @@ MANIFEST = 'META-INF/MANIFEST.MF'
 _EOCD = b'PK\x05\x06'
 _EOCD_SIZE = 22  # the end of central directory record, without its comment
 _MAX_COMMENT_LENGTH = 0xFFFF
-_ZIP64_SIZE_MARKER = 0xFFFFFFFF  # an end record field whose value is in the zip64 end record
+# an end record field whose value is in the zip64 end record
+_ZIP64_SIZE_MARKER = 0xFFFFFFFF
 _ZIP64_COUNT_MARKER = 0xFFFF
 _ZIP64_LOCATOR = b'PK\x06\x07'
 _ZIP64_LOCATOR_SIZE = 20
 _ZIP64_EOCD = b'PK\x06\x06'
 _ZIP64_EOCD_SIZE = 56  # without its extensible data
 _EXTENDED_TIMESTAMP = 0x5455  # extra field header id
-_MTIME_END = 5  # an extended-timestamp body starts with a flags byte, then the 4-byte mtime
+# an extended-timestamp body starts with a flags byte, then the 4-byte mtime
+_MTIME_END = 5
 
 EntryReader = Callable[[str, int], 'bytes | None']
 
@@ -46,14 +51,18 @@ class ArchiveFacts:
     """What the listing needs from one archive, read once and cached by its sha256."""
 
     manifest: bytes | None
-    coordinates: Coordinates | None  # from the manifest; None for a WAR or an incomplete manifest
+    # from the manifest; None for a WAR or an incomplete manifest
+    coordinates: Coordinates | None
     pom: bytes | None  # META-INF/maven/<groupId>/<artifactId>/pom.xml
     description: bytes | None  # index.jelly (plugins only)
     released: dt.datetime | None  # rule 9's archive date, before the plausibility check
 
 
 def central_directory_size(stream: BinaryIO) -> int:
-    """Size in bytes of a zip's central directory, read from its end records without parsing it."""
+    """Size in bytes of a zip's central directory.
+
+    Read from its end records without parsing it.
+    """
     end = stream.seek(0, io.SEEK_END)
     tail_length = min(end, _EOCD_SIZE + _MAX_COMMENT_LENGTH)
     stream.seek(end - tail_length)
@@ -80,7 +89,10 @@ def central_directory_size(stream: BinaryIO) -> int:
 
 
 def open_archive(stream: BinaryIO) -> zipfile.ZipFile:
-    """Open a ZipFile over a seekable stream, refusing central directories over CENTRAL_DIRECTORY_LIMIT."""
+    """Open a ZipFile over a seekable stream.
+
+    Refuses central directories over CENTRAL_DIRECTORY_LIMIT.
+    """
     size = central_directory_size(stream)
     if size > CENTRAL_DIRECTORY_LIMIT:
         msg = f'central directory of {size} bytes exceeds {CENTRAL_DIRECTORY_LIMIT}'
@@ -94,7 +106,10 @@ def open_archive(stream: BinaryIO) -> zipfile.ZipFile:
 
 
 def read_entry(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
-    """Read an entry's bytes: None when absent, ArchiveError when it exceeds limit, whatever its header says."""
+    """Read an entry's bytes.
+
+    None when absent, ArchiveError when it exceeds limit, whatever its header says.
+    """
     try:
         info = archive.getinfo(name)
     except KeyError:
@@ -105,7 +120,15 @@ def read_entry(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
     try:
         with archive.open(info) as entry:
             data = entry.read(limit + 1)
-    except (zipfile.BadZipFile, OSError, ValueError, NotImplementedError, RuntimeError, zlib.error, EOFError) as exc:
+    except (
+        zipfile.BadZipFile,
+        OSError,
+        ValueError,
+        NotImplementedError,
+        RuntimeError,
+        zlib.error,
+        EOFError,
+    ) as exc:
         msg = f'unreadable entry {name}: {exc}'
         raise ArchiveError(msg) from exc  # RuntimeError: encrypted
     if len(data) > limit:
@@ -120,7 +143,10 @@ def zip_reader(archive: zipfile.ZipFile) -> EntryReader:
 
 
 def _extended_mtime(extra: bytes) -> dt.datetime | None:
-    """Return the mtime of a 0x5455 extended-timestamp field, which is UTC, when the entry carries one."""
+    """Return the mtime of a 0x5455 extended-timestamp field, which is UTC.
+
+    Only when the entry carries one.
+    """
     at = 0
     while at + 4 <= len(extra):
         header, size = struct.unpack('<HH', extra[at : at + 4])
@@ -133,7 +159,10 @@ def _extended_mtime(extra: bytes) -> dt.datetime | None:
 
 
 def archive_date(archive: zipfile.ZipFile) -> dt.datetime | None:
-    """META-INF/MANIFEST.MF's time: its UTC extended timestamp, else its DOS time read as UTC."""
+    """META-INF/MANIFEST.MF's time.
+
+    Its UTC extended timestamp, else its DOS time read as UTC.
+    """
     try:
         info = archive.getinfo(MANIFEST)
     except KeyError:
@@ -148,7 +177,10 @@ def archive_date(archive: zipfile.ZipFile) -> dt.datetime | None:
 
 
 def plausible(released: dt.datetime | None, repository_time: dt.datetime) -> str | None:
-    """None when the archive date may be used (rule 9); otherwise why the repository's time is used."""
+    """None when the archive date may be used (rule 9).
+
+    Otherwise why the repository's time is used.
+    """
     if released is None:
         return 'archive has no readable date'
     if released < EARLIEST_RELEASE:
@@ -159,7 +191,10 @@ def plausible(released: dt.datetime | None, repository_time: dt.datetime) -> str
 
 
 def manifest_coordinates(manifest: bytes | None) -> Coordinates | None:
-    """Return a plugin's coordinates from its manifest's Group-Id, Artifact-Id and Plugin-Version; None when any is missing."""
+    """Return a plugin's coordinates from its manifest.
+
+    From its Group-Id, Artifact-Id and Plugin-Version; None when any is missing.
+    """
     if manifest is None:
         return None
     attributes = parse_manifest(manifest.decode('utf-8', 'replace'))
@@ -177,7 +212,10 @@ def jar_description(jar: bytes) -> bytes | None:
 
 def find_description(read: EntryReader, artifact_id: str, version: str) -> bytes | None:
     """index.jelly where Maven, Gradle and pre-2015 builds put it (rule 6)."""
-    for inner in (f'WEB-INF/lib/{artifact_id}.jar', f'WEB-INF/lib/{artifact_id}-{version}.jar'):
+    for inner in (
+        f'WEB-INF/lib/{artifact_id}.jar',
+        f'WEB-INF/lib/{artifact_id}-{version}.jar',
+    ):
         jar = read(inner, INNER_JAR_LIMIT)
         if jar is not None:
             description = jar_description(jar)
@@ -186,8 +224,17 @@ def find_description(read: EntryReader, artifact_id: str, version: str) -> bytes
     return read('WEB-INF/classes/index.jelly', SMALL_ENTRY_LIMIT)
 
 
-def extract_facts(read: EntryReader, path_coordinates: Coordinates, *, plugin: bool, released: dt.datetime | None) -> ArchiveFacts:
-    """Read an archive's facts through `read`, which serves entries from a local zip or `!/` requests."""
+def extract_facts(
+    read: EntryReader,
+    path_coordinates: Coordinates,
+    *,
+    plugin: bool,
+    released: dt.datetime | None,
+) -> ArchiveFacts:
+    """Read an archive's facts through `read`.
+
+    `read` serves entries from a local zip or `!/` requests.
+    """
     manifest = read(MANIFEST, SMALL_ENTRY_LIMIT)
     coordinates = manifest_coordinates(manifest) if plugin else None
     group, artifact, version = coordinates or path_coordinates

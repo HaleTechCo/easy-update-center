@@ -1,4 +1,7 @@
-"""The settings registry: names, types, groups and defaults (docs/reference/configuration.md#how-settings-are-read)."""
+"""The settings registry: names, types, groups and defaults.
+
+See docs/reference/configuration.md#how-settings-are-read.
+"""
 
 import re
 from urllib.parse import urlsplit
@@ -35,7 +38,9 @@ def test_int_defaults_respect_their_minimum():
     for setting in SETTINGS:
         if setting.type == 'int':
             for mode in MODES:
-                assert int(setting.default_for(mode)) >= (setting.minimum or 0), setting.env
+                assert int(setting.default_for(mode)) >= (setting.minimum or 0), (
+                    setting.env
+                )
 
 
 def test_mode_defaults():
@@ -48,7 +53,11 @@ def test_mode_defaults():
 def test_derived_settings_have_no_registry_default():
     for setting in SETTINGS:
         if setting.derived:
-            assert (setting.default, setting.online, setting.airgapped) == ('', None, None), setting.env
+            assert (setting.default, setting.online, setting.airgapped) == (
+                '',
+                None,
+                None,
+            ), setting.env
 
 
 def test_settings_field_names():
@@ -72,19 +81,33 @@ def test_active_modes_are_modes():
 SAMPLE_CHECKS = {
     'bool': lambda sample: sample in {'true', 'false'},
     'version': lambda sample: CORE_VERSION.match(sample) is not None,
-    'url': lambda sample: urlsplit(sample).scheme in {'http', 'https'} and bool(urlsplit(sample).netloc),
+    'url': lambda sample: (
+        urlsplit(sample).scheme in {'http', 'https'} and bool(urlsplit(sample).netloc)
+    ),
 }
-"""How a sample of each type must parse; only types some setting has a sample of, so no check is dead (test_every_checked_type_has_a_sample)."""
+"""How a sample of each type must parse.
+
+Only types some setting has a sample of, so no check is dead
+(test_every_checked_type_has_a_sample).
+"""
 UNCHECKED_SAMPLE_TYPES = ('str', 'path', 'cron')
-"""Sample types with nothing to parse here: free text, and cron, which uc schedule checks when it starts. A sample of any other type needs a check."""
+"""Sample types with nothing to parse here.
+
+Free text, and cron, which uc schedule checks when it starts. A sample of any other type
+needs a check.
+"""
 
 
-@pytest.mark.parametrize('setting_and_sample', list(_samples()), ids=lambda pair: pair[0].env)
+@pytest.mark.parametrize(
+    'setting_and_sample', list(_samples()), ids=lambda pair: pair[0].env
+)
 def test_every_sample_parses_for_its_type(setting_and_sample):
     setting, sample = setting_and_sample
     if setting.type in UNCHECKED_SAMPLE_TYPES:
         return
-    assert setting.type in SAMPLE_CHECKS, f'{setting.env}: no check for a sample of type {setting.type}'
+    assert setting.type in SAMPLE_CHECKS, (
+        f'{setting.env}: no check for a sample of type {setting.type}'
+    )
     assert SAMPLE_CHECKS[setting.type](sample), setting.env
 
 
@@ -94,7 +117,12 @@ def test_every_checked_type_has_a_sample():
 
 def test_every_hint_line_and_doc_is_a_sentence():
     for setting in SETTINGS:
-        for line in (setting.doc, *setting.hint, *setting.online_hint, *setting.airgapped_hint):
+        for line in (
+            setting.doc,
+            *setting.hint,
+            *setting.online_hint,
+            *setting.airgapped_hint,
+        ):
             assert line.endswith('.'), (setting.env, line)
 
 

@@ -1,0 +1,16 @@
+---
+# Runs images built from this checkout instead of the release's (docs/getting-started/online.md#or-build-from-source):
+# add it to COMPOSE_FILE in .env, then `docker compose build`. The images are named easy-update-center/uc:local and
+# easy-update-center/web:local, as `make build` names them, so a local build never takes a release's name.
+x-uc-build: &uc-build
+  image: ${UC_IMAGE:-easy-update-center/uc:local}
+  build: {context: uc, target: runtime}
+
+services:
+  web:
+    image: ${WEB_IMAGE:-easy-update-center/web:local}
+    build: {context: web}
+  setup: *uc-build
+  repo-adapter: *uc-build
+  scheduler: *uc-build
+  uc: *uc-build

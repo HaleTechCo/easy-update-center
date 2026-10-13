@@ -1,0 +1,8 @@
+---
+# zizmor's settings (the zizmor pre-commit hook; CONTRIBUTING.md#lint).
+rules:
+  # It asks for GitHub's self-repository syntax (`uses: $/.github/workflows/ci.yml`, added in July
+  # 2026) in place of `./`. Kept off until actionlint accepts that syntax and a release has run
+  # with it.
+  self-repository:
+    disable: true

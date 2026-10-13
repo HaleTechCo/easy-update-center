@@ -21,35 +21,28 @@ cd easy-update-center
 cp .env.online.example .env
 ```
 
-In `.env`, set the release's images, with the same `<version>` as the tag but without the `v`:
-
-```bash
-UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:<version>
-WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:<version>
-```
-
-Pull them now, before anything else:
+The tag's `compose.yaml` names that release's images. Pull them:
 
 ```bash
 docker compose pull
 docker compose run --rm --no-deps uc --version
 ```
 
-The second command must print `uc <version>`, the release you chose. Pull before anything else:
-`docker compose pull` fails loudly, while `setup` or `up` after a missed pull (a mistyped version)
-would build the image from your checkout under the release's name, with only a warning. You can
-check the signatures too: [Verify a release](../how-to/verify-a-release.md). You edit the rest of
-`.env` in the next step.
+The second command must print `uc <version>`, the release you chose. You can check the signatures
+too: [Verify a release](../how-to/verify-a-release.md). You edit the rest of `.env` in the next
+step.
 
 ### Or build from source
 
-To run the current `main` instead, or a change of your own, clone it and build the images. Leave
-`UC_IMAGE` and `WEB_IMAGE` unset.
+To run the current `main` instead, or a change of your own, clone it and build the images.
+`compose.build.yaml` builds them from your checkout and runs them instead of the release's;
+`COMPOSE_FILE` in `.env` makes every command use it (on Windows, separate the files with `;`).
 
 ```bash
 git clone https://github.com/HaleTechCo/easy-update-center.git
 cd easy-update-center
 cp .env.online.example .env
+echo 'COMPOSE_FILE=compose.yaml:compose.build.yaml' >> .env
 docker compose build
 ```
 

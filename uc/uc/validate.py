@@ -1,4 +1,7 @@
-"""Checks a staged release must pass before it becomes live (docs/architecture/generation-pipeline.md#step-9-validate)."""
+"""Checks a staged release must pass before it becomes live.
+
+See docs/architecture/generation-pipeline.md#step-9-validate.
+"""
 
 from __future__ import annotations
 
@@ -43,14 +46,20 @@ class ValidationError(UcError):
 
 @dataclass(frozen=True)
 class ValidationResult:
-    """What a release that passed validation offers: its plugin count and the download keys its sites link to."""
+    """What a release that passed validation offers.
+
+    Its plugin count and the download keys its sites link to.
+    """
 
     plugin_count: int
     offered: frozenset[str]
 
 
 def load_site_json(path: Path) -> Any:
-    """Parse a site JSON file, unwrapping the updateCenter.post(...) JSONP wrapper when present."""
+    """Parse a site JSON file.
+
+    Unwraps the updateCenter.post(...) JSONP wrapper when present.
+    """
     text = path.read_text(encoding='utf-8').strip()
     if text.startswith(JSONP_PREFIX):
         text = text[len(JSONP_PREFIX) :].rstrip()
@@ -59,20 +68,32 @@ def load_site_json(path: Path) -> Any:
 
 
 def count_plugins(site: Path) -> int | None:
-    """Return the number of plugins the site's update-center.actual.json offers, or None when it cannot be read."""
+    """Return the number of plugins the site's update-center.actual.json offers.
+
+    None when it cannot be read.
+    """
     try:
-        return len(load_site_json(site / 'update-center.actual.json').get('plugins') or {})
+        return len(
+            load_site_json(site / 'update-center.actual.json').get('plugins') or {}
+        )
     except (OSError, ValueError, AttributeError):
         return None
 
 
 def download_key(url: str, downloads_root: str) -> str | None:
-    """Return plugins/<id>/<version> or war/<version> for a download URL under downloads_root, else None."""
+    """Return plugins/<id>/<version> or war/<version> for a download URL.
+
+    Only for one under downloads_root, else None.
+    """
     prefix = downloads_root.rstrip('/') + '/'
     if not url.startswith(prefix):
         return None
     parts = url[len(prefix) :].split('/')
-    if len(parts) == PLUGIN_URL_PARTS and parts[0] == 'plugins' and parts[3] == f'{parts[1]}.hpi':
+    if (
+        len(parts) == PLUGIN_URL_PARTS
+        and parts[0] == 'plugins'
+        and parts[3] == f'{parts[1]}.hpi'
+    ):
         return f'plugins/{parts[1]}/{parts[2]}'
     if len(parts) == WAR_URL_PARTS and parts[0] == 'war' and parts[2] == 'jenkins.war':
         return f'war/{parts[1]}'
@@ -82,8 +103,8 @@ def download_key(url: str, downloads_root: str) -> str | None:
 def offers_core(doc: Any) -> bool:
     """Return whether the site document offers a Jenkins core.
 
-    With no jenkins-war in the repository, upstream still writes `core`, holding only its defaults
-    (name and size): the site then offers plugins only, which is valid.
+    With no jenkins-war in the repository, upstream still writes `core`, holding only
+    its defaults (name and size): the site then offers plugins only, which is valid.
     """
     core = doc.get('core') if isinstance(doc, dict) else None
     return isinstance(core, dict) and bool(core.get('url') or core.get('version'))
@@ -106,16 +127,25 @@ def validate_release(
     force: bool,
     download_map: Mapping[str, str] | None,
 ) -> ValidationResult:
-    """Check the staged release (files, signatures, download URLs, .htaccess, plugin count, download map); raise ValidationError listing every failure."""
-    problems: list[str] = [f'missing {name}' for name in ROOT_FILES if not (staging / name).is_file()]
+    """Check the staged release; raise ValidationError listing every failure.
+
+    Checked: files, signatures, download URLs, .htaccess, plugin count, download map.
+    """
+    problems: list[str] = [
+        f'missing {name}' for name in ROOT_FILES if not (staging / name).is_file()
+    ]
     offered: set[str] = set()
     bad_urls: set[str] = set()
 
     def check_signature(doc: Any, label: str) -> None:
         signature = doc.get('signature') if isinstance(doc, dict) else None
-        certificates = signature.get('certificates') if isinstance(signature, dict) else None
+        certificates = (
+            signature.get('certificates') if isinstance(signature, dict) else None
+        )
         if not certificates or certificates[0] != signing_cert_b64:
-            problems.append(f'{label} is not signed with the configured signing certificate')
+            problems.append(
+                f'{label} is not signed with the configured signing certificate'
+            )
 
     def check_url(url: Any, label: str, *, collect: bool) -> None:
         key = download_key(url, downloads_root) if isinstance(url, str) else None
@@ -156,20 +186,35 @@ def validate_release(
             for plugin_id, by_version in (versions.get('plugins') or {}).items():
                 for version, entry in (by_version or {}).items():
                     url = entry.get('url') if isinstance(entry, dict) else None
-                    check_url(url, f'plugin-versions {plugin_id}:{version}', collect=False)
+                    check_url(
+                        url, f'plugin-versions {plugin_id}:{version}', collect=False
+                    )
 
     if bad_urls:
         problems.append(f'download URLs outside {downloads_root}/: {_listed(bad_urls)}')
 
     htaccess = staging / '.htaccess'
     if htaccess.is_file():
-        problems.extend(f'.htaccess redirects to an absolute URL: {line}' for line in absolute_targets(htaccess.read_text(encoding='utf-8')))
+        problems.extend(
+            f'.htaccess redirects to an absolute URL: {line}'
+            for line in absolute_targets(htaccess.read_text(encoding='utf-8'))
+        )
 
     count = count_plugins(staging / 'current') or 0
     if count == 0:
         problems.append('the release has no plugins')
-    if previous_plugin_count and not force and count < min_ratio * previous_plugin_count:
-        problems.append(f"plugin count {count} < {min_ratio} × {previous_plugin_count} of the live release (use 'uc generate --force' if the shrinkage is intended)")  # noqa: RUF001 - the multiplication sign is the documented message text (docs/troubleshooting.md#generation)
+    if (
+        previous_plugin_count
+        and not force
+        and count < min_ratio * previous_plugin_count
+    ):
+        problems.append(
+            # the multiplication sign is the documented message text
+            # (docs/troubleshooting.md#generation)
+            f'plugin count {count} < {min_ratio} × '  # noqa: RUF001
+            f'{previous_plugin_count} of the live release '
+            "(use 'uc generate --force' if the shrinkage is intended)"
+        )
     if download_map is not None:
         missing_keys = offered - set(download_map)
         if missing_keys:

@@ -1,4 +1,7 @@
-"""Unit tests for uc.repo_adapter.cache: the sha256-keyed cache of archive facts and its pruning."""
+"""Unit tests for uc.repo_adapter.cache.
+
+The sha256-keyed cache of archive facts and its pruning.
+"""
 
 import datetime as dt
 import os
@@ -10,7 +13,13 @@ from uc.repo_adapter.archive import ArchiveFacts
 from uc.repo_adapter.cache import Cache
 
 SHA = 'ab' + '0' * 62
-FACTS = ArchiveFacts(b'Manifest-Version: 1.0\n', ('io.jenkins.plugins', 'caffeine-api', '3.2.4'), b'<project/>', b'<div>d</div>', dt.datetime(2024, 5, 1, 12, 30, tzinfo=dt.UTC))
+FACTS = ArchiveFacts(
+    b'Manifest-Version: 1.0\n',
+    ('io.jenkins.plugins', 'caffeine-api', '3.2.4'),
+    b'<project/>',
+    b'<div>d</div>',
+    dt.datetime(2024, 5, 1, 12, 30, tzinfo=dt.UTC),
+)
 
 
 def test_facts_round_trip(tmp_path):
@@ -32,7 +41,9 @@ def test_absent_facts_are_remembered_as_markers(tmp_path):
 def test_facts_without_the_final_marker_are_incomplete(tmp_path):
     cache = Cache(tmp_path)
     cache.store_facts(SHA, FACTS)
-    (tmp_path / 'ab' / SHA / 'released').unlink()  # as if the process died before the last write
+    (
+        tmp_path / 'ab' / SHA / 'released'
+    ).unlink()  # as if the process died before the last write
     assert cache.facts(SHA) is None
 
 

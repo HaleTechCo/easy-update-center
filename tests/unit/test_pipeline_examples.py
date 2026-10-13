@@ -1,6 +1,10 @@
-"""The example Jenkins pipeline runs the procurement stages in the documented order, with the approval before the push and none when nothing was staged (docs/how-to/run-procurement-from-a-pipeline.md).
+"""The example Jenkins pipeline runs the procurement stages in the documented order.
 
-A Jenkinsfile cannot run outside Jenkins, so the stages and the approval are checked in the file; the script that decides whether anything was staged runs for real.
+With the approval before the push and none when nothing was staged
+(docs/how-to/run-procurement-from-a-pipeline.md).
+
+A Jenkinsfile cannot run outside Jenkins, so the stages and the approval are checked in
+the file; the script that decides whether anything was staged runs for real.
 """
 
 import re
@@ -15,24 +19,67 @@ JENKINSFILE = Path('/examples/pipelines/Jenkinsfile')
 STAGES = ['check', 'stage', 'review', 'push', 'generate', 'verify', 'clean']
 AFTER_STAGING = STAGES[2:]
 """The stages a run with nothing staged skips: the review and everything after it."""
-COMMANDS = ['uc config --check', 'uc doctor', 'uc procure stage', 'uc procure push', 'uc generate', 'uc status', 'uc doctor', 'uc procure clean']
+COMMANDS = [
+    'uc config --check',
+    'uc doctor',
+    'uc procure stage',
+    'uc procure push',
+    'uc generate',
+    'uc status',
+    'uc doctor',
+    'uc procure clean',
+]
 """The uc commands the stages run, in the order of the how-to's stage table."""
-COMMAND = re.compile(r'docker compose run --rm (?:--no-deps )?(uc (?:config --check|procure (?:stage|push|clean)|doctor|generate|status))\b')
-STAGED_FLAG = re.compile(r'env\.UC_STAGED = sh\(script: "([^"$\\]*)", returnStdout: true\)\.trim\(\)')
-"""How the stage stage records whether anything was staged; a script without $ or \\ is the same in Groovy and in the shell."""
-TOLERATED_DOCTOR = re.compile(r"sh\(script: 'docker compose run --rm uc doctor', returnStatus: true\)(?s:.*?)\brc > 1\b")
-STAGED = f'Staging into /procurement from http://source.example/:\nstaged    io/jenkins/x.hpi\n1 staged, 0 kept, 0 problem(s)\n{review_line(DEFAULT_STAGING, 1)}\n'
-NOTHING_STAGED = 'Inspecting the repository...\nnext: uc procure stage --poms\n\nStaging into /procurement from http://source.example/:\n0 staged, 0 kept, 0 problem(s)\n'
-"""A stage report with nothing staged: its next: line is the kind uc doctor prints, which must not count."""
+COMMAND = re.compile(
+    r'docker compose run --rm (?:--no-deps )?'
+    r'(uc (?:config --check|procure (?:stage|push|clean)|doctor|generate|status))\b'
+)
+STAGED_FLAG = re.compile(
+    r'env\.UC_STAGED = sh\(script: "([^"$\\]*)", returnStdout: true\)\.trim\(\)'
+)
+"""How the stage stage records whether anything was staged.
+
+A script without $ or \\ is the same in Groovy and in the shell.
+"""
+TOLERATED_DOCTOR = re.compile(
+    r"sh\(script: 'docker compose run --rm uc doctor', returnStatus: true\)"
+    r'(?s:.*?)\brc > 1\b'
+)
+STAGED = (
+    'Staging into /procurement from http://source.example/:\n'
+    'staged    io/jenkins/x.hpi\n'
+    '1 staged, 0 kept, 0 problem(s)\n'
+    f'{review_line(DEFAULT_STAGING, 1)}\n'
+)
+NOTHING_STAGED = (
+    'Inspecting the repository...\n'
+    'next: uc procure stage --poms\n\n'
+    'Staging into /procurement from http://source.example/:\n'
+    '0 staged, 0 kept, 0 problem(s)\n'
+)
+"""A stage report with nothing staged.
+
+Its next: line is the kind uc doctor prints, which must not count.
+"""
 
 
 def code() -> str:
-    """Return the Jenkinsfile without its comment lines, so only what runs is checked."""
-    return '\n'.join(line for line in JENKINSFILE.read_text(encoding='utf-8').splitlines() if not line.lstrip().startswith('//'))
+    """Return the Jenkinsfile without its comment lines.
+
+    So only what runs is checked.
+    """
+    return '\n'.join(
+        line
+        for line in JENKINSFILE.read_text(encoding='utf-8').splitlines()
+        if not line.lstrip().startswith('//')
+    )
 
 
 def stages() -> dict[str, str]:
-    """Return each stage('name') { ... } block by name, in order, found by matching braces."""
+    """Return each stage('name') { ... } block by name, in order.
+
+    Found by matching braces.
+    """
     text, found = code(), {}
     for start in re.finditer(r"stage\('(\w+)'\) \{", text):
         depth, end = 1, start.end()
@@ -44,7 +91,10 @@ def stages() -> dict[str, str]:
 
 
 def test_the_jenkinsfile_is_the_only_example():
-    assert sorted(path.name for path in JENKINSFILE.parent.iterdir()) == ['Jenkinsfile', 'README.md']
+    assert sorted(path.name for path in JENKINSFILE.parent.iterdir()) == [
+        'Jenkinsfile',
+        'README.md',
+    ]
 
 
 def test_the_stages_run_their_commands_in_order():
@@ -55,7 +105,9 @@ def test_the_stages_run_their_commands_in_order():
 def test_the_approval_comes_before_the_push_and_one_run_at_a_time():
     found = stages()
     assert re.search(r'\binput message: .*\bsubmitter: ', found['review']) is not None
-    assert 'uc procure push' not in ''.join(found[name] for name in STAGES[: STAGES.index('push')])
+    assert 'uc procure push' not in ''.join(
+        found[name] for name in STAGES[: STAGES.index('push')]
+    )
     assert 'disableConcurrentBuilds()' in code()
 
 
@@ -63,7 +115,11 @@ def test_the_push_checks_the_reviewed_list_first():
     found = stages()
     assert 'sha256sum procurement/procurement.json >' in found['stage']
     push = found['push']
-    assert push.index('unstash') < push.index('sha256sum -c') < push.index('uc procure push')
+    assert (
+        push.index('unstash')
+        < push.index('sha256sum -c')
+        < push.index('uc procure push')
+    )
     assert 'set -eo pipefail' in push[: push.index('sha256sum -c')]
 
 
@@ -74,34 +130,69 @@ def test_doctor_exit_one_does_not_fail_the_stage(stage):
 
 def test_everything_after_staging_runs_only_when_something_was_staged():
     for name, block in stages().items():
-        assert ("expression { env.UC_STAGED == 'true' }" in block) is (name in AFTER_STAGING), name
+        assert ("expression { env.UC_STAGED == 'true' }" in block) is (
+            name in AFTER_STAGING
+        ), name
 
 
-@pytest.mark.parametrize(('report', 'staged'), [(STAGED, 'true'), (NOTHING_STAGED, 'false'), (None, 'false')], ids=['staged', 'nothing-staged', 'no-report'])
+@pytest.mark.parametrize(
+    ('report', 'staged'),
+    [(STAGED, 'true'), (NOTHING_STAGED, 'false'), (None, 'false')],
+    ids=['staged', 'nothing-staged', 'no-report'],
+)
 def test_the_staged_flag_follows_the_review_line(tmp_path, report, staged):
     found = STAGED_FLAG.search(stages()['stage'])
     assert found is not None
     if report is not None:
         (tmp_path / 'stage-report.txt').write_text(report, encoding='utf-8')
-    result = subprocess.run(['sh', '-c', found.group(1)], cwd=tmp_path, env={'PATH': '/usr/bin:/bin'}, capture_output=True, text=True, check=False, timeout=30)
+    result = subprocess.run(
+        ['sh', '-c', found.group(1)],
+        cwd=tmp_path,
+        env={'PATH': '/usr/bin:/bin'},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
     assert (result.returncode, result.stdout) == (0, f'{staged}\n')
 
 
 WAR_CHECK = re.compile(r'war ==~ /([^/]+)/')
-"""The pattern the stage stage checks each WARS entry against; Groovy's ==~ matches the whole string, as re.fullmatch does."""
+"""The pattern the stage stage checks each WARS entry against.
+
+Groovy's ==~ matches the whole string, as re.fullmatch does.
+"""
 
 
 def test_the_stage_step_builds_its_options_from_checked_parameters():
     text = code()
-    for parameter in ("booleanParam(name: 'POMS', defaultValue: true", "booleanParam(name: 'DEPENDENCIES', defaultValue: true", "string(name: 'WARS', defaultValue: 'required'"):
+    for parameter in (
+        "booleanParam(name: 'POMS', defaultValue: true",
+        "booleanParam(name: 'DEPENDENCIES', defaultValue: true",
+        "string(name: 'WARS', defaultValue: 'required'",
+    ):
         assert parameter in text, parameter
     stage = stages()['stage']
-    assert 'uc procure stage \\$UC_STAGE_OPTIONS ' in stage  # the shell reads the options from the environment
+    assert (
+        'uc procure stage \\$UC_STAGE_OPTIONS ' in stage
+    )  # the shell reads the options from the environment
     assert '${params.' not in stage  # Groovy splices no parameter into the shell script
     assert WAR_CHECK.search(stage) is not None
 
 
-@pytest.mark.parametrize(('war', 'accepted'), [('required', True), ('2.479.1', True), ('2.479', True), ('2.479.1;id', False), ('$(id)', False), ('--poms', False), ('2.x', False), ('', False)])
+@pytest.mark.parametrize(
+    ('war', 'accepted'),
+    [
+        ('required', True),
+        ('2.479.1', True),
+        ('2.479', True),
+        ('2.479.1;id', False),
+        ('$(id)', False),
+        ('--poms', False),
+        ('2.x', False),
+        ('', False),
+    ],
+)
 def test_the_wars_check_accepts_only_versions_and_required(war, accepted):
     found = WAR_CHECK.search(stages()['stage'])
     assert found is not None

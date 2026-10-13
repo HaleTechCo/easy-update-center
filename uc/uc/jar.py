@@ -1,4 +1,7 @@
-"""Running the update-center2 jar (docs/architecture/generation-pipeline.md#step-7-run-the-generator)."""
+"""Running the update-center2 jar.
+
+See docs/architecture/generation-pipeline.md#step-7-run-the-generator.
+"""
 
 from __future__ import annotations
 
@@ -22,8 +25,13 @@ class JarError(UcError):
     """update-center2 exited non-zero or did not write the tier list."""
 
 
-def jar_environment(settings: Settings, creds: Credentials, base_env: Mapping[str, str]) -> dict[str, str]:
-    """Return base_env plus the variables update-center2 reads: repository, credentials, GitHub, popularity and limits."""
+def jar_environment(
+    settings: Settings, creds: Credentials, base_env: Mapping[str, str]
+) -> dict[str, str]:
+    """Return base_env plus the variables update-center2 reads.
+
+    Repository, credentials, GitHub, popularity and limits.
+    """
     env = dict(base_env)
     env.update(
         {
@@ -37,7 +45,9 @@ def jar_environment(settings: Settings, creds: Credentials, base_env: Mapping[st
             'GITHUB_USERNAME': creds.github_username,
             'GITHUB_PASSWORD': creds.github_password,
             'POPULARITY_JSON_URL': settings.popularity_json_url,
-            'CERTIFICATE_MINIMUM_VALID_DAYS': str(settings.certificate_minimum_valid_days),
+            'CERTIFICATE_MINIMUM_VALID_DAYS': str(
+                settings.certificate_minimum_valid_days
+            ),
             'CORE_AGE_DAYS': str(settings.core_age_days),
         }
     )
@@ -45,12 +55,20 @@ def jar_environment(settings: Settings, creds: Credentials, base_env: Mapping[st
 
 
 CONNECT_TIMEOUT_MS = 10000
-"""How long the generator's HttpURLConnection clients wait for a connection: a host the air-gapped extra_hosts list misses stalls seconds, not minutes (docs/architecture/modes.md#fast-failure-for-blocked-hosts)."""
+"""How long the generator's HttpURLConnection clients wait for a connection.
+
+A host the air-gapped extra_hosts list misses stalls seconds, not minutes
+(docs/architecture/modes.md#fast-failure-for-blocked-hosts).
+"""
 
 
 def java_command(settings: Settings, *args: str) -> list[str]:
     """Return the java command line that runs the update-center2 jar with args."""
-    timeout = [] if 'sun.net.client.defaultConnectTimeout' in settings.java_tool_options else [f'-Dsun.net.client.defaultConnectTimeout={CONNECT_TIMEOUT_MS}']
+    timeout = (
+        []
+        if 'sun.net.client.defaultConnectTimeout' in settings.java_tool_options
+        else [f'-Dsun.net.client.defaultConnectTimeout={CONNECT_TIMEOUT_MS}']
+    )
     return [
         'java',
         '-Dfile.encoding=UTF-8',
@@ -97,14 +115,30 @@ def generate_tiers(
     *,
     run: JarRunner = run_jar,
 ) -> Tiers:
-    """Run update-center2 to write the dynamic tier list to out, and return the tiers it lists."""
-    run(java_command(settings, '--resources-dir', str(resources), *settings.extra_args, '--dynamic-tier-list-file', str(out)), env, log)
+    """Run update-center2 to write the dynamic tier list to out.
+
+    Return the tiers it lists.
+    """
+    run(
+        java_command(
+            settings,
+            '--resources-dir',
+            str(resources),
+            *settings.extra_args,
+            '--dynamic-tier-list-file',
+            str(out),
+        ),
+        env,
+        log,
+    )
     try:
         data = json.loads(out.read_text(encoding='utf-8'))
     except (OSError, ValueError) as exc:
         msg = f'tier list {out} is missing or invalid: {exc}'
         raise JarError(msg) from exc
-    return Tiers(tuple(data.get('weeklyCores') or ()), tuple(data.get('stableCores') or ()))
+    return Tiers(
+        tuple(data.get('weeklyCores') or ()), tuple(data.get('stableCores') or ())
+    )
 
 
 def generate_sites(
@@ -116,5 +150,18 @@ def generate_sites(
     *,
     run: JarRunner = run_jar,
 ) -> None:
-    """Run update-center2 once in batch mode, generating every update site listed in arguments_file."""
-    run(java_command(settings, '--resources-dir', str(resources), '--arguments-file', str(arguments_file)), env, log)
+    """Run update-center2 once in batch mode.
+
+    It generates every update site listed in arguments_file.
+    """
+    run(
+        java_command(
+            settings,
+            '--resources-dir',
+            str(resources),
+            '--arguments-file',
+            str(arguments_file),
+        ),
+        env,
+        log,
+    )

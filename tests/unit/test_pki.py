@@ -1,4 +1,7 @@
-"""Unit tests for uc.pki: the root/signing certificate chain, its validity checks and rotation."""
+"""Unit tests for uc.pki.
+
+The root/signing certificate chain, its validity checks and rotation.
+"""
 
 import base64
 import datetime as dt
@@ -19,8 +22,12 @@ from uc.pki import (
 
 
 def test_init_creates_a_valid_chain(pki_material):
-    assert verify_chain(pki_material / 'root-ca.crt', pki_material / 'update-center.cert')
-    assert key_matches_cert(pki_material / 'update-center.key', pki_material / 'update-center.cert')
+    assert verify_chain(
+        pki_material / 'root-ca.crt', pki_material / 'update-center.cert'
+    )
+    assert key_matches_cert(
+        pki_material / 'update-center.key', pki_material / 'update-center.cert'
+    )
     assert (pki_material / 'root' / 'root-ca.key').is_file()
     assert not (pki_material / 'root-ca.key').exists()
     assert (pki_material / 'update-center.key').stat().st_mode & 0o777 == 0o600
@@ -61,29 +68,58 @@ def test_org_with_slash_is_rejected(tmp_path):
 def test_rotate_issues_a_new_cert_under_the_same_root(pki_material, tmp_path):
     work = tmp_path / 'pki'
     shutil.copytree(pki_material, work)
-    previous = {name: (work / name).read_bytes() for name in ('update-center.key', 'update-center.cert')}
+    previous = {
+        name: (work / name).read_bytes()
+        for name in ('update-center.key', 'update-center.cert')
+    }
     rotate_signing(work, days=5)
     assert (work / 'update-center.cert').read_bytes() != previous['update-center.cert']
     assert verify_chain(work / 'root-ca.crt', work / 'update-center.cert')
     assert key_matches_cert(work / 'update-center.key', work / 'update-center.cert')
     assert (work / 'update-center.key').stat().st_mode & 0o777 == 0o600
     assert {name: (work / f'{name}.old').read_bytes() for name in previous} == previous
-    assert sorted(path.name for path in work.iterdir()) == ['root', 'root-ca.crt', 'update-center.cert', 'update-center.cert.old', 'update-center.key', 'update-center.key.old']
+    assert sorted(path.name for path in work.iterdir()) == [
+        'root',
+        'root-ca.crt',
+        'update-center.cert',
+        'update-center.cert.old',
+        'update-center.key',
+        'update-center.key.old',
+    ]
 
 
 def test_cert_der_b64_matches_openssl(pki_material):
     der = subprocess.run(
-        ['openssl', 'x509', '-in', str(pki_material / 'update-center.cert'), '-outform', 'DER'],
+        [
+            'openssl',
+            'x509',
+            '-in',
+            str(pki_material / 'update-center.cert'),
+            '-outform',
+            'DER',
+        ],
         capture_output=True,
         check=True,
     ).stdout
-    assert cert_der_b64(pki_material / 'update-center.cert') == base64.b64encode(der).decode()
+    assert (
+        cert_der_b64(pki_material / 'update-center.cert')
+        == base64.b64encode(der).decode()
+    )
 
 
 def test_key_mismatch_is_detected(pki_material, tmp_path):
     other = tmp_path / 'other.key'
     subprocess.run(
-        ['openssl', 'genpkey', '-algorithm', 'RSA', '-pkeyopt', 'rsa_keygen_bits:2048', '-out', str(other)],
+        [
+            'openssl',
+            'genpkey',
+            '-algorithm',
+            'RSA',
+            '-pkeyopt',
+            'rsa_keygen_bits:2048',
+            '-out',
+            str(other),
+        ],
         check=True,
         capture_output=True,
     )

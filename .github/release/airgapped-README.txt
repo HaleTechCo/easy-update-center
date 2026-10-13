@@ -8,7 +8,7 @@ Easy Update Center for Jenkins @VERSION@: air-gapped bundle for linux/@ARCH@
    same Release:
 
      cosign verify-blob --bundle SHA256SUMS.sigstore.json \
-       --certificate-identity https://github.com/HaleTechCo/easy-update-center/.github/workflows/release.yml@refs/heads/main \
+       --certificate-identity https://github.com/HaleTechCo/easy-update-center/.github/workflows/release.yml@refs/tags/v@VERSION@ \
        --certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS
      sha256sum --check --ignore-missing SHA256SUMS
 
@@ -19,10 +19,8 @@ Easy Update Center for Jenkins @VERSION@: air-gapped bundle for linux/@ARCH@
      cd easy-update-center-@VERSION@
      cp .env.airgapped.example .env
 
-3. In .env, set PUBLIC_URL, REPO_URL and REPO_KEY, uncomment COMPOSE_FILE, and set:
-
-     UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:@VERSION@
-     WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:@VERSION@
+3. In .env, set PUBLIC_URL, REPO_URL, REPO_KEY and DOWNLOAD_BACKEND_URL, and uncomment COMPOSE_FILE.
+   compose.yaml already names the images you loaded.
 
 4. Run docker compose run --rm setup, then continue with docs/getting-started/airgapped.md
    from "Add credentials".

@@ -151,12 +151,12 @@ directory, not by the containers.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `COMPOSE_FILE` | `compose.yaml` | The Compose files every plain `docker compose` command uses. Set it whenever you use an override, in either mode, so later commands keep it: `compose.yaml:compose.airgapped.yaml` air-gapped, plus `compose.tls.yaml`, `compose.repo-ca.yaml` or `compose.proxy-ca.yaml` when you use them. On Windows, separate the files with `;`. Without it, add `-f` for each file to every command. |
+| `COMPOSE_FILE` | `compose.yaml` | The Compose files every plain `docker compose` command uses. Set it whenever you use an override, in either mode, so later commands keep it: `compose.yaml:compose.airgapped.yaml` air-gapped, plus `compose.tls.yaml`, `compose.repo-ca.yaml` or `compose.proxy-ca.yaml` when you use them, and `compose.build.yaml` to run images built from your checkout ([Or build from source](../getting-started/online.md#or-build-from-source)). On Windows, separate the files with `;`. Without it, add `-f` for each file to every command. |
 | `UC_ENV_FILE` | `.env` | The file every uc-image service loads as `env_file`; web takes its variables from Compose's own `.env` (or `--env-file`). Lets several configurations sit side by side. |
 | `UC_UID` | `10001` | The user id every container runs as. On Linux, set it to the output of `id -u`, so the files in `secrets/` and `procurement/` stay yours. |
 | `UC_GID` | `10001` | The group id every container runs as. On Linux, the output of `id -g`. |
-| `UC_IMAGE` | `easy-update-center/uc:local` | The image for `uc`, `scheduler`, `repo-adapter` and `setup`. |
-| `WEB_IMAGE` | `easy-update-center/web:local` | The image for `web`. |
+| `UC_IMAGE` | this release's | The image for `uc`, `scheduler`, `repo-adapter` and `setup`. Unset, `compose.yaml` names this release's, `ghcr.io/haletechco/easy-update-center-uc:<version>`, and `compose.build.yaml` names `easy-update-center/uc:local`. |
+| `WEB_IMAGE` | this release's | The image for `web`: `ghcr.io/haletechco/easy-update-center-web:<version>`, or `easy-update-center/web:local` with `compose.build.yaml`. |
 | `HTTP_PORT` | `8080` | Host port published for the web container's HTTP listener. |
 | `HTTPS_PORT` | `8443` | Host port published for the web container's TLS listener. |
 

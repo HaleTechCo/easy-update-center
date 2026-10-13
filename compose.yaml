@@ -3,12 +3,13 @@
 #   online:     docker compose up -d
 #   air-gapped: docker compose -f compose.yaml -f compose.airgapped.yaml up -d
 #   one-shot:   docker compose run --rm uc doctor | procure | generate | rollback | status
+# The images are this release's on GHCR; tools/release.py prepare sets their version. To run images
+# built from this checkout instead, add compose.build.yaml (docs/getting-started/online.md#or-build-from-source).
 name: easy-update-center
 
 x-uc: &uc
-  image: ${UC_IMAGE:-easy-update-center/uc:local}
+  image: ${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}
   user: "${UC_UID:-10001}:${UC_GID:-10001}"  # docs/reference/configuration.md#compose
-  build: {context: uc, target: runtime}
   env_file: ${UC_ENV_FILE:-.env}
   read_only: true
   tmpfs:
@@ -30,9 +31,8 @@ x-uc: &uc
 
 services:
   web:
-    image: ${WEB_IMAGE:-easy-update-center/web:local}
+    image: ${WEB_IMAGE:-ghcr.io/haletechco/easy-update-center-web:0.1.0}
     user: "${UC_UID:-10001}:${UC_GID:-10001}"
-    build: {context: web}
     read_only: true
     tmpfs:
       - /tmp
@@ -60,9 +60,8 @@ services:
   # `setup secrets | pki-init | pki-rotate` (docs/reference/cli.md#the-setup-service). No network, no
   # compose secrets, no settings; it writes only ./secrets.
   setup:
-    image: ${UC_IMAGE:-easy-update-center/uc:local}
+    image: ${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}
     user: "${UC_UID:-10001}:${UC_GID:-10001}"
-    build: {context: uc, target: runtime}
     profiles: ["setup"]
     network_mode: none
     entrypoint: ["uc-setup"]
@@ -75,9 +74,8 @@ services:
   # Answers the generator's Artifactory requests from Artifactory or Artifact Keeper and fills in POMs,
   # descriptions and release dates from the archives. Idle when REPO_ADAPTER is off (the online default).
   repo-adapter:
-    image: ${UC_IMAGE:-easy-update-center/uc:local}
+    image: ${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}
     user: "${UC_UID:-10001}:${UC_GID:-10001}"
-    build: {context: uc, target: runtime}
     env_file: ${UC_ENV_FILE:-.env}
     command: ["repo-adapter"]
     read_only: true

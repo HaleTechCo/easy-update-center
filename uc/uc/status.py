@@ -1,6 +1,9 @@
-"""status.json on the data volume, served at /status.json (docs/reference/status-json.md).
+"""status.json on the data volume, served at /status.json.
 
-Every write holds DATA/.status.lock, so a generation and a recorded doctor report never lose each other's fields.
+See docs/reference/status-json.md.
+
+Every write holds DATA/.status.lock, so a generation and a recorded doctor report never
+lose each other's fields.
 """
 
 from __future__ import annotations
@@ -20,7 +23,10 @@ LOCK_FILE = '.status.lock'
 
 
 def read_status(data_dir: Path) -> dict[str, Any]:
-    """Return status.json as a dict; empty when it is missing, unreadable JSON or not an object."""
+    """Return status.json as a dict.
+
+    Empty when it is missing, unreadable JSON or not an object.
+    """
     try:
         value = json.loads((data_dir / STATUS_FILE).read_text(encoding='utf-8'))
     except (FileNotFoundError, ValueError):
@@ -40,12 +46,17 @@ def locked(data_dir: Path) -> Iterator[None]:
         os.close(fd)  # closing the descriptor releases the lock
 
 
-def write_status(data_dir: Path, status: dict[str, Any], *, keep: Iterable[str] = ()) -> None:
-    """Replace status.json atomically, carrying over from the current document each field named in keep that status leaves None.
+def write_status(
+    data_dir: Path, status: dict[str, Any], *, keep: Iterable[str] = ()
+) -> None:
+    """Replace status.json atomically, carrying over fields from the current document.
 
-    A name in keep can also be block.field, a field inside a block: when both documents have the block and status's
-    block leaves the field None (or out), the field keeps its current value. uc generate keeps doctor.missing_cores,
-    doctor.cores_unchecked and doctor.recorded_at this way, because only uc doctor --record works them out.
+    It carries over each field named in keep that status leaves None.
+
+    A name in keep can also be block.field, a field inside a block: when both documents
+    have the block and status's block leaves the field None (or out), the field keeps
+    its current value. uc generate keeps doctor.missing_cores, doctor.cores_unchecked
+    and doctor.recorded_at this way, because only uc doctor --record works them out.
     """
     with locked(data_dir):
         current = read_status(data_dir) if keep else {}
@@ -57,7 +68,12 @@ def write_status(data_dir: Path, status: dict[str, Any], *, keep: Iterable[str] 
                     merged[name] = current[name]
                 continue
             mine, theirs = merged.get(block), current.get(block)
-            if isinstance(mine, dict) and isinstance(theirs, dict) and mine.get(field) is None and theirs.get(field) is not None:
+            if (
+                isinstance(mine, dict)
+                and isinstance(theirs, dict)
+                and mine.get(field) is None
+                and theirs.get(field) is not None
+            ):
                 merged[block] = {**mine, field: theirs[field]}
         _write(data_dir, merged)
 
@@ -74,6 +90,8 @@ def update_status(data_dir: Path, **fields: Any) -> dict[str, Any]:
 def _write(data_dir: Path, status: dict[str, Any]) -> None:
     """Write a world-readable temporary file, then rename it over status.json."""
     tmp = data_dir / '.status.json.tmp'
-    tmp.write_text(json.dumps(status, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+    tmp.write_text(
+        json.dumps(status, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+    )
     tmp.chmod(0o644)
     tmp.replace(data_dir / STATUS_FILE)

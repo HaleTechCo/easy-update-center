@@ -1,4 +1,7 @@
-"""Unit tests for uc.htaccess: the root .htaccess rendered from upstream's script, minus its download redirects."""
+"""Unit tests for uc.htaccess.
+
+The root .htaccess rendered from upstream's script, minus its download redirects.
+"""
 
 import re
 from pathlib import Path
@@ -31,7 +34,9 @@ def test_full_tiers_keep_routing_and_drop_download_redirects():
     assert 'RewriteCond %{QUERY_STRING} ^.*uctest$' in text
     for rule in UPSTREAM_DOWNLOAD_RULES:
         assert rule not in text
-    assert absolute_targets(text) == []  # upstream's comments still mention get.jenkins.io; rules do not
+    assert (
+        absolute_targets(text) == []
+    )  # upstream's comments still mention get.jenkins.io; rules do not
 
 
 def test_weekly_only_routes_lts_to_current():
@@ -57,10 +62,16 @@ def test_zero_tiers_use_the_static_template():
 
 
 def test_upstream_changes_are_detected():
-    with pytest.raises(HtaccessError, match=re.escape('upstream generate-htaccess.sh changed')):
-        strip_download_rules('RewriteEngine on\n' + '\n'.join(UPSTREAM_DOWNLOAD_RULES[:4]))
+    with pytest.raises(
+        HtaccessError, match=re.escape('upstream generate-htaccess.sh changed')
+    ):
+        strip_download_rules(
+            'RewriteEngine on\n' + '\n'.join(UPSTREAM_DOWNLOAD_RULES[:4])
+        )
     with pytest.raises(HtaccessError, match='found 2'):
-        strip_download_rules('\n'.join(UPSTREAM_DOWNLOAD_RULES + UPSTREAM_DOWNLOAD_RULES[:1]))
+        strip_download_rules(
+            '\n'.join(UPSTREAM_DOWNLOAD_RULES + UPSTREAM_DOWNLOAD_RULES[:1])
+        )
     with pytest.raises(HtaccessError, match='partial tier list'):
         fix_partial_tiers('RewriteEngine on\n', has_weekly=True, has_stable=False)
 

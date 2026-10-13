@@ -1,16 +1,16 @@
 """pre-commit shim: run a tool if it is on PATH, otherwise skip cleanly.
 
 The shell spelling would be ``bash -c 'command -v TOOL || exit 0; exec TOOL ...'``.
-That is not portable: on Windows the ``bash`` on PATH can be WSL bash, which has its own PATH
-and its own ``/mnt/c`` view of the filesystem, so the Windows toolchain is invisible to it and
-the staged paths do not resolve. This shim does the same job with the venv's Python, which
-pre-commit already requires.
+That is not portable: on Windows the ``bash`` on PATH can be WSL bash, which has its
+own PATH and its own ``/mnt/c`` view of the filesystem, so the Windows toolchain is
+invisible to it and the staged paths do not resolve. This shim does the same job with
+the venv's Python, which pre-commit already requires.
 
 Usage (from a hook entry):
   python tools/run_optional.py TOOL [ARG ...]
 
-pre-commit appends the staged paths after ARGs, so they are forwarded as-is. Exits 0 when
-TOOL is absent, otherwise returns TOOL's exit code.
+pre-commit appends the staged paths after ARGs, so they are forwarded as-is. Exits 0
+when TOOL is absent, otherwise returns TOOL's exit code.
 """
 
 import shutil

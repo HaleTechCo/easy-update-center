@@ -5,8 +5,9 @@ this project's Release workflow and have not been changed since.
 
 ## What is signed
 
-Every release is built and signed by one workflow, `release.yml` on `main` of
-`HaleTechCo/easy-update-center`, and by nothing else. It signs:
+Every release is built and signed by one workflow, `release.yml` of
+`HaleTechCo/easy-update-center`, running on the release's tag `v<version>`, and by nothing else. It
+signs:
 
 - **Each image** (`ghcr.io/haletechco/easy-update-center-uc` and `-web`), with cosign, keyless: the
   signature proves which workflow built it, with no key to manage.
@@ -16,10 +17,11 @@ Every release is built and signed by one workflow, `release.yml` on `main` of
   air-gapped bundles and the SBOM files. It is signed with cosign `sign-blob`, and the signature is
   `SHA256SUMS.sigstore.json`.
 
-The identity every check below expects is the workflow and its issuer:
+The identity every check below expects is the workflow on that tag, and its issuer. With the
+release's version in place of `<version>` (for example `1.0.0`):
 
 ```bash
-IDENTITY=https://github.com/HaleTechCo/easy-update-center/.github/workflows/release.yml@refs/heads/main
+IDENTITY=https://github.com/HaleTechCo/easy-update-center/.github/workflows/release.yml@refs/tags/v<version>
 ISSUER=https://token.actions.githubusercontent.com
 ```
 

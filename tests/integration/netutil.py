@@ -26,19 +26,34 @@ class Response:
 def fetch(url: str, headers: dict[str, str] | None = None) -> Response:
     """GET without following redirects."""
     parts = urlsplit(url)
-    connection_class = http.client.HTTPSConnection if parts.scheme == 'https' else http.client.HTTPConnection
+    connection_class = (
+        http.client.HTTPSConnection
+        if parts.scheme == 'https'
+        else http.client.HTTPConnection
+    )
     connection = connection_class(parts.hostname, parts.port, timeout=30)
     try:
         path = parts.path + (f'?{parts.query}' if parts.query else '')
-        connection.request('GET', path or '/', headers={'User-Agent': 'uc-integration-test', **(headers or {})})
+        connection.request(
+            'GET',
+            path or '/',
+            headers={'User-Agent': 'uc-integration-test', **(headers or {})},
+        )
         response = connection.getresponse()
-        return Response(response.status, {k.lower(): v for k, v in response.getheaders()}, response.read())
+        return Response(
+            response.status,
+            {k.lower(): v for k, v in response.getheaders()},
+            response.read(),
+        )
     finally:
         connection.close()
 
 
 def get(url: str) -> bytes:
-    with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'uc-integration-test'}), timeout=120) as response:
+    with urllib.request.urlopen(
+        urllib.request.Request(url, headers={'User-Agent': 'uc-integration-test'}),
+        timeout=120,
+    ) as response:
         return response.read()
 
 

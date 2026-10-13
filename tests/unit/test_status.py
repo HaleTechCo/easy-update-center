@@ -10,7 +10,10 @@ def test_status_roundtrip(tmp_path):
     write_status(tmp_path, {'live_release': 'a'})
     assert read_status(tmp_path) == {'live_release': 'a'}
     assert (tmp_path / 'status.json').stat().st_mode & 0o777 == 0o644
-    assert update_status(tmp_path, plugin_count=3) == {'live_release': 'a', 'plugin_count': 3}
+    assert update_status(tmp_path, plugin_count=3) == {
+        'live_release': 'a',
+        'plugin_count': 3,
+    }
     assert read_status(tmp_path)['plugin_count'] == 3
 
 
@@ -46,13 +49,21 @@ def test_keep_holds_a_field_the_writer_has_no_value_for(tmp_path):
 
 def test_keep_holds_a_field_of_a_block_the_writer_has_no_value_for(tmp_path):
     keep = ('doctor', 'doctor.missing_cores', 'doctor.recorded_at')
-    write_status(tmp_path, {'doctor': {'plugins': 1, 'missing_cores': 2, 'recorded_at': 'r'}})
+    write_status(
+        tmp_path, {'doctor': {'plugins': 1, 'missing_cores': 2, 'recorded_at': 'r'}}
+    )
     write_status(tmp_path, {'doctor': {'plugins': 3, 'missing_cores': None}}, keep=keep)
-    assert read_status(tmp_path) == {'doctor': {'plugins': 3, 'missing_cores': 2, 'recorded_at': 'r'}}
+    assert read_status(tmp_path) == {
+        'doctor': {'plugins': 3, 'missing_cores': 2, 'recorded_at': 'r'}
+    }
     write_status(tmp_path, {'doctor': {'plugins': 4, 'missing_cores': 5}}, keep=keep)
-    assert read_status(tmp_path) == {'doctor': {'plugins': 4, 'missing_cores': 5, 'recorded_at': 'r'}}
+    assert read_status(tmp_path) == {
+        'doctor': {'plugins': 4, 'missing_cores': 5, 'recorded_at': 'r'}
+    }
     write_status(tmp_path, {'doctor': None}, keep=keep)
-    assert read_status(tmp_path) == {'doctor': {'plugins': 4, 'missing_cores': 5, 'recorded_at': 'r'}}
+    assert read_status(tmp_path) == {
+        'doctor': {'plugins': 4, 'missing_cores': 5, 'recorded_at': 'r'}
+    }
     write_status(tmp_path, {})
     write_status(tmp_path, {'doctor': {'plugins': 6, 'missing_cores': None}}, keep=keep)
     assert read_status(tmp_path) == {'doctor': {'plugins': 6, 'missing_cores': None}}

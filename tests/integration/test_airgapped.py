@@ -1,7 +1,7 @@
 """Air-gapped end to end (CONTRIBUTING.md#tests).
 
-Doctor, generate through the repo-adapter, serve, and real Jenkins controllers installing plugins.
-`make it-airgapped` runs it once per repository type.
+Doctor, generate through the repo-adapter, serve, and real Jenkins controllers
+installing plugins. `make it-airgapped` runs it once per repository type.
 """
 
 from __future__ import annotations
@@ -50,15 +50,22 @@ println("CORE=" + site.data?.core?.version)
 println("PLUGINS=" + (site.data?.plugins?.size() ?: 0))
 """
 
-INSTALL = """
-import jenkins.model.Jenkins
-def futures = Jenkins.get().pluginManager.install(["%(plugin)s"], true)
-println("INSTALL=" + futures.collect { it.get().status.getClass().simpleName }.join(","))
-"""
+INSTALL = (
+    '\nimport jenkins.model.Jenkins\n'
+    'def futures = Jenkins.get().pluginManager.install(["%(plugin)s"], true)\n'
+    'println("INSTALL=" + futures.collect '
+    '{ it.get().status.getClass().simpleName }.join(","))\n'
+)
 
 
 def uc(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, '-m', 'uc', *args], env={**os.environ, **(env or {})}, capture_output=True, text=True, check=False)
+    return subprocess.run(
+        [sys.executable, '-m', 'uc', *args],
+        env={**os.environ, **(env or {})},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def parse(output: str) -> dict[str, str]:
@@ -69,23 +76,45 @@ def test_doctor_reports_the_seeded_defects():
     result = uc('doctor', '--fetch', '--json')
     assert result.returncode == 1, result.stderr  # something is dropped, by design
     report = json.loads(result.stdout)
-    assert report['hpi_without_pom'] == ['io/jenkins/uctest/uc-test-nopom/1.0/uc-test-nopom-1.0.hpi']
+    assert report['hpi_without_pom'] == [
+        'io/jenkins/uctest/uc-test-nopom/1.0/uc-test-nopom-1.0.hpi'
+    ]
     assert 'uc-test-stubpom:1.0' in report['stub_poms']
     assert report['missing_dependencies'] == []
-    assert sorted(report['cores']) == sorted(set(SEEDED['cores']))  # WAR POMs derived where missing
+    assert sorted(report['cores']) == sorted(
+        set(SEEDED['cores'])
+    )  # WAR POMs derived where missing
     adapter = report['repo_adapter']
     assert adapter['misplaced'] == [
         {
-            'path': 'org/jenkins-ci/plugins/uc-test-misplaced/1.0/uc-test-misplaced-1.0.hpi',
-            'correct_path': 'io/jenkins/uctest/uc-test-misplaced/1.0/uc-test-misplaced-1.0.hpi',
+            'path': (
+                'org/jenkins-ci/plugins/uc-test-misplaced/1.0/uc-test-misplaced-1.0.hpi'
+            ),
+            'correct_path': (
+                'io/jenkins/uctest/uc-test-misplaced/1.0/uc-test-misplaced-1.0.hpi'
+            ),
         }
     ]
-    assert [item['reason'] for item in adapter['replaced_poms']] == ['not XML']  # the saved error page
+    assert [item['reason'] for item in adapter['replaced_poms']] == [
+        'not XML'
+    ]  # the saved error page
     derived = {item['gav'].split(':')[1] for item in adapter['derived_poms']}
-    assert all(item['url'].startswith('https://repo.jenkins-ci.org/releases/') and item['url'].endswith('.pom') for item in adapter['derived_poms'])
-    assert {TOP_PLUGIN, SEEDED['html_pom'], 'uc-test-old-a', 'uc-test-old-b', 'jenkins-war'} <= derived
+    assert all(
+        item['url'].startswith('https://repo.jenkins-ci.org/releases/')
+        and item['url'].endswith('.pom')
+        for item in adapter['derived_poms']
+    )
+    assert {
+        TOP_PLUGIN,
+        SEEDED['html_pom'],
+        'uc-test-old-a',
+        'uc-test-old-b',
+        'jenkins-war',
+    } <= derived
     assert SEEDED['real_pom'] not in derived  # the repository's own POM wins
-    assert [item['gav'] for item in adapter['needs_pom']] == ['io.jenkins.uctest:uc-test-nopom:1.0']
+    assert [item['gav'] for item in adapter['needs_pom']] == [
+        'io.jenkins.uctest:uc-test-nopom:1.0'
+    ]
     assert adapter['skipped'] == []
 
 
@@ -104,29 +133,48 @@ def test_generation_succeeds_offline_with_only_warnings(release):
     assert release['doctor']['hpi_without_pom'] == 1
     assert release['doctor']['repo_adapter']['misplaced'] == 1
     plugins = json.loads(get(WEB + '/current/update-center.actual.json'))['plugins']
-    assert 'uc-test-stubpom' in plugins  # a stub POM degrades metadata but is still published
-    assert 'uc-test-nopom' not in plugins  # no POM anywhere: dropped by the generator, as uc doctor predicted
+    assert (
+        'uc-test-stubpom' in plugins
+    )  # a stub POM degrades metadata but is still published
+    assert (
+        'uc-test-nopom' not in plugins
+    )  # no POM anywhere: dropped by the generator, as uc doctor predicted
     assert 'uc-test-misplaced' not in plugins  # its manifest names another group
-    assert {TOP_PLUGIN, SEEDED['html_pom'], 'uc-test-old-a', 'uc-test-old-b'} <= set(plugins)
+    assert {TOP_PLUGIN, SEEDED['html_pom'], 'uc-test-old-a', 'uc-test-old-b'} <= set(
+        plugins
+    )
     assert release['plugin_count'] == release['doctor']['plugins'] == len(plugins)
 
 
 @pytest.mark.usefixtures('release')
 def test_doctor_record_saves_the_report_and_its_counts():
     result = uc('doctor', '--record')
-    assert result.returncode in {0, 1}, result.stderr  # 1 when the seeded repository drops something, as it does
-    assert 'saved the report as /data/doctor/report.json' in result.stdout, result.stderr
+    assert result.returncode in {0, 1}, (
+        result.stderr
+    )  # 1 when the seeded repository drops something, as it does
+    assert 'saved the report as /data/doctor/report.json' in result.stdout, (
+        result.stderr
+    )
     status = json.loads(Path('/data/status.json').read_text(encoding='utf-8'))
     assert status['doctor']['checked_at'].endswith('Z')
     assert status['doctor']['missing_cores'] is not None
-    assert json.loads(Path('/data/doctor/report.json').read_text(encoding='utf-8'))['plugins'] > 0
+    assert (
+        json.loads(Path('/data/doctor/report.json').read_text(encoding='utf-8'))[
+            'plugins'
+        ]
+        > 0
+    )
 
 
 @pytest.mark.usefixtures('release')
 def test_descriptions_are_read_from_inside_the_archives():
     plugins = json.loads(get(WEB + '/current/update-center.actual.json'))['plugins']
-    assert plugins[TOP_PLUGIN]['excerpt']  # no .jar in the repository: index.jelly from the .hpi
-    assert 'integration-test plugin' in plugins['uc-test-old-a']['excerpt']  # WEB-INF/classes/index.jelly
+    assert plugins[TOP_PLUGIN][
+        'excerpt'
+    ]  # no .jar in the repository: index.jelly from the .hpi
+    assert (
+        'integration-test plugin' in plugins['uc-test-old-a']['excerpt']
+    )  # WEB-INF/classes/index.jelly
 
 
 @pytest.mark.usefixtures('release')
@@ -135,25 +183,40 @@ def test_release_dates_are_read_from_the_archives():
     with zipfile.ZipFile(path) as archive:
         built = archive_date(archive)
     version = path.parent.name
-    stamp = json.loads(get(WEB + '/current/plugin-versions.json'))['plugins'][TOP_PLUGIN][version]['releaseTimestamp']
-    released = dt.datetime.strptime(stamp[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=dt.UTC)
+    stamp = json.loads(get(WEB + '/current/plugin-versions.json'))['plugins'][
+        TOP_PLUGIN
+    ][version]['releaseTimestamp']
+    released = dt.datetime.strptime(stamp[:19], '%Y-%m-%dT%H:%M:%S').replace(
+        tzinfo=dt.UTC
+    )
     if plausible(built, dt.datetime.now(dt.UTC)) is None:
-        assert abs(released - built) < dt.timedelta(minutes=1)  # the build date, not the upload
+        assert abs(released - built) < dt.timedelta(
+            minutes=1
+        )  # the build date, not the upload
     else:
-        assert abs(released - dt.datetime.now(dt.UTC)) < dt.timedelta(days=1)  # reported fallback
+        assert abs(released - dt.datetime.now(dt.UTC)) < dt.timedelta(
+            days=1
+        )  # reported fallback
 
 
 def test_every_stored_core_that_plugins_require_gets_a_tier(release):
-    assert set(SEEDED['old_cores']) <= set(release['tiers']['stable'])  # CORE_AGE_DAYS=0, the default
+    assert set(SEEDED['old_cores']) <= set(
+        release['tiers']['stable']
+    )  # CORE_AGE_DAYS=0, the default
 
 
 @pytest.mark.usefixtures('release')
 def test_core_age_400_keeps_at_most_one_old_core():
-    result = uc('generate', env={'CORE_AGE_DAYS': '400', 'UC_DATA_DIR': '/data-age', **ADAPTER_DIR})
+    result = uc(
+        'generate',
+        env={'CORE_AGE_DAYS': '400', 'UC_DATA_DIR': '/data-age', **ADAPTER_DIR},
+    )
     assert result.returncode == 0, result.stdout[-4000:] + result.stderr[-4000:]
     stable = json.loads(Path('/data-age/status.json').read_text())['tiers']['stable']
     oldest = SEEDED['old_cores'][0]
-    assert oldest not in stable  # upstream keeps one core older than 400 days as the floor, then stops
+    assert (
+        oldest not in stable
+    )  # upstream keeps one core older than 400 days as the floor, then stops
 
 
 @pytest.mark.usefixtures('release')
@@ -195,23 +258,34 @@ def test_controller_trusts_the_signature_and_installs(controller):
     assert jenkins.version() == version
     configured = parse(jenkins.script(CONFIGURE % {'site': WEB}))
     assert configured['UPDATE'] == 'OK', configured.get('MESSAGE')
-    tier = json.loads(get(fetch(f'{WEB}/update-center.actual.json?version={version}').location))
-    assert int(configured['PLUGINS']) == len(tier['plugins'])  # Jenkins loaded the tier for its version
-    installed = parse(jenkins.script(INSTALL % {'plugin': TOP_PLUGIN}))['INSTALL'].split(',')
+    tier = json.loads(
+        get(fetch(f'{WEB}/update-center.actual.json?version={version}').location)
+    )
+    assert int(configured['PLUGINS']) == len(
+        tier['plugins']
+    )  # Jenkins loaded the tier for its version
+    installed = parse(jenkins.script(INSTALL % {'plugin': TOP_PLUGIN}))[
+        'INSTALL'
+    ].split(',')
     assert installed, installed
     assert all(status.startswith('Success') for status in installed), installed
 
 
 @pytest.mark.usefixtures('release')
 def test_proxy_mode_installs_without_anonymous_artifactory_access():
-    result = uc('generate', env={'PUBLIC_URL': WEB_PROXY, 'UC_DATA_DIR': '/data-proxy', **ADAPTER_DIR})
+    result = uc(
+        'generate',
+        env={'PUBLIC_URL': WEB_PROXY, 'UC_DATA_DIR': '/data-proxy', **ADAPTER_DIR},
+    )
     assert result.returncode == 0, result.stdout[-4000:] + result.stderr[-4000:]
     wait_for(WEB_PROXY + '/uctest.json')
     jenkins = Jenkins('http://jenkins-weekly:8080')
     jenkins.wait_ready()
     configured = parse(jenkins.script(CONFIGURE % {'site': WEB_PROXY}))
     assert configured['UPDATE'] == 'OK', configured.get('MESSAGE')
-    installed = parse(jenkins.script(INSTALL % {'plugin': TOP_PLUGIN}))['INSTALL'].split(',')
+    installed = parse(jenkins.script(INSTALL % {'plugin': TOP_PLUGIN}))[
+        'INSTALL'
+    ].split(',')
     assert installed, installed
     assert all(status.startswith('Success') for status in installed), installed
 
@@ -248,16 +322,37 @@ PROCURED = {
 
 def test_procurement_round_trip(tmp_path):
     stage = str(tmp_path / 'stage')
-    staged = uc('procure', 'stage', '--fetch', '--poms', '--dependencies', '--war', 'required', '--since', '2.999.1', '--staging', stage, env=PUSH)
+    staged = uc(
+        'procure',
+        'stage',
+        '--fetch',
+        '--poms',
+        '--dependencies',
+        '--war',
+        'required',
+        '--since',
+        '2.999.1',
+        '--staging',
+        stage,
+        env=PUSH,
+    )
     assert staged.returncode == 0, staged.stdout[-4000:] + staged.stderr[-4000:]
     files = json.loads(Path(stage, 'procurement.json').read_text())['files']
     assert set(files) == PROCURED
-    assert staged.stdout.rstrip().endswith(f'next: review {stage} (procurement.json lists {len(PROCURED)} files), then uc procure push')
-    assert files['org/jenkins-ci/plugins/uc-test-dep2/1.0/uc-test-dep2-1.0.hpi']['reason'] == 'uc-test-dep 1.0 requires uc-test-dep2 1.0'  # found through the fallback groups
+    assert staged.stdout.rstrip().endswith(
+        f'next: review {stage} (procurement.json lists {len(PROCURED)} files), '
+        'then uc procure push'
+    )
+    assert (
+        files['org/jenkins-ci/plugins/uc-test-dep2/1.0/uc-test-dep2-1.0.hpi']['reason']
+        == 'uc-test-dep 1.0 requires uc-test-dep2 1.0'
+    )  # found through the fallback groups
     pushed = uc('procure', 'push', '--staging', stage, env=PUSH)
     assert pushed.returncode == 0, pushed.stdout[-4000:] + pushed.stderr[-4000:]
     assert '7 uploaded, 0 already present, 0 problem(s)' in pushed.stdout
-    assert pushed.stdout.rstrip().endswith('next: uc generate (or wait for the schedule), then uc procure clean')
+    assert pushed.stdout.rstrip().endswith(
+        'next: uc generate (or wait for the schedule), then uc procure clean'
+    )
     after = uc('doctor', '--fetch', '--json', env=PUSH)
     assert after.returncode == 0, after.stdout[-4000:] + after.stderr[-4000:]
     report = json.loads(after.stdout)

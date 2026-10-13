@@ -1,4 +1,7 @@
-"""Unit tests for uc.layout: the site layout around the generator output and tool installer mirroring."""
+"""Unit tests for uc.layout.
+
+The site layout around the generator output and tool installer mirroring.
+"""
 
 from pathlib import Path
 
@@ -28,7 +31,9 @@ def test_finalize_layout_matches_upstream(tmp_path):
         assert (site / 'updates').readlink() == Path('../updates')
     assert (tmp_path / 'updates').is_dir()
     assert (tmp_path / 'stable').readlink() == Path('dynamic-stable-2.528.3')
-    assert (tmp_path / 'update-center.json').readlink() == Path('current/update-center.json')
+    assert (tmp_path / 'update-center.json').readlink() == Path(
+        'current/update-center.json'
+    )
     assert (tmp_path / 'latest').readlink() == Path('current/latest')
     assert (tmp_path / 'latestCore.txt').read_text() == '2.528.1'
     assert (tmp_path / 'uctest.json').read_bytes() == b'{}\n'
@@ -58,16 +63,25 @@ def getter(files):
     return get
 
 
-LISTING = b'<a href="?C=N;O=A">Name</a><a href="/">Parent</a><a href="hudson.tasks.Maven.MavenInstaller.json">x</a><a href="hudson.tasks.Maven.MavenInstaller.json.html">y</a>'
+LISTING = (
+    b'<a href="?C=N;O=A">Name</a><a href="/">Parent</a>'
+    b'<a href="hudson.tasks.Maven.MavenInstaller.json">x</a>'
+    b'<a href="hudson.tasks.Maven.MavenInstaller.json.html">y</a>'
+)
 
 
 def test_tool_installers_are_copied_verbatim(tmp_path):
     files = {
         INDEX: LISTING,
-        INDEX + MAVEN: b'downloadService.post(\'hudson.tasks.Maven.MavenInstaller\',{"list":[]})',
+        INDEX + MAVEN: (
+            b'downloadService.post(\'hudson.tasks.Maven.MavenInstaller\',{"list":[]})'
+        ),
         INDEX + MAVEN + '.html': b'<html>postMessage</html>',
     }
-    assert mirror_tool_installers(INDEX, tmp_path / 'updates', None, get=getter(files)) == []
+    assert (
+        mirror_tool_installers(INDEX, tmp_path / 'updates', None, get=getter(files))
+        == []
+    )
     assert (tmp_path / 'updates' / MAVEN).read_bytes() == files[INDEX + MAVEN]
     assert (tmp_path / 'updates' / (MAVEN + '.html')).is_file()
 
@@ -76,10 +90,18 @@ def test_bad_tool_installer_keeps_previous_copy(tmp_path):
     previous = tmp_path / 'previous'
     previous.mkdir()
     (previous / MAVEN).write_text("downloadService.post('old',{})")
-    files = {INDEX: LISTING, INDEX + MAVEN: b'<html>error page</html>', INDEX + MAVEN + '.html': b'x'}
-    warnings = mirror_tool_installers(INDEX, tmp_path / 'updates', previous, get=getter(files))
+    files = {
+        INDEX: LISTING,
+        INDEX + MAVEN: b'<html>error page</html>',
+        INDEX + MAVEN + '.html': b'x',
+    }
+    warnings = mirror_tool_installers(
+        INDEX, tmp_path / 'updates', previous, get=getter(files)
+    )
     assert 'kept the previous copy' in warnings[0]
-    assert (tmp_path / 'updates' / MAVEN).read_text() == "downloadService.post('old',{})"
+    assert (
+        tmp_path / 'updates' / MAVEN
+    ).read_text() == "downloadService.post('old',{})"
 
 
 def test_unreachable_tool_installers_without_previous(tmp_path):

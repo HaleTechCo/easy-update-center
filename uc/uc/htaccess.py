@@ -1,4 +1,8 @@
-"""The root .htaccess: upstream generate-htaccess.sh output minus its download redirects (docs/architecture/generation-pipeline.md#step-5-htaccess)."""
+"""The root .htaccess.
+
+Upstream generate-htaccess.sh output minus its download redirects
+(docs/architecture/generation-pipeline.md#step-5-htaccess).
+"""
 
 from __future__ import annotations
 
@@ -12,16 +16,32 @@ if TYPE_CHECKING:
 
     from .model import Tiers
 
-# The last five rules of upstream's output (site/generate-htaccess.sh:132-137). Downloads are
-# handled at server level instead (web/conf/uc-site.conf).
+# The last five rules of upstream's output (site/generate-htaccess.sh:132-137).
+# Downloads are handled at server level instead (web/conf/uc-site.conf).
 UPSTREAM_DOWNLOAD_RULES = (
-    'RewriteRule ^download/war/latest/jenkins[.]war$ https://updates.jenkins.io/latest/jenkins.war [NC,L,R=302]',
-    'RewriteRule ^download/plugins/(.*)/latest/(.+)[.]hpi$ https://updates.jenkins.io/latest/$2.hpi [NC,L,R=302]',
-    'RewriteRule ^download/war/([0-9]+[.][0-9]+[.][0-9]+/jenkins)[.]war$ https://get.jenkins.io/war-stable/$1.war [NC,L,R=302]',
-    'RewriteRule ^download/war/(.+)[.]war$ https://get.jenkins.io/war/$1.war [NC,L,R=302]',
-    'RewriteRule ^download/plugins/(.+)[.]hpi$ https://get.jenkins.io/plugins/$1.hpi [NC,L,R=302]',
+    (
+        'RewriteRule ^download/war/latest/jenkins[.]war$ '
+        'https://updates.jenkins.io/latest/jenkins.war [NC,L,R=302]'
+    ),
+    (
+        'RewriteRule ^download/plugins/(.*)/latest/(.+)[.]hpi$ '
+        'https://updates.jenkins.io/latest/$2.hpi [NC,L,R=302]'
+    ),
+    (
+        'RewriteRule ^download/war/([0-9]+[.][0-9]+[.][0-9]+/jenkins)[.]war$ '
+        'https://get.jenkins.io/war-stable/$1.war [NC,L,R=302]'
+    ),
+    (
+        'RewriteRule ^download/war/(.+)[.]war$ '
+        'https://get.jenkins.io/war/$1.war [NC,L,R=302]'
+    ),
+    (
+        'RewriteRule ^download/plugins/(.+)[.]hpi$ '
+        'https://get.jenkins.io/plugins/$1.hpi [NC,L,R=302]'
+    ),
 )
-# Targets upstream emits when one tier list is empty; they point nowhere, so send them to current/.
+# Targets upstream emits when one tier list is empty; they point nowhere, so send them
+# to current/.
 NO_STABLE_FIXES = (
     ('/dynamic-stable-%{REQUEST_URI}?', '/current%{REQUEST_URI}?'),
     ('"/dynamic-stable-/$1"', '"/current/$1"'),
@@ -34,7 +54,10 @@ class HtaccessError(UcError):
 
 
 def _changed(detail: str) -> HtaccessError:
-    return HtaccessError(f'{detail}; upstream generate-htaccess.sh changed, review it before upgrading (docs/development/upgrading-upstream.md)')
+    return HtaccessError(
+        f'{detail}; upstream generate-htaccess.sh changed, review it before upgrading '
+        '(docs/development/upgrading-upstream.md)'
+    )
 
 
 def strip_download_rules(text: str) -> str:
@@ -50,8 +73,13 @@ def strip_download_rules(text: str) -> str:
 
 
 def fix_partial_tiers(text: str, *, has_weekly: bool, has_stable: bool) -> str:
-    """Point the targets upstream leaves dangling when the weekly or stable tier list is empty at current/."""
-    fixes = (() if has_stable else NO_STABLE_FIXES) + (() if has_weekly else NO_WEEKLY_FIXES)
+    """Point the targets upstream leaves dangling at current/.
+
+    Upstream leaves them dangling when the weekly or stable tier list is empty.
+    """
+    fixes = (() if has_stable else NO_STABLE_FIXES) + (
+        () if has_weekly else NO_WEEKLY_FIXES
+    )
     for old, new in fixes:
         count = text.count(old)
         if count != 1:
@@ -62,16 +90,33 @@ def fix_partial_tiers(text: str, *, has_weekly: bool, has_stable: bool) -> str:
 
 
 def render_htaccess(tiers: Tiers, script: Path, template: Path) -> str:
-    """Return the root .htaccess: the static template without tiers, else generate-htaccess.sh's output, fixed up."""
+    """Return the root .htaccess.
+
+    The static template without tiers, else generate-htaccess.sh's output, fixed up.
+    """
     if tiers.empty:
         return template.read_text(encoding='utf-8')
-    proc = subprocess.run(['bash', str(script), *tiers.weekly, *tiers.stable], capture_output=True, text=True, check=False)
+    proc = subprocess.run(
+        ['bash', str(script), *tiers.weekly, *tiers.stable],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     if proc.returncode != 0:
         msg = f'generate-htaccess.sh failed ({proc.returncode}): {proc.stderr.strip()}'
         raise HtaccessError(msg)
-    return strip_download_rules(fix_partial_tiers(proc.stdout, has_weekly=bool(tiers.weekly), has_stable=bool(tiers.stable)))
+    return strip_download_rules(
+        fix_partial_tiers(
+            proc.stdout, has_weekly=bool(tiers.weekly), has_stable=bool(tiers.stable)
+        )
+    )
 
 
 def absolute_targets(text: str) -> list[str]:
     """Non-comment lines that mention an absolute http(s) URL."""
-    return [line for line in text.splitlines() if not line.lstrip().startswith('#') and ('http://' in line or 'https://' in line)]
+    return [
+        line
+        for line in text.splitlines()
+        if not line.lstrip().startswith('#')
+        and ('http://' in line or 'https://' in line)
+    ]

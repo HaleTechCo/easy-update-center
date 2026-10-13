@@ -1,21 +1,6 @@
-# Dev-only tooling for the venv that powers pre-commit. `uc` itself is stdlib-only and its tests
-# run in containers (`make test`), so this is the whole of the host-side Python install.
-#   python -m venv .venv
-#   .venv/Scripts/pip install -r requirements-dev.txt   # Linux: bin/pip
+# The one host-side Python install a contributor needs: pre-commit. It installs every hook's pinned
+# version itself (.pre-commit-config.yaml); `uc` is stdlib-only and its tests run in containers
+# (`make test`). In a venv or with pipx:
+#   pip install -r requirements-dev.txt
 #   pre-commit install
-#
-# NOT pip deps, install separately:
-#   go install mvdan.cc/sh/v3/cmd/shfmt@latest                                 # shfmt hook
-#   go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest   # golangci-lint hook
-#   Install-Module -Name PSScriptAnalyzer -Scope CurrentUser                   # psscriptanalyzer hook
-#
-# Deliberately unpinned: this is a local lint venv, not a delivered artifact, and an unpinned venv
-# picks up checker fixes without a bump commit. Worth knowing what that trades away: pyproject.toml
-# sets `select = ["ALL"]`, which opts in to rules that do not exist yet, so a minor ruff bump can
-# fail a commit that touched nothing. If that bites, pin the offending tool alone.
-pre-commit
-pre-commit-hooks   # the hygiene hooks the local config calls (trailing-whitespace-fixer, ...)
-ruff               # Python lint + format (config in pyproject.toml's [tool.ruff])
-shellcheck-py      # vendored shellcheck binary, on PATH inside the venv
-actionlint-py>=1.7.12  # vendored actionlint binary, on PATH inside the venv (GitHub Actions workflows); the floor: older releases reject the ubuntu-24.04 runner label
-yamllint           # YAML style hook
+pre-commit==4.6.2

@@ -1,16 +1,16 @@
 """pre-commit shim: lint a Dockerfile with hadolint, running it as a container.
 
-hadolint ships as a container rather than a binary, so the Dockerfile has to be piped in over
-stdin - the shell spelling would be ``docker run --rm -i hadolint/hadolint hadolint - <
-Dockerfile``. That redirect needs a shell, and on Windows the ``bash`` on PATH can be WSL bash
-(own PATH, ``/mnt/c`` paths), so this shim does the piping from Python instead. Inline
-``# hadolint ignore=`` directives in the Dockerfile still apply.
+hadolint ships as a container rather than a binary, so the Dockerfile has to be piped
+in over stdin - the shell spelling would be ``docker run --rm -i hadolint/hadolint
+hadolint - < Dockerfile``. That redirect needs a shell, and on Windows the ``bash`` on
+PATH can be WSL bash (own PATH, ``/mnt/c`` paths), so this shim does the piping from
+Python instead. Inline ``# hadolint ignore=`` directives in the Dockerfile still apply.
 
 Usage (from a hook entry):
   python tools/run_hadolint.py PATH/TO/Dockerfile
 
-Needs Docker running. Exits non-zero when Docker is unreachable, so a commit is not silently
-waved through - use `git commit --no-verify` when Docker is intentionally down.
+Needs Docker running. Exits non-zero when Docker is unreachable, so a commit is not
+silently waved through - use `git commit --no-verify` when Docker is intentionally down.
 """
 
 import subprocess
@@ -50,7 +50,9 @@ def main(argv: list[str]) -> int:
             # No docker binary at all. Fail rather than skip - a Dockerfile changed and
             # went unlinted - but say so plainly instead of raising a traceback.
             sys.stderr.write(
-                'docker is not on PATH, so the Dockerfile could not be linted.\nInstall Docker, or skip this hook once with SKIP=hadolint git commit ...\n',
+                'docker is not on PATH, so the Dockerfile could not be linted.\n'
+                'Install Docker, or skip this hook once with '
+                'SKIP=hadolint git commit ...\n',
             )
             return _INFRA_FAILURE
 
@@ -61,7 +63,8 @@ def main(argv: list[str]) -> int:
             sys.stderr.write(f'{path}: hadolint reported findings (above).\n')
         elif result.returncode:
             sys.stderr.write(
-                f'{path}: hadolint could not run (docker exit {result.returncode}); is the daemon running?\n',
+                f'{path}: hadolint could not run (docker exit {result.returncode}); '
+                'is the daemon running?\n',
             )
         worst = max(worst, result.returncode)
 

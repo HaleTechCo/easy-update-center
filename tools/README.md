@@ -1,26 +1,23 @@
-# `tools/` - pre-commit shims
+# `tools/` - this repository's own hooks and the release helper
 
 **This directory is not project code.** Nothing here generates, signs or serves an update center.
-It holds the small helper scripts that [`.pre-commit-config.yaml`](../.pre-commit-config.yaml)
-invokes, and `release.py`, the Release workflow's helper. Nothing else imports it. The update center itself is the `uc` package under
-[`uc/uc/`](../uc/uc/) and the web image under [`web/`](../web/). For contributing in general, see
-[CONTRIBUTING.md](../CONTRIBUTING.md).
+It holds the checks and shims that [`.pre-commit-config.yaml`](../.pre-commit-config.yaml)
+runs as `local` hooks, and `release.py`, the release helper. Nothing else imports it. The update
+center itself is the `uc` package under [`uc/uc/`](../uc/uc/) and the web image under
+[`web/`](../web/). For contributing in general, see [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ## Setup
 
-The venv and the hooks: [CONTRIBUTING.md](../CONTRIBUTING.md#set-up). Every hook is
-`language: system`, so the venv must be active when you `git commit`.
+pre-commit and the hooks: [CONTRIBUTING.md](../CONTRIBUTING.md#set-up). The hooks in this
+directory are the `local` ones in `.pre-commit-config.yaml`; pre-commit runs them in its own Python
+environment, so they need nothing installed.
 
-## Why these exist at all
+## Why the shims are Python
 
-Every hook in this repo is `repo: local` + `language: system`, so nothing is cloned at install or
-run time. That leaves one problem: a hook sometimes needs to change directory, skip cleanly when a
-tool is absent, or redirect stdin - things a plain `entry:` line cannot do.
-
-The obvious answer would be `bash -c`. It is not portable: on Windows the `bash` on PATH can be WSL
-bash, with its own PATH (the Windows toolchain is invisible to it) and its own `/mnt/c` view
-(staged paths do not resolve). So the wrappers below are Python instead, and run on the venv
-interpreter pre-commit already needs.
+A hook sometimes needs to skip cleanly when a tool is absent, or redirect stdin - things a plain
+`entry:` line cannot do. The obvious answer would be `bash -c`. It is not portable: on Windows the
+`bash` on PATH can be WSL bash, with its own PATH (the Windows toolchain is invisible to it) and its
+own `/mnt/c` view (staged paths do not resolve). So the wrappers below are Python instead.
 
 ## What each file does
 
@@ -29,27 +26,20 @@ interpreter pre-commit already needs.
 | `check_doc_links.py` | Checks that every relative Markdown link, and every bare `path/to/page.md#anchor` token in a comment of any other tracked file that can hold one (Python, YAML, shell, `.conf`, Makefile, Dockerfiles, `.env` examples), resolves - file and heading anchor both. Scans the whole tracked tree on every run, so renaming a heading is caught by the links pointing AT it, not only the ones in the files you changed. Anchors follow GitHub's heading algorithm. |
 | `check_settings_documented.py` | Fails when the settings the code reads (`uc/uc/config.py`, `web/entrypoint.sh`, the compose files) and the settings [`docs/reference/configuration.md`](../docs/reference/configuration.md) documents differ, in either direction. Names under that page's "Read by bundled software" heading need no reader here. |
 | `check_gremlins.py` | Finds, and with `--fix` rewrites, Unicode "gremlins" in text files - smart quotes, em/en dashes, ellipses, NBSP, zero-width characters, BOMs, bidi controls. Run as a **fixer**, so it reports `Failed` on the run that changes a file. Box drawing, `§`, arrows and middle dots are left alone. |
-| `check_secrets.py` | Refuses a commit containing something that looks like a real provider credential - a Google/AWS/GitHub/Slack/Stripe/Postgres shape, an Artifactory API key or reference token, a JWT, or a general `scheme://user:pass@host` credentialed URL. A finding line shows a provider shape as its first twelve characters - enough to say which shape matched - and a credentialed URL as `scheme://user:***@`, the whole password masked. |
+| `check_secrets.py` | Refuses a commit containing a repository credential that GitHub's push protection does not catch - an Artifactory API key or reference token, a JWT, or a `scheme://user:pass@host` credentialed URL. A finding line shows a provider shape as its first twelve characters - enough to say which shape matched - and a credentialed URL as `scheme://user:***@`, the whole password masked. |
 | `run_optional.py` | Runs a tool if it is on PATH, otherwise exits 0. **Read the caveat below.** |
-| `run_in_dir.py` | Runs a tool with the working directory set to a subdirectory. |
 | `run_hadolint.py` | Lints a Dockerfile with hadolint, running it as a container. |
-| `run_psscriptanalyzer.py` | Lints staged `.ps1` files with PSScriptAnalyzer, skipping cleanly when it is absent. |
-| `run_psscriptanalyzer.ps1` | The PowerShell half of the above, at `-Severity Error`. |
-| `release.py` | The Release workflow's helper (see [Releasing](../docs/development/releasing.md)): `prepare` moves CHANGELOG.md's Unreleased entries under a version, `check` refuses a version the workflow must not publish, `notes` prints a version's section for the GitHub Release, `latest` prints the highest release. |
+| `release.py` | The release helper (see [Releasing](../docs/development/releasing.md)): `prepare` makes the release pull request's change (CHANGELOG.md's Unreleased entries under the version, `compose.yaml`'s images set to it), `check` refuses a tag the Release workflow must not publish, `notes` prints a version's section for the GitHub Release, `latest` prints the highest release. |
 
 These are ordinary repo code: ruff checks them exactly like the code under `uc/`.
 
 ## The thing that will bite you
 
-**`run_optional.py` skips silently, which is a real hazard.** A hook wrapped in it does not fail
-when its tool is missing; it passes. So a green commit is not evidence that hook actually ran.
-
-Before concluding a hook is inert, check whether its `entry:` actually routes through
-`run_optional.py`, and check PATH **with the venv active**. `shellcheck`, for one, ships as a
-precompiled binary in `.venv/Scripts/` via the `shellcheck-py` package, so `which shellcheck`
-outside the venv says nothing about whether its hook runs. The hooks wrapped this way here are
-`shfmt`, the Go hooks and the two `docker compose config` hooks; `hadolint` is not - it fails when
-Docker is unreachable, because a Dockerfile changed and went unlinted.
+**`run_optional.py` skips silently.** A hook wrapped in it does not fail when its tool is missing;
+it passes. The hooks wrapped this way are the three `docker compose config` hooks, so on a machine
+without Docker a green commit does not mean the compose files were validated (CI runs them).
+`hadolint` is not wrapped: it fails when Docker is unreachable, because a Dockerfile changed and
+went unlinted.
 
 ## Running them
 
@@ -58,6 +48,5 @@ They run as part of `pre-commit`; how to run them by hand, and how fixer hooks r
 
 ## Dependencies
 
-The shims use the standard library only. The tools they wrap (`shfmt`, `hadolint`, `docker`,
-`golangci-lint`, `go`, PSScriptAnalyzer) are installed separately; `shellcheck`, `ruff` and
-`yamllint` come from `requirements-dev.txt`.
+The shims use the standard library only. The tools they wrap, `docker` and hadolint (run as a
+container), come from the host.

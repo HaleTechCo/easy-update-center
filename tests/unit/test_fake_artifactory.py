@@ -1,4 +1,7 @@
-"""The test-only fake speaks the same three calls update-center2 makes, as seen by our own clients."""
+"""The test-only fake speaks the same three calls update-center2 makes.
+
+As seen by our own clients.
+"""
 
 import base64
 import hashlib
@@ -24,7 +27,10 @@ from uc.doctor import ArtifactSource
 def hpi(short_name: str) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w') as archive:
-        archive.writestr('META-INF/MANIFEST.MF', f'Manifest-Version: 1.0\r\nShort-Name: {short_name}\r\n\r\n')
+        archive.writestr(
+            'META-INF/MANIFEST.MF',
+            f'Manifest-Version: 1.0\r\nShort-Name: {short_name}\r\n\r\n',
+        )
     return buffer.getvalue()
 
 
@@ -37,7 +43,10 @@ def server(tmp_path):
     (tmp_path / 'jenkins' / 'README.txt').write_text('ignored')
 
     def start(anonymous_read):
-        httpd = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(tmp_path, 'uc:pw', anonymous_read=anonymous_read))
+        httpd = ThreadingHTTPServer(
+            ('127.0.0.1', 0),
+            make_handler(tmp_path, 'uc:pw', anonymous_read=anonymous_read),
+        )
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
         servers.append(httpd)
         return f'http://127.0.0.1:{httpd.server_address[1]}/artifactory/'
@@ -53,7 +62,16 @@ def test_aql_results_match_the_generator_schema(server):
     root, _ = server
     results = aql_results(root, 'jenkins')
     assert [r['name'] for r in results] == ['git-5.2.0.hpi', 'git-5.2.0.pom']
-    assert set(results[0]) == {'repo', 'path', 'name', 'modified', 'created', 'sha256', 'actual_sha1', 'size'}
+    assert set(results[0]) == {
+        'repo',
+        'path',
+        'name',
+        'modified',
+        'created',
+        'sha256',
+        'actual_sha1',
+        'size',
+    }
     assert results[0]['path'] == 'org/jenkins-ci/plugins/git/5.2.0'
     assert results[0]['modified'].endswith('.000Z')
 
@@ -67,7 +85,14 @@ def test_our_aql_client_reads_the_fake(server):
 
 def test_archive_entries_and_files(server):
     _, start = server
-    source = ArtifactSource(start(anonymous_read=False), 'jenkins', 'uc', 'pw', cache_dir=None, allow_network=True)
+    source = ArtifactSource(
+        start(anonymous_read=False),
+        'jenkins',
+        'uc',
+        'pw',
+        cache_dir=None,
+        allow_network=True,
+    )
     gav = Gav('org.jenkins-ci.plugins', 'git', '5.2.0', 'hpi')
     assert 'Short-Name: git' in source.manifest(gav)
     assert source.pom(gav) == b'<project><name>Git</name></project>'
@@ -75,7 +100,10 @@ def test_archive_entries_and_files(server):
 
 def test_file_reads_honour_range(server):
     _, start = server
-    url = start(anonymous_read=True) + 'jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom'
+    url = (
+        start(anonymous_read=True)
+        + 'jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom'
+    )
     request = urllib.request.Request(url, headers={'Range': 'bytes=1-7'})
     with urllib.request.urlopen(request) as response:
         assert response.status == 206
@@ -85,7 +113,10 @@ def test_file_reads_honour_range(server):
 
 def test_private_reads_challenge_for_basic_auth(server):
     _, start = server
-    url = start(anonymous_read=False) + 'jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom'
+    url = (
+        start(anonymous_read=False)
+        + 'jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom'
+    )
     with pytest.raises(urllib.error.HTTPError) as err:
         urllib.request.urlopen(url)
     err.value.close()  # it holds the response
@@ -95,7 +126,9 @@ def test_private_reads_challenge_for_basic_auth(server):
 
 @pytest.fixture
 def writable(tmp_path):
-    httpd = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(tmp_path, 'uc:secret', anonymous_read=False))
+    httpd = ThreadingHTTPServer(
+        ('127.0.0.1', 0), make_handler(tmp_path, 'uc:secret', anonymous_read=False)
+    )
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     yield f'http://127.0.0.1:{httpd.server_address[1]}/artifactory/'
     httpd.shutdown()
@@ -108,20 +141,39 @@ def test_the_fake_accepts_an_upload_once_and_serves_its_sha1(writable, tmp_path)
     assert put(url, b'<project/>') == 401
     assert put(url, b'<project/>', basic) == 201
     assert put(url, b'<other/>', basic) == 409
-    assert (tmp_path / 'jenkins/org/example/new/1.0/new-1.0.pom').read_bytes() == b'<project/>'
-    with urllib.request.urlopen(urllib.request.Request(url + '.sha1', headers={'Authorization': basic})) as response:
-        assert response.read().decode() == hashlib.sha1(b'<project/>', usedforsecurity=False).hexdigest()
+    assert (
+        tmp_path / 'jenkins/org/example/new/1.0/new-1.0.pom'
+    ).read_bytes() == b'<project/>'
+    with urllib.request.urlopen(
+        urllib.request.Request(url + '.sha1', headers={'Authorization': basic})
+    ) as response:
+        assert (
+            response.read().decode()
+            == hashlib.sha1(b'<project/>', usedforsecurity=False).hexdigest()
+        )
 
 
 def test_client_checksums_are_served_only_when_the_upload_sent_one(tmp_path):
-    httpd = ThreadingHTTPServer(('127.0.0.1', 0), make_handler(tmp_path, 'uc:secret', anonymous_read=True, checksum_policy='client'))
+    httpd = ThreadingHTTPServer(
+        ('127.0.0.1', 0),
+        make_handler(
+            tmp_path, 'uc:secret', anonymous_read=True, checksum_policy='client'
+        ),
+    )
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    base = f'http://127.0.0.1:{httpd.server_address[1]}/artifactory/jenkins/org/example/'
+    base = (
+        f'http://127.0.0.1:{httpd.server_address[1]}/artifactory/jenkins/org/example/'
+    )
     basic = 'Basic ' + base64.b64encode(b'uc:secret').decode()
     digest = hashlib.sha1(b'<project/>', usedforsecurity=False).hexdigest()
 
     def put_with(url, data, sha1):
-        request = urllib.request.Request(url, data=data, method='PUT', headers={'Authorization': basic, 'X-Checksum-Sha1': sha1})
+        request = urllib.request.Request(
+            url,
+            data=data,
+            method='PUT',
+            headers={'Authorization': basic, 'X-Checksum-Sha1': sha1},
+        )
         try:
             with urllib.request.urlopen(request) as response:
                 return response.status
@@ -131,7 +183,9 @@ def test_client_checksums_are_served_only_when_the_upload_sent_one(tmp_path):
 
     def status(url, method='GET'):
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, method=method)) as response:
+            with urllib.request.urlopen(
+                urllib.request.Request(url, method=method)
+            ) as response:
                 return response.status, response.read()
         except urllib.error.HTTPError as exc:
             exc.close()

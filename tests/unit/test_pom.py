@@ -1,4 +1,7 @@
-"""Unit tests for uc.pom: POM coordinates and the reasons a repository POM is unusable."""
+"""Unit tests for uc.pom.
+
+POM coordinates and the reasons a repository POM is unusable.
+"""
 
 import pytest
 
@@ -6,7 +9,11 @@ from archivefixture import pom_xml
 from uc.pom import dependency_group, pom_coordinates, safe_root, unusable_reason
 
 GIT = ('org.jenkins-ci.plugins', 'git', '5.2.0')
-NGINX_404 = b'<html>\r\n<head><title>404 Not Found</title></head>\r\n<body>\r\n<center><h1>404 Not Found</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n'
+NGINX_404 = (
+    b'<html>\r\n<head><title>404 Not Found</title></head>\r\n<body>\r\n'
+    b'<center><h1>404 Not Found</h1></center>\r\n<hr><center>nginx</center>\r\n'
+    b'</body>\r\n</html>\r\n'
+)
 
 
 def test_coordinates_of_a_real_pom():
@@ -14,7 +21,11 @@ def test_coordinates_of_a_real_pom():
 
 
 def test_group_and_version_may_come_from_the_parent():
-    data = b'<project><parent><groupId>org.jenkins-ci.plugins</groupId><artifactId>plugin</artifactId><version>5.2.0</version></parent><artifactId>git</artifactId></project>'
+    data = (
+        b'<project><parent><groupId>org.jenkins-ci.plugins</groupId>'
+        b'<artifactId>plugin</artifactId><version>5.2.0</version></parent>'
+        b'<artifactId>git</artifactId></project>'
+    )
     assert pom_coordinates(data) == GIT
 
 
@@ -25,12 +36,27 @@ def test_a_usable_pom_has_no_reason():
 @pytest.mark.parametrize(
     ('data', 'reason'),
     [
-        (NGINX_404, 'not XML'),  # the saved error page from the operator's test repository
+        (
+            NGINX_404,
+            'not XML',
+        ),  # the saved error page from the operator's test repository
         (b'<html><body>404</body></html>', 'not a POM (root element <html>)'),
-        (pom_xml('io.jenkins.plugins', 'git', '5.2.0'), 'declares io.jenkins.plugins:git:5.2.0, not org.jenkins-ci.plugins:git:5.2.0'),
-        (b'<project><artifactId>git</artifactId></project>', 'does not declare groupId, artifactId and version'),
+        (
+            pom_xml('io.jenkins.plugins', 'git', '5.2.0'),
+            (
+                'declares io.jenkins.plugins:git:5.2.0, '
+                'not org.jenkins-ci.plugins:git:5.2.0'
+            ),
+        ),
+        (
+            b'<project><artifactId>git</artifactId></project>',
+            'does not declare groupId, artifactId and version',
+        ),
         (b'<!DOCTYPE p [<!ENTITY x "y">]><project/>', 'declares a DOCTYPE or entities'),
-        (b'<project><version>${revision}${changelist}</version></project>', 'does not declare groupId, artifactId and version'),
+        (
+            b'<project><version>${revision}${changelist}</version></project>',
+            'does not declare groupId, artifactId and version',
+        ),
     ],
 )
 def test_unusable_poms_say_why(data, reason):
@@ -38,30 +64,55 @@ def test_unusable_poms_say_why(data, reason):
 
 
 def test_a_latin1_pom_is_usable():
-    data = ('<?xml version="1.0" encoding="ISO-8859-1"?><project><groupId>org.jenkins-ci.plugins</groupId><artifactId>git</artifactId><version>5.2.0</version><name>Plugin by J\u00e9r\u00f4me</name></project>').encode('latin-1')
+    data = (
+        '<?xml version="1.0" encoding="ISO-8859-1"?>'
+        '<project><groupId>org.jenkins-ci.plugins</groupId>'
+        '<artifactId>git</artifactId><version>5.2.0</version>'
+        '<name>Plugin by J\u00e9r\u00f4me</name></project>'
+    ).encode('latin-1')
     assert unusable_reason(data, GIT) is None
 
 
 def test_safe_root_refuses_what_the_byte_check_cannot_see():
     assert safe_root(b'<project/>') is not None
-    utf16 = '<?xml version="1.0" encoding="UTF-16"?><!DOCTYPE p [<!ENTITY x "y">]><project/>'.encode('utf-16')
+    utf16 = (
+        '<?xml version="1.0" encoding="UTF-16"?>'
+        '<!DOCTYPE p [<!ENTITY x "y">]><project/>'
+    ).encode('utf-16')
     assert safe_root(utf16) is None  # a declaration the ASCII byte check would miss
-    assert safe_root('<project/>'.encode('utf-16-le')) is None  # UTF-16 without a BOM is full of NULs
+    assert (
+        safe_root('<project/>'.encode('utf-16-le')) is None
+    )  # UTF-16 without a BOM is full of NULs
     assert safe_root(b'<project>\xff</project>') is None  # not UTF-8
 
 
 def test_dependency_group_comes_from_the_dependencies():
-    data = pom_xml(*GIT, dependencies=[('org.jenkins-ci.plugins', 'mailer', '534.v1'), ('io.jenkins.plugins', 'caffeine-api', '3.2.4')])
+    data = pom_xml(
+        *GIT,
+        dependencies=[
+            ('org.jenkins-ci.plugins', 'mailer', '534.v1'),
+            ('io.jenkins.plugins', 'caffeine-api', '3.2.4'),
+        ],
+    )
     assert dependency_group(data, 'caffeine-api') == 'io.jenkins.plugins'
     assert dependency_group(data, 'absent') is None
 
 
 def test_dependency_group_resolves_the_projects_own_group():
-    assert dependency_group(pom_xml(*GIT, dependencies=[('${project.groupId}', 'git-client', '6.0')]), 'git-client') == 'org.jenkins-ci.plugins'
+    assert (
+        dependency_group(
+            pom_xml(*GIT, dependencies=[('${project.groupId}', 'git-client', '6.0')]),
+            'git-client',
+        )
+        == 'org.jenkins-ci.plugins'
+    )
 
 
 def test_any_other_property_is_unknown():
-    assert dependency_group(pom_xml(*GIT, dependencies=[('${corp.group}', 'x', '1')]), 'x') is None
+    assert (
+        dependency_group(pom_xml(*GIT, dependencies=[('${corp.group}', 'x', '1')]), 'x')
+        is None
+    )
 
 
 def test_no_pom_or_not_xml_is_unknown():

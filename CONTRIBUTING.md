@@ -5,7 +5,7 @@ How to set up, test and submit changes to this project.
 ## Prerequisites
 
 - Docker with Compose v2, and GNU make. Every test suite runs in containers built from this tree.
-- Python 3 on the host, only for the lint tools behind the pre-commit hooks.
+- Python 3 on the host, only for pre-commit, which runs the lint hooks.
 - git.
 
 On Windows, use Git Bash or WSL; the Makefile sets `MSYS_NO_PATHCONV=1` for its own Docker commands.
@@ -17,14 +17,13 @@ git clone https://github.com/HaleTechCo/easy-update-center.git
 cd easy-update-center
 make build                                         # both images, and the uc test image
 
-python -m venv .venv
-.venv/Scripts/pip install -r requirements-dev.txt  # Linux/macOS: .venv/bin/pip
-.venv/Scripts/pre-commit install                   # run the hooks on every commit
+pip install -r requirements-dev.txt                # pre-commit; in a venv or with pipx
+pre-commit install                                 # run the hooks on every commit
 ```
 
-The hooks run tools from the venv (`language: system`), so **activate the venv in every shell you
-commit from**: `source .venv/Scripts/activate` (Linux/macOS: `source .venv/bin/activate`). Optional
-tools and the details of each hook: [tools/README.md](tools/README.md).
+pre-commit installs each hook at the version `.pre-commit-config.yaml` pins, in its own cached
+environment, the first time it runs (that run needs internet access). Nothing else needs installing
+or activating. This repository's own hooks: [tools/README.md](tools/README.md).
 
 The checker settings live beside the hooks: ruff in `pyproject.toml`, yamllint in `.yamllint`,
 shellcheck in `.shellcheckrc`.
@@ -42,7 +41,8 @@ uc/bin/               the image's commands: uc, and uc-setup, the setup service'
 uc/uc/                the uc Python package (standard library only): CLI, generation, doctor,
                       PKI, status; repo_adapter/ is the repo-adapter service
 web/                  the web image: Apache configuration, entrypoint, health check
-compose.yaml          the stack; compose.airgapped.yaml is the air-gapped override
+compose.yaml          the stack, on the release's images; compose.airgapped.yaml is the air-gapped
+                      override, compose.build.yaml builds the images from the checkout
 config/overlay/       operator overlay merged into upstream's resources/
 examples/pipelines/   an example Jenkins pipeline for procurement, to copy
 secrets/              keys and credentials (gitignored except its README)
@@ -78,7 +78,8 @@ How the pieces fit: [Architecture overview](docs/architecture/overview.md).
 hooks, the suites of `make test`, `make compose-check` and `make it-airgapped` for both repository
 types, with the images built once and loaded by each job (`make <target> PREBUILT=1` keeps an image
 that exists instead of building it). The `ci` check must pass before a pull request can merge.
-`it-online` runs weekly (`.github/workflows/scheduled.yml`).
+`it-online` runs weekly (`.github/workflows/scheduled.yml`), with the watch on update-center2
+releases and the vulnerability scan of the latest release's images.
 
 Unit tests read `uc/uc/`, `uc/templates/`, `tools/`, `examples/pipelines/` and `.github/` straight
 from the working tree, so they need no rebuild. Changing `uc/java/VersionTool.java` or a Dockerfile
@@ -95,8 +96,9 @@ pre-commit run --all-files
 ```
 
 Fixer hooks (formatting, whitespace, typographic characters) rewrite files and report `Failed` on the
-run that changes something; run again, and a second clean run is the real signal. Actionlint checks
-the workflows (installed in the venv as `actionlint-py`). Two hooks guard the documentation:
+run that changes something; run again, and a second clean run is the real signal. actionlint checks
+the workflows' syntax and zizmor their security; zizmor's exceptions, each with its reason, are in
+`.github/zizmor.yml`. Two hooks guard the documentation:
 
 - `check-doc-links`: every relative link and every `docs/<page>.md#anchor` reference in a comment
   resolves, with GitHub's heading anchors;

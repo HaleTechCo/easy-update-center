@@ -1,7 +1,9 @@
 # Web tier (docs/architecture/request-routing.md): Apache serving /data/live with upstream's .htaccess routing.
-FROM httpd:2.4
-# Distribution packages are not version-pinned (DL3008): httpd:2.4 tracks Debian's current release,
-# and the archive drops superseded versions, so a pin breaks the build the day the base moves.
+# Pinned by digest, so a build is reproducible; Dependabot proposes the new digest when the tag moves
+# (docs/reference/dependencies.md#pinning-policy).
+FROM httpd:2.4@sha256:c842ac797bd1fe8b3cd26d002ac9d948aa2814097544600600b35aef42e6785a
+# Distribution packages are not version-pinned (DL3008): the Debian archive drops superseded
+# versions, so a pin breaks the build as soon as the base image moves on.
 # hadolint ignore=DL3008
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl openssl \

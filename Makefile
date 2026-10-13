@@ -90,6 +90,8 @@ compose-check: build-uc ## Validate compose.yaml and check the services' network
 	  config --format json | $(ISOLATION) online
 	UC_ENV_FILE=.env.airgapped.example docker compose --env-file .env.airgapped.example \
 	  -f compose.yaml -f compose.airgapped.yaml --profile tools --profile setup config --format json | $(ISOLATION) airgapped
+	UC_ENV_FILE=.env.online.example docker compose --env-file .env.online.example -f compose.yaml -f compose.build.yaml \
+	  --profile tools --profile setup config --format json | $(ISOLATION) online build
 
 IT_DIR = tests/integration
 IT_AIR = docker compose -f $(IT_DIR)/airgapped.yaml --env-file $(IT_DIR)/.versions.env

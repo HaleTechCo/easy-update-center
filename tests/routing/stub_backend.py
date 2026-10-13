@@ -1,4 +1,6 @@
-"""Echo backend for proxy-mode tests: answers with the request path and Authorization header.
+"""Echo backend for proxy-mode tests.
+
+It answers with the request path and Authorization header.
 
 With a certificate chain and key it serves TLS, as a real repository does.
 """
@@ -14,7 +16,9 @@ class Echo(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         """Echo the request path and Authorization header."""
-        body = json.dumps({'path': self.path, 'authorization': self.headers.get('Authorization')}).encode()
+        body = json.dumps(
+            {'path': self.path, 'authorization': self.headers.get('Authorization')}
+        ).encode()
         self.send_response(200)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))

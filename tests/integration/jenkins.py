@@ -1,4 +1,7 @@
-"""Minimal Jenkins script-console client for integration tests (unsecured controller, CSRF crumb + session)."""
+"""Minimal Jenkins script-console client for integration tests.
+
+Unsecured controller, CSRF crumb + session.
+"""
 
 from __future__ import annotations
 
@@ -15,10 +18,15 @@ class Jenkins:
     def __init__(self, base_url: str) -> None:
         """Talk to the controller at base_url."""
         self.base = base_url.rstrip('/')
-        self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        self.opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
+        )
 
     def wait_ready(self, timeout: float = 600) -> None:
-        """Poll /login until it answers 200; raise TimeoutError after timeout seconds."""
+        """Poll /login until it answers 200.
+
+        Raise TimeoutError after timeout seconds.
+        """
         deadline = time.monotonic() + timeout
         while True:
             try:
@@ -38,8 +46,13 @@ class Jenkins:
             return response.headers['X-Jenkins']
 
     def script(self, groovy: str, timeout: float = 900) -> str:
-        """Run groovy in the script console and return its output, sending a fresh CSRF crumb."""
-        with self.opener.open(self.base + '/crumbIssuer/api/json', timeout=30) as response:
+        """Run groovy in the script console and return its output.
+
+        It sends a fresh CSRF crumb.
+        """
+        with self.opener.open(
+            self.base + '/crumbIssuer/api/json', timeout=30
+        ) as response:
             crumb = json.loads(response.read())
         request = urllib.request.Request(
             self.base + '/scriptText',

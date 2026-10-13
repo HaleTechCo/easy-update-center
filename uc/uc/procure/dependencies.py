@@ -1,4 +1,7 @@
-"""uc procure stage --dependencies: stage each missing required dependency at the highest minimum any plugin declares, and theirs in turn."""
+"""uc procure stage --dependencies: stage each missing required dependency.
+
+At the highest minimum any plugin declares, and theirs in turn.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +13,13 @@ from typing import TYPE_CHECKING
 from uc.aql import Gav, RepoFile, to_gav
 from uc.doctor import parse_dependencies, parse_manifest, required_jenkins_version
 from uc.pom import dependency_group
-from uc.repo_adapter.archive import MANIFEST, SMALL_ENTRY_LIMIT, ArchiveError, open_archive, read_entry
+from uc.repo_adapter.archive import (
+    MANIFEST,
+    SMALL_ENTRY_LIMIT,
+    ArchiveError,
+    open_archive,
+    read_entry,
+)
 
 from . import ProcureError
 from .stager import Wanted
@@ -23,15 +32,26 @@ if TYPE_CHECKING:
 
     from .stager import Stager
 
-FALLBACK_GROUPS = ('org.jenkins-ci.plugins', 'io.jenkins.plugins', 'org.jenkins-ci.plugins.workflow', 'org.jenkinsci.plugins', 'io.jenkins.blueocean')
+FALLBACK_GROUPS = (
+    'org.jenkins-ci.plugins',
+    'io.jenkins.plugins',
+    'org.jenkins-ci.plugins.workflow',
+    'org.jenkinsci.plugins',
+    'io.jenkins.blueocean',
+)
 ARCHIVE_EXTENSIONS = ('hpi', 'jpi')
-_COORDINATE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.+-]*$')  # untrusted manifest values: safe in a path and in VersionTool's line protocol
-_GROUP = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*$')  # untrusted POM values: dot-separated names, each a path segment
+# untrusted manifest values: safe in a path and in VersionTool's line protocol
+_COORDINATE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.+-]*$')
+# untrusted POM values: dot-separated names, each a path segment
+_GROUP = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*$')
 
 
 @dataclass(frozen=True)
 class Need:
-    """A dependency to satisfy: its artifactId, the minimum version asked for, who asked, and a group to try first."""
+    """A dependency to satisfy.
+
+    Its artifactId, the minimum version asked for, who asked, and a group to try first.
+    """
 
     artifact: str
     version: str
@@ -53,27 +73,61 @@ def archive_manifest(file: Path) -> dict[str, str]:
     return parse_manifest(data.decode('utf-8', 'replace'))
 
 
-def resolve_dependencies(inspection: Inspection, stager: Stager, versions: VersionTool) -> None:
-    """Stage every missing required dependency in the report, and those they bring, until nothing new is needed."""
-    repository = versions.max_by_key((g.artifact_id, g.version) for g in inspection.listing.plugins)
+def resolve_dependencies(
+    inspection: Inspection, stager: Stager, versions: VersionTool
+) -> None:
+    """Stage every missing required dependency in the report, and those they bring.
+
+    Until nothing new is needed.
+    """
+    repository = versions.max_by_key(
+        (g.artifact_id, g.version) for g in inspection.listing.plugins
+    )
     needs: list[Need] = []
     for detail in inspection.report.missing_dependency_details:
-        requirer = Gav(detail['plugin_group'], detail['plugin'], detail['plugin_version'], 'hpi')
+        requirer = Gav(
+            detail['plugin_group'], detail['plugin'], detail['plugin_version'], 'hpi'
+        )
         group = dependency_group(inspection.source.pom(requirer), detail['dependency'])
-        needs.append(Need(detail['dependency'], detail['required'], f'{detail["plugin"]} {detail["plugin_version"]}', group))
-    failed: set[tuple[str, str]] = set()  # (artifactId, minimum) that could not be staged this run
-    visited: set[tuple[str, str]] = set()  # (artifactId, version) staged or checked this run: each once, so cycles end
+        needs.append(
+            Need(
+                detail['dependency'],
+                detail['required'],
+                f'{detail["plugin"]} {detail["plugin_version"]}',
+                group,
+            )
+        )
+    # (artifactId, minimum) that could not be staged this run
+    failed: set[tuple[str, str]] = set()
+    # (artifactId, version) staged or checked this run: each once, so cycles end
+    visited: set[tuple[str, str]] = set()
     while needs:
-        needs = _round(_valid(needs, stager), repository, stager, versions, failed=failed, visited=visited)
+        needs = _round(
+            _valid(needs, stager),
+            repository,
+            stager,
+            versions,
+            failed=failed,
+            visited=visited,
+        )
 
 
 def _valid(needs: list[Need], stager: Stager) -> list[Need]:
     kept = []
     for need in needs:
         if _COORDINATE.match(need.artifact) and _COORDINATE.match(need.version):
-            kept.append(need if need.group is None or _GROUP.match(need.group) else dataclasses.replace(need, group=None))  # a group that is not one never reaches a URL: the known groups are tried instead
+            # a group that is not one never reaches a URL:
+            # the known groups are tried instead
+            kept.append(
+                need
+                if need.group is None or _GROUP.match(need.group)
+                else dataclasses.replace(need, group=None)
+            )
         else:
-            stager.problem(f'{need.artifact} {need.version}', f'not a plugin name and version (required by {need.required_by})')
+            stager.problem(
+                f'{need.artifact} {need.version}',
+                f'not a plugin name and version (required by {need.required_by})',
+            )
     return kept
 
 
@@ -82,7 +136,11 @@ def _staged_plugins(stager: Stager) -> dict[str, Gav]:
     for path, staged in stager.staging.files.items():
         directory, _, name = path.rpartition('/')
         gav = to_gav(RepoFile(directory, name))
-        if staged.kind == 'dependency' and gav is not None and gav.extension in ARCHIVE_EXTENSIONS:
+        if (
+            staged.kind == 'dependency'
+            and gav is not None
+            and gav.extension in ARCHIVE_EXTENSIONS
+        ):
             result[gav.artifact_id] = gav
     return result
 
@@ -96,10 +154,31 @@ def _highest(needs: list[Need], versions: VersionTool) -> list[Need]:
     return [chosen[artifact] for artifact in sorted(chosen)]
 
 
-def _met(needs: list[Need], repository: dict[str, str], staged: dict[str, Gav], versions: VersionTool) -> dict[str, str]:
-    """Map each need's artifactId to what already satisfies it: 'repository' before 'staged'; needs nothing satisfies are left out."""
-    candidates = [(need, where, have) for need in needs for where, have in (('repository', repository.get(need.artifact)), ('staged', staged[need.artifact].version if need.artifact in staged else None)) if have is not None]
-    order = versions.compare_many([(have, need.version) for need, _, have in candidates])
+def _met(
+    needs: list[Need],
+    repository: dict[str, str],
+    staged: dict[str, Gav],
+    versions: VersionTool,
+) -> dict[str, str]:
+    """Map each need's artifactId to what already satisfies it.
+
+    'repository' before 'staged'; needs nothing satisfies are left out.
+    """
+    candidates = [
+        (need, where, have)
+        for need in needs
+        for where, have in (
+            ('repository', repository.get(need.artifact)),
+            (
+                'staged',
+                staged[need.artifact].version if need.artifact in staged else None,
+            ),
+        )
+        if have is not None
+    ]
+    order = versions.compare_many(
+        [(have, need.version) for need, _, have in candidates]
+    )
     met: dict[str, str] = {}
     for (need, where, _), cmp in zip(candidates, order, strict=True):
         if cmp >= 0:
@@ -107,7 +186,15 @@ def _met(needs: list[Need], repository: dict[str, str], staged: dict[str, Gav], 
     return met
 
 
-def _round(needs: list[Need], repository: dict[str, str], stager: Stager, versions: VersionTool, *, failed: set[tuple[str, str]], visited: set[tuple[str, str]]) -> list[Need]:
+def _round(
+    needs: list[Need],
+    repository: dict[str, str],
+    stager: Stager,
+    versions: VersionTool,
+    *,
+    failed: set[tuple[str, str]],
+    visited: set[tuple[str, str]],
+) -> list[Need]:
     if not needs:
         return []
     staged = _staged_plugins(stager)
@@ -118,7 +205,9 @@ def _round(needs: list[Need], repository: dict[str, str], stager: Stager, versio
         where = met.get(need.artifact)
         if where == 'repository':
             continue
-        if where == 'staged':  # staged earlier: stage() keeps it when intact and downloads it again when not, and its own needs are followed again
+        # staged earlier: stage() keeps it when intact and downloads it again when not,
+        # and its own needs are followed again
+        if where == 'staged':
             gav = staged[need.artifact]
             if (gav.artifact_id, gav.version) in visited:
                 continue
@@ -130,13 +219,25 @@ def _round(needs: list[Need], repository: dict[str, str], stager: Stager, versio
                 failed.add((need.artifact, need.version))
                 continue
             previous = staged.get(need.artifact)
-            if previous is not None:  # a higher minimum supersedes what an earlier run staged
-                for old in (previous.maven_path, previous.with_extension('pom').maven_path):
-                    if old in stager.staging.files and stager.staging.files[old].kind == 'dependency':
+            # a higher minimum supersedes what an earlier run staged
+            if previous is not None:
+                for old in (
+                    previous.maven_path,
+                    previous.with_extension('pom').maven_path,
+                ):
+                    if (
+                        old in stager.staging.files
+                        and stager.staging.files[old].kind == 'dependency'
+                    ):
                         stager.staging.remove(old)
         visited.add((gav.artifact_id, gav.version))
         reason = f'{need.required_by} requires {need.artifact} {need.version}'
-        if not (stager.stage(Wanted(gav.maven_path, 'dependency', reason)) and stager.stage(Wanted(gav.with_extension('pom').maven_path, 'dependency', reason))):
+        if not (
+            stager.stage(Wanted(gav.maven_path, 'dependency', reason))
+            and stager.stage(
+                Wanted(gav.with_extension('pom').maven_path, 'dependency', reason)
+            )
+        ):
             failed.add((need.artifact, need.version))
             continue
         following += _needs_of(gav, stager)
@@ -157,7 +258,13 @@ def _locate(need: Need, stager: Stager) -> Gav | None:
                 return None
             if found:
                 return gav
-    stager.problem(label, f'not found at the source under {", ".join(groups)}; required by {need.required_by}')
+    stager.problem(
+        label,
+        (
+            f'not found at the source under {", ".join(groups)}; '
+            f'required by {need.required_by}'
+        ),
+    )
     return None
 
 
@@ -168,8 +275,16 @@ def _needs_of(gav: Gav, stager: Stager) -> list[Need]:
         stager.problem(gav.maven_path, str(exc))
         return []
     staged = stager.staging.files[gav.maven_path]
-    stager.staging.files[gav.maven_path] = dataclasses.replace(staged, required_core=required_jenkins_version(manifest))
+    stager.staging.files[gav.maven_path] = dataclasses.replace(
+        staged, required_core=required_jenkins_version(manifest)
+    )
     pom_file = stager.staging.root / gav.with_extension('pom').maven_path
     pom = pom_file.read_bytes() if pom_file.is_file() else None
     requirer = f'{gav.artifact_id} {gav.version}'
-    return [Need(name, version, requirer, dependency_group(pom, name)) for name, version, optional in parse_dependencies(manifest.get('Plugin-Dependencies', '')) if not optional]
+    return [
+        Need(name, version, requirer, dependency_group(pom, name))
+        for name, version, optional in parse_dependencies(
+            manifest.get('Plugin-Dependencies', '')
+        )
+        if not optional
+    ]

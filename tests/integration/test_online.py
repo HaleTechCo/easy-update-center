@@ -1,4 +1,7 @@
-"""Online end to end (CONTRIBUTING.md#tests): generate from repo.jenkins-ci.org, serve, redirect to get.jenkins.io."""
+"""Online end to end (CONTRIBUTING.md#tests).
+
+Generate from repo.jenkins-ci.org, serve, redirect to get.jenkins.io.
+"""
 
 from __future__ import annotations
 
@@ -20,7 +23,9 @@ WEB = 'http://web:8080'
 
 
 def tree_size(root: Path) -> int:
-    return sum(p.stat().st_size for p in root.rglob('*') if p.is_file() and not p.is_symlink())
+    return sum(
+        p.stat().st_size for p in root.rglob('*') if p.is_file() and not p.is_symlink()
+    )
 
 
 @pytest.fixture(scope='module')
@@ -41,7 +46,9 @@ def release() -> dict:
         'cache_bytes': tree_size(Path('/data/cache')),
         'release_bytes': tree_size(Path('/data/live').resolve()),
     }
-    out = Path('/results') / f'online-{measurements["finished_at"].replace(":", "")}.json'
+    out = (
+        Path('/results') / f'online-{measurements["finished_at"].replace(":", "")}.json'
+    )
     out.write_text(json.dumps(measurements, indent=2) + '\n')
     print(json.dumps(measurements, indent=2))
     return status
@@ -59,7 +66,9 @@ def test_published_from_the_public_repository(release):
 @pytest.mark.usefixtures('release')
 def test_metadata_points_at_the_update_center():
     doc = json.loads(get(WEB + '/current/update-center.actual.json'))
-    assert all(p['url'].startswith(WEB + '/download/plugins/') for p in doc['plugins'].values())
+    assert all(
+        p['url'].startswith(WEB + '/download/plugins/') for p in doc['plugins'].values()
+    )
     assert doc['core']['url'].startswith(WEB + '/download/war/')
 
 
@@ -69,7 +78,10 @@ def test_downloads_redirect_to_get_jenkins_io():
     plugin_id, plugin = min(doc['plugins'].items())
     response = fetch(plugin['url'])
     assert response.status == 302
-    assert response.location == f'https://get.jenkins.io/plugins/{plugin_id}/{plugin["version"]}/{plugin_id}.hpi'
+    assert (
+        response.location
+        == f'https://get.jenkins.io/plugins/{plugin_id}/{plugin["version"]}/{plugin_id}.hpi'
+    )
     assert fetch(response.location).status in (200, 302)
 
 
@@ -89,7 +101,11 @@ def test_version_routing_uses_generated_tiers(release):
     stable = release['tiers']['stable']
     version = stable[-1] if stable else '2.999.1'
     response = fetch(f'{WEB}/update-center.json?version={version}')
-    expected = f'{WEB}/dynamic-stable-{version}/update-center.json' if stable else f'{WEB}/current/update-center.json'
+    expected = (
+        f'{WEB}/dynamic-stable-{version}/update-center.json'
+        if stable
+        else f'{WEB}/current/update-center.json'
+    )
     assert response.location == expected
 
 
