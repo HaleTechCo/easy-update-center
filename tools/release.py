@@ -3,23 +3,26 @@
 See docs/development/releasing.md.
 
     python3 tools/release.py prepare VERSION
-        Make the release pull request's change: move CHANGELOG.md's Unreleased entries
-        under "## [VERSION] - <UTC date>", below an empty "## Unreleased", and set
-        compose.yaml's uc and web images to VERSION's, so a checkout of the release
-        runs its own images. Everything else stays byte for byte. Refuses a VERSION
-        that is not above the highest vX.Y.Z tag.
-    python3 tools/release.py check VERSION [--republish]
+        VERSION is X.Y.Z or X.Y.Z-rc.N. Make the release pull request's change: move
+        CHANGELOG.md's Unreleased entries under "## [VERSION] - <UTC date>", below an
+        empty "## Unreleased", and set compose.yaml's uc and web images to VERSION's,
+        so a checkout of the release runs its own images. Everything else stays byte
+        for byte. For a release candidate only compose.yaml changes, and Unreleased
+        must have entries. Refuses a VERSION that is not above the highest version
+        tag.
+    python3 tools/release.py check VERSION
         Refuse a tag vVERSION the Release workflow must not publish, then print
-        version=, latest=true|false and minor_latest=true|false for $GITHUB_OUTPUT:
-        whether VERSION is the highest release, and the highest in its X.Y, so the
-        workflow moves the latest and X.Y image tags only then. --republish: the tag
-        is published again, so it need not be the highest.
+        version=, prerelease=, latest= and minor_latest= (true|false) for
+        $GITHUB_OUTPUT: whether VERSION is a release candidate, the highest release,
+        and the highest in its X.Y, so the workflow moves the latest and X.Y image
+        tags only for a release that is. A published version is never published again.
     python3 tools/release.py notes VERSION
-        Print that version's CHANGELOG.md section without its heading: the GitHub
-        Release's notes, with relative links to repository files pointed at that file in
-        the version's tag.
+        Print that version's CHANGELOG.md section without its heading (a release
+        candidate's: the Unreleased entries): the GitHub Release's notes, with relative
+        links to repository files pointed at that file in the version's tag.
     python3 tools/release.py latest
-        Print the highest released version (from the vX.Y.Z tags), or nothing.
+        Print the highest release (from the vX.Y.Z tags, release candidates left out),
+        or nothing.
 
 Run from the repository root. A refusal prints `release.py: error: ...` and exits 1.
 Standard library only, and nothing newer than Python 3.12: the workflow runs it on the
@@ -52,8 +55,12 @@ IMAGE_REFERENCE = re.compile(
 
 Such as the default of ${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}.
 """
-VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
-TAG = re.compile(r'v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))')
+VERSION = re.compile(
+    r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-rc\.([1-9][0-9]*))?'
+)
+TAG = re.compile(
+    r'v((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-rc\.[1-9][0-9]*)?)'
+)
 UNRELEASED = re.compile(r'^## Unreleased[ \t]*\n', re.MULTILINE)
 NEXT_SECTION = re.compile(r'^## ', re.MULTILINE)
 REPOSITORY_URL = 'https://github.com/HaleTechCo/easy-update-center'
@@ -67,29 +74,41 @@ class ReleaseError(Exception):
     """A refusal; the message says what to fix."""
 
 
-def parse_version(text: str) -> tuple[int, int, int]:
-    """Return X.Y.Z as three integers.
+def parse_version(text: str) -> tuple[int, int, int, int, int]:
+    """Return X.Y.Z or X.Y.Z-rc.N as a key that orders versions as SemVer does.
 
-    Refuse anything else (a v prefix, a pre-release, a leading zero).
+    (X, Y, Z, 0, N) for a release candidate, (X, Y, Z, 1, 0) for the release, so every
+    X.Y.Z-rc.N sorts below X.Y.Z. Refuse anything else (a v prefix, another pre-release,
+    a leading zero).
     """
     match = VERSION.fullmatch(text)
     if match is None:
-        msg = f'{text!r} is not a version: give X.Y.Z, such as 0.1.0'
+        msg = f'{text!r} is not a version: give X.Y.Z, such as 0.1.0, or X.Y.Z-rc.N'
         raise ReleaseError(msg)
-    return int(match[1]), int(match[2]), int(match[3])
+    major, minor, patch = int(match[1]), int(match[2]), int(match[3])
+    if match[4] is None:
+        return major, minor, patch, 1, 0
+    return major, minor, patch, 0, int(match[4])
 
 
-def highest(tags: Iterable[str]) -> str | None:
-    """Return the highest version among the vX.Y.Z tags, without the v.
+def is_candidate(version: str) -> bool:
+    """Return whether version is a release candidate, X.Y.Z-rc.N."""
+    return parse_version(version)[3] == 0
 
-    Other tags are ignored.
+
+def highest(tags: Iterable[str], *, releases_only: bool = False) -> str | None:
+    """Return the highest version among the vX.Y.Z and vX.Y.Z-rc.N tags, without the v.
+
+    Release candidates are left out with releases_only. Other tags are ignored.
     """
     versions = [match[1] for tag in tags if (match := TAG.fullmatch(tag))]
+    if releases_only:
+        versions = [version for version in versions if not is_candidate(version)]
     return max(versions, key=parse_version, default=None)
 
 
 def _refuse_not_above_highest(version: str, tags: Iterable[str]) -> None:
-    """Refuse version unless it is above every vX.Y.Z tag in tags."""
+    """Refuse version unless it is above every version tag in tags."""
     top = highest(tags)
     if top is not None and parse_version(version) <= parse_version(top):
         msg = f'{version} is not above the highest release, {top}'
@@ -117,15 +136,11 @@ def _has_entries(body: str) -> bool:
     return any(line.strip() and not line.startswith('#') for line in body.splitlines())
 
 
-def prepare(text: str, version: str, date: str) -> str:
-    """Return the CHANGELOG text with the Unreleased entries moved.
+def unreleased(text: str) -> str:
+    """Return the Unreleased section's body.
 
-    They move under "## [version] - date".
+    ReleaseError when there is no such section, or it holds only headings.
     """
-    parse_version(version)
-    if _version_heading(version).search(text):
-        msg = f'CHANGELOG.md already has a section for {version}'
-        raise ReleaseError(msg)
     body = _body(text, UNRELEASED)
     if body is None:
         msg = 'CHANGELOG.md has no "## Unreleased" section'
@@ -137,6 +152,20 @@ def prepare(text: str, version: str, date: str) -> str:
             'there is nothing to release'
         )
         raise ReleaseError(msg)
+    return text[start:end]
+
+
+def prepare(text: str, version: str, date: str) -> str:
+    """Return the CHANGELOG text with the Unreleased entries moved.
+
+    They move under "## [version] - date".
+    """
+    parse_version(version)
+    if _version_heading(version).search(text):
+        msg = f'CHANGELOG.md already has a section for {version}'
+        raise ReleaseError(msg)
+    unreleased(text)
+    start = _body(text, UNRELEASED)[0]
     return f'{text[:start]}\n## [{version}] - {date}\n{text[start:]}'
 
 
@@ -195,33 +224,32 @@ def _absolute_links(text: str, version: str) -> str:
 
 
 def notes(text: str, version: str) -> str:
-    """Return the body of version's section.
+    """Return the version's release notes, with relative links made absolute.
 
-    Without its heading or the blank lines around it, with relative links made absolute.
+    A release's CHANGELOG section without its heading or the blank lines around it; a
+    release candidate's are the Unreleased entries it was cut from.
     """
-    parse_version(version)
-    body = _body(text, _version_heading(version))
-    if body is None:
-        msg = f'CHANGELOG.md has no section for {version}'
-        raise ReleaseError(msg)
-    start, end = body
-    return _absolute_links(text[start:end].strip('\n') + '\n', version)
+    if is_candidate(version):
+        body = unreleased(text)
+    else:
+        span = _body(text, _version_heading(version))
+        if span is None:
+            msg = f'CHANGELOG.md has no section for {version}'
+            raise ReleaseError(msg)
+        body = text[span[0] : span[1]]
+    return _absolute_links(body.strip('\n') + '\n', version)
 
 
 def check(
-    version: str,
-    tags: Sequence[str],
-    changelog: str,
-    compose: str,
-    *,
-    republish: bool,
+    version: str, tags: Sequence[str], changelog: str, compose: str
 ) -> dict[str, bool]:
     """Refuse a tag vVERSION the Release workflow must not publish.
 
-    The tag must exist and, unless it is published again (republish), be above every
-    other release. CHANGELOG.md must have the version's section and compose.yaml must
-    name its images: both come from the release pull request. Return whether version
-    is the highest release overall (latest) and within its X.Y (minor_latest).
+    The tag must exist and be above every other release and release candidate: a
+    published version is never published again. A release needs its CHANGELOG section,
+    a candidate Unreleased entries; compose.yaml must name the version's images. Return
+    whether it is a candidate (prerelease), and, for a release, whether it is the
+    highest release overall (latest) and within its X.Y (minor_latest).
     """
     parsed = parse_version(version)
     tag = f'v{version}'
@@ -229,22 +257,35 @@ def check(
         msg = f'{tag} does not exist: push the tag first'
         raise ReleaseError(msg)
     others = [other for other in tags if other != tag]
-    if not republish:
-        _refuse_not_above_highest(version, others)
+    _refuse_not_above_highest(version, others)
     pull_request = f'tag the merged release pull request (release.py prepare {version})'
-    if not _version_heading(version).search(changelog):
+    candidate = is_candidate(version)
+    if candidate:
+        try:
+            unreleased(changelog)
+        except ReleaseError as exc:
+            msg = f'{exc}: {pull_request}'
+            raise ReleaseError(msg) from None
+    elif not _version_heading(version).search(changelog):
         msg = f'CHANGELOG.md has no section for {version}: {pull_request}'
         raise ReleaseError(msg)
     if pin_images(compose, version) != compose:
         msg = f'compose.yaml names other images than {version}: {pull_request}'
         raise ReleaseError(msg)
-    top = highest(others)
+    if candidate:
+        return {'prerelease': True, 'latest': False, 'minor_latest': False}
+    top = highest(others, releases_only=True)
     minor_top = highest(
-        other
-        for other in others
-        if (match := TAG.fullmatch(other)) and parse_version(match[1])[:2] == parsed[:2]
+        (
+            other
+            for other in others
+            if (match := TAG.fullmatch(other))
+            and parse_version(match[1])[:2] == parsed[:2]
+        ),
+        releases_only=True,
     )
     return {
+        'prerelease': False,
         'latest': top is None or parsed > parse_version(top),
         'minor_latest': minor_top is None or parsed > parse_version(minor_top),
     }
@@ -274,15 +315,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         'check',
         help=(
             'refuse a tag the workflow must not publish; '
-            'print version=, latest= and minor_latest='
+            'print version=, prerelease=, latest= and minor_latest='
         ),
     )
     check_command.add_argument('version')
-    check_command.add_argument(
-        '--republish',
-        action='store_true',
-        help='the tag was published before and is published again',
-    )
     commands.add_parser(
         'notes', help="print the version's CHANGELOG.md section"
     ).add_argument('version')
@@ -290,7 +326,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == 'latest':
-            top = highest(git_tags())
+            top = highest(git_tags(), releases_only=True)
             sys.stdout.write(f'{top}\n' if top else '')
             return 0
         text = CHANGELOG.read_bytes().decode('utf-8')
@@ -299,14 +335,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == 'prepare':
             parse_version(args.version)
             _refuse_not_above_highest(args.version, git_tags())
-            today = dt.datetime.now(tz=dt.UTC).date().isoformat()
-            changelog = prepare(text, args.version, today)
-            COMPOSE.write_bytes(pin_images(compose, args.version).encode('utf-8'))
-            CHANGELOG.write_bytes(changelog.encode('utf-8'))
+            pinned = pin_images(compose, args.version)
+            if is_candidate(args.version):
+                unreleased(text)  # a candidate of nothing is refused
+            else:
+                today = dt.datetime.now(tz=dt.UTC).date().isoformat()
+                changelog = prepare(text, args.version, today)
+                CHANGELOG.write_bytes(changelog.encode('utf-8'))
+            COMPOSE.write_bytes(pinned.encode('utf-8'))
         elif args.command == 'check':
-            flags = check(
-                args.version, git_tags(), text, compose, republish=args.republish
-            )
+            flags = check(args.version, git_tags(), text, compose)
             lines = [f'version={args.version}\n']
             lines += [f'{key}={str(value).lower()}\n' for key, value in flags.items()]
             sys.stdout.write(''.join(lines))

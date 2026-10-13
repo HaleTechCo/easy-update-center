@@ -120,7 +120,20 @@ def test_prepare_refuses_a_version_the_changelog_already_has():
         release.prepare(CHANGELOG, '0.1.0', '2026-11-02')
 
 
-@pytest.mark.parametrize('version', ['1.0', 'v1.0.0', '01.0.0', '1.0.0-rc1', '1.0.0 '])
+@pytest.mark.parametrize(
+    'version',
+    [
+        '1.0',
+        'v1.0.0',
+        '01.0.0',
+        '1.0.0-rc1',
+        '1.0.0 ',
+        '1.0.0-rc.0',
+        '1.0.0-rc.01',
+        '1.0.0-beta.1',
+        '1.0.0-rc',
+    ],
+)
 def test_a_version_is_x_y_z(version):
     with pytest.raises(release.ReleaseError, match='is not a version'):
         release.prepare(CHANGELOG, version, '2026-11-02')
@@ -183,7 +196,7 @@ def test_notes_refuse_a_version_the_changelog_lacks():
 
 
 def test_highest_compares_versions_as_numbers_and_ignores_other_tags():
-    tags = ['v0.9.1', 'v0.10.0', 'v0.2.0', 'backup/x', 'v1.0.0-rc1']
+    tags = ['v0.9.1', 'v0.10.0', 'v0.2.0', 'backup/x', 'v1.0.0-beta.1']
     assert release.highest(tags) == '0.10.0'
     assert release.highest(['backup/settings-file-pre-squash']) is None
 
@@ -192,59 +205,43 @@ def test_highest_compares_versions_as_numbers_and_ignores_other_tags():
 def test_check_a_pushed_release(version):
     changelog, compose = released(version)
     tags = [*TAGS, f'v{version}']
-    flags = release.check(version, tags, changelog, compose, republish=False)
-    assert flags == {'latest': True, 'minor_latest': True}
+    flags = release.check(version, tags, changelog, compose)
+    assert flags == {'prerelease': False, 'latest': True, 'minor_latest': True}
 
 
 def test_check_the_first_release():
     compose = release.pin_images(COMPOSE, '0.1.0')
     tags = ['backup/x', 'v0.1.0']
-    flags = release.check('0.1.0', tags, CHANGELOG, compose, republish=False)
-    assert flags == {'latest': True, 'minor_latest': True}
+    flags = release.check('0.1.0', tags, CHANGELOG, compose)
+    assert flags == {'prerelease': False, 'latest': True, 'minor_latest': True}
 
 
-@pytest.mark.parametrize('republish', [False, True])
-def test_check_refuses_a_tag_never_pushed(republish):
+def test_check_refuses_a_tag_never_pushed():
     changelog, compose = released('0.2.1')
     message = r'v0\.2\.1 does not exist: push the tag first'
     with pytest.raises(release.ReleaseError, match=message):
-        release.check('0.2.1', TAGS, changelog, compose, republish=republish)
+        release.check('0.2.1', TAGS, changelog, compose)
 
 
 def test_check_refuses_a_new_tag_not_above_the_highest_release():
     changelog, compose = released('0.1.2')
     message = r'0\.1\.2 is not above the highest release, 0\.2\.0'
     with pytest.raises(release.ReleaseError, match=message):
-        release.check('0.1.2', [*TAGS, 'v0.1.2'], changelog, compose, republish=False)
+        release.check('0.1.2', [*TAGS, 'v0.1.2'], changelog, compose)
 
 
 def test_check_refuses_a_tag_without_its_changelog_section():
     compose = release.pin_images(COMPOSE, '0.2.1')
     message = r'CHANGELOG\.md has no section for 0\.2\.1: tag the merged release'
     with pytest.raises(release.ReleaseError, match=message):
-        release.check('0.2.1', [*TAGS, 'v0.2.1'], CHANGELOG, compose, republish=False)
+        release.check('0.2.1', [*TAGS, 'v0.2.1'], CHANGELOG, compose)
 
 
 def test_check_refuses_a_tag_whose_compose_file_names_other_images():
     changelog, _ = released('0.2.1')
     message = r'compose\.yaml names other images than 0\.2\.1'
     with pytest.raises(release.ReleaseError, match=message):
-        release.check('0.2.1', [*TAGS, 'v0.2.1'], changelog, COMPOSE, republish=False)
-
-
-@pytest.mark.parametrize(
-    ('version', 'flags'),
-    [
-        ('0.2.0', {'latest': True, 'minor_latest': True}),
-        ('0.1.1', {'latest': False, 'minor_latest': True}),
-        ('0.1.0', {'latest': False, 'minor_latest': False}),
-    ],
-)
-def test_republishing_moves_latest_and_the_minor_tag_only_for_the_highest(
-    version, flags
-):
-    compose = release.pin_images(COMPOSE, version)
-    assert release.check(version, TAGS, HISTORY, compose, republish=True) == flags
+        release.check('0.2.1', [*TAGS, 'v0.2.1'], changelog, COMPOSE)
 
 
 def test_pin_images_sets_every_uc_and_web_image_to_the_version():
@@ -276,9 +273,7 @@ def test_the_command_line_prepares_checks_and_prints_notes(
     monkeypatch.setattr(release, 'git_tags', lambda: [*TAGS, 'v0.2.1'])
     assert release.main(['check', '0.2.1']) == 0
     output = capsys.readouterr().out
-    assert output == 'version=0.2.1\nlatest=true\nminor_latest=true\n'
-    assert release.main(['check', '0.2.1', '--republish']) == 0
-    capsys.readouterr()
+    assert output == 'version=0.2.1\nprerelease=false\nlatest=true\nminor_latest=true\n'
     assert release.main(['notes', '0.2.1']) == 0
     notes = capsys.readouterr().out
     assert notes == '### Changed\n\n- A change.\n\n### Added\n\n- A new thing.\n'
@@ -328,3 +323,73 @@ def test_git_tags_lists_the_repository_tags(tmp_path, monkeypatch):
     git('tag', 'backup/x')
     monkeypatch.chdir(tmp_path)
     assert sorted(release.git_tags()) == ['backup/x', 'v0.1.0']
+
+
+COMPOSE_RC = (
+    'services:\n'
+    '  uc: {image: "${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc'
+    ':0.2.0-rc.1}"}\n'
+    '  web: {image: "${WEB_IMAGE:-ghcr.io/haletechco/easy-update-center-web'
+    ':0.2.0-rc.1}"}\n'
+)
+
+
+def test_candidates_sort_below_their_release_and_by_number():
+    order = ['0.1.0', '0.2.0-rc.1', '0.2.0-rc.2', '0.2.0-rc.10', '0.2.0', '0.2.1-rc.1']
+    assert sorted(sorted(order, key=str), key=release.parse_version) == order
+
+
+def test_highest_can_ignore_candidates():
+    tags = ['v0.1.0', 'v0.2.0-rc.1']
+    assert release.highest(tags) == '0.2.0-rc.1'
+    assert release.highest(tags, releases_only=True) == '0.1.0'
+
+
+def test_check_a_candidate_moves_no_floating_tag():
+    flags = release.check(
+        '0.2.0-rc.1', ['v0.1.0', 'v0.2.0-rc.1'], CHANGELOG, COMPOSE_RC
+    )
+    assert flags == {'prerelease': True, 'latest': False, 'minor_latest': False}
+
+
+def test_check_refuses_a_candidate_below_its_release():
+    with pytest.raises(
+        release.ReleaseError, match=r'not above the highest release, 0\.2\.0'
+    ):
+        release.check('0.2.0-rc.3', ['v0.2.0', 'v0.2.0-rc.3'], CHANGELOG, COMPOSE_RC)
+
+
+def test_check_refuses_a_candidate_with_nothing_unreleased():
+    with pytest.raises(release.ReleaseError, match='no entries under "## Unreleased"'):
+        release.check('0.2.0-rc.1', ['v0.1.0', 'v0.2.0-rc.1'], PREPARED, COMPOSE_RC)
+
+
+def test_a_release_after_its_candidates_is_the_latest():
+    compose = COMPOSE_RC.replace('0.2.0-rc.1', '0.2.0')
+    flags = release.check(
+        '0.2.0', ['v0.1.0', 'v0.2.0-rc.1', 'v0.2.0'], PREPARED, compose
+    )
+    assert flags == {'prerelease': False, 'latest': True, 'minor_latest': True}
+
+
+def test_candidate_notes_are_the_unreleased_entries():
+    text = release.notes(CHANGELOG, '0.2.0-rc.1')
+    assert text.startswith('### Changed\n\n- A change.')
+    assert '[0.1.0]' not in text
+
+
+def test_the_command_line_prepares_and_checks_a_candidate(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'CHANGELOG.md').write_bytes(CHANGELOG.encode('utf-8'))
+    (tmp_path / 'compose.yaml').write_bytes(COMPOSE.encode('utf-8'))
+    monkeypatch.setattr(release, 'git_tags', lambda: TAGS)
+    assert release.main(['prepare', '0.3.0-rc.1']) == 0
+    assert (tmp_path / 'CHANGELOG.md').read_bytes() == CHANGELOG.encode('utf-8')
+    compose = (tmp_path / 'compose.yaml').read_text(encoding='utf-8')
+    assert compose == COMPOSE.replace(':0.2.0}', ':0.3.0-rc.1}')
+    monkeypatch.setattr(release, 'git_tags', lambda: [*TAGS, 'v0.3.0-rc.1'])
+    assert release.main(['check', '0.3.0-rc.1']) == 0
+    expected = 'version=0.3.0-rc.1\nprerelease=true\nlatest=false\nminor_latest=false\n'
+    assert capsys.readouterr().out == expected
