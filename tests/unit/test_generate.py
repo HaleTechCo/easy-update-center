@@ -15,6 +15,7 @@ from sitefixture import DEFAULT_PLUGINS
 from uc.aql import AqlError, RepoFile
 from uc.generate import Toolchain, generate
 from uc.htaccess import absolute_targets
+from uc.http import HttpError
 from uc.jar import JarError
 from uc.model import Tiers
 from uc.pki import cert_der_b64
@@ -410,3 +411,20 @@ def test_a_generation_with_doctor_counts_keeps_the_recorded_core_check(
     assert (
         block['checked_at'] == '2026-09-22T03:00:00Z'
     )  # the injected start time, not the wall clock
+
+
+def test_status_warnings_name_no_url_but_the_log_does(tmp_path, secrets_dir, capsys):
+    url = 'https://tools.internal.corp/updates/'
+    settings = make_settings(tmp_path, secrets_dir, TOOL_INSTALLERS_URL=url)
+
+    def refused(fetched, _headers=None, _timeout=60):
+        msg = f'GET {fetched} failed: refused'
+        raise HttpError(msg)
+
+    tools = tools_for(settings)
+    tools.http_get = refused
+    generate(settings, tools=tools, now=T1, base_env={})
+    warnings = read_status(settings.data_dir)['warnings']
+    assert any('tool installers' in w for w in warnings)
+    assert not any('tools.internal.corp' in w for w in warnings)
+    assert 'tools.internal.corp' in capsys.readouterr().err

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +50,12 @@ class Toolchain:
     aql_query: AqlQuery = aql.query_repository
     http_get: http.Getter = http.get
     versions: VersionTool | None = None
+
+
+def _log_warnings(warnings: list[str]) -> None:
+    """Print every warning in full to the log: status.json gets them without URLs."""
+    for warning in warnings:
+        print(f'uc: warning: {warning}', file=sys.stderr)
 
 
 def generate(
@@ -100,6 +107,7 @@ def generate(
             )
         except Exception as exc:
             publish.mark_failed(data, release_id)
+            _log_warnings(warnings)
             status.update_status(
                 data,
                 mode=settings.mode,
@@ -109,7 +117,7 @@ def generate(
                     'error': errors.public_summary(exc),
                     'finished_at': iso(utcnow()),
                 },
-                warnings=warnings,
+                warnings=errors.public_warnings(warnings),
             )
             raise
         finally:
@@ -227,6 +235,7 @@ def _build_and_publish(
     publish.prune(data, settings.retain_releases)
     finished = utcnow()
     age = prepared.info.age_days(finished)
+    _log_warnings(warnings)
     status.write_status(
         data,
         {
@@ -259,7 +268,7 @@ def _build_and_publish(
             },
             'tiers': {'weekly': list(tiers.weekly), 'stable': list(tiers.stable)},
             'plugin_count': result.plugin_count,
-            'warnings': warnings,
+            'warnings': errors.public_warnings(warnings),
             'doctor': doctor_summary,
         },
         # Without counts of its own (DOWNLOAD_BACKEND=mirror) it keeps the recorded

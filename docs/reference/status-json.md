@@ -6,8 +6,8 @@ Every field of status.json, the public report of the last run and the live relea
 
 - `$PUBLIC_URL/status.json`, served by the web container with `Cache-Control: no-store`. It is
   public: it never holds credentials, and a failure appears only as its error class. `warnings` can
-  name plugin coordinates or the URL of an upstream-data source that failed to download; restrict
-  `/status.json` at your proxy if those URLs are sensitive.
+  name plugin coordinates; URLs in them show as `<url>`, and the generator log
+  (`docker compose logs scheduler`) has the full text.
 - `docker compose run --rm uc status` prints the same document.
 - On the data volume it is `/data/status.json`.
 
