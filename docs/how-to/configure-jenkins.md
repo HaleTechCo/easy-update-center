@@ -73,6 +73,10 @@ JENKINS_UC_EXPERIMENTAL=https://jenkins-updates.example.com/experimental
 JENKINS_PLUGIN_INFO=https://jenkins-updates.example.com/current/plugin-versions.json
 ```
 
+`jenkins-plugin-cli` checks no update-center signatures: HTTPS is all that protects what it installs.
+Use the `https://` URL, with your TLS certificate's CA in the truststore of the Java runtime it runs
+on, and keep `JENKINS_PLUGIN_INFO` pointed at this update center: unset, it reads updates.jenkins.io.
+
 `JENKINS_UC` is the bare origin, with no path: the tool builds download URLs from its host and
 ignores any path. No download variable is needed. For example, in a controller image:
 

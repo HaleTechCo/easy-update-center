@@ -211,6 +211,8 @@ def tls_backend(tls: Path, hostname: str) -> None:
     (tls / 'chain.pem').write_text(
         (tls / 'leaf.crt').read_text() + (tls / 'intermediate.crt').read_text()
     )
+    # web-tls reads the key as uid 10001; a test fixture, never a deployment's key
+    (tls / 'leaf.key').chmod(0o644)
 
 
 def main(root: Path) -> None:

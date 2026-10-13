@@ -5,7 +5,9 @@ files.
 """
 
 import base64
+import http.client
 import json
+import ssl
 
 import pytest
 
@@ -189,3 +191,28 @@ def test_redirects_drop_the_query_string():
     response = fetch('web-full', '/download/plugins/git/5.2.0/git.hpi?x=1')
     assert response.status == 302
     assert '?' not in response.location
+
+
+def test_with_tls_on_plain_http_only_redirects_to_the_public_url():
+    response = fetch('web-tls', '/update-center.json?version=2.528.1')
+    assert response.status == 301
+    assert (
+        response.location == 'https://web-tls:8443/update-center.json?version=2.528.1'
+    )
+
+
+def test_tls_responses_carry_hsts_and_nosniff():
+    context = ssl.create_default_context(cafile='/fixtures/tls/root.crt')
+    context.check_hostname = False  # the fixture certificate names backend-tls
+    connection = http.client.HTTPSConnection(
+        'web-tls', 8443, timeout=10, context=context
+    )
+    try:
+        connection.request('GET', '/uctest.json')
+        response = connection.getresponse()
+        response.read()
+    finally:
+        connection.close()
+    assert response.status == 200
+    assert response.getheader('Strict-Transport-Security') == 'max-age=31536000'
+    assert response.getheader('X-Content-Type-Options') == 'nosniff'

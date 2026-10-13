@@ -62,6 +62,7 @@ esac
 
 if [[ -n "${TLS_CERT_FILE:-}" || -n "${TLS_KEY_FILE:-}" ]]; then
     [[ -r "${TLS_CERT_FILE:-}" && -r "${TLS_KEY_FILE:-}" ]] || die "TLS_CERT_FILE and TLS_KEY_FILE must both be readable"
+    [[ "${PUBLIC_URL}" == https://* ]] || die "with TLS_CERT_FILE and TLS_KEY_FILE set, PUBLIC_URL must start with https:// (port 8080 then only redirects to it)"
     defines+=(-D TLS -D NEED_SSL)
 fi
 

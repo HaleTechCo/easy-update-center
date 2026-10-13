@@ -53,3 +53,15 @@ To keep an expiring certificate from ever reaching controllers, every `uc genera
 when the signing certificate expires within `CERTIFICATE_MINIMUM_VALID_DAYS` (default 30), and the
 generator applies the same limit. Publication stops, the live release stays as it was, and
 `status.json` and the log say why.
+
+## What a signature proves
+
+- **That this update center vouched for a checksum, not that the plugin is good.** update-center2
+  signs the checksums the repository reports without downloading the files, so whoever can write
+  your repository can put a plugin on every controller. Guard the repository's write access as you
+  guard the signing key.
+- **Nothing about which update center it came from.** Jenkins trusts the Jenkins project's bundled
+  roots alongside the roots in `update-center-rootCAs/`, for every update site, and checks no
+  revocation and no freshness. Serve the site over HTTPS ([Enable TLS](../how-to/enable-tls.md)) and
+  keep the signing certificate short-lived
+  ([Rotate the signing certificate](../how-to/rotate-signing-certificate.md)).

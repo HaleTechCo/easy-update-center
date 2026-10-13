@@ -67,6 +67,7 @@ expect_exit 64 "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL" -e PUBL
 expect_exit 64 "DOWNLOAD_ACCESS=proxy needs DOWNLOAD_BACKEND_URL set explicitly" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy
 expect_exit 64 "needs username:password" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy -e DOWNLOAD_BACKEND=artifactory -e DOWNLOAD_BACKEND_URL=https://repo.corp/jenkins
 expect_exit 64 "TLS_CERT_FILE and TLS_KEY_FILE must both be readable" -e PUBLIC_URL=http://uc -e TLS_CERT_FILE=/nope
+expect_exit 64 "PUBLIC_URL must start with https://" -e PUBLIC_URL=http://uc -e TLS_CERT_FILE=/etc/ssl/certs/ca-certificates.crt -e TLS_KEY_FILE=/etc/ssl/certs/ca-certificates.crt
 
 no_credentials="DOWNLOAD_BACKEND_URL must not contain credentials or an @; for proxied downloads put them in secrets/download_proxy_auth"
 expect_exit 64 "${no_credentials}" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e DOWNLOAD_BACKEND_URL=https://u:pw@art/repo # pragma: allowlist secret

@@ -2,8 +2,21 @@
 
 How to serve the update center over HTTPS, behind your own proxy or from the web container itself.
 
-Signatures already protect the metadata's integrity, so plain HTTP is not unsafe for Jenkins, but
-HTTPS is recommended: it protects downloads through proxy mode, and many networks require it.
+HTTPS is required for production. Signatures stop anyone from changing the metadata, but over plain
+HTTP anyone on the network path between a controller and the update center can still:
+
+- **replay older metadata.** Jenkins accepts any file signed by a certificate that is still valid,
+  however old, so an attacker can keep serving last month's file and hide every security warning
+  published since.
+- **swap in another signed file.** Jenkins trusts the Jenkins project's own roots alongside yours,
+  for every update site, so updates.jenkins.io's genuine file passes as yours, without your blocked
+  plugins and your own warnings.
+- **send a controller to an older tier.** The `?version=` redirects are not signed.
+- **take over `jenkins-plugin-cli`.** It checks no signatures at all, so over HTTP it installs
+  whatever plugins and checksums it is sent.
+
+Plain HTTP is fine for a trial on one machine. `uc config --check` and every run warn while
+`PUBLIC_URL` uses it.
 
 ## Behind a reverse proxy
 
@@ -23,9 +36,14 @@ needed in the proxy.
 Keep port 8080 away from everyone but the proxy, especially in proxy download mode, where it would
 serve repository files over plain HTTP. `HTTP_PORT` accepts a bind address: with the proxy on the
 same host, `HTTP_PORT=127.0.0.1:8080` in `.env` publishes it on the loopback interface only.
-Otherwise restrict it with the host's firewall.
+Otherwise restrict it in the
+`DOCKER-USER` chain: ports Docker publishes bypass ufw and firewalld rules.
 
 ## In the web container
+
+With TLS on, port 8080 answers every request with a redirect to
+`PUBLIC_URL`, which must then start with `https://`. Jenkins controllers do not follow a redirect
+from http to https, so change each controller's update site to the https URL.
 
 Mount a certificate and key and point `TLS_CERT_FILE` and `TLS_KEY_FILE` at them, in a Compose
 override file next to `compose.yaml`:
@@ -50,5 +68,5 @@ COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.tls.yaml       # air-ga
 ```
 
 Then run `docker compose up -d`. Port 8443
-(`HTTPS_PORT` on the host) then serves TLS with Mozilla's "intermediate" settings; 8080 stays
-available for a proxy in front. Set `PUBLIC_URL` to the `https://` origin and publish a new release.
+(`HTTPS_PORT` on the host) then serves TLS with Mozilla's "intermediate" settings and 8080 only redirects to it. Set `PUBLIC_URL`
+to the `https://` origin and publish a new release.
