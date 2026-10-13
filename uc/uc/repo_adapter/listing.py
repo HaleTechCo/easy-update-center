@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from uc.aql import Gav, RepoFile, to_gav
-from uc.config import PUBLIC_RELEASES_URL
+from uc.config import PUBLIC_RELEASES_URL, UnsafeFileError, read_untrusted
 from uc.http import HttpError
 from uc.pom import Coordinates, unusable_reason
 from uc.timeutil import iso
@@ -345,13 +345,25 @@ def write_report(report: Report, path: Path) -> None:
     Path(tmp).replace(path)
 
 
+REPORT_LIMIT = 16 * 1024 * 1024
+"""The largest report.json uc reads."""
+
+
 def read_report(path: Path) -> dict | None:
     """Return the last report written.
 
-    None when there is none or it is not a JSON object.
+    None when there is none, or it is not a JSON object, or it is a link, not a
+    regular file or larger than REPORT_LIMIT: uc reads it from the adapter's volume,
+    which the adapter can write.
     """
     try:
-        value = json.loads(path.read_text(encoding='utf-8'))
-    except (FileNotFoundError, ValueError):
+        data = read_untrusted(path, REPORT_LIMIT)
+    except UnsafeFileError:
+        return None
+    if data is None:
+        return None
+    try:
+        value = json.loads(data)
+    except ValueError:
         return None
     return value if isinstance(value, dict) else None

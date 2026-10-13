@@ -34,6 +34,7 @@ from ucsupport import make_settings
 T1 = dt.datetime(2026, 9, 22, 3, 0, tzinfo=dt.UTC)
 T2 = dt.datetime(2026, 9, 22, 9, 0, tzinfo=dt.UTC)
 TIERS = Tiers(('2.540',), ('2.528.1',))
+ADAPTER_TOKEN = 'a1' * 32  # what the adapter writes: 64 hex digits
 
 
 def repo_files():
@@ -271,7 +272,7 @@ def test_generate_reclaims_orphaned_staging_and_work(tmp_path, secrets_dir):
 def test_generation_through_the_adapter(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on')
     settings.repo_adapter_dir.mkdir(parents=True)
-    settings.repo_adapter_token_file.write_text('adapter-token\n')
+    settings.repo_adapter_token_file.write_text(ADAPTER_TOKEN + '\n')
     settings.repo_adapter_report_file.write_text(
         json.dumps(
             {
@@ -302,13 +303,13 @@ def test_generation_through_the_adapter(tmp_path, secrets_dir):
     assert env['ARTIFACTORY_URL'] == 'http://repo-adapter:8081/artifactory/'
     assert (env['ARTIFACTORY_USERNAME'], env['ARTIFACTORY_PASSWORD']) == (
         'uc',
-        'adapter-token',
+        ADAPTER_TOKEN,
     )
     assert queries[0] == (
         'http://repo-adapter:8081/artifactory/api/',
         'jenkins',
         'uc',
-        'adapter-token',
+        ADAPTER_TOKEN,
         None,
     )
     status = read_status(settings.data_dir)

@@ -6,10 +6,12 @@ The gap-filled listing (derived and replaced POMs, dates) and its report.
 import datetime as dt
 import hashlib
 import json
+import os
 import stat
 
 from archivefixture import make_hpi, make_war, pom_xml
 from fakebackend import FakeBackend
+from uc.repo_adapter import listing
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import build_index, read_report, write_report
 
@@ -320,6 +322,33 @@ def test_report_is_written_privately(tmp_path):
     ]
     assert json.loads(path.read_text())['generated_at'] == '2026-09-23T00:00:00Z'
     assert read_report(tmp_path / 'missing.json') is None
+
+
+def test_a_report_that_is_a_link_or_not_a_regular_file_reads_as_none(tmp_path):
+    # The adapter can write its volume; uc reads the report from there.
+    real = tmp_path / 'real.json'
+    real.write_text('{"archives": 1}\n')
+    assert read_report(real) == {'archives': 1}
+    link = tmp_path / 'link.json'
+    link.symlink_to(real)
+    assert read_report(link) is None
+    fifo = tmp_path / 'fifo.json'
+    os.mkfifo(fifo)
+    assert read_report(fifo) is None
+    assert read_report(tmp_path) is None
+
+
+def test_an_oversized_report_reads_as_none(tmp_path, monkeypatch):
+    path = tmp_path / 'report.json'
+    path.write_text('{"archives": 1}\n')
+    monkeypatch.setattr(listing, 'REPORT_LIMIT', len('{"archives": 1}\n'))
+    assert read_report(path) == {'archives': 1}
+    monkeypatch.setattr(listing, 'REPORT_LIMIT', len('{"archives": 1}\n') - 1)
+    assert read_report(path) is None
+
+
+def test_the_report_limit_is_16_mib():
+    assert listing.REPORT_LIMIT == 16 * 1024 * 1024
 
 
 CHECKED_GAV = ('io.jenkins.plugins', 'caffeine-api', '3.2.4')

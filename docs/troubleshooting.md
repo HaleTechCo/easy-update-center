@@ -74,6 +74,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](ref
 | Symptom | Cause and fix |
 |---|---|
 | `repo-adapter token missing: /data/repo-adapter/token` | The repo-adapter has not started. Check `docker compose logs repo-adapter`. |
+| `repo-adapter token refused: /data/repo-adapter/token is a symbolic link` (or `is not a regular file`, `is larger than 128 bytes`, `is not 64 lower-case hex digits`) | The token is not what the repo-adapter writes. Something other than the adapter may have written its volume: find out what, then remove the file and run `docker compose restart repo-adapter`, which writes a new one. |
 | `REPO_TYPE=artifact-keeper needs REPO_ADAPTER=on` | Only the adapter can read Artifact Keeper. Remove `REPO_ADAPTER=off`. |
 | Its log shows `listing failed: ... HTTP 401` | Wrong repository credentials. For Artifact Keeper, `repo_password` must be an API token, not the password. |
 | Its log shows certificate verification errors | The repository uses a private CA: [Repository behind a private CA](getting-started/airgapped.md#repository-behind-a-private-ca). |

@@ -7,10 +7,18 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import re
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from .config import NO_CREDENTIALS, PLAIN_HTTP, Settings, read_secret
+from .config import (
+    NO_CREDENTIALS,
+    PLAIN_HTTP,
+    Settings,
+    UnsafeFileError,
+    read_secret,
+    read_untrusted,
+)
 from .errors import UcError
 from .model import Credentials
 from .pki import CertInfo, cert_info, key_matches_cert, verify_chain
@@ -116,16 +124,39 @@ def load_repository_credentials(settings: Settings) -> tuple[str, str]:
     return user, password
 
 
+ADAPTER_TOKEN = re.compile(rb'[0-9a-f]{64}')
+"""What the repo-adapter writes: secrets.token_hex(32)."""
+ADAPTER_TOKEN_LIMIT = 128
+
+
 def load_adapter_token(settings: Settings) -> str:
-    """Return the token the repo-adapter service writes when it starts."""
-    token = read_secret(settings.repo_adapter_token_file)
+    """Return the token the repo-adapter service writes when it starts.
+
+    It lies on the adapter's volume, which the adapter can write, and goes back to the
+    adapter as the repository password: so read it without following a link (to this
+    container's own secrets), and accept only what the adapter writes.
+    """
+    path = settings.repo_adapter_token_file
+    refused = 'remove it and restart the repo-adapter service, which writes a new one'
+    try:
+        data = read_untrusted(path, ADAPTER_TOKEN_LIMIT)
+    except UnsafeFileError as exc:
+        msg = f'repo-adapter token refused: {exc}; {refused}'
+        raise PreflightError(msg) from None
+    token = (data or b'').strip()
     if not token:
         msg = (
-            f'repo-adapter token missing: {settings.repo_adapter_token_file}; '
+            f'repo-adapter token missing: {path}; '
             'the repo-adapter service creates it when it starts'
         )
         raise PreflightError(msg)
-    return token
+    if not ADAPTER_TOKEN.fullmatch(token):
+        msg = (
+            f'repo-adapter token refused: {path} is not 64 lower-case hex digits; '
+            f'{refused}'
+        )
+        raise PreflightError(msg)
+    return token.decode('ascii')
 
 
 def load_credentials(settings: Settings) -> Credentials:

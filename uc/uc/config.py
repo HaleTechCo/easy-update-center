@@ -9,15 +9,17 @@ settings where empty means "off" (POPULARITY_JSON_URL, TOOL_INSTALLERS_URL).
 
 from __future__ import annotations
 
+import errno
 import ipaddress
 import os
 import re
+import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import unquote, urlsplit, urlunsplit
 
-from .errors import ConfigError
+from .errors import ConfigError, UcError
 from .procure.staging import DEFAULT_STAGING
 from .settings import CORE_VERSION, REGISTRY
 
@@ -729,3 +731,42 @@ def read_secret(path: Path) -> str | None:
     except FileNotFoundError:
         return None
     return value or None
+
+
+class UnsafeFileError(UcError):
+    """A file another container can write is a link, not a regular file, or too big."""
+
+
+def read_untrusted(path: Path, limit: int) -> bytes | None:
+    """Return the contents of path, a file another container can write; None if missing.
+
+    Such as the repo-adapter's token and report on its own volume. Refuse
+    (UnsafeFileError) a symbolic link, which could point at this container's own
+    secrets, anything but a regular file, which could block or never end, and more than
+    limit bytes, without following the link, blocking or reading more than limit + 1
+    bytes. The messages name the path, never the contents.
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        if exc.errno != errno.ELOOP:
+            raise
+        msg = f'{path} is a symbolic link'
+        raise UnsafeFileError(msg) from None
+    try:
+        regular = stat.S_ISREG(os.fstat(fd).st_mode)
+    except OSError:
+        os.close(fd)
+        raise
+    if not regular:
+        os.close(fd)
+        msg = f'{path} is not a regular file'
+        raise UnsafeFileError(msg)
+    with os.fdopen(fd, 'rb') as file:
+        data = file.read(limit + 1)
+    if len(data) > limit:
+        msg = f'{path} is larger than {limit} bytes'
+        raise UnsafeFileError(msg)
+    return data

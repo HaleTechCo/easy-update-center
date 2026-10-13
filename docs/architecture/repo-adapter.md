@@ -144,7 +144,10 @@ and pass its own check, so an error page is never cached as content.
   `/data/repo-adapter/token` (mode 0600), in the `repo-adapter-data` volume that the scheduler and `uc`
   mount read-only and web does not mount. `uc` passes it to the generator as the repository
   password, and the listing is refused without it (HTTP 401). Only services on the internal `repo`
-  network can reach the listing; the web container is not on it.
+  network can reach the listing; the web container is not on it. Since the adapter can write that
+  volume, `uc` reads the token, and `report.json`, without following a link and only from a regular,
+  small file, and accepts only the 64 hex digits the adapter writes: a link to the signing key would
+  otherwise go back to the adapter as the password.
 - **File reads need no token**, because the generator cannot answer a challenge on them. They serve
   only POMs, manifests and descriptions, never archives, and only on the internal `repo` network,
   which the web container is not on.
