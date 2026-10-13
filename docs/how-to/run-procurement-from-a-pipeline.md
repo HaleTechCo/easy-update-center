@@ -33,6 +33,17 @@ The agent's user needs:
   user root on the host, so treat the agent accordingly);
 - read access to `UC_DIR`.
 
+That agent holds the update center's keys. Anyone who can run a job on the `uc-host` label (anyone
+with job configuration rights on that Jenkins, or whoever controls that Jenkins) can read
+`secrets/update-center.key`, and with it sign metadata every controller trusting your root accepts.
+So:
+
+- run this pipeline on a Jenkins that does not itself install plugins from this update center, so a
+  compromise of one cannot sign for the other;
+- restrict which jobs may use the `uc-host` label (Jenkins' job restrictions, or a folder only the
+  update center's administrators can configure);
+- treat that Jenkins's administrators as holders of the signing key.
+
 Before the first run:
 
 - **Prepare the host** once, as for running the stages by hand
