@@ -8,6 +8,8 @@ die() {
     echo "entrypoint: $*" >&2
     exit 64
 }
+uid="$(id -u)"
+[[ "${uid}" != 0 ]] || die "web must not run as root: set UC_UID and UC_GID in .env to your own user (id -u, id -g)"
 
 [[ -n "${PUBLIC_URL:-}" ]] || die "PUBLIC_URL must be set"
 case "${MODE:-}" in

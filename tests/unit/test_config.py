@@ -871,3 +871,9 @@ def test_proxy_mode_needs_an_explicit_backend_url():
         ConfigError, match='DOWNLOAD_ACCESS=proxy needs DOWNLOAD_BACKEND_URL'
     ):
         load_settings({**ONLINE, 'DOWNLOAD_ACCESS': 'proxy'})
+
+
+@pytest.mark.parametrize('name', ['UC_UID', 'UC_GID'])
+def test_the_containers_must_not_run_as_root(name):
+    with pytest.raises(ConfigError, match=f'{name} must not be 0'):
+        load_settings({**ONLINE, name: '0'})

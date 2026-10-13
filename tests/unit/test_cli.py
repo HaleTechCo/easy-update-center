@@ -1629,3 +1629,18 @@ def test_the_repo_adapter_checks_its_own_directory(tmp_path, monkeypatch, secret
     )
     cli.main(['repo-adapter'])
     assert checked == [tmp_path / 'adapter']
+
+
+def test_uc_refuses_to_run_as_root(monkeypatch, capsys):
+    monkeypatch.setattr(cli.os, 'getuid', lambda: 0)
+    monkeypatch.delenv('UC_ALLOW_ROOT', raising=False)
+    monkeypatch.setattr(cli, '_dispatch', lambda _args: 0)
+    assert cli.main(['status']) == 1
+    assert 'uc must not run as root' in capsys.readouterr().err
+
+
+def test_the_tests_may_run_uc_as_root(monkeypatch):
+    monkeypatch.setattr(cli.os, 'getuid', lambda: 0)
+    monkeypatch.setenv('UC_ALLOW_ROOT', '1')
+    monkeypatch.setattr(cli, '_dispatch', lambda _args: 0)
+    assert cli.main(['status']) == 0

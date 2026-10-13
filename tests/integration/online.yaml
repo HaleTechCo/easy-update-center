@@ -10,6 +10,7 @@ services:
     # Test-only: the stack under test reads repo.jenkins-ci.org, so the community account becomes its
     # repo_username/repo_password secrets here. A deployment reads secrets/repo_* instead.
     environment:
+      UC_ALLOW_ROOT: "1"
       JENKINS_COMMUNITY_USERNAME: ${JENKINS_COMMUNITY_USERNAME:?set JENKINS_COMMUNITY_USERNAME (a Jenkins community account)}
       JENKINS_COMMUNITY_PASSWORD: ${JENKINS_COMMUNITY_PASSWORD:?set JENKINS_COMMUNITY_PASSWORD}
       GITHUB_USERNAME: ${GITHUB_USERNAME:-}
@@ -38,6 +39,7 @@ services:
     image: ${UC_TEST_IMAGE:-easy-update-center/uc-test:local}
     user: "0:0"
     environment:
+      UC_ALLOW_ROOT: "1"
       MODE: online
       PUBLIC_URL: "http://web:8080"
       SECRETS_DIR: /pki

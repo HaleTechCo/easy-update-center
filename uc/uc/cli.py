@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -325,6 +326,13 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = build_parser()
     args = parser.parse_args(argv)
+    if os.getuid() == 0 and not os.environ.get('UC_ALLOW_ROOT'):
+        print(
+            'uc: error: uc must not run as root: set UC_UID and UC_GID in .env to your '
+            'own user (id -u, id -g); docs/reference/configuration.md#compose',
+            file=sys.stderr,
+        )
+        return 1
     if args.command == 'config':
         _check_config_args(parser, args)
     try:

@@ -38,11 +38,13 @@ INTERNAL = {
     'SECRETS_DIR': '/run/secrets',
     'REPO_ADAPTER_URL': 'http://repo-adapter:8081/artifactory/',
     'REPO_ADAPTER_DIR': '',
+    'UC_ALLOW_ROOT': '',
 }
 """Container paths that the unit and integration tests point at their own.
 
 Read from the environment, but not settings (not documented, not in uc config or the
 example files). An empty REPO_ADAPTER_DIR means repo-adapter/ in the data directory.
+UC_ALLOW_ROOT=1 lets uc run as root: the integration stacks run it so.
 """
 _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 # the scheme split_userinfo keeps in front of the user info uc config masks
@@ -350,6 +352,13 @@ def settings_from(r: Resolver) -> Settings:
     """
     mode = _choice(r, 'MODE')
     r.mode = mode
+    for name, flag in (('UC_UID', 'u'), ('UC_GID', 'g')):
+        if r.raw(name) == '0':
+            msg = (
+                f'{name} must not be 0: every container would run as root; set it to '
+                f'the output of id -{flag}'
+            )
+            raise ConfigError(msg)
     online = mode == 'online'
 
     public_url = r.raw('PUBLIC_URL').rstrip('/')

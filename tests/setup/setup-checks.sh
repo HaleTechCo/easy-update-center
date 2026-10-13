@@ -153,6 +153,13 @@ same "stale init folder: exits 0" 0 "${rc}"
 says "stale init folder: says it removed it" "removed secrets/.init-stale, left by an interrupted pki init"
 if [[ -e "${secrets}/.init-stale" ]]; then fail "stale init folder: is gone"; else pass "stale init folder: is gone"; fi
 
+# 9. setup refuses to run as root: the files it writes would be root's.
+fresh
+output="$(sh "${setup}" secrets 2>&1)"
+rc=$?
+same "as root: exits 1" 1 "${rc}"
+says "as root: names UC_UID and UC_GID" "setup must not run as root: set UC_UID and UC_GID in .env"
+
 # 6. Usage.
 fresh
 expect_usage bogus

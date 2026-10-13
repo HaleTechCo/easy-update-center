@@ -23,6 +23,8 @@ die() {
     echo "uc-setup: error: $*" >&2
     exit 1
 }
+uid="$(id -u)"
+[ "${uid}" != 0 ] || die "setup must not run as root: set UC_UID and UC_GID in .env to your own user (id -u, id -g)"
 
 writable() { # writable DIR LABEL - stop unless this uid can create files in DIR
     if ! (: > "$1/.uc-setup-check") 2> /dev/null; then

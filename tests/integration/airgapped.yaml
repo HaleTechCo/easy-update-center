@@ -71,6 +71,7 @@ services:
     image: ${UC_IMAGE:-easy-update-center/uc:local}
     profiles: ["seed"]
     user: "0:0"
+    environment: {UC_ALLOW_ROOT: "1"}
     network_mode: none
     entrypoint:
       - sh
