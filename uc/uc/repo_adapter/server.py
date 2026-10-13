@@ -13,6 +13,7 @@ import http.client
 import json
 import os
 import secrets
+import socket
 import sys
 import threading
 import urllib.error
@@ -55,6 +56,12 @@ MAX_REQUESTS = 32
 """Requests handled at once; more get 503 straight away instead of a thread each."""
 REQUEST_TIMEOUT = 120
 """Seconds a connection may wait for the client before it is closed."""
+READ_DEADLINE = 60
+"""Seconds a client has to send its whole request, headers and body.
+
+Then the connection is closed, so a client trickling bytes cannot hold one of the
+MAX_REQUESTS slots. It stops once the request is read: a long listing still finishes.
+"""
 BUSY = (
     b'HTTP/1.1 503 Service Unavailable\r\n'
     b'Content-Length: 0\r\nConnection: close\r\n\r\n'
@@ -221,9 +228,11 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
     With adapter None, it answers the repository requests with 503.
     """
     expected = (
-        ('Basic ' + base64.b64encode(f'{ADAPTER_USERNAME}:{token}'.encode()).decode())
+        (
+            'Basic ' + base64.b64encode(f'{ADAPTER_USERNAME}:{token}'.encode()).decode()
+        ).encode()
         if token
-        else ''
+        else b''
     )
     repo_prefix = f'{PREFIX}{key}/'
 
@@ -231,9 +240,26 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
         server_version = 'uc-repo-adapter'
         timeout = REQUEST_TIMEOUT
 
+        def setup(self) -> None:
+            super().setup()
+            self._deadline = threading.Timer(READ_DEADLINE, self._expire)
+            self._deadline.daemon = True
+            self._deadline.start()
+
+        def _expire(self) -> None:
+            with contextlib.suppress(OSError):
+                self.connection.shutdown(socket.SHUT_RDWR)
+
+        def finish(self) -> None:
+            self._deadline.cancel()
+            super().finish()
+
         # http.server's signature
         def log_message(self, format: str, *args) -> None:  # noqa: A002
-            sys.stderr.write(f'repo-adapter: {self.address_string()} {format % args}\n')
+            # http.server's own escaping of control characters: a request path cannot
+            # start a forged log line
+            message = (format % args).translate(self._control_char_table)
+            sys.stderr.write(f'repo-adapter: {self.address_string()} {message}\n')
 
         def _send(
             self,
@@ -263,7 +289,8 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 self._send(503, b'REPO_ADAPTER is off\n', 'text/plain')
                 return True
             if authenticate and not hmac.compare_digest(
-                self.headers.get('Authorization', ''), expected
+                self.headers.get('Authorization', '').encode('latin-1', 'replace'),
+                expected,
             ):
                 self.send_response(401)
                 self.send_header('WWW-Authenticate', 'Basic realm="repo-adapter"')
@@ -274,6 +301,7 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
 
         def do_GET(self) -> None:
             path = self.path.split('?', 1)[0]
+            self._deadline.cancel()  # the request is read
             if path == HEALTH_PATH:
                 return self._send(200, b'ok\n', 'text/plain')
             if self._refuse(authenticate=False):
@@ -321,6 +349,7 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
             if length > QUERY_LIMIT:
                 return self._send(413)
             query = self.rfile.read(length).decode('utf-8', 'replace')
+            self._deadline.cancel()  # the request is read
             if query != AQL_TEMPLATE % key:
                 return self._send(400, b'unsupported query\n', 'text/plain')
             try:

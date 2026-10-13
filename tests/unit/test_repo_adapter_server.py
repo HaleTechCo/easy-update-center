@@ -22,6 +22,7 @@ from fakebackend import FakeBackend
 from uc.aql import AQL_TEMPLATE, Gav, classify, query_repository
 from uc.doctor import ArtifactSource
 from uc.errors import UcError
+from uc.repo_adapter import server as server_module
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import read_report
 from uc.repo_adapter.server import (
@@ -420,3 +421,43 @@ def test_make_server_caps_the_requests(tmp_path, secrets_dir):
         assert isinstance(server, AdapterServer)
     finally:
         server.server_close()
+
+
+def port_of(url):
+    return int(url.split(':')[2].split('/')[0])
+
+
+def test_a_non_ascii_authorization_gets_401_not_a_crash(running):
+    _backend, url = running({})
+    body = (AQL_TEMPLATE % KEY).encode()
+    request = (
+        b'POST /artifactory/api/search/aql HTTP/1.0\r\n'
+        b'Authorization: Basic \xe9\xff\r\n'
+        b'Content-Length: ' + str(len(body)).encode() + b'\r\n\r\n' + body
+    )
+    with socket.create_connection(('127.0.0.1', port_of(url)), timeout=5) as conn:
+        conn.sendall(request)
+        reply = conn.recv(1024)
+    assert reply.startswith(b'HTTP/1.0 401')
+
+
+def test_a_request_cannot_forge_a_log_line(running, capfd):
+    _backend, url = running({})
+    with socket.create_connection(('127.0.0.1', port_of(url)), timeout=5) as conn:
+        conn.sendall(
+            f'GET /artifactory/{KEY}/x.hpi!/%0Aforged HTTP/1.0\r\n\r\n'.encode()
+        )
+        conn.recv(1024)
+    err = capfd.readouterr().err
+    assert '\nforged' not in err
+    assert '\\nforged' in err or '\\x0aforged' in err
+
+
+def test_a_client_that_never_finishes_its_request_is_cut_off(running, monkeypatch):
+    monkeypatch.setattr(server_module, 'READ_DEADLINE', 0.5)
+    _backend, url = running({})
+    with socket.create_connection(('127.0.0.1', port_of(url)), timeout=5) as conn:
+        conn.sendall(b'GET /healthz HTTP/1.0\r\n')  # and never the blank line
+        started = time.monotonic()
+        assert conn.recv(1024) == b''
+    assert time.monotonic() - started < 4
