@@ -166,6 +166,16 @@ jobs:
       - name: Create the multi-architecture indexes
         id: merge
         run: |
+          # One digest per platform: a stray one from an earlier attempt would give an index with
+          # two manifests for one platform.
+          shopt -s nullglob
+          for image in uc web; do
+              found=("digests/${image}"/*)
+              if [[ "${#found[@]}" -ne 2 ]]; then
+                  echo "::error::expected 2 ${image} digests, one per platform, found ${#found[@]}: ${found[*]##*/}"
+                  exit 1
+              fi
+          done
           for image in uc web; do
               if [[ "${image}" == uc ]]; then repo="${UC_REPO}"; else repo="${WEB_REPO}"; fi
               sources=()
@@ -361,17 +371,22 @@ jobs:
           PRERELEASE: ${{ needs.check.outputs.prerelease }}
         run: |
           python3 tools/release.py notes "${VERSION}" > "${RUNNER_TEMP}/notes.md"
-          if draft="$(gh release view "v${VERSION}" --json isDraft --jq .isDraft 2> /dev/null)"; then
+          # Only "release not found" means there is none: any other failure (network,
+          # authentication) must not create a second draft for the tag.
+          if draft="$(gh release view "v${VERSION}" --json isDraft --jq .isDraft 2> "${RUNNER_TEMP}/view.err")"; then
               if [[ "${draft}" != true ]]; then
                   echo "::error::v${VERSION} is already published, and a published release is never changed: release the next version"
                   exit 1
               fi
               gh release edit "v${VERSION}" --notes-file "${RUNNER_TEMP}/notes.md"
               gh release upload "v${VERSION}" assets/* --clobber
-          else
+          elif grep -qFx 'release not found' "${RUNNER_TEMP}/view.err"; then
               flags=(--draft --verify-tag --title "${VERSION}" --notes-file "${RUNNER_TEMP}/notes.md")
               if [[ "${PRERELEASE}" == true ]]; then flags+=(--prerelease); fi
               gh release create "v${VERSION}" "${flags[@]}" assets/*
+          else
+              echo "::error::cannot tell whether v${VERSION} has a Release: $(cat "${RUNNER_TEMP}/view.err")"
+              exit 1
           fi
 
   publish:
@@ -384,6 +399,34 @@ jobs:
       VERSION: ${{ needs.check.outputs.version }}
       LATEST: ${{ needs.check.outputs.latest }}
     steps:
+      # gh release edit below publishes whichever draft gh finds for the tag, and a published
+      # release is never changed: so first make sure there is one, holding exactly what draft wrote.
+      - name: Check the draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh api --paginate "repos/${GH_REPO}/releases?per_page=100" > "${RUNNER_TEMP}/releases.json"
+          jq --slurp --arg tag "v${VERSION}" '[.[][] | select(.tag_name == $tag)]' "${RUNNER_TEMP}/releases.json" > "${RUNNER_TEMP}/tagged.json"
+          count="$(jq length "${RUNNER_TEMP}/tagged.json")"
+          if [[ "${count}" -ne 1 ]]; then
+              echo "::error::v${VERSION} has ${count} Releases, not exactly one: delete any extra drafts, then re-run the draft job"
+              exit 1
+          fi
+          assets="$(jq --raw-output '[.[0].assets[].name] | sort | join(" ")' "${RUNNER_TEMP}/tagged.json")"
+          names=(
+              "easy-update-center-${VERSION}-airgapped-amd64.tar"
+              "easy-update-center-${VERSION}-airgapped-arm64.tar"
+              "easy-update-center-uc-${VERSION}.spdx.json"
+              "easy-update-center-web-${VERSION}.spdx.json"
+              SHA256SUMS
+              SHA256SUMS.sigstore.json
+          )
+          expected="$(printf '%s\n' "${names[@]}" | LC_ALL=C sort | paste -sd ' ' -)"
+          if [[ "${assets}" != "${expected}" ]]; then
+              echo "::error::the draft of v${VERSION} has the assets [${assets}], not [${expected}]: re-run the draft job"
+              exit 1
+          fi
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -391,7 +434,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       # One source and no annotations: the tag names the signed index as it is. Any other digest
-      # stops the run before the Release is published.
+      # stops the run before the Release is published. Each tag for both images before the next
+      # tag: X.Y.Z first, so a failure never leaves X.Y or latest naming a mixed pair.
       - name: Tag the images
         env:
           MINOR_LATEST: ${{ needs.check.outputs.minor_latest }}
@@ -401,9 +445,9 @@ jobs:
           tags=("${VERSION}")
           if [[ "${MINOR_LATEST}" == true ]]; then tags+=("${VERSION%.*}"); fi
           if [[ "${LATEST}" == true ]]; then tags+=(latest); fi
-          for image in uc web; do
-              if [[ "${image}" == uc ]]; then repo="${UC_REPO}" digest="${UC_DIGEST}"; else repo="${WEB_REPO}" digest="${WEB_DIGEST}"; fi
-              for tag in "${tags[@]}"; do
+          for tag in "${tags[@]}"; do
+              for image in uc web; do
+                  if [[ "${image}" == uc ]]; then repo="${UC_REPO}" digest="${UC_DIGEST}"; else repo="${WEB_REPO}" digest="${WEB_DIGEST}"; fi
                   docker buildx imagetools create --tag "${repo}:${tag}" "${repo}@${digest}"
                   got="$(docker buildx imagetools inspect "${repo}:${tag}" --format '{{.Manifest.Digest}}')"
                   if [[ "${got}" != "${digest}" ]]; then

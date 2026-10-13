@@ -351,6 +351,36 @@ def test_ci_pulls_the_images_under_test_and_names_them_as_make_expects(tmp_path)
     ]
 
 
+@pytest.mark.parametrize(
+    ('uc', 'web', 'ok'),
+    [
+        ('', '', True),
+        ('ghcr.io/x/uc@sha256:1111', 'ghcr.io/x/web@sha256:2222', True),
+        ('ghcr.io/x/uc@sha256:1111', '', False),
+        ('', 'ghcr.io/x/web@sha256:2222', False),
+    ],
+    ids=['neither', 'both', 'uc-only', 'web-only'],
+)
+def test_ci_refuses_one_image_under_test_without_the_other(tmp_path, uc, web, ok):
+    first = jobs('ci.yml')['images']['steps'][0]
+    assert first.get('name') == 'Check the image inputs'
+    env = {'PATH': PATH, 'UC_IMAGE_UNDER_TEST': uc, 'WEB_IMAGE_UNDER_TEST': web}
+    result = run_bash(tmp_path, first['run'], env, tmp_path)
+    assert (result.returncode == 0) is ok, result.stdout
+    assert ('::error::give both uc-image and web-image' in result.stdout) is not ok
+
+
+def test_ci_keeps_the_images_for_the_release_s_re_runs():
+    # The Release workflow's CI jobs download this artifact, and its failed jobs can be
+    # re-run for 7 days.
+    upload = next(
+        each
+        for each in jobs('ci.yml')['images']['steps']
+        if each.get('uses', '').startswith('actions/upload-artifact@')
+    )
+    assert upload['with']['retention-days'] == "${{ inputs.uc-image != '' && 7 || 1 }}"
+
+
 def test_only_zizmor_gets_the_token():
     lint = jobs('ci.yml')['lint']
     with_token = [
@@ -397,6 +427,67 @@ def run_release_check(
     }
     script = release_step('check', 'Check the tag')['run']
     return run_bash(tmp_path, script, env, tmp_path)
+
+
+def test_each_release_job_needs_the_jobs_whose_results_it_uses():
+    needs = {
+        name: {need} if isinstance(need := job.get('needs', []), str) else set(need)
+        for name, job in jobs('release.yml').items()
+    }
+    assert needs == {
+        'check': set(),
+        'images': {'check'},
+        'index': {'check', 'images'},
+        'ci': {'check', 'index'},
+        'sign': {'check', 'index', 'ci'},
+        'bundle': {'check', 'index', 'sign'},
+        'draft': {'check', 'sign', 'bundle'},
+        'publish': {'check', 'index', 'draft'},
+    }
+
+
+def test_the_release_runs_ci_on_the_images_index_pushed():
+    ci = jobs('release.yml')['ci']
+    assert ci['uses'] == './.github/workflows/ci.yml'
+    assert ci['with'] == {
+        'ref': '${{ github.sha }}',
+        'uc-image': UC + '@${{ needs.index.outputs.uc-digest }}',
+        'web-image': WEB + '@${{ needs.index.outputs.web-digest }}',
+    }
+    assert ci['permissions'] == {'contents': 'read', 'packages': 'read'}
+
+
+def test_the_bundle_holds_the_signed_digests(tmp_path):
+    bundle = jobs('release.yml')['bundle']
+    assert bundle['env']['UC_DIGEST'] == '${{ needs.index.outputs.uc-digest }}'
+    assert bundle['env']['WEB_DIGEST'] == '${{ needs.index.outputs.web-digest }}'
+    readme = tmp_path / '.github' / 'release' / 'airgapped-README.txt'
+    readme.parent.mkdir(parents=True)
+    readme.write_text('@VERSION@ @ARCH@\n', encoding='utf-8')
+    stub(tmp_path, 'git', '#!/bin/sh\necho "$*" >> "$STUB_DIR/git.log"\n')
+    stubs = stub(tmp_path, 'docker', DOCKER_STUB)
+    env = {
+        'PATH': f'{stubs}:{PATH}',
+        'STUB_DIR': str(tmp_path),
+        'VERSION': '0.2.1',
+        'ARCH': 'arm64',
+        'UC_DIGEST': 'sha256:1111',
+        'WEB_DIGEST': 'sha256:2222',
+        **REPOS,
+    }
+    script = release_step('bundle', 'Build the air-gapped bundle')['run']
+    result = run_bash(tmp_path, script, env, tmp_path)
+    assert result.returncode == 0, result.stdout
+    assert docker_calls(tmp_path, 'pull') == [
+        f'pull {UC}@sha256:1111',
+        f'pull {WEB}@sha256:2222',
+    ]
+    assert docker_calls(tmp_path, 'tag') == [
+        f'tag {UC}@sha256:1111 {UC}:0.2.1',
+        f'tag {WEB}@sha256:2222 {WEB}:0.2.1',
+    ]
+    bundle_tar = tmp_path / 'assets' / 'easy-update-center-0.2.1-airgapped-arm64.tar'
+    assert bundle_tar.is_file()
 
 
 def test_the_release_runs_only_on_pushed_release_tags():
@@ -472,6 +563,29 @@ def test_the_index_job_tags_nothing_a_user_would_pull(tmp_path):
     )
 
 
+def test_the_index_job_refuses_a_stray_digest_before_creating_any_index(tmp_path):
+    # A digest left by an earlier attempt would give an index two manifests for one
+    # platform.
+    for image, digests in (('uc', ('aaaa', 'bbbb', 'cccc')), ('web', ('aaaa', 'bbbb'))):
+        (tmp_path / 'digests' / image).mkdir(parents=True)
+        for digest in digests:
+            (tmp_path / 'digests' / image / digest).touch()
+    stubs = stub(tmp_path, 'docker', DOCKER_STUB)
+    env = {
+        'PATH': f'{stubs}:{PATH}',
+        'STUB_DIR': str(tmp_path),
+        'VERSION': '0.2.1',
+        'GITHUB_SHA': 'abc123',
+        'GITHUB_OUTPUT': str(tmp_path / 'output'),
+        **REPOS,
+    }
+    script = release_step('index', 'Create the multi-architecture indexes')['run']
+    result = run_bash(tmp_path, script, env, tmp_path)
+    assert result.returncode == 1
+    assert '::error::expected 2 uc digests, one per platform, found 3' in result.stdout
+    assert not (tmp_path / 'docker.log').exists()
+
+
 def run_tagging(
     tmp_path: Path,
     *,
@@ -508,10 +622,12 @@ def test_publish_tags_the_signed_index_as_it_is(tmp_path, latest, minor_latest, 
     result = run_tagging(tmp_path, latest=latest, minor_latest=minor_latest)
     assert result.returncode == 0, result.stdout
     creates = docker_calls(tmp_path, 'buildx imagetools create')
+    # each tag for both images before the next tag, so a failure never leaves a moving
+    # tag naming a mixed pair
     assert creates == [
         f'buildx imagetools create --tag {repo}:{tag} {repo}@sha256:1111'
-        for repo in (UC, WEB)
         for tag in tags
+        for repo in (UC, WEB)
     ]
 
 
@@ -535,6 +651,9 @@ def test_publish_stops_when_a_tag_names_another_digest(tmp_path):
         f'::error::{UC}:0.2.1 is sha256:9999, not the signed sha256:1111'
         in result.stdout
     )
+    assert docker_calls(tmp_path, 'buildx imagetools create') == [
+        f'buildx imagetools create --tag {UC}:0.2.1 {UC}@sha256:1111'
+    ]
 
 
 def test_the_release_refuses_an_asset_of_2_gib_naming_it(tmp_path):
@@ -555,16 +674,33 @@ RELEASE_GH_STUB = """#!/bin/sh
 echo "$*" >> "$STUB_DIR/gh.log"
 case "$1 $2" in
     'release view')
-        [ "${STUB_RELEASE_VIEW:-0}" = 0 ] || exit "$STUB_RELEASE_VIEW"
+        if [ "${STUB_RELEASE_VIEW:-0}" != 0 ]; then
+            echo "${STUB_VIEW_ERROR:-release not found}" >&2
+            exit "$STUB_RELEASE_VIEW"
+        fi
         printf '%s\\n' "${STUB_DRAFT:-true}" ;;
+    'api --paginate') cat "$STUB_DIR/release-pages.json" ;;
 esac
+"""
+"""gh for the draft and publish jobs.
+
+release view fails with STUB_VIEW_ERROR when STUB_RELEASE_VIEW is not 0; api prints
+release-pages.json, as gh api --paginate prints the pages: one JSON array after another.
 """
 
 
 def run_draft(
-    tmp_path: Path, *, exists: bool, draft: bool = True, prerelease: str = 'false'
+    tmp_path: Path,
+    *,
+    exists: bool,
+    draft: bool = True,
+    prerelease: str = 'false',
+    view_error: str = 'release not found',
 ) -> subprocess.CompletedProcess[str]:
-    """Run the step that creates or updates the draft Release."""
+    """Run the step that creates or updates the draft Release.
+
+    gh release view fails with view_error when the release does not exist.
+    """
     (tmp_path / 'assets').mkdir()
     (tmp_path / 'assets' / 'bundle.tar').touch()
     notes = '#!/bin/sh\necho "$*" >> "$STUB_DIR/python3.log"\necho "- A change."\n'
@@ -575,6 +711,7 @@ def run_draft(
         'STUB_DIR': str(tmp_path),
         'STUB_RELEASE_VIEW': '0' if exists else '1',
         'STUB_DRAFT': 'true' if draft else 'false',
+        'STUB_VIEW_ERROR': view_error,
         'RUNNER_TEMP': str(tmp_path),
         'VERSION': '0.1.0',
         'PRERELEASE': prerelease,
@@ -613,6 +750,98 @@ def test_a_published_release_is_never_changed(tmp_path):
     result = run_draft(tmp_path, exists=True, draft=False)
     assert result.returncode == 1
     assert '::error::v0.1.0 is already published' in result.stdout
+
+
+def test_a_failure_to_look_the_release_up_creates_nothing(tmp_path):
+    # Only "release not found" means there is none: a second draft for the tag could be
+    # the one publish makes permanent.
+    result = run_draft(tmp_path, exists=False, view_error='HTTP 502: Bad Gateway')
+    assert result.returncode == 1
+    assert '::error::cannot tell whether v0.1.0 has a Release' in result.stdout
+    assert 'HTTP 502: Bad Gateway' in result.stdout
+    calls = (tmp_path / 'gh.log').read_text(encoding='utf-8').splitlines()
+    assert [call for call in calls if not call.startswith('release view')] == []
+
+
+ASSETS = [
+    'easy-update-center-0.1.0-airgapped-amd64.tar',
+    'easy-update-center-0.1.0-airgapped-arm64.tar',
+    'easy-update-center-uc-0.1.0.spdx.json',
+    'easy-update-center-web-0.1.0.spdx.json',
+    'SHA256SUMS',
+    'SHA256SUMS.sigstore.json',
+]
+"""What the draft job uploads for 0.1.0."""
+
+
+def release(tag: str, assets: list[str], *, draft: bool = True) -> dict:
+    """Return a release as the GitHub API lists it."""
+    return {
+        'tag_name': tag,
+        'draft': draft,
+        'assets': [{'name': name} for name in assets],
+    }
+
+
+def run_draft_check(
+    tmp_path: Path, pages: list[list[dict]]
+) -> subprocess.CompletedProcess[str]:
+    """Run publish's check of the draft, with gh listing the releases in pages."""
+    (tmp_path / 'release-pages.json').write_text(
+        '\n'.join(json.dumps(page) for page in pages), encoding='utf-8'
+    )
+    stubs = stub(tmp_path, 'gh', RELEASE_GH_STUB)
+    env = {
+        'PATH': f'{stubs}:{PATH}',
+        'STUB_DIR': str(tmp_path),
+        'RUNNER_TEMP': str(tmp_path),
+        'GH_REPO': 'HaleTechCo/easy-update-center',
+        'VERSION': '0.1.0',
+    }
+    script = release_step('publish', 'Check the draft Release')['run']
+    return run_bash(tmp_path, script, env, tmp_path)
+
+
+def test_publish_checks_the_draft_before_tagging_anything():
+    names = [each.get('name') for each in jobs('release.yml')['publish']['steps']]
+    assert names[0] == 'Check the draft Release'
+    assert names.index('Tag the images') < names.index('Publish the GitHub Release')
+
+
+def test_publish_accepts_one_draft_with_the_six_assets(tmp_path):
+    pages = [
+        [release('v0.0.9', ASSETS[:1], draft=False)],
+        [release('v0.1.0', list(reversed(ASSETS)))],
+    ]
+    result = run_draft_check(tmp_path, pages)
+    assert result.returncode == 0, result.stdout
+    assert last_call(tmp_path, 'gh') == (
+        'api --paginate repos/HaleTechCo/easy-update-center/releases?per_page=100'
+    )
+
+
+def test_publish_refuses_two_releases_for_the_tag(tmp_path):
+    pages = [[release('v0.1.0', ASSETS)], [release('v0.1.0', ASSETS)]]
+    result = run_draft_check(tmp_path, pages)
+    assert result.returncode == 1
+    assert '::error::v0.1.0 has 2 Releases, not exactly one' in result.stdout
+
+
+def test_publish_refuses_a_tag_without_a_release(tmp_path):
+    result = run_draft_check(tmp_path, [[release('v0.0.9', ASSETS)]])
+    assert result.returncode == 1
+    assert '::error::v0.1.0 has 0 Releases, not exactly one' in result.stdout
+
+
+@pytest.mark.parametrize(
+    'assets',
+    [ASSETS[1:], [*ASSETS, 'extra.txt'], []],
+    ids=['missing', 'extra', 'none'],
+)
+def test_publish_refuses_a_draft_without_exactly_the_six_assets(tmp_path, assets):
+    result = run_draft_check(tmp_path, [[release('v0.1.0', assets)]])
+    assert result.returncode == 1
+    assert '::error::the draft of v0.1.0 has the assets [' in result.stdout
 
 
 def test_publish_publishes_the_draft(tmp_path):

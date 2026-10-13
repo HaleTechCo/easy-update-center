@@ -81,6 +81,14 @@ jobs:
       UC_IMAGE_UNDER_TEST: ${{ inputs.uc-image }}
       WEB_IMAGE_UNDER_TEST: ${{ inputs.web-image }}
     steps:
+      # The steps below choose by uc-image alone: one image under test and the other built here
+      # would test a pair that never ships.
+      - name: Check the image inputs
+        run: |
+          if [[ "${UC_IMAGE_UNDER_TEST:+given}" != "${WEB_IMAGE_UNDER_TEST:+given}" ]]; then
+              echo "::error::give both uc-image and web-image, or neither"
+              exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
@@ -136,7 +144,8 @@ jobs:
         with:
           name: images
           path: ${{ runner.temp }}/images.tar.gz
-          retention-days: 1
+          # A day, except for the Release workflow's run: its failed jobs can be re-run for 7 days.
+          retention-days: ${{ inputs.uc-image != '' && 7 || 1 }}
           compression-level: 0
           if-no-files-found: error
 
