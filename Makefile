@@ -33,9 +33,14 @@ UNLESS_PREBUILT = $(if $(PREBUILT),docker image inspect $(1) >/dev/null 2>&1 || 
 
 build: build-uc build-web ## Build the uc, uc-test and web images; works before .env exists
 
+# uc-test adds the test tools to this checkout's runtime stage or, when UC_IMAGE names another image
+# (a release's, docs/development/releasing.md), to that image, as the Release workflow's CI does.
+UC_TEST_BASE = $(if $(filter easy-update-center/uc:local,$(UC_IMAGE)),runtime,$(UC_IMAGE))
+
 build-uc:
 	$(call UNLESS_PREBUILT,$(UC_IMAGE))docker build --target runtime --build-arg UC_VERSION=$(UC_VERSION) -t $(UC_IMAGE) uc
-	$(call UNLESS_PREBUILT,$(UC_TEST_IMAGE))docker build --target test --build-arg UC_VERSION=$(UC_VERSION) -t $(UC_TEST_IMAGE) uc
+	$(call UNLESS_PREBUILT,$(UC_TEST_IMAGE))docker build --target test --build-arg UC_VERSION=$(UC_VERSION) \
+	  --build-arg RUNTIME_IMAGE=$(UC_TEST_BASE) -t $(UC_TEST_IMAGE) uc
 
 build-web:
 	$(call UNLESS_PREBUILT,$(WEB_IMAGE))docker build -t $(WEB_IMAGE) web
