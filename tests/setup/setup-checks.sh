@@ -33,6 +33,10 @@ says() { # says DESCRIPTION TEXT - the last run's output holds TEXT
     if [[ "${output}" == *"$2"* ]]; then pass "$1"; else fail "$1 (no '$2' in: ${output})"; fi
 }
 
+lacks() { # lacks DESCRIPTION TEXT - the last run's output does not hold TEXT
+    if [[ "${output}" != *"$2"* ]]; then pass "$1"; else fail "$1 ('$2' in: ${output})"; fi
+}
+
 is_file() { # is_file DESCRIPTION PATH
     if [[ -f "$2" ]]; then pass "$1"; else fail "$1 ($2 is missing)"; fi
 }
@@ -74,7 +78,7 @@ for file in ${credentials}; do
     stat_is "first run: ${file} exists, empty, yours" %s:%u 0:1000 "${secrets}/${file}"
 done
 is_file "first run: update-center.key exists" "${secrets}/update-center.key"
-says "first run: says to move the root key offline" "move secrets/root/root-ca.key to offline storage"
+says "first run: warns that the root key is on this host" "warning: secrets/root/root-ca.key is on this host"
 modes "first run" "${secrets}"
 
 # 2. Again: the keys stay; a credential written meanwhile keeps its contents and gets its mode back.
@@ -83,6 +87,7 @@ printf '%s' svc-uc > "${secrets}/repo_username" && chmod 0644 "${secrets}/repo_u
 run
 same "second run: exits 0" 0 "${rc}"
 says "second run: leaves the keys" "the signing keys exist; left as they are"
+says "second run: still warns about the root key" "warning: secrets/root/root-ca.key is on this host"
 after="$(sha256sum < "${secrets}/update-center.key")"
 same "second run: update-center.key unchanged" "${before}" "${after}"
 contents="$(cat "${secrets}/repo_username")"
@@ -127,6 +132,7 @@ says "pki-rotate: names secrets/update-center.cert" "issued a new secrets/update
 is_file "pki-rotate: keeps the previous key as update-center.key.old" "${secrets}/update-center.key.old"
 if [[ -e "${secrets}/root" ]]; then fail "pki-rotate: leaves nothing at secrets/root"; else pass "pki-rotate: leaves nothing at secrets/root"; fi
 stat_is "pki-rotate: update-center.key.old is 0600" %a 600 "${secrets}/update-center.key.old"
+lacks "pki-rotate with the root moved away: no root key warning" "root-ca.key is on this host"
 rm -rf /setup/root
 run pki-rotate
 same "pki-rotate without /setup/root: exits 1" 1 "${rc}"

@@ -547,8 +547,8 @@ def _pki(args: argparse.Namespace) -> int:
             'as secrets'
         )
         print(
-            f'move {shown / "root" / ROOT_KEY} to offline storage; '
-            "only 'uc pki rotate' needs it"
+            f'{shown / "root" / ROOT_KEY} can sign metadata every controller accepts: '
+            "move it to offline storage now; only 'uc pki rotate' needs it"
         )
     elif args.pki_command == 'rotate':
         rotate_signing(

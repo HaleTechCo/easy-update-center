@@ -13,7 +13,7 @@ trusts. The update center uses its own two-level PKI, created by first-time setu
 | `secrets/root/root-ca.key` | The root CA's private key: RSA 4096. Needed only to issue signing certificates; move it offline. |
 | `secrets/root-ca.crt` | The root CA certificate: 10 years (3650 days), `CA:TRUE, pathlen:0`, key usage `keyCertSign, cRLSign`. Every controller trusts it. |
 | `secrets/update-center.key` | The signing key: RSA 4096. Mounted only into `scheduler` and `uc`. |
-| `secrets/update-center.cert` | The signing certificate, issued by the root: 365 days by default, key usage `digitalSignature`. |
+| `secrets/update-center.cert` | The signing certificate, issued by the root: 180 days by default, key usage `digitalSignature`, extended key usage `codeSigning`. |
 
 The subjects name the organization "Easy Update Center" unless `--org` is given. To keep the root
 key off the update center's host from the start:
@@ -39,7 +39,7 @@ trusts already.
 
 ## Rotation
 
-The signing certificate lasts a year by default and is reissued from the same root, so controllers
+The signing certificate lasts 180 days by default and is reissued from the same root, so controllers
 need no change. The root CA lasts ten years; replacing it takes an overlap on every controller. Both
 procedures: [Rotate the signing certificate](../how-to/rotate-signing-certificate.md).
 

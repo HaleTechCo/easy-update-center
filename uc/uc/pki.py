@@ -31,7 +31,7 @@ SIGNING_KEY = 'update-center.key'
 SIGNING_CERT = 'update-center.cert'
 DEFAULT_ORG = 'Easy Update Center'
 ROOT_DAYS = 3650
-SIGNING_DAYS = 365
+SIGNING_DAYS = 180
 # every openssl call that reads a private key: an encrypted key fails instead of asking
 _NO_PASSPHRASE = ('-passin', 'pass:')
 # the PEM label of an encrypted PKCS#8 key, and the traditional format's header

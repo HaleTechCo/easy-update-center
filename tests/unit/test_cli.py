@@ -147,8 +147,8 @@ def test_pki_init_and_show(tmp_path, capsys):
         == 0
     )
     assert (
-        f'move {out / "root" / "root-ca.key"} to offline storage'
-        in capsys.readouterr().out
+        f'{out / "root" / "root-ca.key"} can sign metadata every controller accepts: '
+        'move it to offline storage now' in capsys.readouterr().out
     )
     assert main(['pki', 'show', '--dir', str(out)]) == 0
     shown = capsys.readouterr().out
@@ -484,8 +484,8 @@ def test_pki_init_names_the_files_under_the_display_dir(tmp_path, capsys):
             'provide them as secrets'
         ),
         (
-            'move new pki/root/root-ca.key to offline storage; '
-            "only 'uc pki rotate' needs it"
+            'new pki/root/root-ca.key can sign metadata every controller accepts: '
+            "move it to offline storage now; only 'uc pki rotate' needs it"
         ),
     ]
 
@@ -1514,7 +1514,7 @@ def test_pki_init_defaults_and_flags(tmp_path):
     )
     assert 'Easy Update Center' in root.subject
     assert 3649 <= root.days_left(utcnow()) <= 3650
-    assert 364 <= signing.days_left(utcnow()) <= 365
+    assert 179 <= signing.days_left(utcnow()) <= 180
     other = tmp_path / 'other'
     assert (
         main(
@@ -1547,7 +1547,7 @@ def test_pki_takes_no_settings(monkeypatch, tmp_path):
     assert main(['pki', 'init', '--out', str(tmp_path / 'pki')]) == 0
     signing = cert_info(tmp_path / 'pki' / 'update-center.cert')
     assert 'Env Corp' not in signing.subject
-    assert signing.days_left(utcnow()) > 300
+    assert signing.days_left(utcnow()) > 150
 
 
 def test_pki_rotate_reads_the_root_key_from_root_and_names_it_there(

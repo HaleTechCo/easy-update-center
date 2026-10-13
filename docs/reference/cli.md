@@ -281,15 +281,15 @@ Manages the signing PKI. It reads no settings, so it runs before anything else i
 `secrets` step.
 
 ```bash
-uc pki init --out <dir> [--display-dir <dir>] [--root-days 3650] [--signing-days 365] [--org <name>]
-uc pki rotate --dir <dir> [--root <dir>] [--display-dir <dir>] [--days 365] [--org <name>]
+uc pki init --out <dir> [--display-dir <dir>] [--root-days 3650] [--signing-days 180] [--org <name>]
+uc pki rotate --dir <dir> [--root <dir>] [--display-dir <dir>] [--days 180] [--org <name>]
 uc pki show --dir <dir>
 ```
 
 | Command | What it does |
 |---|---|
 | `init` | Creates a root CA (`root-ca.crt`, and `root/root-ca.key` to move offline) and a signing key and certificate (`update-center.key`, `update-center.cert`) issued by it. It refuses to overwrite any of them. |
-| `rotate` | Issues a new signing certificate from the root key in `<dir>/root/` (or `--root`), keeping the previous pair as `*.old` in place of an older one. It first checks that the root key and `root-ca.crt` can be read and belong together, and that `update-center.key` and `update-center.cert` are both there or both missing. It refuses an encrypted root key without asking for the passphrase: [decrypt it to a temporary file](../how-to/rotate-signing-certificate.md#a-passphrase-protected-root-key) for the rotation. |
+| `rotate` | Issues a new signing certificate from the root key in `<dir>/root/` (or `--root`), keeping the previous pair as `*.old` in place of an older one. It first checks that the root key and `root-ca.crt` can be read and belong together, and that `update-center.key` and `update-center.cert` are both there or both missing. It refuses an encrypted root key without asking for the passphrase: [decrypt it on the offline machine](../how-to/rotate-signing-certificate.md#issue-a-new-signing-certificate) for the rotation. |
 | `show` | Prints the subject, expiry (with days left) and SHA-256 fingerprint of the root and signing certificates. |
 
 When `init` or `rotate` fails, `<dir>` is left as it was. Both build the new files in a temporary
@@ -306,7 +306,7 @@ write in (or that `init` cannot create) is reported as `uc: error: cannot write 
 | `--display-dir` | `init` and `rotate`: the directory `--out` or `--dir` is on the host. Messages name the files under it (`secrets/root/root-ca.key`, not `/setup/secrets/root/root-ca.key`). `setup` passes `secrets`. |
 | `--root` | `rotate`: the directory holding `root-ca.key` (default: `root/` under `--dir`). Messages name the root key there. |
 | `--root-days` | Lifetime of the root CA (default 3650). |
-| `--signing-days`, `--days` | Lifetime of the signing certificate (default 365). |
+| `--signing-days`, `--days` | Lifetime of the signing certificate (default 180). |
 | `--org` | Organization name in the certificates' subjects (default `Easy Update Center`). |
 
 How to run `rotate` safely: [Rotate the signing certificate](../how-to/rotate-signing-certificate.md).

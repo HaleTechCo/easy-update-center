@@ -80,6 +80,12 @@ clear_stale_init() { # clear_stale_init DIR - remove what a killed pki init left
     done
 }
 
+warn_root_key() { # warn while the root CA's key is on this host
+    if [ -e "${secrets}/root/root-ca.key" ]; then
+        echo "uc-setup: warning: secrets/root/root-ca.key is on this host: anyone who holds it can sign metadata every controller accepts. Move secrets/root/ to offline storage (docs/how-to/rotate-signing-certificate.md#where-the-root-key-lives)" >&2
+    fi
+}
+
 do_secrets() {
     writable "${secrets}" secrets/
     for file in ${credential_files}; do
@@ -136,3 +142,5 @@ case ${command} in
     pki-rotate) do_pki_rotate "$@" ;;
     *) usage ;;
 esac
+
+warn_root_key

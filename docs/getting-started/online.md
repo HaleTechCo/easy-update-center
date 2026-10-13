@@ -97,7 +97,7 @@ credential file. Each step: [The setup service](../reference/cli.md#the-setup-se
 ## 4. Move the root key offline
 
 `setup` created the root CA and the signing certificate in `secrets/`. Now **move the root CA's key to
-offline storage**: it is needed only once a year, to issue the next signing certificate.
+offline storage**: it is needed only about every five months, to issue the next signing certificate.
 
 ```bash
 mv secrets/root /media/offline-usb/easy-update-center-root      # any offline location
@@ -152,7 +152,7 @@ the update site to `$PUBLIC_URL/update-center.json`:
 ## Production checklist
 
 - [ ] TLS: `PUBLIC_URL` is `https://`, through your proxy or the web container ([Enable TLS](../how-to/enable-tls.md)).
-- [ ] The root CA key (`secrets/root/`) is offline, with a backup.
+- [ ] The root CA key (`secrets/root/`) is offline, with a backup: create the PKI offline ([Create the PKI on an offline machine](../how-to/rotate-signing-certificate.md#create-the-pki-on-an-offline-machine)), or else move `secrets/root/` offline right after setup.
 - [ ] `secrets/` is backed up: losing the signing key means issuing a new one; losing the root key
       means re-trusting every controller.
 - [ ] Monitoring alerts on failed runs, certificate expiry and stale data ([Monitor](../how-to/monitor.md)).
