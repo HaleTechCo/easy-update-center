@@ -91,6 +91,15 @@ expect_serves "downloads: artifactory http://backend/repo (redirect)" -e PUBLIC_
 expect_exit 64 "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL" -e PUBLIC_URL=http://uc -e MODE=airgapped -e DOWNLOAD_BACKEND= -e DOWNLOAD_BACKEND_URL=
 expect_serves "${mirror}" -e PUBLIC_URL=http://uc -e MODE=airgapped -e DOWNLOAD_BACKEND=mirror
 
+# The image deletes /data/live after its syntax check, and httpd -M fails without DocumentRoot.
+modules="$(docker run --rm -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND_URL=https://get.jenkins.io --entrypoint sh "${image}" -c 'mkdir -p /data/live && httpd -M -D BACKEND_MIRROR' 2>&1)"
+if [[ "${modules}" == *reqtimeout_module* ]]; then
+    echo "ok: mod_reqtimeout is loaded"
+else
+    echo "FAIL: mod_reqtimeout is not loaded: ${modules}"
+    failures=$((failures + 1))
+fi
+
 name="uc-web-wait-$$"
 # Removed on every way out of this script, a failed check or an interrupt included.
 trap 'docker rm -f "${name}" "${name}-env" "${name}-proxy" > /dev/null 2>&1' EXIT

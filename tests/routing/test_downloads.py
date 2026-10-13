@@ -121,6 +121,11 @@ def test_download_index_pages_are_served():
     assert fetch('web-full', '/download/plugins/git/').status == 200
 
 
+def test_responses_forbid_content_sniffing():
+    response = fetch('web-full', '/update-center.json')
+    assert response.headers.get('x-content-type-options') == 'nosniff'
+
+
 def test_cache_headers():
     assert (
         fetch('web-full', '/update-center.json?version=2.240').headers['cache-control']

@@ -11,6 +11,9 @@ secrets/*
 # (docs/how-to/rotate-signing-certificate.md): it holds a root CA's private key.
 newpki/
 
+# A TLS certificate and key mounted into web (docs/how-to/enable-tls.md): the key is private.
+tls/
+
 # Files staged for review by uc procure stage and record (docs/how-to/procure-missing-files.md)
 procurement/*
 !procurement/README.md
