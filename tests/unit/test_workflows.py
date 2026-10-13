@@ -331,183 +331,6 @@ def test_image_scan_does_nothing_when_it_finds_none_and_no_issue_is_open(tmp_pat
     assert [call for call in calls if not call.startswith('issue list')] == []
 
 
-def release_step(job: str, name: str) -> dict:
-    return step(jobs('release.yml')[job], name)
-
-
-CHECK_STUBS = {
-    'git': '#!/bin/sh\necho "$*" >> "$STUB_DIR/git.log"\nexit "$STUB_ON_MAIN"\n',
-    'python3': (
-        '#!/bin/sh\necho "$*" >> "$STUB_DIR/python3.log"\n'
-        'printf "version=0.1.0\\nlatest=true\\nminor_latest=true\\n"\n'
-    ),
-}
-"""Stubs for the check step.
-
-git answers merge-base with STUB_ON_MAIN (0: on main); python3 prints release.py's
-output.
-"""
-
-
-def run_release_check(
-    tmp_path: Path, ref: str, event: str = 'push', *, on_main: bool = True
-) -> subprocess.CompletedProcess[str]:
-    """Run the Release workflow's check step for a run on ref, started by event."""
-    for name, body in CHECK_STUBS.items():
-        stubs = stub(tmp_path, name, body)
-    env = {
-        'PATH': f'{stubs}:{PATH}',
-        'STUB_DIR': str(tmp_path),
-        'STUB_ON_MAIN': '0' if on_main else '1',
-        'GITHUB_OUTPUT': str(tmp_path / 'output'),
-        'GITHUB_REF': ref,
-        'GITHUB_REF_TYPE': 'tag' if ref.startswith('refs/tags/') else 'branch',
-        'GITHUB_REF_NAME': ref.rsplit('/', 1)[-1],
-        'GITHUB_SHA': 'abc123',
-        'EVENT': event,
-    }
-    script = release_step('check', 'Check the tag')['run']
-    return run_bash(tmp_path, script, env, tmp_path)
-
-
-def test_the_release_checks_a_pushed_tag_on_main(tmp_path):
-    result = run_release_check(tmp_path, 'refs/tags/v0.1.0')
-    assert result.returncode == 0, result.stdout
-    assert last_call(tmp_path, 'git') == 'merge-base --is-ancestor abc123 origin/main'
-    assert last_call(tmp_path, 'python3') == 'tools/release.py check 0.1.0'
-    output = (tmp_path / 'output').read_text(encoding='utf-8')
-    assert output == 'version=0.1.0\nlatest=true\nminor_latest=true\n'
-
-
-def test_a_run_by_hand_on_a_tag_republishes_it(tmp_path):
-    result = run_release_check(tmp_path, 'refs/tags/v0.1.0', 'workflow_dispatch')
-    assert result.returncode == 0, result.stdout
-    expected = 'tools/release.py check 0.1.0 --republish'
-    assert last_call(tmp_path, 'python3') == expected
-
-
-def test_the_release_refuses_a_run_on_a_branch(tmp_path):
-    result = run_release_check(tmp_path, 'refs/heads/main', 'workflow_dispatch')
-    assert result.returncode == 1
-    expected = '::error::run the Release workflow on a release tag, not refs/heads/main'
-    assert expected in result.stdout
-    assert not (tmp_path / 'python3.log').exists()
-
-
-def test_the_release_refuses_a_tag_that_is_not_on_main(tmp_path):
-    result = run_release_check(tmp_path, 'refs/tags/v0.1.0', on_main=False)
-    assert result.returncode == 1
-    assert '::error::v0.1.0 is not on main' in result.stdout
-    assert not (tmp_path / 'python3.log').exists()
-
-
-DOCKER_STUB = """#!/bin/sh
-echo "$*" >> "$STUB_DIR/docker.log"
-case "$*" in
-    'buildx imagetools inspect'*) echo 'sha256:1111' ;;
-esac
-"""
-
-
-@pytest.mark.parametrize(
-    ('latest', 'minor_latest', 'tags'),
-    [
-        ('true', 'true', ['0.2.1', '0.2', 'latest']),
-        ('false', 'true', ['0.2.1', '0.2']),
-        ('false', 'false', ['0.2.1']),
-    ],
-)
-def test_the_manifest_lists_move_latest_and_the_minor_tag_only_for_the_highest_release(
-    tmp_path, latest, minor_latest, tags
-):
-    for image in ('uc', 'web'):
-        (tmp_path / 'digests' / image).mkdir(parents=True)
-        for digest in ('aaaa', 'bbbb'):
-            (tmp_path / 'digests' / image / digest).touch()
-    stubs = stub(tmp_path, 'docker', DOCKER_STUB)
-    output = tmp_path / 'output'
-    env = {
-        'PATH': f'{stubs}:{PATH}',
-        'STUB_DIR': str(tmp_path),
-        'VERSION': '0.2.1',
-        'LATEST': latest,
-        'MINOR_LATEST': minor_latest,
-        'GITHUB_OUTPUT': str(output),
-        'UC_REPO': 'ghcr.io/haletechco/easy-update-center-uc',
-        'WEB_REPO': 'ghcr.io/haletechco/easy-update-center-web',
-        'SOURCE_URL': 'https://github.com/HaleTechCo/easy-update-center',
-    }
-    script = release_step('manifests', 'Create the multi-architecture manifest lists')
-    result = run_bash(tmp_path, script['run'], env, tmp_path)
-    assert result.returncode == 0, result.stdout
-    creates = [
-        line
-        for line in (tmp_path / 'docker.log').read_text(encoding='utf-8').splitlines()
-        if line.startswith('buildx imagetools create')
-    ]
-    assert len(creates) == 2
-    for image, line in zip(('uc', 'web'), creates, strict=True):
-        repo = f'ghcr.io/haletechco/easy-update-center-{image}'
-        assert re.findall(r'--tag (\S+)', line) == [f'{repo}:{tag}' for tag in tags]
-        assert line.endswith(f'{repo}@sha256:aaaa {repo}@sha256:bbbb')
-    digests = output.read_text(encoding='utf-8')
-    assert digests == 'uc-digest=sha256:1111\nweb-digest=sha256:1111\n'
-
-
-def test_the_release_refuses_an_asset_of_2_gib_naming_it(tmp_path):
-    script = release_step('release', 'Check the asset sizes')['run']
-    (tmp_path / 'assets').mkdir()
-    fits = tmp_path / 'assets' / 'fits.tar'
-    subprocess.run(['truncate', '--size=2047M', str(fits)], check=True)
-    assert run_bash(tmp_path, script, {'PATH': PATH}, tmp_path).returncode == 0
-    too_big = tmp_path / 'assets' / 'too-big.tar'
-    subprocess.run(['truncate', '--size=2G', str(too_big)], check=True)
-    result = run_bash(tmp_path, script, {'PATH': PATH}, tmp_path)
-    assert result.returncode == 1
-    assert 'assets/too-big.tar' in result.stdout
-    assert 'fits.tar' not in result.stdout
-
-
-def run_publish(tmp_path: Path, *, exists: bool) -> subprocess.CompletedProcess[str]:
-    """Run the step that publishes the GitHub Release, whose Release exists or not."""
-    (tmp_path / 'assets').mkdir()
-    (tmp_path / 'assets' / 'bundle.tar').touch()
-    notes = '#!/bin/sh\necho "$*" >> "$STUB_DIR/python3.log"\necho "- A change."\n'
-    stub(tmp_path, 'python3', notes)
-    stubs = stub(tmp_path, 'gh', GH_STUB)
-    env = {
-        'PATH': f'{stubs}:{PATH}',
-        'STUB_DIR': str(tmp_path),
-        'STUB_RELEASE_VIEW': '0' if exists else '1',
-        'RUNNER_TEMP': str(tmp_path),
-        'VERSION': '0.1.0',
-        'LATEST': 'true',
-    }
-    script = release_step('release', 'Publish the GitHub Release')['run']
-    return run_bash(tmp_path, script, env, tmp_path)
-
-
-def test_the_first_run_on_a_tag_creates_its_release(tmp_path):
-    result = run_publish(tmp_path, exists=False)
-    assert result.returncode == 0, result.stdout
-    assert last_call(tmp_path, 'python3') == 'tools/release.py notes 0.1.0'
-    assert last_call(tmp_path, 'gh') == (
-        f'release create v0.1.0 --verify-tag --title 0.1.0 --notes-file '
-        f'{tmp_path}/notes.md --latest=true assets/bundle.tar'
-    )
-    assert (tmp_path / 'notes.md').read_text(encoding='utf-8') == '- A change.\n'
-
-
-def test_a_run_on_a_released_tag_replaces_its_notes_and_assets(tmp_path):
-    result = run_publish(tmp_path, exists=True)
-    assert result.returncode == 0, result.stdout
-    calls = (tmp_path / 'gh.log').read_text(encoding='utf-8').splitlines()
-    assert calls[1:] == [
-        f'release edit v0.1.0 --notes-file {tmp_path}/notes.md',
-        'release upload v0.1.0 assets/bundle.tar --clobber',
-    ]
-
-
 def test_ci_pulls_the_images_under_test_and_names_them_as_make_expects(tmp_path):
     docker = '#!/bin/sh\necho "$*" >> "$STUB_DIR/docker.log"\n'
     stubs = stub(tmp_path, 'docker', docker)
@@ -537,3 +360,272 @@ def test_only_zizmor_gets_the_token():
     ]
     assert with_token == ['zizmor']
     assert step(lint, 'pre-commit')['env'] == {'SKIP': 'zizmor'}
+
+
+def release_step(job: str, name: str) -> dict:
+    return step(jobs('release.yml')[job], name)
+
+
+CHECK_STUBS = {
+    'git': '#!/bin/sh\necho "$*" >> "$STUB_DIR/git.log"\nexit "$STUB_ON_MAIN"\n',
+    'python3': (
+        '#!/bin/sh\necho "$*" >> "$STUB_DIR/python3.log"\n'
+        'printf "version=0.1.0\\nprerelease=false\\nlatest=true\\n'
+        'minor_latest=true\\n"\n'
+    ),
+}
+"""Stubs for the check step.
+
+git answers merge-base with STUB_ON_MAIN (0: on main); python3 prints release.py's
+output.
+"""
+
+
+def run_release_check(
+    tmp_path: Path, ref: str, *, on_main: bool = True
+) -> subprocess.CompletedProcess[str]:
+    """Run the Release workflow's check step for a push of the tag ref."""
+    for name, body in CHECK_STUBS.items():
+        stubs = stub(tmp_path, name, body)
+    env = {
+        'PATH': f'{stubs}:{PATH}',
+        'STUB_DIR': str(tmp_path),
+        'STUB_ON_MAIN': '0' if on_main else '1',
+        'GITHUB_OUTPUT': str(tmp_path / 'output'),
+        'GITHUB_REF_NAME': ref.rsplit('/', 1)[-1],
+        'GITHUB_SHA': 'abc123',
+    }
+    script = release_step('check', 'Check the tag')['run']
+    return run_bash(tmp_path, script, env, tmp_path)
+
+
+def test_the_release_runs_only_on_pushed_release_tags():
+    on = load('release.yml')['on']
+    assert set(on) == {'push'}
+    assert on['push']['tags'] == [
+        'v[0-9]+.[0-9]+.[0-9]+',
+        'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+',
+    ]
+
+
+def test_the_release_checks_a_pushed_tag_on_main(tmp_path):
+    result = run_release_check(tmp_path, 'refs/tags/v0.1.0')
+    assert result.returncode == 0, result.stdout
+    assert last_call(tmp_path, 'git') == 'merge-base --is-ancestor abc123 origin/main'
+    assert last_call(tmp_path, 'python3') == 'tools/release.py check 0.1.0'
+    output = (tmp_path / 'output').read_text(encoding='utf-8')
+    assert output == 'version=0.1.0\nprerelease=false\nlatest=true\nminor_latest=true\n'
+
+
+def test_the_release_refuses_a_tag_that_is_not_on_main(tmp_path):
+    result = run_release_check(tmp_path, 'refs/tags/v0.1.0', on_main=False)
+    assert result.returncode == 1
+    assert '::error::v0.1.0 is not on main' in result.stdout
+    assert not (tmp_path / 'python3.log').exists()
+
+
+DOCKER_STUB = """#!/bin/sh
+echo "$*" >> "$STUB_DIR/docker.log"
+case "$*" in
+    'buildx imagetools inspect'*) echo "${STUB_DIGEST:-sha256:1111}" ;;
+esac
+"""
+UC = 'ghcr.io/haletechco/easy-update-center-uc'
+WEB = 'ghcr.io/haletechco/easy-update-center-web'
+REPOS = {
+    'UC_REPO': UC,
+    'WEB_REPO': WEB,
+    'SOURCE_URL': 'https://github.com/HaleTechCo/easy-update-center',
+}
+
+
+def docker_calls(tmp_path: Path, prefix: str) -> list[str]:
+    log = (tmp_path / 'docker.log').read_text(encoding='utf-8').splitlines()
+    return [line for line in log if line.startswith(prefix)]
+
+
+def test_the_index_job_tags_nothing_a_user_would_pull(tmp_path):
+    for image in ('uc', 'web'):
+        (tmp_path / 'digests' / image).mkdir(parents=True)
+        for digest in ('aaaa', 'bbbb'):
+            (tmp_path / 'digests' / image / digest).touch()
+    stubs = stub(tmp_path, 'docker', DOCKER_STUB)
+    output = tmp_path / 'output'
+    env = {
+        'PATH': f'{stubs}:{PATH}',
+        'STUB_DIR': str(tmp_path),
+        'VERSION': '0.2.1',
+        'GITHUB_SHA': 'abc123',
+        'GITHUB_OUTPUT': str(output),
+        **REPOS,
+    }
+    script = release_step('index', 'Create the multi-architecture indexes')['run']
+    result = run_bash(tmp_path, script, env, tmp_path)
+    assert result.returncode == 0, result.stdout
+    creates = docker_calls(tmp_path, 'buildx imagetools create')
+    assert len(creates) == 2
+    for repo, line in zip((UC, WEB), creates, strict=True):
+        assert re.findall(r'--tag (\S+)', line) == [f'{repo}:build-abc123']
+        assert line.endswith(f'{repo}@sha256:aaaa {repo}@sha256:bbbb')
+    assert output.read_text(encoding='utf-8') == (
+        'uc-digest=sha256:1111\nweb-digest=sha256:1111\n'
+    )
+
+
+def run_tagging(
+    tmp_path: Path,
+    *,
+    latest: str,
+    minor_latest: str,
+    version: str = '0.2.1',
+    resolves_to: str = 'sha256:1111',
+) -> subprocess.CompletedProcess[str]:
+    stubs = stub(tmp_path, 'docker', DOCKER_STUB)
+    env = {
+        'PATH': f'{stubs}:{PATH}',
+        'STUB_DIR': str(tmp_path),
+        'STUB_DIGEST': resolves_to,
+        'VERSION': version,
+        'LATEST': latest,
+        'MINOR_LATEST': minor_latest,
+        'UC_DIGEST': 'sha256:1111',
+        'WEB_DIGEST': 'sha256:1111',
+        **REPOS,
+    }
+    script = release_step('publish', 'Tag the images')['run']
+    return run_bash(tmp_path, script, env, tmp_path)
+
+
+@pytest.mark.parametrize(
+    ('latest', 'minor_latest', 'tags'),
+    [
+        ('true', 'true', ['0.2.1', '0.2', 'latest']),
+        ('false', 'true', ['0.2.1', '0.2']),
+        ('false', 'false', ['0.2.1']),
+    ],
+)
+def test_publish_tags_the_signed_index_as_it_is(tmp_path, latest, minor_latest, tags):
+    result = run_tagging(tmp_path, latest=latest, minor_latest=minor_latest)
+    assert result.returncode == 0, result.stdout
+    creates = docker_calls(tmp_path, 'buildx imagetools create')
+    assert creates == [
+        f'buildx imagetools create --tag {repo}:{tag} {repo}@sha256:1111'
+        for repo in (UC, WEB)
+        for tag in tags
+    ]
+
+
+def test_publish_tags_a_candidate_with_its_own_version_only(tmp_path):
+    result = run_tagging(
+        tmp_path, latest='false', minor_latest='false', version='0.3.0-rc.1'
+    )
+    assert result.returncode == 0, result.stdout
+    assert docker_calls(tmp_path, 'buildx imagetools create') == [
+        f'buildx imagetools create --tag {repo}:0.3.0-rc.1 {repo}@sha256:1111'
+        for repo in (UC, WEB)
+    ]
+
+
+def test_publish_stops_when_a_tag_names_another_digest(tmp_path):
+    result = run_tagging(
+        tmp_path, latest='true', minor_latest='true', resolves_to='sha256:9999'
+    )
+    assert result.returncode == 1
+    assert (
+        f'::error::{UC}:0.2.1 is sha256:9999, not the signed sha256:1111'
+        in result.stdout
+    )
+
+
+def test_the_release_refuses_an_asset_of_2_gib_naming_it(tmp_path):
+    script = release_step('draft', 'Check the asset sizes')['run']
+    (tmp_path / 'assets').mkdir()
+    fits = tmp_path / 'assets' / 'fits.tar'
+    subprocess.run(['truncate', '--size=2047M', str(fits)], check=True)
+    assert run_bash(tmp_path, script, {'PATH': PATH}, tmp_path).returncode == 0
+    too_big = tmp_path / 'assets' / 'too-big.tar'
+    subprocess.run(['truncate', '--size=2G', str(too_big)], check=True)
+    result = run_bash(tmp_path, script, {'PATH': PATH}, tmp_path)
+    assert result.returncode == 1
+    assert 'assets/too-big.tar' in result.stdout
+    assert 'fits.tar' not in result.stdout
+
+
+RELEASE_GH_STUB = """#!/bin/sh
+echo "$*" >> "$STUB_DIR/gh.log"
+case "$1 $2" in
+    'release view')
+        [ "${STUB_RELEASE_VIEW:-0}" = 0 ] || exit "$STUB_RELEASE_VIEW"
+        printf '%s\\n' "${STUB_DRAFT:-true}" ;;
+esac
+"""
+
+
+def run_draft(
+    tmp_path: Path, *, exists: bool, draft: bool = True, prerelease: str = 'false'
+) -> subprocess.CompletedProcess[str]:
+    """Run the step that creates or updates the draft Release."""
+    (tmp_path / 'assets').mkdir()
+    (tmp_path / 'assets' / 'bundle.tar').touch()
+    notes = '#!/bin/sh\necho "$*" >> "$STUB_DIR/python3.log"\necho "- A change."\n'
+    stub(tmp_path, 'python3', notes)
+    stubs = stub(tmp_path, 'gh', RELEASE_GH_STUB)
+    env = {
+        'PATH': f'{stubs}:{PATH}',
+        'STUB_DIR': str(tmp_path),
+        'STUB_RELEASE_VIEW': '0' if exists else '1',
+        'STUB_DRAFT': 'true' if draft else 'false',
+        'RUNNER_TEMP': str(tmp_path),
+        'VERSION': '0.1.0',
+        'PRERELEASE': prerelease,
+    }
+    script = release_step('draft', 'Create or update the draft Release')['run']
+    return run_bash(tmp_path, script, env, tmp_path)
+
+
+def test_the_first_run_creates_a_draft_release(tmp_path):
+    result = run_draft(tmp_path, exists=False)
+    assert result.returncode == 0, result.stdout
+    assert last_call(tmp_path, 'python3') == 'tools/release.py notes 0.1.0'
+    assert last_call(tmp_path, 'gh') == (
+        f'release create v0.1.0 --draft --verify-tag --title 0.1.0 --notes-file '
+        f'{tmp_path}/notes.md assets/bundle.tar'
+    )
+
+
+def test_a_candidate_is_drafted_as_a_prerelease(tmp_path):
+    result = run_draft(tmp_path, exists=False, prerelease='true')
+    assert result.returncode == 0, result.stdout
+    assert '--prerelease' in last_call(tmp_path, 'gh')
+
+
+def test_a_rerun_updates_the_existing_draft(tmp_path):
+    result = run_draft(tmp_path, exists=True)
+    assert result.returncode == 0, result.stdout
+    calls = (tmp_path / 'gh.log').read_text(encoding='utf-8').splitlines()
+    assert calls[1:] == [
+        f'release edit v0.1.0 --notes-file {tmp_path}/notes.md',
+        'release upload v0.1.0 assets/bundle.tar --clobber',
+    ]
+
+
+def test_a_published_release_is_never_changed(tmp_path):
+    result = run_draft(tmp_path, exists=True, draft=False)
+    assert result.returncode == 1
+    assert '::error::v0.1.0 is already published' in result.stdout
+
+
+def test_publish_publishes_the_draft(tmp_path):
+    stubs = stub(tmp_path, 'gh', RELEASE_GH_STUB)
+    env = {
+        'PATH': f'{stubs}:{PATH}',
+        'STUB_DIR': str(tmp_path),
+        'VERSION': '0.1.0',
+        'LATEST': 'true',
+    }
+    script = release_step('publish', 'Publish the GitHub Release')['run']
+    result = run_bash(tmp_path, script, env, tmp_path)
+    assert result.returncode == 0, result.stdout
+    assert (
+        last_call(tmp_path, 'gh') == 'release edit v0.1.0 --draft=false --latest=true'
+    )

@@ -1,21 +1,27 @@
 ---
 # Publishes a release when its tag is pushed (docs/development/releasing.md). The maintainer merges
-# the release pull request `tools/release.py prepare X.Y.Z` made, then pushes the tag vX.Y.Z on that
-# commit of main. check refuses a tag that must not be published; ci runs the CI workflow on the
-# tagged commit; images, manifests, sign, bundle and release publish the signed uc and web images for
-# linux/amd64 and linux/arm64 on GHCR, an air-gapped bundle per architecture, and the GitHub Release.
-# Run by hand on an existing tag (Run workflow, "Use workflow from" the tag), it publishes that
-# release again, with that tag's own workflow, so every signature names the tag.
+# the release pull request `tools/release.py prepare VERSION` made, then pushes the tag vVERSION on
+# that commit of main: X.Y.Z for a release, X.Y.Z-rc.N for a release candidate.
 #
-# No token here can push to main or create a tag: the tag ruleset lets only admins push release
-# tags, and only the release job's own token writes contents, to create the GitHub Release on the
-# tag that exists (docs/development/github-setup.md).
+# Nothing anyone can pull or download changes until the last job:
+#   images  builds each architecture without cache and pushes it by digest;
+#   index   joins them into one index per image, under a build tag only;
+#   ci      runs the CI workflow against those exact images;
+#   sign    signs and attests them by digest;
+#   bundle  builds the air-gapped bundles from the signed digests;
+#   draft   writes the assets and a draft Release;
+#   publish tags the images (X.Y.Z, plus X.Y and latest for the highest release) and publishes it.
+# A failed run is finished with "Re-run failed jobs"; a published release is never changed
+# (Immutable Releases, docs/development/github-setup.md).
+#
+# No token here can push to main or create a tag: the tag ruleset lets only admins push release tags.
 name: Release
 
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
-  workflow_dispatch:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+'
 
 permissions:
   contents: read
@@ -38,6 +44,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
       latest: ${{ steps.check.outputs.latest }}
       minor_latest: ${{ steps.check.outputs.minor_latest }}
     steps:
@@ -47,33 +54,17 @@ jobs:
           persist-credentials: false
       - name: Check the tag
         id: check
-        env:
-          EVENT: ${{ github.event_name }}
         run: |
-          if [[ "${GITHUB_REF_TYPE}" != tag ]]; then
-              echo "::error::run the Release workflow on a release tag, not ${GITHUB_REF}"
-              exit 1
-          fi
           if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
               echo "::error::${GITHUB_REF_NAME} is not on main: tag the merged release commit"
               exit 1
           fi
-          args=(check "${GITHUB_REF_NAME#v}")
-          if [[ "${EVENT}" == workflow_dispatch ]]; then
-              args+=(--republish)
-          fi
-          python3 tools/release.py "${args[@]}" | tee -a "${GITHUB_OUTPUT}"
-
-  ci:
-    needs: check
-    uses: ./.github/workflows/ci.yml
-    with:
-      ref: ${{ github.sha }}
+          python3 tools/release.py check "${GITHUB_REF_NAME#v}" | tee -a "${GITHUB_OUTPUT}"
 
   # No build cache: every release builds from scratch, so it gets the distribution's current
   # packages even when the Dockerfiles are unchanged, and nothing cached can reach a release.
   images:
-    needs: [check, ci]
+    needs: check
     strategy:
       matrix:
         include:
@@ -145,10 +136,11 @@ jobs:
         with:
           name: digests-${{ matrix.arch }}
           path: digests
-          retention-days: 1
+          retention-days: 7
           if-no-files-found: error
 
-  manifests:
+  # One index per image, under a build tag only: no version, X.Y or latest tag exists until publish.
+  index:
     needs: [check, images]
     runs-on: ubuntu-24.04
     permissions:
@@ -171,32 +163,36 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
-      # X.Y moves only for the highest release in X.Y, latest only for the highest release overall
-      # (tools/release.py check), so republishing an older release leaves both where they are.
-      - name: Create the multi-architecture manifest lists
+      - name: Create the multi-architecture indexes
         id: merge
-        env:
-          LATEST: ${{ needs.check.outputs.latest }}
-          MINOR_LATEST: ${{ needs.check.outputs.minor_latest }}
         run: |
           for image in uc web; do
               if [[ "${image}" == uc ]]; then repo="${UC_REPO}"; else repo="${WEB_REPO}"; fi
-              tags=(--tag "${repo}:${VERSION}")
-              if [[ "${MINOR_LATEST}" == true ]]; then tags+=(--tag "${repo}:${VERSION%.*}"); fi
-              if [[ "${LATEST}" == true ]]; then tags+=(--tag "${repo}:latest"); fi
               sources=()
               for digest in "digests/${image}"/*; do sources+=("${repo}@sha256:${digest##*/}"); done
-              docker buildx imagetools create "${tags[@]}" \
+              docker buildx imagetools create --tag "${repo}:build-${GITHUB_SHA}" \
                   --annotation "index:org.opencontainers.image.source=${SOURCE_URL}" \
                   --annotation "index:org.opencontainers.image.version=${VERSION}" \
                   --annotation "index:org.opencontainers.image.licenses=MIT" \
                   "${sources[@]}"
-              digest="$(docker buildx imagetools inspect "${repo}:${VERSION}" --format '{{.Manifest.Digest}}')"
+              digest="$(docker buildx imagetools inspect "${repo}:build-${GITHUB_SHA}" --format '{{.Manifest.Digest}}')"
               echo "${image}-digest=${digest}" >> "${GITHUB_OUTPUT}"
           done
 
+  # The CI workflow against the exact images this run pushed (linux/amd64, as CI runs).
+  ci:
+    needs: [check, index]
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ github.sha }}
+      uc-image: ghcr.io/haletechco/easy-update-center-uc@${{ needs.index.outputs.uc-digest }}
+      web-image: ghcr.io/haletechco/easy-update-center-web@${{ needs.index.outputs.web-digest }}
+
   sign:
-    needs: [check, manifests]
+    needs: [check, index, ci]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -214,28 +210,28 @@ jobs:
           password: ${{ github.token }}
       - name: Sign the images
         env:
-          UC_DIGEST: ${{ needs.manifests.outputs.uc-digest }}
-          WEB_DIGEST: ${{ needs.manifests.outputs.web-digest }}
+          UC_DIGEST: ${{ needs.index.outputs.uc-digest }}
+          WEB_DIGEST: ${{ needs.index.outputs.web-digest }}
         run: cosign sign --yes "${UC_REPO}@${UC_DIGEST}" "${WEB_REPO}@${WEB_DIGEST}"
       - name: Attest the uc image's build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ env.UC_REPO }}
-          subject-digest: ${{ needs.manifests.outputs.uc-digest }}
+          subject-digest: ${{ needs.index.outputs.uc-digest }}
           push-to-registry: true
           create-storage-record: false
       - name: Attest the web image's build provenance
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ env.WEB_REPO }}
-          subject-digest: ${{ needs.manifests.outputs.web-digest }}
+          subject-digest: ${{ needs.index.outputs.web-digest }}
           push-to-registry: true
           create-storage-record: false
       # syft reads the manifest list's linux/amd64 image (the runner's platform).
       - name: SBOM of the uc image
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
-          image: ${{ env.UC_REPO }}@${{ needs.manifests.outputs.uc-digest }}
+          image: ${{ env.UC_REPO }}@${{ needs.index.outputs.uc-digest }}
           format: spdx-json
           output-file: easy-update-center-uc-${{ env.VERSION }}.spdx.json
           upload-artifact: false
@@ -243,7 +239,7 @@ jobs:
       - name: SBOM of the web image
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
-          image: ${{ env.WEB_REPO }}@${{ needs.manifests.outputs.web-digest }}
+          image: ${{ env.WEB_REPO }}@${{ needs.index.outputs.web-digest }}
           format: spdx-json
           output-file: easy-update-center-web-${{ env.VERSION }}.spdx.json
           upload-artifact: false
@@ -252,7 +248,7 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ env.UC_REPO }}
-          subject-digest: ${{ needs.manifests.outputs.uc-digest }}
+          subject-digest: ${{ needs.index.outputs.uc-digest }}
           sbom-path: easy-update-center-uc-${{ env.VERSION }}.spdx.json
           push-to-registry: true
           create-storage-record: false
@@ -260,7 +256,7 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ env.WEB_REPO }}
-          subject-digest: ${{ needs.manifests.outputs.web-digest }}
+          subject-digest: ${{ needs.index.outputs.web-digest }}
           sbom-path: easy-update-center-web-${{ env.VERSION }}.spdx.json
           push-to-registry: true
           create-storage-record: false
@@ -268,13 +264,13 @@ jobs:
         with:
           name: sboms
           path: '*.spdx.json'
-          retention-days: 1
+          retention-days: 7
           if-no-files-found: error
 
-  # Each bundle is built on its own architecture's runner, so docker pull and docker save handle
-  # that architecture's images only.
+  # Each bundle is built on its own architecture's runner, from the signed digests, so docker pull
+  # and docker save handle that architecture's images only.
   bundle:
-    needs: [check, sign]
+    needs: [check, index, sign]
     strategy:
       matrix:
         include:
@@ -288,6 +284,8 @@ jobs:
       packages: read
     env:
       VERSION: ${{ needs.check.outputs.version }}
+      UC_DIGEST: ${{ needs.index.outputs.uc-digest }}
+      WEB_DIGEST: ${{ needs.index.outputs.web-digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -303,8 +301,11 @@ jobs:
         run: |
           name="easy-update-center-${VERSION}-airgapped-${ARCH}"
           mkdir -p "bundle/${name}" assets
-          docker pull "${UC_REPO}:${VERSION}"
-          docker pull "${WEB_REPO}:${VERSION}"
+          docker pull "${UC_REPO}@${UC_DIGEST}"
+          docker pull "${WEB_REPO}@${WEB_DIGEST}"
+          # compose.yaml names the images by version: tag the signed digests so for docker load
+          docker tag "${UC_REPO}@${UC_DIGEST}" "${UC_REPO}:${VERSION}"
+          docker tag "${WEB_REPO}@${WEB_DIGEST}" "${WEB_REPO}:${VERSION}"
           docker save --output "bundle/${name}/images.tar" "${UC_REPO}:${VERSION}" "${WEB_REPO}:${VERSION}"
           git archive --format=tar.gz --prefix="easy-update-center-${VERSION}/" --output="bundle/${name}/easy-update-center-${VERSION}.tar.gz" HEAD
           sed -e "s/@VERSION@/${VERSION}/g" -e "s/@ARCH@/${ARCH}/g" .github/release/airgapped-README.txt > "bundle/${name}/README.txt"
@@ -313,11 +314,11 @@ jobs:
         with:
           name: bundle-${{ matrix.arch }}
           path: assets
-          retention-days: 1
+          retention-days: 7
           compression-level: 0
           if-no-files-found: error
 
-  release:
+  draft:
     needs: [check, sign, bundle]
     runs-on: ubuntu-24.04
     permissions:
@@ -351,18 +352,68 @@ jobs:
         run: |
           sha256sum -- *.tar *.spdx.json > SHA256SUMS
           cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
-      # A first run creates the Release; a run on a tag that already has one replaces its notes and
-      # assets.
+      # A draft is invisible to everyone but maintainers until publish, and can be changed until
+      # then: a re-run updates it. A published release is never changed.
+      - name: Create or update the draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+        run: |
+          python3 tools/release.py notes "${VERSION}" > "${RUNNER_TEMP}/notes.md"
+          if draft="$(gh release view "v${VERSION}" --json isDraft --jq .isDraft 2> /dev/null)"; then
+              if [[ "${draft}" != true ]]; then
+                  echo "::error::v${VERSION} is already published, and a published release is never changed: release the next version"
+                  exit 1
+              fi
+              gh release edit "v${VERSION}" --notes-file "${RUNNER_TEMP}/notes.md"
+              gh release upload "v${VERSION}" assets/* --clobber
+          else
+              flags=(--draft --verify-tag --title "${VERSION}" --notes-file "${RUNNER_TEMP}/notes.md")
+              if [[ "${PRERELEASE}" == true ]]; then flags+=(--prerelease); fi
+              gh release create "v${VERSION}" "${flags[@]}" assets/*
+          fi
+
+  publish:
+    needs: [check, index, draft]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      LATEST: ${{ needs.check.outputs.latest }}
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      # One source and no annotations: the tag names the signed index as it is. Any other digest
+      # stops the run before the Release is published.
+      - name: Tag the images
+        env:
+          MINOR_LATEST: ${{ needs.check.outputs.minor_latest }}
+          UC_DIGEST: ${{ needs.index.outputs.uc-digest }}
+          WEB_DIGEST: ${{ needs.index.outputs.web-digest }}
+        run: |
+          tags=("${VERSION}")
+          if [[ "${MINOR_LATEST}" == true ]]; then tags+=("${VERSION%.*}"); fi
+          if [[ "${LATEST}" == true ]]; then tags+=(latest); fi
+          for image in uc web; do
+              if [[ "${image}" == uc ]]; then repo="${UC_REPO}" digest="${UC_DIGEST}"; else repo="${WEB_REPO}" digest="${WEB_DIGEST}"; fi
+              for tag in "${tags[@]}"; do
+                  docker buildx imagetools create --tag "${repo}:${tag}" "${repo}@${digest}"
+                  got="$(docker buildx imagetools inspect "${repo}:${tag}" --format '{{.Manifest.Digest}}')"
+                  if [[ "${got}" != "${digest}" ]]; then
+                      echo "::error::${repo}:${tag} is ${got}, not the signed ${digest}"
+                      exit 1
+                  fi
+              done
+          done
       - name: Publish the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          LATEST: ${{ needs.check.outputs.latest }}
-        run: |
-          python3 tools/release.py notes "${VERSION}" > "${RUNNER_TEMP}/notes.md"
-          if gh release view "v${VERSION}" > /dev/null 2>&1; then
-              gh release edit "v${VERSION}" --notes-file "${RUNNER_TEMP}/notes.md"
-              gh release upload "v${VERSION}" assets/* --clobber
-          else
-              gh release create "v${VERSION}" --verify-tag --title "${VERSION}" --notes-file "${RUNNER_TEMP}/notes.md" --latest="${LATEST}" assets/*
-          fi
+        run: gh release edit "v${VERSION}" --draft=false --latest="${LATEST}"
