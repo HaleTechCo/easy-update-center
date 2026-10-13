@@ -9,9 +9,9 @@ import pytest
 
 from httpstub import StubServer
 from procurefixture import publish
+from uc.http import Http
 from uc.procure import ProcureError
 from uc.procure.upstream import NotFoundError, Upstream, parse_sha1
-from uc.repo_adapter.backends import Http
 
 POM = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.pom'
 HPI = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.hpi'

@@ -9,6 +9,7 @@ import json
 import pytest
 
 from httpstub import StubServer
+from uc import aql
 from uc.aql import (
     AQL_TEMPLATE,
     AqlError,
@@ -138,3 +139,29 @@ def test_query_repository_http_error():
 def test_query_repository_rejects_odd_repository_names():
     with pytest.raises(AqlError, match='repository name'):
         query_repository('http://127.0.0.1:1/api/', 'a"b', 'u', 'p')
+
+
+def test_the_aql_query_keeps_the_credentials_off_another_host():
+    results = {'results': [{'path': 'org/x/1', 'name': 'x-1.pom', 'size': 3}]}
+    with StubServer(
+        {('GET', '/api/search/aql'): (200, {}, json.dumps(results).encode())}
+    ) as other:
+        elsewhere = other.url.replace('127.0.0.1', 'localhost') + '/api/search/aql'
+        with StubServer(
+            {('POST', '/api/search/aql'): (302, {'Location': elsewhere}, b'')}
+        ) as repository:
+            files = query_repository(repository.url + '/api/', 'jenkins', 'svc', 'pw')
+    assert [f.name for f in files] == ['x-1.pom']
+    _method, _path, headers, _body = other.requests[0]
+    assert 'Authorization' not in headers
+
+
+def test_an_aql_answer_over_the_limit_is_refused(monkeypatch):
+    monkeypatch.setattr(aql, 'LISTING_LIMIT', 10)
+    with (
+        StubServer(
+            {('POST', '/api/search/aql'): (200, {}, b'{"results": []}' * 2)}
+        ) as stub,
+        pytest.raises(aql.AqlError, match='larger than 10 bytes'),
+    ):
+        query_repository(stub.url + '/api/', 'jenkins', 'svc', 'pw')

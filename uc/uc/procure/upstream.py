@@ -8,8 +8,8 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
+from uc.http import TIMEOUT, Http, HttpError
 from uc.repo_adapter.archive import SMALL_ENTRY_LIMIT
-from uc.repo_adapter.backends import TIMEOUT, BackendError, Http
 
 from . import ProcureError
 from .staging import SHA1, sha1_of
@@ -62,7 +62,7 @@ class Upstream:
             response = self.http.request(
                 url, headers={}, limit=SIDE_FILE_LIMIT, timeout=TIMEOUT
             )
-        except BackendError as exc:
+        except HttpError as exc:
             raise ProcureError(str(exc)) from exc
         if response.status == HTTPStatus.NOT_FOUND:
             return None
@@ -89,7 +89,7 @@ class Upstream:
         try:
             with part.open('wb') as out:
                 self.http.download(self.url(path), headers={}, out=out, limit=limit)
-        except BackendError as exc:
+        except HttpError as exc:
             raise ProcureError(str(exc)) from exc
         actual = sha1_of(part)
         if actual != expected:

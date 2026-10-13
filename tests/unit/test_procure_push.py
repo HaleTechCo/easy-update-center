@@ -11,10 +11,10 @@ import pytest
 
 from httpstub import StubServer
 from procurefixture import SOURCE, publish, stage
+from uc.http import Http
 from uc.procure import ProcureError
 from uc.procure.push import push
 from uc.procure.staging import Staging
-from uc.repo_adapter.backends import Http
 from ucsupport import make_settings
 
 POM = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.pom'

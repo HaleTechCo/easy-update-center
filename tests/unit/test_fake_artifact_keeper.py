@@ -20,7 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'integration'))
 
 from fake_artifact_keeper import make_handler
 from httpclient import put
-from uc.repo_adapter.backends import ArtifactKeeperBackend, Http
+from uc.http import Http
+from uc.repo_adapter.backends import ArtifactKeeperBackend
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import build_index
 

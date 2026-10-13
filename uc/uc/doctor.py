@@ -12,9 +12,8 @@ import hashlib
 import json
 import os
 import tempfile
-import urllib.error
-import urllib.request
 from dataclasses import asdict, dataclass, field
+from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 from urllib.parse import urlsplit
@@ -36,6 +35,8 @@ if TYPE_CHECKING:
     from .versions import VersionTool
 
 HTTP_NOT_FOUND = 404
+SMALL_FILE_LIMIT = 1024 * 1024
+"""The largest POM or MANIFEST.MF doctor fetches, as the repo-adapter caps them."""
 REPORT_FILE = Path('doctor') / 'report.json'
 """Where uc doctor --record saves the full report, under the data directory.
 
@@ -179,6 +180,7 @@ class ArtifactSource:
         *,
         cache_dir: Path | None,
         allow_network: bool,
+        ca_file: Path | None = None,
         timeout: float = 60,
     ) -> None:
         """Read from repository at artifactory_url.
@@ -188,7 +190,9 @@ class ArtifactSource:
         self.base = f'{artifactory_url}{repository}/'
         self.cache_dir = cache_dir
         self.allow_network = allow_network
+        self.ca_file = ca_file
         self.timeout = timeout
+        self._http: http.Http | None = None
         self._auth = (
             'Basic ' + base64.b64encode(f'{username}:{password}'.encode()).decode()
         )
@@ -206,6 +210,7 @@ class ArtifactSource:
             creds.repo_password,
             cache_dir=settings.cache_dir,
             allow_network=allow_network,
+            ca_file=settings.repo_ca_file,
         )
 
     def pom(self, gav: Gav) -> bytes | None:
@@ -243,21 +248,25 @@ class ArtifactSource:
                 return None
         if not self.allow_network:
             return None
-        request = urllib.request.Request(
-            url, headers={'Authorization': self._auth, 'User-Agent': http.USER_AGENT}
-        )
+        # built on first use, so a source that only reads the cache never reads
+        # REPO_CA_FILE
+        if self._http is None:
+            self._http = http.Http(self.ca_file)
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                return response.read()
-        except urllib.error.HTTPError as exc:
-            exc.close()  # it holds the response
-            if exc.code == HTTP_NOT_FOUND:
-                return None
-            msg = f'GET {url} failed with HTTP {exc.code}'
-            raise DoctorError(msg) from exc
-        except OSError as exc:
-            msg = f'GET {url} failed: {exc}'
-            raise DoctorError(msg) from exc
+            response = self._http.request(
+                url,
+                headers={'Authorization': self._auth},
+                limit=SMALL_FILE_LIMIT,
+                timeout=self.timeout,
+            )
+        except http.HttpError as exc:
+            raise DoctorError(str(exc)) from exc
+        if response.status == HTTP_NOT_FOUND:
+            return None
+        if response.status != HTTPStatus.OK:
+            msg = f'GET {url} failed with HTTP {response.status}'
+            raise DoctorError(msg)
+        return response.body
 
 
 def parse_manifest(text: str) -> dict[str, str]:
@@ -511,6 +520,7 @@ def inspect_repository(
         settings.repo_key,
         creds.repo_username,
         creds.repo_password,
+        settings.repo_ca_file,
     )
     listing = aql.classify(files)
     source = ArtifactSource.from_settings(settings, creds, allow_network=fetch)

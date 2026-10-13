@@ -8,9 +8,8 @@ from __future__ import annotations
 import base64
 import json
 import re
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from . import http
@@ -18,6 +17,7 @@ from .errors import UcError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+    from pathlib import Path
 
 AQL_TEMPLATE = (
     'items.find({"repo":{"$eq":"%s"},"$or":['
@@ -28,6 +28,8 @@ AQL_TEMPLATE = (
 )
 WAR_GROUP = 'org.jenkins-ci.main'
 WAR_ARTIFACT = 'jenkins-war'
+LISTING_LIMIT = 256 * 1024 * 1024
+"""The largest AQL answer read: about a million files."""
 _ALLOWED = re.compile(r'^[0-9A-Za-z+\-./_]*$')
 _REPOSITORY = re.compile(r'^[A-Za-z0-9._-]+$')
 
@@ -103,39 +105,46 @@ def to_gav(f: RepoFile) -> Gav | None:
     return Gav(group, artifact, version, extension)
 
 
-def query_repository(
-    api_url: str, repository: str, username: str, password: str, timeout: float = 600
+def query_repository(  # noqa: PLR0917
+    api_url: str,
+    repository: str,
+    username: str,
+    password: str,
+    ca_file: Path | None = None,
+    timeout: float = http.LONG_TIMEOUT,
 ) -> list[RepoFile]:
     """Run the AQL query against api_url with basic auth.
 
-    Return every .hpi, .jpi, .war and .pom in repository.
+    Return every .hpi, .jpi, .war and .pom in repository. The credentials never follow a
+    redirect to another host (uc.http.Http); ca_file is REPO_CA_FILE.
     """
     if not _REPOSITORY.match(repository):
         msg = f'unsupported repository name {repository!r}'
         raise AqlError(msg)
     token = base64.b64encode(f'{username}:{password}'.encode()).decode()
-    request = urllib.request.Request(
-        api_url + 'search/aql',
-        data=(AQL_TEMPLATE % repository).encode(),
-        method='POST',
-        headers={
-            'Content-Type': 'text/plain',
-            'Accept': 'application/json',
-            'Authorization': f'Basic {token}',
-            'User-Agent': http.USER_AGENT,
-        },
-    )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            payload = json.loads(response.read())
-    except urllib.error.HTTPError as exc:
-        try:
-            detail = exc.read()[:300].decode('utf-8', 'replace')
-        finally:
-            exc.close()  # it holds the response
-        msg = f'AQL query to {api_url} failed with HTTP {exc.code}: {detail}'
+        response = http.Http(ca_file).request(
+            api_url + 'search/aql',
+            method='POST',
+            data=(AQL_TEMPLATE % repository).encode(),
+            headers={
+                'Content-Type': 'text/plain',
+                'Accept': 'application/json',
+                'Authorization': f'Basic {token}',
+            },
+            limit=LISTING_LIMIT,
+            timeout=timeout,
+        )
+    except http.HttpError as exc:
+        msg = f'AQL query to {api_url} failed: {exc}'
         raise AqlError(msg) from exc
-    except (OSError, ValueError) as exc:
+    if response.status != HTTPStatus.OK:
+        detail = response.body[:300].decode('utf-8', 'replace')
+        msg = f'AQL query to {api_url} failed with HTTP {response.status}: {detail}'
+        raise AqlError(msg)
+    try:
+        payload = json.loads(response.body)
+    except ValueError as exc:
         msg = f'AQL query to {api_url} failed: {exc}'
         raise AqlError(msg) from exc
     results = payload.get('results') if isinstance(payload, dict) else None

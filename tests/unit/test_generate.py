@@ -308,6 +308,7 @@ def test_generation_through_the_adapter(tmp_path, secrets_dir):
         'jenkins',
         'uc',
         'adapter-token',
+        None,
     )
     status = read_status(settings.data_dir)
     assert status['doctor']['repo_adapter']['derived_poms'] == 1

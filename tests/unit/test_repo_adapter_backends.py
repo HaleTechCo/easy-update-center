@@ -17,14 +17,13 @@ import pytest
 from archivefixture import make_hpi, make_jar
 from httpstub import StubServer, serve_bytes
 from uc.aql import AQL_TEMPLATE
+from uc.http import Http, HttpError, forwards_credentials
 from uc.repo_adapter.backends import (
     ArtifactKeeperBackend,
     ArtifactoryBackend,
     BackendError,
-    Http,
     RepoEntry,
     artifactory_time,
-    forwards_credentials,
 )
 
 UTC = dt.UTC
@@ -201,7 +200,7 @@ def test_protocol_errors_are_backend_errors():
 
     threading.Thread(target=reply, daemon=True).start()
     try:
-        with pytest.raises(BackendError, match='failed'):
+        with pytest.raises(HttpError, match='failed'):
             Http(None).request(
                 f'http://127.0.0.1:{listener.getsockname()[1]}/x',
                 headers={},
@@ -371,6 +370,6 @@ def test_keeper_refuses_archives_over_the_cap(tmp_path):
         StubServer(
             {('GET', f'/maven/jenkins-prod-local/{HPI_PATH}'): (200, {}, data)}
         ) as stub,
-        pytest.raises(BackendError, match='larger than 100 bytes'),
+        pytest.raises(HttpError, match='larger than 100 bytes'),
     ):
         keeper(stub, tmp_path, max_archive=100).facts(entry(data), GIT, plugin=True)

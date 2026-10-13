@@ -7,10 +7,10 @@ import io
 
 from httpstub import StubServer
 from procurefixture import publish
+from uc.http import Http
 from uc.procure.stager import Stager, Wanted
 from uc.procure.staging import Staging
 from uc.procure.upstream import Upstream
-from uc.repo_adapter.backends import Http
 
 POM = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.pom'
 

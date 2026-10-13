@@ -8,7 +8,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING, TextIO
 
-from uc.repo_adapter.backends import Http
+from uc.http import Http
 
 from . import ProcureError
 from .dependencies import resolve_dependencies

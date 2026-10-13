@@ -15,11 +15,12 @@ from typing import TYPE_CHECKING
 
 from uc.aql import Gav, RepoFile, to_gav
 from uc.config import PUBLIC_RELEASES_URL
+from uc.http import HttpError
 from uc.pom import Coordinates, unusable_reason
 from uc.timeutil import iso
 
 from .archive import ArchiveError, ArchiveFacts, plausible
-from .backends import Backend, BackendError, RepoEntry, artifactory_time, parse_time
+from .backends import Backend, RepoEntry, artifactory_time, parse_time
 
 if TYPE_CHECKING:
     import datetime as dt
@@ -84,7 +85,7 @@ def _reason(exc: Exception) -> str:
     """Our errors carry their own message; anything else also names its type."""
     return (
         str(exc)
-        if isinstance(exc, (BackendError, ArchiveError))
+        if isinstance(exc, (HttpError, ArchiveError))
         else f'{type(exc).__name__}: {exc}'
     )
 

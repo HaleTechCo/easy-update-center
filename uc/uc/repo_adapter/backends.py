@@ -7,23 +7,19 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
-import http.client
 import io
 import json
 import re
-import ssl
 import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from http import HTTPStatus
-from typing import TYPE_CHECKING, BinaryIO, Protocol, override
-from urllib.parse import urlsplit
+from typing import TYPE_CHECKING, Protocol, override
 
-from uc import http as uc_http
-from uc.aql import AQL_TEMPLATE
-from uc.errors import UcError
+from uc.aql import AQL_TEMPLATE, LISTING_LIMIT
+from uc.http import LONG_TIMEOUT, Http, HttpError
 
 from .archive import (
     SMALL_ENTRY_LIMIT,
@@ -41,18 +37,16 @@ if TYPE_CHECKING:
 
     from uc.pom import Coordinates
 
-TIMEOUT = 60
-LONG_TIMEOUT = 600
-LISTING_LIMIT = 256 * 1024 * 1024
 RANGE_BLOCK = 256 * 1024
 LISTED_EXTENSIONS = ('.hpi', '.jpi', '.war', '.pom')
 _SHA1 = re.compile(r'^[0-9a-f]{40}$')
 
 
-class BackendError(UcError):
-    """A repository request failed.
+class BackendError(HttpError):
+    """A repository answered with something the adapter cannot use.
 
-    Or it was answered with something the adapter cannot use.
+    An Http failure is an HttpError, of which this is one kind, so callers catch
+    HttpError.
     """
 
 
@@ -91,135 +85,6 @@ def artifactory_time(moment: dt.datetime) -> str:
 def parse_time(value: str) -> dt.datetime:
     """Parse an ISO 8601 time from a repository listing."""
     return dt.datetime.fromisoformat(value)
-
-
-@dataclass
-class Response:
-    """An HTTP response.
-
-    Its status, its headers with lower-cased names, and its body.
-    """
-
-    status: int
-    headers: dict[str, str]
-    body: bytes
-
-
-def forwards_credentials(old_url: str, new_url: str) -> bool:
-    """Return whether a redirect may carry the repository credentials.
-
-    The redirect is from old_url to new_url. Only to the same host, and never from https
-    to http, where they would cross the network in the clear.
-    """
-    old, new = urlsplit(old_url), urlsplit(new_url)
-    return new.hostname == old.hostname and not (
-        old.scheme == 'https' and new.scheme != 'https'
-    )
-
-
-class _NoCredentialsAcrossHosts(urllib.request.HTTPRedirectHandler):
-    """Artifactory redirects downloads to object storage.
-
-    Repository credentials must not follow.
-    """
-
-    # urllib.request.HTTPRedirectHandler's signature
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: PLR0917
-        new = super().redirect_request(req, fp, code, msg, headers, newurl)
-        if new is not None and not forwards_credentials(req.full_url, newurl):
-            new.remove_header('Authorization')
-        return new
-
-
-class Http:
-    """HTTP to the repository.
-
-    Its credentials never follow a redirect to another host.
-    """
-
-    def __init__(self, ca_file: Path | None) -> None:
-        """Verify TLS against the system bundle, plus ca_file when given."""
-        # REPO_CA_FILE adds to the system bundle: a repository behind a private CA may
-        # still redirect downloads to object storage with a public certificate.
-        self.context = ssl.create_default_context()
-        if ca_file:
-            self.context.load_verify_locations(cafile=str(ca_file))
-        self.opener = urllib.request.build_opener(
-            urllib.request.HTTPSHandler(context=self.context),
-            _NoCredentialsAcrossHosts(),
-        )
-
-    def request(
-        self,
-        url: str,
-        *,
-        headers: dict[str, str],
-        limit: int,
-        data: bytes | None = None,
-        method: str | None = None,
-        timeout: float = TIMEOUT,
-        truncate: bool = False,
-    ) -> Response:
-        """One request; the body is read up to limit bytes.
-
-        BackendError beyond, unless truncate.
-        """
-        request = urllib.request.Request(
-            url,
-            data=data,
-            method=method,
-            headers={'User-Agent': uc_http.USER_AGENT, **headers},
-        )
-        try:
-            with self.opener.open(request, timeout=timeout) as response:
-                body = response.read(limit + 1)
-                status, got = response.status, dict(response.headers.items())
-        except urllib.error.HTTPError as exc:
-            status, got = exc.code, dict(exc.headers.items())
-            try:
-                body = exc.read(4096)
-            except (OSError, http.client.HTTPException):
-                body = b''
-            finally:
-                exc.close()  # it holds the response
-        except (OSError, ValueError, http.client.HTTPException) as exc:
-            msg = f'{method or "GET"} {url} failed: {exc!r}'
-            raise BackendError(msg) from exc
-        if len(body) > limit and not truncate:
-            msg = f'{url} is larger than {limit} bytes'
-            raise BackendError(msg)
-        return Response(
-            status,
-            {k.lower(): v for k, v in got.items()},
-            body[:limit] if truncate else body,
-        )
-
-    def download(
-        self, url: str, *, headers: dict[str, str], out: BinaryIO, limit: int
-    ) -> None:
-        """Stream url's body into out.
-
-        BackendError on an HTTP error or beyond limit bytes.
-        """
-        request = urllib.request.Request(
-            url, headers={'User-Agent': uc_http.USER_AGENT, **headers}
-        )
-        try:
-            with self.opener.open(request, timeout=LONG_TIMEOUT) as response:
-                total = 0
-                while chunk := response.read(1024 * 1024):
-                    total += len(chunk)
-                    if total > limit:
-                        msg = f'{url} is larger than {limit} bytes'
-                        raise BackendError(msg)
-                    out.write(chunk)
-        except urllib.error.HTTPError as exc:
-            exc.close()  # it holds the response
-            msg = f'GET {url} failed with HTTP {exc.code}'
-            raise BackendError(msg) from exc
-        except (OSError, ValueError, http.client.HTTPException) as exc:
-            msg = f'GET {url} failed: {exc!r}'
-            raise BackendError(msg) from exc
 
 
 class RangeReader(io.RawIOBase):

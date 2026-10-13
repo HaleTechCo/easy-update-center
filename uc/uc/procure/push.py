@@ -14,7 +14,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, TextIO
 
 from uc.config import read_secret
-from uc.repo_adapter.backends import LONG_TIMEOUT, TIMEOUT, BackendError, Http
+from uc.http import LONG_TIMEOUT, TIMEOUT, Http, HttpError
 
 from . import ProcureError
 from .staging import MANIFEST, Staging, in_layout
@@ -120,7 +120,7 @@ class Target:
                 limit=SIDE_FILE_LIMIT,
                 timeout=TIMEOUT,
             )
-        except BackendError as exc:
+        except HttpError as exc:
             raise ProcureError(str(exc)) from exc
         if response.status == HTTPStatus.NOT_FOUND:
             return None
@@ -143,7 +143,7 @@ class Target:
                 timeout=TIMEOUT,
                 truncate=True,
             )
-        except BackendError as exc:
+        except HttpError as exc:
             raise ProcureError(str(exc)) from exc
         if response.status not in {HTTPStatus.OK, HTTPStatus.NOT_FOUND}:
             msg = f'the repository answered HTTP {response.status}'
@@ -160,7 +160,7 @@ class Target:
             self.http.download(
                 self.base + path, headers=self.headers, out=sink, limit=limit
             )
-        except BackendError as exc:
+        except HttpError as exc:
             raise ProcureError(str(exc)) from exc
         return sink.digest.hexdigest()
 
@@ -185,7 +185,7 @@ class Target:
                 timeout=LONG_TIMEOUT,
                 truncate=True,
             )
-        except BackendError as exc:
+        except HttpError as exc:
             raise ProcureError(str(exc)) from exc
         return (
             response.status,

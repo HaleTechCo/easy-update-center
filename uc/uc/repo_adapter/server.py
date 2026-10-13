@@ -25,11 +25,12 @@ from typing import TYPE_CHECKING
 from uc.aql import AQL_TEMPLATE, RepoFile, to_gav
 from uc.config import Settings, read_secret
 from uc.errors import UcError
+from uc.http import Http
 from uc.preflight import ADAPTER_USERNAME, load_repository_credentials
 from uc.timeutil import utcnow
 
 from .archive import MANIFEST
-from .backends import ArtifactKeeperBackend, ArtifactoryBackend, Backend, Http
+from .backends import ArtifactKeeperBackend, ArtifactoryBackend, Backend
 from .cache import Cache
 from .listing import Index, build_index, write_report
 

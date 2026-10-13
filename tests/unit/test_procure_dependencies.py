@@ -12,11 +12,11 @@ from archivefixture import make_hpi, pom_xml
 from procurefixture import publish
 from uc.aql import RepoFile, classify
 from uc.doctor import DoctorReport, Inspection
+from uc.http import Http
 from uc.procure.dependencies import resolve_dependencies
 from uc.procure.stager import Stager
 from uc.procure.staging import Staging
 from uc.procure.upstream import Upstream
-from uc.repo_adapter.backends import Http
 from uc.versions import VersionTool
 
 PLUGINS = 'org.jenkins-ci.plugins'

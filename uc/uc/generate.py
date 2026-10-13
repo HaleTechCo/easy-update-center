@@ -9,6 +9,7 @@ import os
 import shutil
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import (
@@ -34,11 +35,10 @@ from .versions import VersionTool
 
 if TYPE_CHECKING:
     import datetime as dt
-    from pathlib import Path
 
     from .config import Settings
 
-AqlQuery = Callable[[str, str, str, str], list[aql.RepoFile]]
+AqlQuery = Callable[[str, str, str, str, Path | None], list[aql.RepoFile]]
 
 
 @dataclass
@@ -180,6 +180,7 @@ def _build_and_publish(
                 settings.repo_key,
                 creds.repo_username,
                 creds.repo_password,
+                settings.repo_ca_file,
             )
         )
         current = validate.load_site_json(

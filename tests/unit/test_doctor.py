@@ -746,3 +746,23 @@ def test_a_failed_record_removes_its_temporary_file(tmp_path, monkeypatch):
     assert sorted(path.name for path in (tmp_path / 'doctor').iterdir()) == [
         '.record.lock'
     ]
+
+
+def test_a_doctor_fetch_keeps_the_credentials_off_another_host():
+    gav = Gav('org.x', 'x', '1', 'hpi')
+    with StubServer({('GET', '/blob'): (200, {}, b'<project/>')}) as other:
+        elsewhere = other.url.replace('127.0.0.1', 'localhost') + '/blob'
+        with StubServer(
+            {('GET', '/jenkins/org/x/x/1/x-1.pom'): (302, {'Location': elsewhere}, b'')}
+        ) as repository:
+            source = ArtifactSource(
+                repository.url + '/',
+                'jenkins',
+                'svc',
+                'pw',
+                cache_dir=None,
+                allow_network=True,
+            )
+            assert source.pom(gav) == b'<project/>'
+    _method, _path, headers, _body = other.requests[0]
+    assert 'Authorization' not in headers
