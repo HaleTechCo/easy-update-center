@@ -22,6 +22,8 @@ from uc.aql import AQL_TEMPLATE, LISTING_LIMIT
 from uc.http import LONG_TIMEOUT, Http, HttpError
 
 from .archive import (
+    CENTRAL_DIRECTORY_LIMIT,
+    INNER_JAR_LIMIT,
     SMALL_ENTRY_LIMIT,
     ArchiveError,
     ArchiveFacts,
@@ -38,6 +40,10 @@ if TYPE_CHECKING:
     from uc.pom import Coordinates
 
 RANGE_BLOCK = 256 * 1024
+RANGE_READ_LIMIT = CENTRAL_DIRECTORY_LIMIT + 1024 * 1024
+"""The most one RangeReader fetches: a central directory, its end records, a margin."""
+SHA1_FILE_LIMIT = 4096
+"""A .sha1 file: 40 hex characters, sometimes followed by a file name."""
 LISTED_EXTENSIONS = ('.hpi', '.jpi', '.war', '.pom')
 _SHA1 = re.compile(r'^[0-9a-f]{40}$')
 
@@ -132,6 +138,12 @@ class RangeReader(io.RawIOBase):
 
     def _block(self, index: int) -> bytes:
         if index not in self.blocks:
+            if (len(self.blocks) + 1) * RANGE_BLOCK > RANGE_READ_LIMIT:
+                msg = (
+                    f'{self.url}: more than {RANGE_READ_LIMIT} bytes read through '
+                    'Range requests'
+                )
+                raise BackendError(msg)
             start = index * RANGE_BLOCK
             end = min(start + RANGE_BLOCK, self.size) - 1
             response = self.http.request(
@@ -177,8 +189,11 @@ class Backend(Protocol):
         Also its .jar files where the backend lists them.
         """
 
-    def get(self, path: str) -> bytes | None:
-        """Return a file's bytes, None when the repository does not have it."""
+    def get(self, path: str, limit: int) -> bytes | None:
+        """Return a file's bytes, at most limit (HttpError beyond).
+
+        None when the repository does not have it.
+        """
 
     def sha1(self, entry: RepoEntry) -> str:
         """Return a file's sha1; BackendError when the repository has none."""
@@ -269,12 +284,12 @@ class ArtifactoryBackend:
             msg = f'unexpected AQL response from {self.api_url}: {exc}'
             raise BackendError(msg) from exc
 
-    def get(self, path: str) -> bytes | None:
-        """Return a file's bytes, None on HTTP 404."""
+    def get(self, path: str, limit: int) -> bytes | None:
+        """Return a file's bytes, at most limit (HttpError beyond); None on HTTP 404."""
         response = self.http.request(
             self.base + _quote(path),
             headers=self.auth,
-            limit=self.max_archive_bytes,
+            limit=limit,
             timeout=LONG_TIMEOUT,
         )
         if response.status == HTTPStatus.NOT_FOUND:
@@ -425,12 +440,12 @@ class ArtifactKeeperBackend:
                 return entries
             cursor, page = body.get('next_cursor'), page + 1
 
-    def get(self, path: str) -> bytes | None:
-        """Return a file's bytes, None on HTTP 404."""
+    def get(self, path: str, limit: int) -> bytes | None:
+        """Return a file's bytes, at most limit (HttpError beyond); None on HTTP 404."""
         response = self.http.request(
             self.base + _quote(path),
             headers=self.basic,
-            limit=self.max_archive_bytes,
+            limit=limit,
             timeout=LONG_TIMEOUT,
         )
         if response.status == HTTPStatus.NOT_FOUND:
@@ -445,7 +460,7 @@ class ArtifactKeeperBackend:
 
         BackendError when it is missing or malformed.
         """
-        data = self.get(entry.path + '.sha1')
+        data = self.get(entry.path + '.sha1', SHA1_FILE_LIMIT)
         value = (data or b'').decode('ascii', 'replace').strip().split(' ')[0].lower()
         if not _SHA1.match(value):
             msg = f'no valid sha1 file for {entry.path}'
@@ -477,7 +492,7 @@ class ArtifactKeeperBackend:
 
         None when the jar is absent, unreadable or has none.
         """
-        data = self.get(jar_path)
+        data = self.get(jar_path, INNER_JAR_LIMIT)
         if data is None:
             return None
         try:

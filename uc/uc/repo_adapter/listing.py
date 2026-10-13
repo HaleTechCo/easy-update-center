@@ -19,7 +19,7 @@ from uc.http import HttpError
 from uc.pom import Coordinates, unusable_reason
 from uc.timeutil import iso
 
-from .archive import ArchiveError, ArchiveFacts, plausible
+from .archive import SMALL_ENTRY_LIMIT, ArchiveError, ArchiveFacts, plausible
 from .backends import Backend, RepoEntry, artifactory_time, parse_time
 
 if TYPE_CHECKING:
@@ -145,7 +145,7 @@ def _pom_verdict(
     cached = cache.pom_verdict(entry.sha256)
     if cached is not None:
         return cached or None
-    data = backend.get(entry.path)
+    data = backend.get(entry.path, SMALL_ENTRY_LIMIT)
     reason = (
         'missing from the repository'
         if data is None

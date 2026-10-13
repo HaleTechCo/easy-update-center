@@ -59,33 +59,47 @@ class ArchiveFacts:
 
 
 def central_directory_size(stream: BinaryIO) -> int:
-    """Size in bytes of a zip's central directory.
+    """Size in bytes of a zip's central directory, as zipfile may read it.
 
-    Read from its end records without parsing it.
+    Read from the end records without parsing the directory. zipfile takes the zip64
+    end record whenever a zip64 locator precedes the end record, whatever the classic
+    record says; CPython versions differ in where they look for that record (just
+    before the locator, or at the locator's offset), so both are read and the largest
+    size found counts.
     """
     end = stream.seek(0, io.SEEK_END)
     tail_length = min(end, _EOCD_SIZE + _MAX_COMMENT_LENGTH)
-    stream.seek(end - tail_length)
+    tail_start = end - tail_length
+    stream.seek(tail_start)
     tail = stream.read(tail_length)
     at = tail.rfind(_EOCD)
     if at < 0 or len(tail) - at < _EOCD_SIZE:
         msg = 'not a zip archive (no end of central directory record)'
         raise ArchiveError(msg)
     entries, size = struct.unpack('<HI', tail[at + 10 : at + 16])
-    if size != _ZIP64_SIZE_MARKER and entries != _ZIP64_COUNT_MARKER:
-        return size
-    locator = tail[at - _ZIP64_LOCATOR_SIZE : at] if at >= _ZIP64_LOCATOR_SIZE else b''
-    if not locator.startswith(_ZIP64_LOCATOR):
+    markers = size == _ZIP64_SIZE_MARKER or entries == _ZIP64_COUNT_MARKER
+    sizes = [] if size == _ZIP64_SIZE_MARKER else [size]
+    locator_at = tail_start + at - _ZIP64_LOCATOR_SIZE
+    locator = b''
+    if locator_at >= 0:
+        stream.seek(locator_at)
+        locator = stream.read(_ZIP64_LOCATOR_SIZE)
+    if locator.startswith(_ZIP64_LOCATOR):
+        (record_offset,) = struct.unpack('<Q', locator[8:16])
+        for offset in {locator_at - _ZIP64_EOCD_SIZE, record_offset}:
+            if offset < 0:
+                continue
+            stream.seek(offset)
+            record = stream.read(_ZIP64_EOCD_SIZE)
+            if len(record) == _ZIP64_EOCD_SIZE and record.startswith(_ZIP64_EOCD):
+                sizes.append(struct.unpack('<Q', record[40:48])[0])
+    elif markers:
         msg = 'zip64 archive without a zip64 end record locator'
         raise ArchiveError(msg)
-    (record_offset,) = struct.unpack('<Q', locator[8:16])
-    stream.seek(record_offset)
-    record = stream.read(_ZIP64_EOCD_SIZE)
-    if len(record) < _ZIP64_EOCD_SIZE or not record.startswith(_ZIP64_EOCD):
+    if not sizes:
         msg = 'zip64 end of central directory record not found'
         raise ArchiveError(msg)
-    (size,) = struct.unpack('<Q', record[40:48])
-    return size
+    return max(sizes)
 
 
 def open_archive(stream: BinaryIO) -> zipfile.ZipFile:

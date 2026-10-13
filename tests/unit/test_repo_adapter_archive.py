@@ -12,6 +12,7 @@ import pytest
 
 from archivefixture import make_hpi, make_war, pom_xml
 from uc.repo_adapter.archive import (
+    CENTRAL_DIRECTORY_LIMIT,
     ArchiveError,
     archive_date,
     central_directory_size,
@@ -209,3 +210,19 @@ def test_extract_facts_for_a_war_uses_the_path():
         'org.jenkins-ci.main', 'jenkins-war', '2.583', 'Jenkins war'
     )
     assert facts.description is None
+
+
+def test_a_zip64_record_counts_even_when_the_classic_record_looks_complete():
+    # zipfile reads the zip64 end record whenever a locator precedes the end record,
+    # so a small classic size must not hide a large zip64 one.
+    body = b'\0' * 100
+    huge = CENTRAL_DIRECTORY_LIMIT * 2
+    record = b'PK\x06\x06' + struct.pack(
+        '<QHHIIQQQQ', 44, 45, 45, 0, 0, 5001, 5001, huge, 0
+    )
+    locator = b'PK\x06\x07' + struct.pack('<IQI', 0, len(body), 1)
+    end = b'PK\x05\x06' + struct.pack('<HHHHIIH', 0, 0, 1, 1, 60, 0, 0)
+    data = body + record + locator + end
+    assert central_directory_size(io.BytesIO(data)) == huge
+    with pytest.raises(ArchiveError, match='exceeds'):
+        open_archive(io.BytesIO(data))

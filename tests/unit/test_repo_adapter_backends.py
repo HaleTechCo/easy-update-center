@@ -18,10 +18,12 @@ from archivefixture import make_hpi, make_jar
 from httpstub import StubServer, serve_bytes
 from uc.aql import AQL_TEMPLATE
 from uc.http import Http, HttpError, forwards_credentials
+from uc.repo_adapter import backends
 from uc.repo_adapter.backends import (
     ArtifactKeeperBackend,
     ArtifactoryBackend,
     BackendError,
+    RangeReader,
     RepoEntry,
     artifactory_time,
 )
@@ -135,8 +137,8 @@ def test_artifactory_files_entries_and_sha1():
     }
     with StubServer(routes) as stub:
         backend = artifactory(stub)
-        assert backend.get('org/x/1/x-1.pom') == b'<project/>'
-        assert backend.get('org/x/1/missing.pom') is None
+        assert backend.get('org/x/1/x-1.pom', 1024 * 1024) == b'<project/>'
+        assert backend.get('org/x/1/missing.pom', 1024 * 1024) is None
         assert (
             backend.entry(HPI_PATH, 'META-INF/MANIFEST.MF', 100)
             == b'Manifest-Version: 1.0'
@@ -249,7 +251,7 @@ def test_redirects_to_another_host_drop_the_credentials():
                 )
             }
         ) as stub:
-            assert artifactory(stub).get('x/1/x-1.pom') == b'<project/>'
+            assert artifactory(stub).get('x/1/x-1.pom', 1024 * 1024) == b'<project/>'
     assert stub.requests[0][2]['Authorization'] == BASIC
     assert 'Authorization' not in storage.requests[0][2]
 
@@ -342,7 +344,7 @@ def test_keeper_files_use_basic_auth_and_sha1_side_files(tmp_path):
     }
     with StubServer(routes) as stub:
         backend = keeper(stub, tmp_path)
-        assert backend.get('org/x/1/x-1.pom') == b'<project/>'
+        assert backend.get('org/x/1/x-1.pom', 1024 * 1024) == b'<project/>'
         assert backend.sha1(entry(b'x')) == 'c' * 40
         with pytest.raises(BackendError, match='no valid sha1'):
             backend.sha1(entry(b'x', 'org/x/1/x-1.hpi'))
@@ -373,3 +375,22 @@ def test_keeper_refuses_archives_over_the_cap(tmp_path):
         pytest.raises(HttpError, match='larger than 100 bytes'),
     ):
         keeper(stub, tmp_path, max_archive=100).facts(entry(data), GIT, plugin=True)
+
+
+def test_a_repository_pom_over_its_limit_is_refused():
+    big = b'<project>' + b' ' * 2000 + b'</project>'
+    routes = {('GET', '/artifactory/jenkins/org/x/1/x-1.pom'): (200, {}, big)}
+    with (
+        StubServer(routes) as stub,
+        pytest.raises(HttpError, match='larger than 1000 bytes'),
+    ):
+        artifactory(stub).get('org/x/1/x-1.pom', 1000)
+
+
+def test_a_range_reader_stops_at_its_limit(monkeypatch):
+    monkeypatch.setattr(backends, 'RANGE_READ_LIMIT', 2 * backends.RANGE_BLOCK)
+    data = b'x' * (3 * backends.RANGE_BLOCK)
+    with StubServer({('GET', '/big'): serve_bytes(data)}) as stub:
+        reader = RangeReader(Http(None), stub.url + '/big', {}, len(data))
+        with pytest.raises(BackendError, match='Range requests'):
+            reader.read()

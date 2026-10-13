@@ -243,11 +243,11 @@ def test_an_unexpected_failure_skips_only_that_archive(tmp_path):
 
 def test_an_unreadable_repository_pom_is_replaced_not_fatal(tmp_path):
     class Flaky(FakeBackend):
-        def get(self, path):
+        def get(self, path, limit):
             if path.endswith('.pom'):
                 msg = 'connection reset'
                 raise RuntimeError(msg)
-            return super().get(path)
+            return super().get(path, limit)
 
     backend = Flaky({f'{AD}.hpi': make_hpi(*AD_GAV), f'{AD}.pom': pom_xml(*AD_GAV)})
     index = build_index(backend, Cache(tmp_path / 'cache'), key='k', now=NOW)

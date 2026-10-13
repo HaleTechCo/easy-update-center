@@ -29,7 +29,7 @@ from uc.http import Http
 from uc.preflight import ADAPTER_USERNAME, load_repository_credentials
 from uc.timeutil import utcnow
 
-from .archive import MANIFEST
+from .archive import MANIFEST, SMALL_ENTRY_LIMIT
 from .backends import ArtifactKeeperBackend, ArtifactoryBackend, Backend
 from .cache import Cache
 from .listing import Index, build_index, write_report
@@ -183,7 +183,11 @@ class Adapter:
         if path not in index.poms:
             return None
         derived = index.poms[path]
-        return derived if derived is not None else self.backend.get(path)
+        return (
+            derived
+            if derived is not None
+            else self.backend.get(path, SMALL_ENTRY_LIMIT)
+        )
 
     def manifest(self, archive_path: str) -> bytes | None:
         """Return a listed archive's MANIFEST.MF, None when the listing has none."""

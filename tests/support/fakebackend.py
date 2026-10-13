@@ -65,10 +65,17 @@ class FakeBackend:
             )
         return entries
 
-    def get(self, path: str) -> bytes | None:
-        """Return the file's bytes, or None when there is no such path."""
+    def get(self, path: str, limit: int) -> bytes | None:
+        """Return the file's bytes, or None when there is no such path.
+
+        BackendError beyond limit bytes, as a real repository read would fail.
+        """
         self.calls.append(('get', path))
-        return self.files.get(path)
+        data = self.files.get(path)
+        if data is not None and len(data) > limit:
+            msg = f'{path} is larger than {limit} bytes'
+            raise BackendError(msg)
+        return data
 
     def sha1(self, entry: RepoEntry) -> str:
         """Return the listed sha1, or compute it from the file."""
