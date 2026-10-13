@@ -250,6 +250,17 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
             with contextlib.suppress(OSError):
                 self.connection.shutdown(socket.SHUT_RDWR)
 
+        def handle(self) -> None:
+            """Answer the connection's requests, quietly when it closes under an answer.
+
+            The client hung up, or the read deadline closed the connection: a line in
+            the log rather than socketserver's traceback.
+            """
+            try:
+                super().handle()
+            except (BrokenPipeError, ConnectionResetError):
+                self.log_message('connection closed before the answer was sent')
+
         def finish(self) -> None:
             self._deadline.cancel()
             super().finish()

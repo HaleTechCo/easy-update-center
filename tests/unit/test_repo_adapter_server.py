@@ -14,6 +14,7 @@ import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -451,6 +452,35 @@ def test_a_request_cannot_forge_a_log_line(running, capfd):
     err = capfd.readouterr().err
     assert '\nforged' not in err
     assert '\\nforged' in err or '\\x0aforged' in err
+
+
+def test_a_connection_closed_before_the_answer_ends_quietly(capfd):
+    # A client that hangs up, or one the read deadline cut off, leaves the answer
+    # nowhere to go: a line in the log, not socketserver's traceback.
+    handler = make_handler(None, key=KEY, token=TOKEN)
+    ours, theirs = socket.socketpair()
+    theirs.sendall(b'GET /healthz HTTP/1.0\r\n')  # and no more: the client hangs up
+    theirs.close()
+    with ours:
+        handler(ours, ('127.0.0.1', 1), SimpleNamespace())  # raises nothing
+    assert 'connection closed before the answer was sent' in capfd.readouterr().err
+
+
+def test_a_listing_slower_than_the_read_deadline_still_finishes(running, monkeypatch):
+    # The deadline is for reading the request; a listing of a large repository takes
+    # minutes, and the connection must stay open for its answer.
+    monkeypatch.setattr(server_module, 'READ_DEADLINE', 0.2)
+    refresh = Adapter.refresh
+
+    def slow_refresh(self):
+        time.sleep(1)
+        return refresh(self)
+
+    monkeypatch.setattr(Adapter, 'refresh', slow_refresh)
+    _backend, url = running({f'{BASE}.hpi': make_hpi(*GAV)})
+    status, _headers, body = aql(url)
+    assert status == 200
+    assert b'caffeine-api-3.2.4.hpi' in body
 
 
 def test_a_client_that_never_finishes_its_request_is_cut_off(running, monkeypatch):
