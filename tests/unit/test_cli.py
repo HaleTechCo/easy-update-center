@@ -162,7 +162,10 @@ def test_procure_stage_with_nothing_selected_exits_2(
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
     assert main(['procure', 'stage']) == 2
-    assert capsys.readouterr().err == (
+    err = capsys.readouterr().err
+    assert 'uc: warning: REPO_URL uses plain http: ' in err
+    assert 'uc: warning: PROCUREMENT_SOURCE_URL uses plain http: ' in err
+    assert err.endswith(
         'uc: error: nothing to stage: choose --poms, --dependencies or --war '
         'VERSION|required\n'
     )

@@ -79,7 +79,7 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 |---|---|---|---|
 | `REPO_TYPE` | `artifactory` | generate, doctor, procure, repo-adapter | `artifactory` or `artifact-keeper`. Artifact Keeper is read only through the repo-adapter. |
 | `REPO_URL` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter | Artifactory: the `/artifactory/` base URL. Artifact Keeper: the server's base URL. A trailing slash is optional. Must not contain credentials or any `@`. |
-| `REPO_API_URL` | `${REPO_URL}api/` | generate, doctor, procure, repo-adapter | Artifactory's API base, for the listing query. Set it only when the API is served elsewhere. |
+| `REPO_API_URL` | `${REPO_URL}api/` | generate, doctor, procure, repo-adapter | Artifactory's API base, for the listing query. Set it only when the API is served elsewhere. Must not contain credentials or any `@`. |
 | `REPO_KEY` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter | The repository key (for Artifact Keeper, the key, not the display name). Letters, digits, `.`, `_` and `-` only. |
 
 ## repo-adapter
@@ -96,7 +96,7 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 |---|---|---|---|
 | `DOWNLOAD_BACKEND` | see [Mode defaults](#mode-defaults) | generate, web | `mirror` (get.jenkins.io layout) or `artifactory` (any Maven-layout repository, looked up through the release's download map). |
 | `DOWNLOAD_BACKEND_URL` | see [Mode defaults](#mode-defaults) | web (every uc-image service checks it) | Where `/download/...` requests are sent. It must not contain credentials or any `@` (uc and web refuse them; for `DOWNLOAD_ACCESS=proxy` put them in `secrets/download_proxy_auth`). Controllers must be able to read it without credentials unless `DOWNLOAD_ACCESS=proxy`. |
-| `DOWNLOAD_ACCESS` | `redirect` | web | `redirect` sends controllers to the backend; `proxy` streams the file through the web container. See [Proxy plugin downloads](../how-to/proxy-downloads.md). |
+| `DOWNLOAD_ACCESS` | `redirect` | web | `redirect` sends controllers to the backend; `proxy` streams the file through the web container and needs `DOWNLOAD_BACKEND_URL` set explicitly (web sends `download_proxy_auth` to it; an `http://` backend only draws a warning). See [Proxy plugin downloads](../how-to/proxy-downloads.md). |
 | `DOWNLOAD_PROXY_CA_FILE` | `/etc/ssl/certs/ca-certificates.crt` | web | Proxy mode only: the CA bundle the backend's certificate must verify against. |
 
 ## Upstream data
@@ -105,10 +105,10 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 |---|---|---|---|
 | `RESOURCES_SOURCE` | see [Mode defaults](#mode-defaults) | generate | Where security warnings, suspensions and labels come from: `github` (upstream at `RESOURCES_REF`), `url` (a tarball at `RESOURCES_URL`), or `bundled` (the copy in the image). |
 | `RESOURCES_REF` | `master` | generate | The update-center2 branch, tag or commit to read with `RESOURCES_SOURCE=github`. |
-| `RESOURCES_URL` | none | generate | Required with `RESOURCES_SOURCE=url`: a tarball containing `resources/`. |
+| `RESOURCES_URL` | none | generate | Required with `RESOURCES_SOURCE=url`: a tarball containing `resources/`. Must not contain credentials or any `@`. |
 | `RESOURCES_SHA256` | none | generate | With `RESOURCES_SOURCE=url`, the tarball must match this checksum. |
-| `POPULARITY_JSON_URL` | see [Mode defaults](#mode-defaults) | generate | Plugin install counts. Set it empty to skip; popularity is then 0. |
-| `TOOL_INSTALLERS_URL` | see [Mode defaults](#mode-defaults) | generate | A directory listing of the `updates/` tool-installer files. Set it empty to skip. |
+| `POPULARITY_JSON_URL` | see [Mode defaults](#mode-defaults) | generate | Plugin install counts. Set it empty to skip; popularity is then 0. Must not contain credentials or any `@`. |
+| `TOOL_INSTALLERS_URL` | see [Mode defaults](#mode-defaults) | generate | A directory listing of the `updates/` tool-installer files. Set it empty to skip. Must not contain credentials or any `@`. |
 | `STALE_AFTER_DAYS` | `30` | generate | `status.json` marks the resources stale when they are older than this. |
 
 See [Keep upstream data fresh](../how-to/keep-upstream-data-fresh.md).

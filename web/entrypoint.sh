@@ -20,6 +20,7 @@ if [[ -z "${DOWNLOAD_BACKEND:-}" ]]; then
     if [[ "${MODE:-}" == airgapped ]]; then DOWNLOAD_BACKEND=artifactory; else DOWNLOAD_BACKEND=mirror; fi
 fi
 DOWNLOAD_ACCESS="${DOWNLOAD_ACCESS:-redirect}"
+explicit_backend="${DOWNLOAD_BACKEND_URL:-}"
 defines=()
 
 case "${DOWNLOAD_BACKEND}" in
@@ -42,6 +43,10 @@ export DOWNLOAD_BACKEND_URL="${backend_url%/}"
 case "${DOWNLOAD_ACCESS}" in
     redirect) ;;
     proxy)
+        [[ -n "${explicit_backend}" ]] || die "DOWNLOAD_ACCESS=proxy needs DOWNLOAD_BACKEND_URL set explicitly: web sends download_proxy_auth to it"
+        if [[ "${DOWNLOAD_BACKEND_URL}" != https://* ]]; then
+            echo "entrypoint: warning: DOWNLOAD_BACKEND_URL uses plain http: download_proxy_auth crosses the network in the clear" >&2
+        fi
         auth_file=/run/secrets/download_proxy_auth
         credentials="$(tr -d '\r\n' < "${auth_file}" 2> /dev/null || true)"
         [[ "${credentials}" == *:* ]] || die "DOWNLOAD_ACCESS=proxy needs username:password in ${auth_file}"

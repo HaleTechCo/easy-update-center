@@ -15,7 +15,7 @@ def env_for(**extra):
     return {
         'MODE': 'airgapped',
         'PUBLIC_URL': 'https://uc.example.com',
-        'REPO_URL': 'http://artifactory:8081/artifactory/',
+        'REPO_URL': 'https://artifactory:8081/artifactory/',
         'REPO_KEY': 'jenkins',
         'DOWNLOAD_BACKEND_URL': 'http://artifactory:8081/artifactory/jenkins',
         **extra,
@@ -196,3 +196,11 @@ def test_internal_paths_at_their_defaults_are_not_noted():
         REPO_ADAPTER_DIR='',
     )
     assert show(env, check=True) == (0, 'configuration ok\n', '')
+
+
+def test_check_prints_plain_http_warnings_and_still_passes():
+    out, err = io.StringIO(), io.StringIO()
+    env = {'MODE': 'online', 'PUBLIC_URL': 'http://uc.example.com'}
+    assert run(check=True, env=env, out=out, err=err) == 0
+    assert out.getvalue() == 'configuration ok\n'
+    assert 'uc: warning: PUBLIC_URL uses plain http' in err.getvalue()

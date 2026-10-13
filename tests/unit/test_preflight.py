@@ -33,12 +33,8 @@ def test_bare_origins_are_accepted(url):
 
 
 def test_plain_http_warns():
-    assert check_public_url('http://web:8080', allow_local=False) == [
-        (
-            'PUBLIC_URL uses plain http; signatures protect integrity, '
-            'but TLS is recommended'
-        )
-    ]
+    (warning,) = check_public_url('http://web:8080', allow_local=False)
+    assert warning.startswith('PUBLIC_URL uses plain http: ')
     assert check_public_url('https://uc.example.com', allow_local=False) == []
 
 

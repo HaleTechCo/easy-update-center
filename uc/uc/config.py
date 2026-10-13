@@ -22,7 +22,7 @@ from .procure.staging import DEFAULT_STAGING
 from .settings import CORE_VERSION, REGISTRY
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
     from urllib.parse import SplitResult
 
 PUBLIC_ARTIFACTORY_URL = 'https://repo.jenkins-ci.org/'
@@ -59,6 +59,59 @@ NO_CREDENTIALS = 'must not contain credentials or an @'
 Only for the URL settings that never carry credentials; preflight's PUBLIC_URL check
 says the same.
 """
+
+PLAIN_HTTP = {
+    'PUBLIC_URL': (
+        'anyone on the network path can replay older signed metadata or swap in '
+        'another signed file, and jenkins-plugin-cli checks no signatures; HTTPS is '
+        'required for production (docs/how-to/enable-tls.md)'
+    ),
+    'REPO_URL': (
+        'the repository credentials, and repo_push_auth when uc procure pushes, cross '
+        'the network in the clear'
+    ),
+    'REPO_API_URL': 'the repository credentials cross the network in the clear',
+    'PROCUREMENT_SOURCE_URL': (
+        'each file and its .sha1 come from the same origin, so anyone on the network '
+        'path can replace both before uc procure push'
+    ),
+    'DOWNLOAD_BACKEND_URL': (
+        'in proxy mode web sends download_proxy_auth to it in the clear'
+    ),
+}
+"""What crosses the network unprotected when a URL setting uses plain http."""
+
+
+def plain_http_warnings(
+    settings: Settings, names: Iterable[str] | None = None
+) -> list[str]:
+    """Return a warning for each URL setting that uses plain http where it matters.
+
+    In PLAIN_HTTP's order, limited to names when given. REPO_API_URL only when set apart
+    from REPO_URL, PROCUREMENT_SOURCE_URL only when set, DOWNLOAD_BACKEND_URL only in
+    proxy mode.
+    """
+    urls = {
+        'PUBLIC_URL': settings.public_url,
+        'REPO_URL': settings.repo_url,
+        'REPO_API_URL': (
+            settings.repo_api_url
+            if settings.repo_api_url != settings.repo_url_with_port + 'api/'
+            else ''
+        ),
+        'PROCUREMENT_SOURCE_URL': (
+            settings.procurement_source_url if settings.procurement_source_set else ''
+        ),
+        'DOWNLOAD_BACKEND_URL': (
+            settings.download_backend_url if settings.download_access == 'proxy' else ''
+        ),
+    }
+    wanted = set(PLAIN_HTTP) if names is None else set(names)
+    return [
+        f'{name} uses plain http: {why}'
+        for name, why in PLAIN_HTTP.items()
+        if name in wanted and urlsplit(urls[name]).scheme == 'http'
+    ]
 
 
 @dataclass(frozen=True)
@@ -341,6 +394,14 @@ def settings_from(r: Resolver) -> Settings:
 
     secrets_dir = Path(_internal(r, 'SECRETS_DIR'))
 
+    download_access = _choice(r, 'DOWNLOAD_ACCESS')
+    if download_access == 'proxy' and not _explicit_backend_url(r):
+        msg = (
+            'DOWNLOAD_ACCESS=proxy needs DOWNLOAD_BACKEND_URL set explicitly: '
+            'web sends download_proxy_auth to it'
+        )
+        raise ConfigError(msg)
+
     return Settings(
         mode=mode,
         public_url=public_url,
@@ -370,7 +431,7 @@ def settings_from(r: Resolver) -> Settings:
         core_age_days=_int(r, 'CORE_AGE_DAYS'),
         download_backend=backend,
         download_backend_url=backend_url,
-        download_access=_choice(r, 'DOWNLOAD_ACCESS'),
+        download_access=download_access,
         download_proxy_ca_file=r.raw('DOWNLOAD_PROXY_CA_FILE'),
         procurement_source_url=with_trailing_slash(
             procurement_source or PUBLIC_RELEASES_URL
@@ -430,10 +491,14 @@ def _explicit_backend_url(r: Resolver) -> str:
 
 
 def _checked_url(r: Resolver, name: str) -> str:
-    """Return name's value, '' if unset; a non-empty value must parse as a URL."""
+    """Return name's value, '' if unset.
+
+    A non-empty value must parse as a URL and hold no '@': urllib quotes a password in
+    its error messages.
+    """
     value = r.raw(name)
     if value:
-        _parse_url(name, value)
+        _check_credential_free_url(name, value)
     return value
 
 

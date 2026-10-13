@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import configview, publish, status
-from .config import check_staging_outside_data_dir, load_settings
+from .config import check_staging_outside_data_dir, load_settings, plain_http_warnings
 from .doctor import check_since, format_report, inspect_repository, record
 from .errors import UcError, UsageError
 from .examples import example_env
@@ -471,6 +471,10 @@ def procure_options(args: argparse.Namespace, settings: Settings) -> StageOption
 
 
 def _procure(args: argparse.Namespace, settings: Settings) -> int:
+    for warning in plain_http_warnings(
+        settings, ('REPO_URL', 'REPO_API_URL', 'PROCUREMENT_SOURCE_URL')
+    ):
+        print(f'uc: warning: {warning}', file=sys.stderr)
     if args.staging is not None:
         check_staging_outside_data_dir(args.staging, settings.data_dir, '--staging')
     staging = getattr(args, 'staging', None) or settings.procurement_staging_dir

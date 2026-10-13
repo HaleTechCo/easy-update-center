@@ -10,7 +10,7 @@ import os
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from .config import NO_CREDENTIALS, Settings, read_secret
+from .config import NO_CREDENTIALS, PLAIN_HTTP, Settings, read_secret
 from .errors import UcError
 from .model import Credentials
 from .pki import CertInfo, cert_info, key_matches_cert, verify_chain
@@ -66,12 +66,7 @@ def check_public_url(url: str, *, allow_local: bool) -> list[str]:
         )
         raise PreflightError(msg)
     if parts.scheme == 'http':
-        return [
-            (
-                'PUBLIC_URL uses plain http; signatures protect integrity, '
-                'but TLS is recommended'
-            )
-        ]
+        return [f'PUBLIC_URL uses plain http: {PLAIN_HTTP["PUBLIC_URL"]}']
     return []
 
 

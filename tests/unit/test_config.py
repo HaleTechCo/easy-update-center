@@ -12,6 +12,7 @@ import pytest
 from uc.config import (
     _proxy_hostport,
     load_settings,
+    plain_http_warnings,
     read_secret,
     split_userinfo,
     with_explicit_port,
@@ -577,6 +578,10 @@ NO_AT_SETTINGS = (
     'REPO_URL',
     'DOWNLOAD_BACKEND_URL',
     'PROCUREMENT_SOURCE_URL',
+    'REPO_API_URL',
+    'RESOURCES_URL',
+    'POPULARITY_JSON_URL',
+    'TOOL_INSTALLERS_URL',
 )
 """The URL settings that never carry credentials, so any @ in them is refused."""
 
@@ -816,3 +821,53 @@ def test_internal_paths_are_not_settings():
         'REPO_PUSH_AUTH_FILE',
     ):
         assert name not in REGISTRY, name
+
+
+ONLINE = {'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com'}
+
+
+@pytest.mark.parametrize(
+    'name',
+    ['RESOURCES_URL', 'TOOL_INSTALLERS_URL', 'REPO_API_URL', 'POPULARITY_JSON_URL'],
+)
+def test_every_url_setting_refuses_an_at(name):
+    env = {
+        **ONLINE,
+        name: 'https://user:s3cret@host.example/x',
+    }  # pragma: allowlist secret
+    if name == 'RESOURCES_URL':
+        env['RESOURCES_SOURCE'] = 'url'
+    with pytest.raises(ConfigError, match=name) as raised:
+        load_settings(env)
+    assert 's3cret' not in str(raised.value)
+
+
+def test_plain_http_warnings_name_what_crosses_in_the_clear():
+    settings = load_settings(
+        {
+            **ONLINE,
+            'PUBLIC_URL': 'http://uc.example.com',
+            'REPO_TYPE': 'artifactory',
+            'REPO_URL': 'http://art.corp/artifactory/',
+            'REPO_KEY': 'jenkins',
+            'PROCUREMENT_SOURCE_URL': 'http://mirror.corp/releases/',
+        }
+    )
+    warnings = plain_http_warnings(settings)
+    assert [w.split(':', 1)[0] for w in warnings] == [
+        'PUBLIC_URL uses plain http',
+        'REPO_URL uses plain http',
+        'PROCUREMENT_SOURCE_URL uses plain http',
+    ]
+    assert 'HTTPS is required for production' in warnings[0]
+
+
+def test_an_https_setup_has_no_plain_http_warnings():
+    assert plain_http_warnings(load_settings(ONLINE)) == []
+
+
+def test_proxy_mode_needs_an_explicit_backend_url():
+    with pytest.raises(
+        ConfigError, match='DOWNLOAD_ACCESS=proxy needs DOWNLOAD_BACKEND_URL'
+    ):
+        load_settings({**ONLINE, 'DOWNLOAD_ACCESS': 'proxy'})

@@ -10,7 +10,13 @@ import sys
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, TextIO
 
-from .config import INTERNAL, make_resolver, settings_from, split_userinfo
+from .config import (
+    INTERNAL,
+    make_resolver,
+    plain_http_warnings,
+    settings_from,
+    split_userinfo,
+)
 from .errors import ConfigError
 from .settings import GROUPS, REGISTRY, SETTINGS
 
@@ -135,6 +141,8 @@ def run(
             out.write(format_rows(rows(r, None)))
         err.write(f'uc: error: {exc}\n')
         return 1
+    for warning in plain_http_warnings(settings):
+        err.write(f'uc: warning: {warning}\n')
     if check:
         out.write('configuration ok\n')
         return 0
