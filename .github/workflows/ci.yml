@@ -3,7 +3,8 @@
 # (CONTRIBUTING.md#tests): the pre-commit hooks, make test's suites, make compose-check, and make
 # it-airgapped for both repository types. The images are built once, with the GitHub Actions build
 # cache, and every test job loads them; PREBUILT=1 tells make to use them instead of building.
-# The Release workflow runs this one on the commit it publishes (the ref input). The ci job is the
+# The Release workflow runs this one on the commit it publishes (the ref input) and on the images it
+# pushed (the uc-image and web-image inputs), so its suites test what ships. The ci job is the
 # one check the branch ruleset requires (docs/development/github-setup.md).
 name: CI
 
@@ -21,6 +22,14 @@ on:
     inputs:
       ref:
         description: Branch, tag or commit to check
+        type: string
+        default: ''
+      uc-image:
+        description: The uc image to test, by digest (the Release workflow); empty builds it
+        type: string
+        default: ''
+      web-image:
+        description: The web image to test, by digest (the Release workflow); empty builds it
         type: string
         default: ''
 
@@ -51,23 +60,47 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - name: Install pre-commit
         run: pip install -r requirements-dev.txt
-      # pre-commit installs each hook's pinned version. With GH_TOKEN, zizmor also runs its online
-      # audits (known-vulnerable actions, impostor commits); the token only reads.
       - name: pre-commit
         env:
-          GH_TOKEN: ${{ github.token }}
+          SKIP: zizmor
         run: pre-commit run --all-files --show-diff-on-failure
+      # zizmor alone gets the token, for its online audits (known-vulnerable actions, impostor
+      # commits); it only reads.
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pre-commit run zizmor --all-files
 
   images:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read # the release's images, while they are private
+    env:
+      UC_IMAGE_UNDER_TEST: ${{ inputs.uc-image }}
+      WEB_IMAGE_UNDER_TEST: ${{ inputs.web-image }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: inputs.uc-image != ''
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Pull the images under test
+        if: inputs.uc-image != ''
+        run: |
+          docker pull --platform linux/amd64 "${UC_IMAGE_UNDER_TEST}"
+          docker pull --platform linux/amd64 "${WEB_IMAGE_UNDER_TEST}"
+          docker tag "${UC_IMAGE_UNDER_TEST}" easy-update-center/uc:local
+          docker tag "${WEB_IMAGE_UNDER_TEST}" easy-update-center/web:local
       - name: Build the uc image
+        if: inputs.uc-image == ''
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: uc
@@ -81,6 +114,7 @@ jobs:
         with:
           context: uc
           target: test
+          build-args: RUNTIME_IMAGE=${{ inputs.uc-image || 'runtime' }}
           tags: easy-update-center/uc-test:local
           load: true
           cache-from: |
@@ -88,6 +122,7 @@ jobs:
             type=gha,scope=uc-test
           cache-to: type=gha,mode=max,scope=uc-test
       - name: Build the web image
+        if: inputs.web-image == ''
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: web

@@ -506,3 +506,34 @@ def test_a_run_on_a_released_tag_replaces_its_notes_and_assets(tmp_path):
         f'release edit v0.1.0 --notes-file {tmp_path}/notes.md',
         'release upload v0.1.0 assets/bundle.tar --clobber',
     ]
+
+
+def test_ci_pulls_the_images_under_test_and_names_them_as_make_expects(tmp_path):
+    docker = '#!/bin/sh\necho "$*" >> "$STUB_DIR/docker.log"\n'
+    stubs = stub(tmp_path, 'docker', docker)
+    env = {
+        'PATH': f'{stubs}:{PATH}',
+        'STUB_DIR': str(tmp_path),
+        'UC_IMAGE_UNDER_TEST': 'ghcr.io/x/uc@sha256:1111',
+        'WEB_IMAGE_UNDER_TEST': 'ghcr.io/x/web@sha256:2222',
+    }
+    script = step(jobs('ci.yml')['images'], 'Pull the images under test')['run']
+    result = run_bash(tmp_path, script, env, tmp_path)
+    assert result.returncode == 0, result.stdout
+    assert (tmp_path / 'docker.log').read_text(encoding='utf-8').splitlines() == [
+        'pull --platform linux/amd64 ghcr.io/x/uc@sha256:1111',
+        'pull --platform linux/amd64 ghcr.io/x/web@sha256:2222',
+        'tag ghcr.io/x/uc@sha256:1111 easy-update-center/uc:local',
+        'tag ghcr.io/x/web@sha256:2222 easy-update-center/web:local',
+    ]
+
+
+def test_only_zizmor_gets_the_token():
+    lint = jobs('ci.yml')['lint']
+    with_token = [
+        each.get('name')
+        for each in lint['steps']
+        if 'GH_TOKEN' in (each.get('env') or {})
+    ]
+    assert with_token == ['zizmor']
+    assert step(lint, 'pre-commit')['env'] == {'SKIP': 'zizmor'}

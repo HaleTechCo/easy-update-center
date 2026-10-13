@@ -7,6 +7,9 @@ ARG SUPERCRONIC_VERSION=v0.2.49
 # The release uc reports (uc --version, status.json uc_version): the Release workflow sets it; dev for a
 # build from source (make build UC_VERSION=... to set it).
 ARG UC_VERSION=dev
+# The image the test stage builds on: this file's runtime stage, or the released image under test
+# (the Release workflow's CI), so the suites test what ships.
+ARG RUNTIME_IMAGE=runtime
 
 # Base images are pinned by digest, so a build is reproducible; Dependabot proposes the new digest
 # when a tag moves (docs/reference/dependencies.md#pinning-policy).
@@ -101,7 +104,7 @@ WORKDIR /data
 ENTRYPOINT ["/usr/bin/tini", "--", "uc"]
 CMD ["status"]
 
-FROM runtime AS test
+FROM ${RUNTIME_IMAGE} AS test
 USER 0:0
 # hadolint ignore=DL3008
 RUN apt-get update \
