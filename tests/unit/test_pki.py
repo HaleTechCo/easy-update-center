@@ -11,6 +11,8 @@ import subprocess
 import pytest
 
 from uc.pki import (
+    ROOT_CERT,
+    SIGNING_CERT,
     PkiError,
     cert_der_b64,
     cert_info,
@@ -131,3 +133,44 @@ def test_cert_info_on_garbage_raises(tmp_path):
     bad.write_text('not a certificate')
     with pytest.raises(PkiError):
         cert_info(bad)
+
+
+def test_verify_chain_trusts_only_the_given_root(tmp_path, monkeypatch):
+    # update-center2 only warns on a bad chain, so this check is the one that refuses:
+    # a CA in openssl's default directory must not count.
+    ours, theirs = tmp_path / 'ours', tmp_path / 'theirs'
+    init_pki(ours)
+    # A different organisation, so the two roots have different subjects: with the
+    # same subject, the given root would shadow the planted one and hide the fault.
+    init_pki(theirs, org='Another Update Center')
+    name = subprocess.run(
+        ['openssl', 'x509', '-hash', '-noout', '-in', str(theirs / ROOT_CERT)],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    store = tmp_path / 'store'
+    store.mkdir()
+    shutil.copy(theirs / ROOT_CERT, store / f'{name}.0')
+    monkeypatch.setenv('SSL_CERT_DIR', str(store))
+    assert verify_chain(ours / ROOT_CERT, ours / SIGNING_CERT)
+    assert not verify_chain(ours / ROOT_CERT, theirs / SIGNING_CERT)
+
+
+def test_a_new_signing_certificate_is_for_code_signing(tmp_path):
+    init_pki(tmp_path)
+    text = subprocess.run(
+        [
+            'openssl',
+            'x509',
+            '-in',
+            str(tmp_path / SIGNING_CERT),
+            '-noout',
+            '-ext',
+            'extendedKeyUsage',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert 'Code Signing' in text

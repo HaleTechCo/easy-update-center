@@ -70,6 +70,14 @@ out_dir() { # out_dir ARG... - print the value of --out, if given
     done
 }
 
+clear_stale_init() { # clear_stale_init DIR - remove what a killed pki init left: .init-* folders, which can hold a root key
+    for stale in "$1"/.init-*; do
+        [ -e "${stale}" ] || continue
+        rm -rf "${stale}"
+        echo "uc-setup: removed ${stale#/setup/}, left by an interrupted pki init"
+    done
+}
+
 do_secrets() {
     writable "${secrets}" secrets/
     for file in ${credential_files}; do
@@ -84,10 +92,12 @@ do_pki_init() {
     out=$(out_dir "$@")
     if [ -z "${out}" ]; then
         writable "${secrets}" secrets/
+        clear_stale_init "${secrets}"
         uc pki init --out "${secrets}" --display-dir secrets "$@"
         do_secrets
     else
         writable "${out}" "${out}"
+        clear_stale_init "${out}"
         uc pki init "$@"
         set_modes "${out}" # a new PKI elsewhere: no credential files there
     fi
@@ -111,6 +121,7 @@ case ${command} in
         if [ -e "${secrets}/update-center.key" ]; then
             echo "secrets/: the signing keys exist; left as they are (pki-rotate issues a new certificate)"
         else
+            clear_stale_init "${secrets}"
             uc pki init --out "${secrets}" --display-dir secrets
             set_modes "${secrets}"
         fi

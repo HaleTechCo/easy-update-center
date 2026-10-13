@@ -144,6 +144,15 @@ says "PYTHONSAFEPATH: uc ignores a uc package in the working directory" "uc "
 if [[ "${output}" == *planted* ]]; then fail "PYTHONSAFEPATH: the planted package ran"; fi
 rm -rf /tmp/planted
 
+# 8. A killed pki init can leave its work folder, with a root key in it: the next run removes it.
+fresh
+mkdir -p "${secrets}/.init-stale/root" && : > "${secrets}/.init-stale/root/root-ca.key"
+chown -R "${host}" "${secrets}/.init-stale"
+run
+same "stale init folder: exits 0" 0 "${rc}"
+says "stale init folder: says it removed it" "removed secrets/.init-stale, left by an interrupted pki init"
+if [[ -e "${secrets}/.init-stale" ]]; then fail "stale init folder: is gone"; else pass "stale init folder: is gone"; fi
+
 # 6. Usage.
 fresh
 expect_usage bogus

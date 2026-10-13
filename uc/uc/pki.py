@@ -48,6 +48,7 @@ subjectKeyIdentifier = hash
 [v3_signing]
 basicConstraints = critical, CA:FALSE
 keyUsage = critical, digitalSignature
+extendedKeyUsage = codeSigning
 subjectKeyIdentifier = hash
 authorityKeyIdentifier = keyid
 """
@@ -129,9 +130,21 @@ def key_matches_cert(key: Path, cert: Path) -> bool:
 
 
 def verify_chain(root: Path, cert: Path) -> bool:
-    """Return True when openssl verifies cert against the root CA certificate."""
+    """Return True when openssl verifies cert against the root CA certificate.
+
+    Only that root counts, never openssl's default store: update-center2 only warns
+    on a bad chain, so this is the check that refuses one.
+    """
     proc = subprocess.run(
-        ['openssl', 'verify', '-CAfile', str(root), str(cert)],
+        [
+            'openssl',
+            'verify',
+            '-no-CApath',
+            '-no-CAstore',
+            '-CAfile',
+            str(root),
+            str(cert),
+        ],
         capture_output=True,
         text=True,
         check=False,
