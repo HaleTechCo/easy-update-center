@@ -16,6 +16,7 @@ x-uc: &uc
     - /tmp
   volumes:
     - uc-data:/data
+    - repo-adapter-data:/data/repo-adapter:ro
     - ./config:/config:ro
   networks: [default, repo]
   depends_on:
@@ -81,8 +82,10 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    # Only its own volume (token, cache, report): it parses untrusted archives, so it never
+    # writes the volume web serves and the scheduler runs from.
     volumes:
-      - uc-data:/data
+      - repo-adapter-data:/data/repo-adapter
       - ./config:/config:ro
     networks: [repo, repo-egress]
     secrets:
@@ -110,6 +113,7 @@ services:
     profiles: ["tools"]
     volumes:
       - uc-data:/data
+      - repo-adapter-data:/data/repo-adapter:ro
       - ./config:/config:ro
       - ./procurement:/procurement
     secrets:
@@ -132,6 +136,7 @@ networks:
 
 volumes:
   uc-data:
+  repo-adapter-data:
 
 secrets:
   update-center.key:

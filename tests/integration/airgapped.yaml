@@ -178,7 +178,7 @@ services:
       keeper-push: {condition: service_started}
       artifactory-push: {condition: service_started}
     volumes:
-      - uc-data-push:/data
+      - repo-adapter-push-data:/data/repo-adapter
       - pki:/pki:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 
@@ -201,7 +201,7 @@ services:
       artifactory-private: {condition: service_started}
       keeper-private: {condition: service_started}
     volumes:
-      - uc-data:/data
+      - repo-adapter-data:/data/repo-adapter
       - pki:/pki:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 
@@ -269,9 +269,11 @@ services:
       jenkins-weekly: {condition: service_healthy}
     volumes:
       - uc-data:/data
+      - repo-adapter-data:/data/repo-adapter:ro
       - uc-data-proxy:/data-proxy
       - uc-data-age:/data-age
       - uc-data-push:/data-push
+      - repo-adapter-push-data:/data-push/repo-adapter:ro
       - pki:/pki:ro
       - seed:/seed:ro
       - ../../tests:/tests:ro
@@ -297,3 +299,5 @@ volumes:
   uc-data-age:
   push-repo:
   uc-data-push:
+  repo-adapter-data:
+  repo-adapter-push-data:

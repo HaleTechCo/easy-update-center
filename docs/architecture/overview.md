@@ -56,7 +56,7 @@ flowchart LR
 
 ## Data volume
 
-All state lives on one Compose volume, `uc-data`, mounted at `/data`:
+All state but the repo-adapter's lives on one Compose volume, `uc-data`, mounted at `/data`:
 
 | Path | Contents |
 |---|---|
@@ -65,7 +65,6 @@ All state lives on one Compose volume, `uc-data`, mounted at `/data`:
 | `releases/.failed-<id>/` | The last failed attempt, kept for debugging. |
 | `cache/` | The generator's download cache (manifests, POMs), one directory per source, so later runs fetch only what is new. |
 | `resources/last-good/` | The last upstream `resources/` copy that produced a published release, used when a fetch fails. |
-| `repo-adapter/` | The repo-adapter's access token, its content-addressed cache and `report.json`. |
 | `doctor/report.json` | The last report `uc doctor --record` saved. Not served. |
 | `.status.lock` | Held briefly by every write to `status.json`. |
 | `status.json` | The public [status](../reference/status-json.md), served at `/status.json`. |
@@ -73,6 +72,10 @@ All state lives on one Compose volume, `uc-data`, mounted at `/data`:
 
 Everything is on one filesystem so that publishing is a rename, never a copy: the web container
 sees either the old release or the new one, never a half-written one.
+
+The repo-adapter keeps its access token, its content-addressed cache and `report.json` in a volume of
+its own, `repo-adapter-data`, mounted at `/data/repo-adapter`: read-write in the adapter, read-only
+in the scheduler and `uc`, absent from web.
 
 ## Networks and trust boundaries
 
@@ -93,8 +96,10 @@ The boundaries they and the images draw:
 - The repo-adapter's file reads need no credentials, because the generator cannot answer an
   authentication challenge on them. They are reachable only on the internal `repo` network, which
   `web` is not attached to, and they serve only POMs, manifests and descriptions, never archives.
-  The listing needs a token from `/data/repo-adapter/token` (mode 0600). `web` runs as the same user
-  and could read the file, but it is not on the `repo` network, where the token is accepted.
+  The listing needs a token from `/data/repo-adapter/token` (mode 0600). The token lives in
+  the adapter's own volume, which `web` does not mount.
+- The repo-adapter, which parses untrusted archives, mounts only its own volume: it
+  cannot write the releases web serves or the files the scheduler runs.
 - Air-gapped, of the services that run, only the repo-adapter receives the repository credentials;
   `setup` is the exception described above, and only while it runs.
 - Archives and POMs from the repository are treated as untrusted input: reads are size-capped,

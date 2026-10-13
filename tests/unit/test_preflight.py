@@ -12,6 +12,7 @@ import pytest
 
 from uc.pki import init_pki
 from uc.preflight import (
+    ADAPTER_ENTRIES,
     PreflightError,
     check_data_dir,
     check_public_url,
@@ -215,3 +216,25 @@ def test_entries_uc_never_writes_do_not_count(tmp_path, monkeypatch):
     other = os.getuid() + 1
     monkeypatch.setattr(os, 'getuid', lambda: other)
     check_data_dir(data)
+
+
+def test_the_adapter_mount_point_on_the_data_volume_does_not_count(
+    tmp_path, monkeypatch
+):
+    # Docker creates /data/repo-adapter, the mount point of the adapter's own volume,
+    # as root inside uc-data: uc never owns it.
+    data = tmp_path / 'data'
+    (data / 'repo-adapter').mkdir(parents=True)
+    other = os.getuid() + 1
+    monkeypatch.setattr(os, 'getuid', lambda: other)
+    check_data_dir(data)
+
+
+def test_the_adapter_directory_is_checked_for_the_adapter_files(tmp_path, monkeypatch):
+    adapter = tmp_path / 'repo-adapter'
+    adapter.mkdir()
+    (adapter / 'token').write_text('t\n')
+    other = os.getuid() + 1
+    monkeypatch.setattr(os, 'getuid', lambda: other)
+    with pytest.raises(PreflightError, match='not writable by uid'):
+        check_data_dir(adapter, ADAPTER_ENTRIES)

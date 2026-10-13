@@ -36,6 +36,49 @@ SETUP_MOUNTS = {
     '/setup/secrets': ('secrets', False),
 }
 SETUP_ENTRYPOINT = ['uc-setup']
+ADAPTER_VOLUME = 'repo-adapter-data'
+ADAPTER_DIR = '/data/repo-adapter'
+
+
+def volume_mounts(service: dict) -> dict[str, tuple[str, bool]]:
+    """Return the service's named-volume mounts: target -> (volume, read-only)."""
+    return {
+        str(volume.get('target')): (
+            str(volume.get('source')),
+            bool(volume.get('read_only')),
+        )
+        for volume in service.get('volumes') or []
+        if volume.get('type') == 'volume'
+    }
+
+
+def adapter_volume_problems(services: dict) -> list[str]:
+    """List where the adapter, scheduler, uc and web break the adapter-volume split.
+
+    The adapter writes only its own volume; scheduler and uc read it; web never sees it.
+    """
+    problems = []
+    adapter = volume_mounts(services['repo-adapter'])
+    if any(source == 'uc-data' for source, _ in adapter.values()):
+        problems.append('repo-adapter mounts uc-data; it gets only its own volume')
+    if adapter.get(ADAPTER_DIR) != (ADAPTER_VOLUME, False):
+        problems.append(
+            f'repo-adapter must mount {ADAPTER_VOLUME} at {ADAPTER_DIR} read-write'
+        )
+    problems.extend(
+        f'{name} must mount {ADAPTER_VOLUME} at {ADAPTER_DIR} read-only'
+        for name in ('scheduler', 'uc')
+        if name in services
+        and volume_mounts(services[name]).get(ADAPTER_DIR) != (ADAPTER_VOLUME, True)
+    )
+    if any(
+        source == ADAPTER_VOLUME
+        for source, _ in volume_mounts(services['web']).values()
+    ):
+        problems.append(
+            f'web mounts {ADAPTER_VOLUME}: the adapter token would reach it'
+        )
+    return problems
 
 
 def networks(service: dict) -> set[str]:
@@ -178,6 +221,7 @@ def main() -> None:
         )
     elif next(iter(users.values())).split(':')[0] == '0':
         problems.append('the services must not run as root (UC_UID=0)')
+    problems += adapter_volume_problems(services)
     problems += build_problems(services, build=build)
     label = f'{mode}, build' if build else mode
     for problem in problems:

@@ -17,6 +17,7 @@ from .pki import CertInfo, cert_info, key_matches_cert, verify_chain
 
 if TYPE_CHECKING:
     import datetime as dt
+    from collections.abc import Iterable
     from pathlib import Path
 
 GITHUB_PLACEHOLDER = 'uc'
@@ -159,7 +160,6 @@ DATA_ENTRIES = (
     'work',
     'cache',
     'resources',
-    'repo-adapter',
     'doctor',
 )
 """What uc keeps at the top of the data volume.
@@ -167,6 +167,9 @@ DATA_ENTRIES = (
 On a volume this release creates, /data itself is world-writable and sticky, so these
 are what another uid owns.
 """
+
+ADAPTER_ENTRIES = ('token', 'cache', 'tmp', 'report.json')
+"""What the repo-adapter keeps in its own volume, mounted at /data/repo-adapter."""
 
 
 def _owner(path: Path) -> int | None:
@@ -176,18 +179,18 @@ def _owner(path: Path) -> int | None:
         return None
 
 
-def check_data_dir(data_dir: Path) -> None:
+def check_data_dir(data_dir: Path, entries: Iterable[str] = DATA_ENTRIES) -> None:
     """Raise PreflightError unless this process can write the data volume.
 
-    That is, create files in data_dir, and own what uc keeps there (a missing one is
-    created later).
+    That is, create files in data_dir, and own each of entries in it that exists (a
+    missing one is created later).
     """
     if not data_dir.is_dir():
         return
     uid = os.getuid()
     others = {
         owner
-        for name in DATA_ENTRIES
+        for name in entries
         if (owner := _owner(data_dir / name)) not in (None, uid)
     }
     if others or not os.access(data_dir, os.W_OK | os.X_OK):

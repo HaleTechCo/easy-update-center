@@ -107,7 +107,7 @@ Artifact Keeper it is read from the archive the adapter downloads anyway.
 
 ## Cache
 
-- Everything derived from an archive is cached under `/data/repo-adapter/cache/`, addressed by the
+- Everything derived from an archive is cached under `/data/repo-adapter/cache/` (the adapter's own `repo-adapter-data` volume), addressed by the
   archive's SHA-256: its manifest, coordinates, embedded POM, description and date, or markers
   saying each is absent. Content addressed by checksum never changes, so entries never go stale.
 - Writes go to a temporary file and are renamed into place, so concurrent requests are safe.
@@ -141,7 +141,8 @@ and pass its own check, so an error page is never cached as content.
   password is an API token, sent as a bearer token to its API and as basic authentication to its
   Maven endpoint. Air-gapped, no other container receives them.
 - **The token.** On first start the adapter writes a random 32-byte token to
-  `/data/repo-adapter/token` (mode 0600). `uc` passes it to the generator as the repository
+  `/data/repo-adapter/token` (mode 0600), in the `repo-adapter-data` volume that the scheduler and `uc`
+  mount read-only and web does not mount. `uc` passes it to the generator as the repository
   password, and the listing is refused without it (HTTP 401). Only services on the internal `repo`
   network can reach the listing; the web container is not on it.
 - **File reads need no token**, because the generator cannot answer a challenge on them. They serve
@@ -156,7 +157,7 @@ and pass its own check, so an error page is never cached as content.
 
 ## Report
 
-After each listing the adapter writes `/data/repo-adapter/report.json` (mode 0600): what it derived,
+After each listing the adapter writes `/data/repo-adapter/report.json` (mode 0600, in the same volume): what it derived,
 replaced, dropped and dated from the repository, with paths and URLs.
 
 - `uc doctor` reads it and adds sections for POMs filled in from archives, plugins that need a real

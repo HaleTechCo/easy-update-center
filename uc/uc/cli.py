@@ -31,7 +31,7 @@ from .pki import (
     init_pki,
     rotate_signing,
 )
-from .preflight import check_data_dir, load_credentials
+from .preflight import ADAPTER_ENTRIES, check_data_dir, load_credentials
 from .procure.clean import clean
 from .procure.download import check_download_allowed, download, downloads_allowed
 from .procure.local import stage_local
@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from .config import Settings
 
 EXIT_LOCKED = 75
-WRITES_DATA = frozenset({'generate', 'rollback', 'schedule', 'repo-adapter'})
+WRITES_DATA = frozenset({'generate', 'rollback', 'schedule'})
 """The commands that write to the data volume, which uc checks it can write first.
 
 See preflight.check_data_dir.
@@ -357,7 +357,10 @@ def _dispatch(args: argparse.Namespace) -> int:
         healthcheck(args.port)
         return 0
     settings = load_settings()
-    if args.command in WRITES_DATA or (args.command == 'doctor' and args.record):
+    if args.command == 'repo-adapter':
+        # its own volume, mounted at /data/repo-adapter (compose.yaml)
+        check_data_dir(settings.repo_adapter_dir, ADAPTER_ENTRIES)
+    elif args.command in WRITES_DATA or (args.command == 'doctor' and args.record):
         check_data_dir(settings.data_dir)
     if args.command == 'generate':
         print(

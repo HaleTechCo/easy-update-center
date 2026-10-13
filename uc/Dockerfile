@@ -84,11 +84,12 @@ COPY bin/uc-setup /usr/local/bin/
 RUN chmod 0755 /usr/local/bin/uc /usr/local/bin/uc-setup /opt/uc/site/generate-htaccess.sh \
  && groupadd --system --gid 10001 uc \
  && useradd --system --uid 10001 --gid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin uc \
- && mkdir -p /data /config/overlay \
- && chmod 1777 /data
+ && mkdir -p /data/repo-adapter /config/overlay \
+ && chmod 1777 /data /data/repo-adapter
 # Any UC_UID can write a new data volume (Docker copies /data's mode into it), and HOME is writable
 # for a uid with no entry in /etc/passwd. PYTHONSAFEPATH: python3 -m uc never imports from the
-# working directory, /data, which other containers can write.
+# working directory, /data, which other containers can write. /data/repo-adapter too, for
+# the adapter's own volume.
 ENV PYTHONPATH=/opt/uc/python \
     PYTHONSAFEPATH=1 \
     HOME=/tmp \

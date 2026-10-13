@@ -21,7 +21,7 @@ from types import SimpleNamespace
 import pytest
 
 from sitefixture import uc_document, write_site
-from uc import pki
+from uc import cli, pki
 from uc.aql import classify
 from uc.cli import (
     EXIT_LOCKED,
@@ -1609,3 +1609,20 @@ def test_commands_that_write_the_data_volume_stop_when_they_cannot(
         f'uc: error: {data} is not writable by uid {os.getuid()}'
         in capsys.readouterr().err
     )
+
+
+def test_the_repo_adapter_checks_its_own_directory(tmp_path, monkeypatch, secrets_dir):
+    checked = []
+    monkeypatch.setattr(
+        cli, 'check_data_dir', lambda path, *_entries: checked.append(path)
+    )
+    monkeypatch.setattr(cli, 'serve', lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        cli,
+        'load_settings',
+        lambda: make_settings(
+            tmp_path, secrets_dir, REPO_ADAPTER_DIR=str(tmp_path / 'adapter')
+        ),
+    )
+    cli.main(['repo-adapter'])
+    assert checked == [tmp_path / 'adapter']
