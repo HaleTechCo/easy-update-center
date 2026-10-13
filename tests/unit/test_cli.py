@@ -1219,6 +1219,55 @@ def test_repo_adapter_listens_on_8081_unless_given_a_port(
     assert ports == [8081, 7000]
 
 
+PLAIN_HTTP_WARNING = re.compile(r'^uc: warning: (\S+) uses plain http: ', re.MULTILINE)
+
+
+def use_plain_http_everywhere(monkeypatch, tmp_path, secrets_dir):
+    use_env(monkeypatch, tmp_path, secrets_dir)  # REPO_URL is http already
+    monkeypatch.setenv('PUBLIC_URL', 'http://uc.example.com')
+    monkeypatch.setenv('REPO_API_URL', 'http://api.example.com/api/')
+    monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.example.com/releases/')
+    monkeypatch.setenv('DOWNLOAD_ACCESS', 'proxy')
+
+
+def test_the_scheduler_warns_about_each_plain_http_url_once_as_it_starts(
+    monkeypatch, tmp_path, secrets_dir, capsys
+):
+    use_plain_http_everywhere(monkeypatch, tmp_path, secrets_dir)
+    before = []
+    monkeypatch.setattr(
+        cli, 'run_schedule', lambda _settings: before.append(capsys.readouterr().err)
+    )
+    assert main(['schedule']) == 0
+    assert PLAIN_HTTP_WARNING.findall(before[0]) == [
+        'PUBLIC_URL',
+        'REPO_URL',
+        'REPO_API_URL',
+        'PROCUREMENT_SOURCE_URL',
+        'DOWNLOAD_BACKEND_URL',
+    ]
+    assert capsys.readouterr().err == ''
+
+
+def test_the_repo_adapter_warns_about_its_plain_http_urls_as_it_starts(
+    monkeypatch, tmp_path, secrets_dir, capsys
+):
+    use_plain_http_everywhere(monkeypatch, tmp_path, secrets_dir)
+    before = []
+    monkeypatch.setattr(
+        cli, 'serve', lambda _settings, **_port: before.append(capsys.readouterr().err)
+    )
+    assert main(['repo-adapter']) == 0
+    assert PLAIN_HTTP_WARNING.findall(before[0]) == ['REPO_URL', 'REPO_API_URL']
+
+
+def test_the_repo_adapter_health_check_does_not_warn(monkeypatch, capsys):
+    monkeypatch.setenv('REPO_URL', 'http://artifactory:8081/artifactory/')
+    monkeypatch.setattr(cli, 'healthcheck', lambda _port: None)
+    assert main(['repo-adapter', '--healthcheck']) == 0
+    assert capsys.readouterr().err == ''
+
+
 def test_a_malformed_url_prints_an_error_not_a_traceback(
     monkeypatch, tmp_path, secrets_dir, capsys
 ):
@@ -1365,7 +1414,10 @@ def test_serving_stops_with_an_error_when_it_cannot_record_its_port(
     )
     assert main(['repo-adapter', '--port', '0']) == 1
     err = capsys.readouterr().err
-    assert err.startswith('uc: error: repo-adapter cannot record its port in ')
+    # after the plain-http warning for use_env's REPO_URL
+    assert err.splitlines()[-1].startswith(
+        'uc: error: repo-adapter cannot record its port in '
+    )
     assert 'Traceback' not in err
     assert closed
 

@@ -47,6 +47,8 @@ from .version import uc_version
 from .versions import VersionTool
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from .config import Settings
 
 EXIT_LOCKED = 75
@@ -396,9 +398,11 @@ def _dispatch(args: argparse.Namespace) -> int:
         )
         return 0
     if args.command == 'schedule':
+        warn_plain_http(settings)  # once, as the service starts: it runs every URL
         run_schedule(settings)
         return 0
     if args.command == 'repo-adapter':
+        warn_plain_http(settings, ('REPO_URL', 'REPO_API_URL'))
         serve(settings, port=PORT if args.port is None else args.port)
         return 0
     msg = f'unhandled command {args.command}'
@@ -478,11 +482,17 @@ def procure_options(args: argparse.Namespace, settings: Settings) -> StageOption
     )
 
 
-def _procure(args: argparse.Namespace, settings: Settings) -> int:
-    for warning in plain_http_warnings(
-        settings, ('REPO_URL', 'REPO_API_URL', 'PROCUREMENT_SOURCE_URL')
-    ):
+def warn_plain_http(settings: Settings, names: Iterable[str] | None = None) -> None:
+    """Print a warning to stderr for each of names (default all) that uses plain http.
+
+    See config.plain_http_warnings.
+    """
+    for warning in plain_http_warnings(settings, names):
         print(f'uc: warning: {warning}', file=sys.stderr)
+
+
+def _procure(args: argparse.Namespace, settings: Settings) -> int:
+    warn_plain_http(settings, ('REPO_URL', 'REPO_API_URL', 'PROCUREMENT_SOURCE_URL'))
     if args.staging is not None:
         check_staging_outside_data_dir(args.staging, settings.data_dir, '--staging')
     staging = getattr(args, 'staging', None) or settings.procurement_staging_dir
