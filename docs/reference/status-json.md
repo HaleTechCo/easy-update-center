@@ -5,8 +5,9 @@ Every field of status.json, the public report of the last run and the live relea
 ## Where to read it
 
 - `$PUBLIC_URL/status.json`, served by the web container with `Cache-Control: no-store`. It is
-  public: it never holds credentials, and a failure appears only as its error class. `warnings` can
-  name plugin coordinates; URLs in them show as `<url>`, and the generator log
+  public: it never holds credentials, and a failure appears only as its error class. `warnings`
+  say what failed and can name plugin coordinates; a detail in parentheses, such as an error's
+  text, shows as `(see the generator log)`, any other URL as `<url>`, and the generator log
   (`docker compose logs scheduler`) has the full text.
 - `docker compose run --rm uc status` prints the same document.
 - On the data volume it is `/data/status.json`.

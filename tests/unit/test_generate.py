@@ -426,6 +426,6 @@ def test_status_warnings_name_no_url_but_the_log_does(tmp_path, secrets_dir, cap
     tools.http_get = refused
     generate(settings, tools=tools, now=T1, base_env={})
     warnings = read_status(settings.data_dir)['warnings']
-    assert any('tool installers' in w for w in warnings)
-    assert not any('tools.internal.corp' in w for w in warnings)
+    assert 'tool installers not mirrored (see the generator log)' in warnings
+    assert not any('tools.internal.corp' in w or 'refused' in w for w in warnings)
     assert 'tools.internal.corp' in capsys.readouterr().err
