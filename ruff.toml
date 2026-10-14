@@ -1,12 +1,8 @@
-# Tool configuration only. Nothing here is built or installed from this file - the uc package ships
-# inside the uc image (uc/Dockerfile) - so there is deliberately no [build-system] or [project]
-# table. It holds the settings for the Python tools that can read it; .yamllint and .shellcheckrc
-# stay separate because yamllint and shellcheck cannot.
-#
-# Keep ruff's settings here, not in a ruff.toml: ruff prefers a ruff.toml when both exist, so
-# adding one would silently make every [tool.ruff] table below dead.
+# Ruff's settings (the ruff-check and ruff-format pre-commit hooks; CONTRIBUTING.md#lint), in their own
+# file like every other tool's (.yamllint, .shellcheckrc). There is no pyproject.toml on purpose:
+# nothing here is a Python distribution - the uc package ships inside the uc image (uc/Dockerfile) -
+# so there is nothing to pip install.
 
-[tool.ruff]
 # The uc image runs the distribution's python3 of its eclipse-temurin:21-jre base (currently
 # Ubuntu 26.04, Python 3.14). 3.13 stays below it.
 target-version = "py313"
@@ -23,7 +19,7 @@ src = [".", "uc", "tests/support", "tests/integration", "tests/routing"]
 # limits itself to `types_or: [python, pyi]`; this keeps a bare `ruff format .` idempotent too.
 extend-exclude = ["*.md"]
 
-[tool.ruff.lint]
+[lint]
 select = ["ALL"]
 fixable = ["ALL"]
 task-tags = ["TODO"]
@@ -80,7 +76,7 @@ ignore = [
     "FIX002", # line-contains-todo
 ]
 
-[tool.ruff.lint.per-file-ignores]
+[lint.per-file-ignores]
 # These modules shell out to the tools the uc image installs - java (update-center2 and the
 # VersionTool), openssl, and upstream's generate-htaccess.sh - so the audit-only subprocess rules
 # are noise here: S603 (subprocess-without-shell-equals-true) fires on every subprocess.run([...]) -
@@ -114,7 +110,7 @@ ignore = [
 "tests/**/*.py" = ["INP001", "S101", "PLR2004", "D103", "S104", "S105", "S106", "S310", "S603", "S607"]
 
 ### Ruff recommended if using `ruff format`
-[tool.ruff.lint.isort]
+[lint.isort]
 known-first-party = ["uc"]
 force-single-line = false
 force-wrap-aliases = false
@@ -123,7 +119,7 @@ lines-after-imports = -1
 lines-between-types = 0
 split-on-trailing-comma = true
 
-[tool.ruff.format]
+[format]
 quote-style = "single"
 indent-style = "space"
 docstring-code-format = true

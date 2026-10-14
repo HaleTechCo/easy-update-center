@@ -25,7 +25,7 @@ pre-commit installs each hook at the version `.pre-commit-config.yaml` pins, in 
 environment, the first time it runs (that run needs internet access). Nothing else needs installing
 or activating. This repository's own hooks: [tools/README.md](tools/README.md).
 
-The checker settings live beside the hooks: ruff in `pyproject.toml`, yamllint in `.yamllint`,
+The checker settings live beside the hooks: ruff in `ruff.toml`, yamllint in `.yamllint`,
 shellcheck in `.shellcheckrc`.
 
 Plain `make` runs `make help`: the contributor targets, each with one line on what it does. Operators

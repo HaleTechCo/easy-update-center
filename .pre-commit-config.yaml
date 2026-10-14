@@ -5,7 +5,7 @@
 # compose files and test stacks (yamllint, docker compose config), the two Dockerfiles (hadolint),
 # the shell scripts (shellcheck, shfmt) and the workflows (actionlint, zizmor). They are strict:
 # yamllint --strict, shellcheck enable=all / severity=style (see .shellcheckrc), ruff select=ALL
-# (see pyproject.toml), LF line endings enforced. A new file type gets its hook when it arrives.
+# (see ruff.toml), LF line endings enforced. A new file type gets its hook when it arrives.
 #
 # Each hook comes from its own repository, pinned to a commit (the "frozen" comment names the
 # release; Dependabot proposes new ones). pre-commit installs each in its own environment on first
@@ -102,7 +102,7 @@ repos:
           - id: yamllint
             args: ['--strict']
 
-    # ── Python (config in pyproject.toml) ───────────────────────────────────────
+    # ── Python (config in ruff.toml) ────────────────────────────────────────────
     - repo: https://github.com/astral-sh/ruff-pre-commit
       rev: 44b5042edab9382aba712eed4f9c7bab7a3d6a3e # frozen: v0.17.0
       hooks:
