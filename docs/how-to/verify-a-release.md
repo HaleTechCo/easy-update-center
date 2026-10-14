@@ -44,10 +44,11 @@ place of `<version>` (for example `1.0.0`):
 docker buildx imagetools inspect ghcr.io/haletechco/easy-update-center-uc:<version> --format '{{.Manifest.Digest}}'
 ```
 
-It prints `sha256:` and 64 hex digits. With that digest in place of `<digest>`:
+It prints the digest: `sha256:` followed by 64 hex digits. Put all of it, `sha256:` included, in
+place of `<digest>`:
 
 ```bash
-UC=ghcr.io/haletechco/easy-update-center-uc@sha256:<digest>
+UC=ghcr.io/haletechco/easy-update-center-uc@<digest>
 cosign verify --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$UC"
 gh attestation verify "oci://$UC" \
   --repo HaleTechCo/easy-update-center --source-ref refs/tags/v<version> \
@@ -59,7 +60,7 @@ gh attestation verify "oci://$UC" \
 ```
 
 Then the same for the web image: its digest from `ghcr.io/haletechco/easy-update-center-web:<version>`,
-and the three checks against `ghcr.io/haletechco/easy-update-center-web@sha256:<digest>`.
+and the three checks against `ghcr.io/haletechco/easy-update-center-web@<digest>`.
 
 Success: `cosign verify` prints the checks it made and the signature's JSON, and each
 `gh attestation verify` prints `Verification succeeded!` with the attestation it matched. The first
@@ -75,8 +76,8 @@ a typo first; if they are right, report it as a security issue ([SECURITY.md](..
 Pin the two digests you verified in `.env`, so `docker compose pull` fetches exactly those images:
 
 ```bash
-UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc@sha256:<digest>
-WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web@sha256:<digest>
+UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc@<digest>
+WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web@<digest>
 ```
 
 ## The air-gapped bundle and other assets
