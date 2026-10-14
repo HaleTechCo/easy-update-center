@@ -23,8 +23,9 @@ the release builds on are free only for public repositories.
 
 - The same Actions settings as in step 1, if the organization's do not already apply.
 - Features: Issues on, Wikis off.
-- Turn **Immutable releases** on: a published Release's assets and tag can never change. The Release
-  workflow uploads to a draft and publishes it last, which immutable releases allow.
+- Settings > General > Releases: **Enable release immutability**. A published Release's assets and tag
+  can never change; it applies to Releases published from then on. The Release workflow uploads to a
+  draft and publishes it last, which immutable releases allow.
 
 ## 4. Branch ruleset
 
