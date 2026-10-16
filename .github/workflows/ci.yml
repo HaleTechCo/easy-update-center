@@ -3,9 +3,11 @@
 # (CONTRIBUTING.md#tests): the pre-commit hooks, make test's suites, make compose-check, and make
 # it-airgapped for both repository types. The images are built once, with the GitHub Actions build
 # cache, and every test job loads them; PREBUILT=1 tells make to use them instead of building.
-# The Release workflow runs this one on the commit it publishes (the ref input) and on the images it
-# pushed (the uc-image and web-image inputs), so its suites test what ships. The ci job is the
-# one check the branch ruleset requires (docs/development/github-setup.md).
+# The Release workflow runs this one on the images it pushed (the uc-image and web-image inputs), so
+# its suites test what ships. Every job checks out the commit of the event that started the run (for
+# the Release workflow, the tag) and takes no ref as input: a run with main's caches that checked
+# out any other commit could poison those caches. The ci job is the one check the branch ruleset
+# requires (docs/development/github-setup.md).
 name: CI
 
 on:
@@ -13,17 +15,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      ref:
-        description: Branch, tag or commit to check (empty for the branch selected above)
-        type: string
-        default: ''
   workflow_call:
     inputs:
-      ref:
-        description: Branch, tag or commit to check
-        type: string
-        default: ''
       uc-image:
         description: The uc image to test, by digest (the Release workflow); empty builds it
         type: string
@@ -51,7 +44,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -91,7 +83,6 @@ jobs:
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -160,7 +151,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -184,7 +174,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:

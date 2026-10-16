@@ -197,7 +197,6 @@ jobs:
       packages: read
     uses: ./.github/workflows/ci.yml
     with:
-      ref: ${{ github.sha }}
       uc-image: ghcr.io/haletechco/easy-update-center-uc@${{ needs.index.outputs.uc-digest }}
       web-image: ghcr.io/haletechco/easy-update-center-web@${{ needs.index.outputs.web-digest }}
 

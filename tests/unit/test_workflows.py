@@ -66,14 +66,6 @@ def test_every_workflow_runs_bash_with_pipefail(name):
     assert load(name)['defaults'] == {'run': {'shell': 'bash'}}
 
 
-def test_every_ci_checkout_takes_the_ref_it_is_asked_for():
-    # The Release workflow runs CI on the tagged commit through this input.
-    for job_name, job in jobs('ci.yml').items():
-        for each in job.get('steps', []):
-            if each.get('uses', '').startswith('actions/checkout@'):
-                assert each['with']['ref'] == '${{ inputs.ref }}', job_name
-
-
 def test_the_ci_check_needs_every_job_and_fails_unless_all_succeeded(tmp_path):
     # The one check the branch ruleset requires: a skipped job must not let a change
     # through.
@@ -450,7 +442,6 @@ def test_the_release_runs_ci_on_the_images_index_pushed():
     ci = jobs('release.yml')['ci']
     assert ci['uses'] == './.github/workflows/ci.yml'
     assert ci['with'] == {
-        'ref': '${{ github.sha }}',
         'uc-image': UC + '@${{ needs.index.outputs.uc-digest }}',
         'web-image': WEB + '@${{ needs.index.outputs.web-digest }}',
     }
