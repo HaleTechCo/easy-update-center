@@ -310,7 +310,7 @@ def build_problems(services: dict, *, build: bool) -> list[str]:
     problems += [
         f'{name} builds into {service.get("image")}, a published image name'
         for name, service in sorted(services.items())
-        if str(service.get('image', '')).startswith('ghcr.io/')
+        if str(service.get('image', '')).split('/', 1)[0] == 'ghcr.io'
     ]
     return problems
 
