@@ -62,7 +62,9 @@ All state but the repo-adapter's lives on one Compose volume, `uc-data`, mounted
 |---|---|
 | `releases/<id>/` | One complete site per release. Ids are UTC timestamps, `YYYYMMDDTHHMMSSZ`. The newest `RETAIN_RELEASES` are kept. |
 | `live` | A symlink to the release being served. Publishing and rollback replace it atomically. |
+| `releases/<id>.staging/` | A release being built, before it is published. A run that dies leaves it behind; the next run removes it. |
 | `releases/.failed-<id>/` | The last failed attempt, kept for debugging. |
+| `work/<id>/` | The generator's scratch space for the run building release `<id>`. Removed when the run ends or by the next run. |
 | `cache/` | The generator's download cache (manifests, POMs), one directory per source, so later runs fetch only what is new. |
 | `resources/last-good/` | The last upstream `resources/` copy that produced a published release, used when a fetch fails. |
 | `doctor/report.json` | The last report `uc doctor --record` saved. Not served. |

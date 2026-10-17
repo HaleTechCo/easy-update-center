@@ -33,8 +33,11 @@ https://github.com/jenkins-infra/update-center2/archive/refs/heads/master.tar.gz
 
 Store it where the update center can reach it, note its SHA-256, and set the three variables below.
 The `scheduler` and `uc` containers fetch `RESOURCES_URL`, `POPULARITY_JSON_URL` and
-`TOOL_INSTALLERS_URL` themselves, **without credentials**, and verify HTTPS only against the image's
-system CA bundle (`REPO_CA_FILE` does not apply to these fetches). So serve these files from a
+`TOOL_INSTALLERS_URL` themselves, **without credentials**, and verify HTTPS only against a public
+trust store, never `REPO_CA_FILE`. The resources tarball and the tool installers are fetched by
+`uc`, so they use the image's system CA bundle and `HTTPS_PROXY`; the popularity file is fetched by
+the generator's JVM, so it uses the Java truststore and the proxy flags in `JAVA_TOOL_OPTIONS`
+([configuration](../reference/configuration.md#read-by-bundled-software)). So serve these files from a
 location that allows anonymous reads: for example an Artifactory generic repository with anonymous
 read access, over HTTPS with a publicly trusted certificate, or over plain HTTP inside your network.
 `RESOURCES_SHA256` still verifies the tarball whatever the transport.

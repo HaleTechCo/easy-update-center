@@ -18,7 +18,7 @@ The image behind the `uc`, `scheduler`, `repo-adapter` and `setup` services. Bui
 | `0001-popularity-configurable-and-optional.patch` | in this repository | `uc/patches/` | MIT | Makes the popularity URL configurable (`POPULARITY_JSON_URL`) and its absence non-fatal. |
 | `0002-core-age-configurable.patch` | in this repository | `uc/patches/` | MIT | Makes the 400-day core age for tiers configurable (`CORE_AGE_DAYS`, `0` for no limit). |
 | update-center2's Java libraries | resolved by Maven for 3.18.4 (28 jars) | update-center2's `pom.xml` | Apache-2.0, MIT, BSD-style, Bouncy Castle; one LGPL-2.1 (see [Third-party notices](#third-party-notices)) | The generator's own dependencies. |
-| supercronic | `v0.2.49`, SHA-256 per architecture (amd64 `a53ae236...0c1`, arm64 `02aa0cb2...dd5`) | `uc/Dockerfile` (`SUPERCRONIC_VERSION`, checksums) | MIT | Runs `uc generate` on `GENERATE_SCHEDULE`. |
+| supercronic | `v0.2.49`, SHA-256 per architecture (amd64 `a53ae236...0c1`, arm64 `02aa0cb2...dd5`) | `uc/Dockerfile` (`SUPERCRONIC_VERSION`, checksums) | MIT | Runs `uc generate` on `GENERATE_SCHEDULE`, and `uc doctor --record` on `DOCTOR_SCHEDULE` when that is set. |
 | python3 | distribution package, floats (3.14.4) | not pinned | PSF-2.0 | Runs the `uc` command. Standard library only: no pip packages. |
 | openssl | distribution package, floats (3.5.5) | not pinned | Apache-2.0 | Signing PKI (`uc pki`) and certificate checks. |
 | tini | distribution package, floats | not pinned | MIT | Init process: forwards signals, reaps children. |
@@ -36,7 +36,7 @@ The image behind the `web` service. Built from [`web/Dockerfile`](../../web/Dock
 | `httpd:2.4` base image | tag `2.4`, pinned by digest (Debian 13, Apache 2.4.68) | `web/Dockerfile` | Apache-2.0 | Serves the release and runs upstream's `.htaccess` routing. |
 | ca-certificates | distribution package, floats | not pinned | MPL-2.0 (certificate data), GPL-2.0-or-later (scripts) | Verifies the download backend in proxy mode. |
 | curl | distribution package, floats | not pinned | curl | The container health check. |
-| openssl | distribution package, floats | not pinned | Apache-2.0 | Only for the configuration check during the build. |
+| openssl | distribution package, floats | not pinned | Apache-2.0 | The build's configuration check uses it to make a throwaway certificate. It stays installed because the `ca-certificates` package depends on it; nothing uses it at run time. |
 | Apache configuration and scripts | in this repository | `web/conf/`, `web/*.sh` | MIT | Download routing, headers, TLS, the entrypoint and health check. |
 
 ## Build time
@@ -56,6 +56,7 @@ The Maven build downloads update-center2's dependencies; see
 | Component | Version | License | Why |
 |---|---|---|---|
 | python3-pytest | distribution package in the `test` image stage | MIT | Runs the unit, routing and integration suites. |
+| python3-yaml | distribution package in the `test` image stage | MIT | Read by the tests that check `compose.yaml` and the setup service. |
 | git | distribution package in the `test` image stage | GPL-2.0-only | Used by tests and by `make upstream-diff`. |
 | jq | distribution package in the `test` image stage | MIT | Reads Grype's reports in the tests of `.github/scripts/image-scan.sh`, as the runner does. |
 | `jenkins/jenkins` images | `lts` and `latest` tags | MIT | Real controllers in `make it-airgapped` and `make it-online`. |
@@ -102,7 +103,7 @@ repository at the commit `.pre-commit-config.yaml` pins, and Dependabot proposes
 The jars the image ships, update-center2 itself included:
 
 ```bash
-docker run --rm --entrypoint ls easy-update-center/uc:local /opt/uc/generator
+docker compose run --rm --no-deps --entrypoint ls uc /opt/uc/generator
 ```
 
 (From Git Bash on Windows, prefix it with `MSYS_NO_PATHCONV=1`.) Their licenses are listed in the
@@ -121,7 +122,7 @@ The uc image carries the notices for everything it ships that is not this projec
 | `Apache-2.0.txt`, `MIT.txt`, `LGPL-2.1.txt`, `jaxen-BSD.txt`, `dom4j.txt`, `BouncyCastle.txt` | The license texts the libraries use, as published by each license's author or project. |
 | `supercronic-MIT.txt` | supercronic's license. |
 
-To read them: `docker run --rm --entrypoint cat easy-update-center/uc:local /opt/uc/licenses/NOTICE.txt`.
+To read them: `docker compose run --rm --no-deps --entrypoint cat uc /opt/uc/licenses/NOTICE.txt`.
 
 The build keeps them complete. Maven's license plugin lists each runtime library with the license
 its POM declares, and the build fails when a library has no known license, or when a jar the image

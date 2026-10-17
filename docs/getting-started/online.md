@@ -121,8 +121,8 @@ generation at once, because no release is live yet.
 docker compose logs -f scheduler
 ```
 
-The generator logs each manifest and POM it downloads. The first run is done when `docker compose run --rm uc status` shows a `live_release`; it prints
-no `published release` line, as later scheduled runs do.
+The generator logs each manifest and POM it downloads. The first run is done when `docker compose run --rm uc status` shows a `live_release`.
+`status` only reports; the `published release <id>` line is what a generate run itself prints when it ends.
 Until then, the web container logs "waiting for the first published release" and answers nothing.
 A failed run logs a Python traceback saying why
 ([Troubleshooting](../troubleshooting.md#generation), which also explains the `GitHubSource` stack

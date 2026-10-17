@@ -107,8 +107,9 @@ and the production checklist: [Deploy online](docs/getting-started/online.md),
 The [documentation index](docs/README.md) has everything:
 
 - **Getting started:** requirements, and a production deployment per mode.
-- **How-to guides:** configuring controllers, stocking a repository, TLS, proxied downloads, key
-  rotation, blocking plugins, rollback, monitoring, upgrades, verifying a release.
+- **How-to guides:** configuring controllers, stocking a repository, procuring missing files, keeping
+  upstream data fresh, TLS, proxied downloads, key rotation, blocking plugins, rollback, monitoring,
+  upgrades, verifying a release.
 - **Reference:** every setting, `uc` command, secret, `status.json` field, URL, network host and
   dependency.
 - **Architecture:** how the pieces fit, with diagrams.
