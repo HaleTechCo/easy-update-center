@@ -46,7 +46,6 @@ def test_plain_http_warns():
         ('https://host.example.com/jenkins', 'bare origin'),
         ('https://host.example.com/?x=1', 'bare origin'),
         ('ftp://host', 'http\\(s\\) URL'),
-        ('https://user:pw@host', 'credentials'),  # pragma: allowlist secret
         ('http://localhost:8080', 'cannot reach'),
         ('http://127.0.0.1:8080', 'cannot reach'),
     ],
@@ -69,9 +68,8 @@ def test_credentials_in_the_public_url_are_refused_before_a_message_could_quote_
 ):
     with pytest.raises(
         PreflightError, match=r'^PUBLIC_URL must not contain credentials or an @$'
-    ) as error:
+    ):
         check_public_url(url, allow_local=False)
-    assert 'S3cretPW' not in str(error.value)
 
 
 def test_local_urls_allowed_for_tests():
@@ -112,8 +110,9 @@ def test_check_signing_wrong_root(tmp_path, secrets_dir):
 
 
 def test_load_credentials_with_github_placeholder(tmp_path, secrets_dir):
+    (secrets_dir / 'repo_username').write_text('repo-account\n')
     creds = load_credentials(make_settings(tmp_path, secrets_dir))
-    assert (creds.repo_username, creds.repo_password) == ('uc', 'secret')
+    assert (creds.repo_username, creds.repo_password) == ('repo-account', 'secret')
     assert (creds.github_username, creds.github_password, creds.github_placeholder) == (
         'uc',
         'uc',
@@ -152,6 +151,7 @@ def test_load_credentials_uses_the_adapter_token_when_the_adapter_is_on(
     tmp_path, secrets_dir
 ):
     settings = adapter_settings(tmp_path, secrets_dir)
+    (secrets_dir / 'repo_username').write_text('repo-account\n')  # not the adapter's
     settings.repo_adapter_token_file.write_text(ADAPTER_TOKEN + '\n')
     creds = load_credentials(settings)
     assert (creds.repo_username, creds.repo_password) == ('uc', ADAPTER_TOKEN)
@@ -178,25 +178,31 @@ def test_a_symlinked_adapter_token_is_refused_even_when_it_looks_valid(
         load_credentials(settings)
 
 
+NOT_A_TOKEN = 'is not 64 lower-case hex digits'
+
+
 @pytest.mark.parametrize(
-    'content',
+    ('content', 'reason'),
     [
-        'hunter2-not-a-token',
-        ADAPTER_TOKEN.upper(),
-        ADAPTER_TOKEN[:-1],
-        ADAPTER_TOKEN + 'a',
-        'g' * 64,
-        ADAPTER_TOKEN + '\n' + ADAPTER_TOKEN,
-        'a' * 200,
+        ('hunter2-not-a-token', NOT_A_TOKEN),
+        (ADAPTER_TOKEN.upper(), NOT_A_TOKEN),
+        (ADAPTER_TOKEN[:-1], NOT_A_TOKEN),
+        (ADAPTER_TOKEN + 'a', NOT_A_TOKEN),
+        ('g' * 64, NOT_A_TOKEN),
+        # short enough to pass the size limit: a second line is not part of a token
+        (ADAPTER_TOKEN + '\n' + ADAPTER_TOKEN[:8], NOT_A_TOKEN),
+        ('a' * 200, 'is larger than 128 bytes'),
     ],
     ids=['words', 'upper-case', 'short', 'long', 'not-hex', 'two-lines', 'oversized'],
 )
 def test_an_adapter_token_that_is_not_64_hex_digits_is_refused_unquoted(
-    tmp_path, secrets_dir, content
+    tmp_path, secrets_dir, content, reason
 ):
     settings = adapter_settings(tmp_path, secrets_dir)
     settings.repo_adapter_token_file.write_text(content + '\n')
-    with pytest.raises(PreflightError, match='repo-adapter token refused') as caught:
+    with pytest.raises(
+        PreflightError, match=f'repo-adapter token refused: .*{reason}'
+    ) as caught:
         load_credentials(settings)
     assert content[:16] not in str(caught.value)
 
