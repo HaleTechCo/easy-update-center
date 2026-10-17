@@ -42,10 +42,13 @@ class FakeBackend:
         self.calls: list[tuple[str, str]] = []
 
     def list(self) -> list[RepoEntry]:
-        """Return an entry per file, sorted by path."""
+        """Return an entry per file, in the order the files were given.
+
+        Not sorted, as a real repository does not promise it.
+        """
         self.calls.append(('list', ''))
         entries = []
-        for path, data in sorted(self.files.items()):
+        for path, data in self.files.items():
             directory, _, name = path.rpartition('/')
             sha1 = (
                 hashlib.sha1(data, usedforsecurity=False).hexdigest()

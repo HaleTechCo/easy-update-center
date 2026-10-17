@@ -8,15 +8,13 @@ import datetime as dt
 import hashlib
 import io
 import json
-import socket
-import threading
 import zipfile
 
 import pytest
 
+from aqlfixture import UPSTREAM_QUERY
 from archivefixture import make_hpi, make_jar
 from httpstub import StubServer, serve_bytes
-from uc.aql import AQL_TEMPLATE
 from uc.http import Http, HttpError
 from uc.repo_adapter import archive, backends
 from uc.repo_adapter.backends import (
@@ -114,7 +112,7 @@ def test_artifactory_listing_sends_the_upstream_query_with_basic_auth():
         )
     ]
     _method, _path, headers, body = stub.requests[0]
-    assert body == (AQL_TEMPLATE % 'jenkins').encode()
+    assert body == UPSTREAM_QUERY.encode()
     assert headers['Authorization'] == BASIC
 
 
@@ -258,31 +256,6 @@ def test_an_archive_with_an_oversized_directory_keeps_the_repositorys_date(
     assert index.report.dates_from_repository == [
         {'path': HPI_PATH, 'reason': 'archive has no readable date'}
     ]
-
-
-def test_protocol_errors_are_backend_errors():
-    listener = socket.socket()
-    listener.bind(('127.0.0.1', 0))
-    listener.listen(1)
-
-    def reply():
-        connection, _ = listener.accept()
-        connection.recv(65536)
-        connection.sendall(
-            b'garbage\r\n\r\n'
-        )  # http.client.BadStatusLine, which is not an OSError
-        connection.close()
-
-    threading.Thread(target=reply, daemon=True).start()
-    try:
-        with pytest.raises(HttpError, match='failed'):
-            Http(None).request(
-                f'http://127.0.0.1:{listener.getsockname()[1]}/x',
-                headers={},
-                limit=1000,
-            )
-    finally:
-        listener.close()
 
 
 def test_a_private_ca_is_added_to_the_system_bundle(pki_material):

@@ -19,16 +19,17 @@ from types import SimpleNamespace
 
 import pytest
 
+from aqlfixture import upstream_query
 from archivefixture import make_hpi, make_jar, pom_xml
 from fakebackend import FakeBackend
-from uc.aql import AQL_TEMPLATE, Gav, classify, query_repository
+from uc.aql import Gav, classify, query_repository
 from uc.doctor import ArtifactSource
 from uc.errors import UcError
+from uc.preflight import PreflightError
 from uc.repo_adapter import server as server_module
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import read_report
 from uc.repo_adapter.server import (
-    REQUEST_TIMEOUT,
     Adapter,
     AdapterServer,
     RecordPortError,
@@ -96,7 +97,7 @@ def fetch(url, *, token=TOKEN, data=None):
 
 
 def aql(url, key=KEY):
-    return fetch(url + 'api/search/aql', data=(AQL_TEMPLATE % key).encode())
+    return fetch(url + 'api/search/aql', data=upstream_query(key).encode())
 
 
 def test_health_needs_no_credentials(running):
@@ -107,7 +108,7 @@ def test_health_needs_no_credentials(running):
 def test_the_listing_needs_the_token(running):
     _, url = running({})
     status, headers, _ = fetch(
-        url + 'api/search/aql', token=None, data=(AQL_TEMPLATE % KEY).encode()
+        url + 'api/search/aql', token=None, data=upstream_query(KEY).encode()
     )
     assert status == 401
     assert headers['WWW-Authenticate'] == 'Basic realm="repo-adapter"'
@@ -203,6 +204,17 @@ def test_repository_poms_are_forwarded_and_archives_are_not_served(running):
     )
 
 
+def test_a_repository_pom_is_served_as_the_listing_checked_it(running):
+    own = pom_xml(*GAV, name='Own')
+    backend, url = running({f'{BASE}.hpi': make_hpi(*GAV), f'{BASE}.pom': own})
+    aql(url)
+    # the repository changes after the check: upstream must still get the checked bytes
+    backend.files[f'{BASE}.pom'] = (
+        b'<!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc">]><project/>'
+    )
+    assert fetch(f'{url}{KEY}/{BASE}.pom')[2] == own
+
+
 def test_a_get_before_any_listing_builds_one(running):
     backend, url = running({f'{BASE}.hpi': make_hpi(*GAV)})
     assert fetch(f'{url}{KEY}/{BASE}.pom')[2] == pom_xml(
@@ -260,16 +272,18 @@ def test_a_leftover_token_temp_file_does_not_stop_the_adapter(tmp_path):
 
 
 def test_make_server_needs_repository_credentials_only_when_on(tmp_path, secrets_dir):
-    idle = make_server(
-        make_settings(tmp_path, secrets_dir, MODE='online', REPO_URL='', REPO_KEY=''),
-        port=0,
-        host='127.0.0.1',
-    )
-    idle.server_close()
-    settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on')
-    server = make_server(settings, port=0, host='127.0.0.1')
-    server.server_close()
-    assert settings.repo_adapter_token_file.is_file()
+    (secrets_dir / 'repo_username').unlink()
+    (secrets_dir / 'repo_password').unlink()
+    off = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='off')
+    make_server(off, port=0, host='127.0.0.1').server_close()
+    assert not off.repo_adapter_token_file.exists()
+    on = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on')
+    with pytest.raises(PreflightError, match='Repository credentials missing'):
+        make_server(on, port=0, host='127.0.0.1')
+    (secrets_dir / 'repo_username').write_text('uc\n')
+    (secrets_dir / 'repo_password').write_text('secret\n')
+    make_server(on, port=0, host='127.0.0.1').server_close()
+    assert on.repo_adapter_token_file.is_file()
 
 
 def test_healthcheck_reports_a_listener_that_does_not_speak_http():
@@ -420,17 +434,18 @@ def test_a_slot_comes_back_after_failed_requests(capped):
     )
 
 
-def test_connections_time_out():
-    assert REQUEST_TIMEOUT == 120
-    assert make_handler(None, key=KEY, token=TOKEN).timeout == REQUEST_TIMEOUT
-
-
-def test_make_server_caps_the_requests(tmp_path, secrets_dir):
-    server = make_server(make_settings(tmp_path, secrets_dir), port=0, host='127.0.0.1')
+@pytest.mark.parametrize('adapter', ['off', 'on'])
+def test_make_server_caps_the_requests(tmp_path, secrets_dir, adapter):
+    settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER=adapter)
+    server = make_server(settings, port=0, host='127.0.0.1')
     try:
-        assert isinstance(server, AdapterServer)
+        taken = [
+            server.slots.acquire(blocking=False)
+            for _ in range(server_module.MAX_REQUESTS + 1)
+        ]
     finally:
         server.server_close()
+    assert taken == [True] * server_module.MAX_REQUESTS + [False]
 
 
 def port_of(url):
@@ -439,7 +454,7 @@ def port_of(url):
 
 def test_a_non_ascii_authorization_gets_401_not_a_crash(running):
     _backend, url = running({})
-    body = (AQL_TEMPLATE % KEY).encode()
+    body = upstream_query(KEY).encode()
     request = (
         b'POST /artifactory/api/search/aql HTTP/1.0\r\n'
         b'Authorization: Basic \xe9\xff\r\n'

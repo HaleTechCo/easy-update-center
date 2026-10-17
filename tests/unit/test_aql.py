@@ -8,6 +8,7 @@ import json
 
 import pytest
 
+from aqlfixture import UPSTREAM_QUERY
 from httpstub import StubServer
 from uc import aql
 from uc.aql import (
@@ -17,15 +18,6 @@ from uc.aql import (
     classify,
     query_repository,
     to_gav,
-)
-
-# update-center2's ArtifactoryRepositoryImpl.AQL_QUERY for the repository 'jenkins', so
-# a change to uc's copy of the query is a change from upstream's.
-UPSTREAM_QUERY = (
-    'items.find({"repo":{"$eq":"jenkins"},"$or":[{"name":{"$match":"*.hpi"}},'
-    '{"name":{"$match":"*.jpi"}},{"name":{"$match":"*.war"}},'
-    '{"name":{"$match":"*.pom"}}]}).include("repo", "path", "name", "modified", '
-    '"created", "sha256", "actual_sha1", "size")'
 )
 
 

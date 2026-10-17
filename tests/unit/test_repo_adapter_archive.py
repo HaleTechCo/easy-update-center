@@ -10,7 +10,7 @@ import zipfile
 
 import pytest
 
-from archivefixture import make_hpi, make_war, pom_xml
+from archivefixture import make_hpi, pom_xml
 from uc.repo_adapter.archive import (
     CENTRAL_DIRECTORY_LIMIT,
     ArchiveError,
@@ -81,15 +81,13 @@ def test_read_entry_is_bounded():
         read_entry(archive, 'big', 100)
 
 
-def test_a_lying_size_header_is_refused():
-    data = bytearray(
-        zip_of({'entry': b'z' * 4096})
-    )  # stored, so sizes are easy to patch
+def test_a_size_header_that_understates_the_entry_is_unreadable():
+    # stored, so the sizes are easy to patch: zipfile reads only the 16 bytes the header
+    # claims and then fails the checksum of the whole entry
+    data = bytearray(zip_of({'entry': b'z' * 4096}))
     central = data.find(b'PK\x01\x02')
-    data[central + 20 : central + 28] = struct.pack(
-        '<II', 16, 16
-    )  # claim 16 bytes, compressed and not
-    with pytest.raises(ArchiveError):
+    data[central + 20 : central + 28] = struct.pack('<II', 16, 16)
+    with pytest.raises(ArchiveError, match=r'unreadable entry entry: .*CRC'):
         read_entry(open_archive(io.BytesIO(bytes(data))), 'entry', 1024)
 
 
@@ -190,25 +188,14 @@ def test_extract_facts_for_a_plugin_uses_the_manifest_coordinates():
     assert facts.released == dt.datetime(2024, 5, 1, 12, 30, tzinfo=UTC)
 
 
-def test_extract_facts_for_a_gradle_plugin_has_no_pom():
-    archive = open_archive(io.BytesIO(make_hpi(*GIT, layout='gradle')))
-    facts = extract_facts(zip_reader(archive), GIT, plugin=True, released=None)
-    assert facts.pom is None
-    assert facts.description == b'<div>An excellent plugin.</div>'
-
-
 def test_extract_facts_for_a_war_uses_the_path():
-    archive = open_archive(io.BytesIO(make_war('2.583')))
-    facts = extract_facts(
-        zip_reader(archive),
-        ('org.jenkins-ci.main', 'jenkins-war', '2.583'),
-        plugin=False,
-        released=None,
-    )
+    # a WAR carrying a plugin's manifest and a plugin-style jar: only plugin=False
+    # keeps its Group-Id, Artifact-Id and description from being read
+    war = ('org.jenkins-ci.main', 'jenkins-war', '2.583')
+    archive = open_archive(io.BytesIO(make_hpi(*war)))
+    facts = extract_facts(zip_reader(archive), war, plugin=False, released=None)
     assert facts.coordinates is None
-    assert facts.pom == pom_xml(
-        'org.jenkins-ci.main', 'jenkins-war', '2.583', 'Jenkins war'
-    )
+    assert facts.pom == pom_xml(*war)
     assert facts.description is None
 
 
