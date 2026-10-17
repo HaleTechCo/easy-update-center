@@ -315,9 +315,6 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 return self._send(200, b'ok\n', 'text/plain')
             if self._refuse(authenticate=False):
                 return None
-            if adapter is None:
-                msg = '_refuse answers every request while the adapter is idle'
-                raise RuntimeError(msg)
             if not path.startswith(repo_prefix):
                 return self._send(404)
             archive, separator, entry = urllib.parse.unquote(
@@ -346,9 +343,6 @@ def make_handler(adapter: Adapter | None, *, key: str, token: str | None):
                 return self._send(404)
             if self._refuse(authenticate=True):
                 return None
-            if adapter is None:
-                msg = '_refuse answers every request while the adapter is idle'
-                raise RuntimeError(msg)
             try:
                 length = int(self.headers.get('Content-Length') or 0)
             except ValueError:
