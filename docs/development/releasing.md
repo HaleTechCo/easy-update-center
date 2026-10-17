@@ -31,15 +31,20 @@ images are tagged `X.Y.Z-rc.N` only, and it never moves `X.Y` or `latest`.
    the highest version tag, release candidates included: `0.1.0` may follow `0.1.0-rc.2`, but
    `0.1.0-rc.2` may not follow `0.1.0-rc.3`.
 2. Open the pull request "Release X.Y.Z", let CI pass, and merge it. Check its diff: the CHANGELOG
-   heading and the two image versions, nothing else (for a candidate, only the two image versions).
+   heading and the four image lines in `compose.yaml`, nothing else (for a candidate, only the four
+   image lines).
 3. Tag the commit the merge put on `main`, and push the tag. Only admins can push release tags
    ([GitHub setup](github-setup.md), step 5):
 
    ```bash
    git switch main && git pull
-   git tag -s vX.Y.Z -m "Release X.Y.Z"     # -s signs it; -a if you have no signing key
+   git log -1                                # the "Release X.Y.Z" merge: note its SHA
+   git tag -s vX.Y.Z -m "Release X.Y.Z" <sha>   # -s signs it; -a if you have no signing key
    git push origin vX.Y.Z
    ```
+
+   Name the SHA: after the pull, `main` may already hold another pull request's merge, which an
+   unnamed tag would label as the release.
 
 The tag starts the Release workflow. Its jobs run in this order; each starts only if the ones before
 it succeeded.
@@ -49,11 +54,11 @@ it succeeded.
 | `check` | Refuses a tag on a commit not on `main` and, through `tools/release.py check`, a version not above every other tag, a release without its CHANGELOG section, a candidate without Unreleased entries, and a `compose.yaml` naming other images. Works out `prerelease`, `latest` and `minor_latest`. | Nothing. |
 | `images` | Builds the `uc` and `web` images per architecture on a native runner, without cache, and pushes each by digest. | Untagged per-architecture images. |
 | `index` | Joins the architectures into one index per image, from exactly one digest per architecture. | Each index, tagged `build-<commit>` only. |
-| `ci` | Runs the CI workflow against those exact images. | Nothing. |
-| `sign` | Signs the indexes with cosign and attests their provenance and SBOMs. | Signatures and attestations. |
+| `ci` | Runs the CI workflow against those exact images, the linux/amd64 ones only: the arm64 images are built and signed but not tested. | Nothing. |
+| `sign` | Signs the indexes with cosign and attests their provenance and SBOMs (an SBOM lists the linux/amd64 image's contents, attested on the multi-architecture digest). | Signatures and attestations. |
 | `bundle` | Builds the air-gapped bundle per architecture from the signed digests. | Workflow artifacts, kept 7 days. |
 | `draft` | Writes and signs `SHA256SUMS`, and creates or updates the draft Release with the bundles, SBOMs and checksums (a pre-release for a candidate). | A draft only maintainers see. |
-| `publish` | Checks that the tag has one Release, the draft, holding exactly the two bundles, the two SBOMs, `SHA256SUMS` and its signature. Tags the images `X.Y.Z`, then `X.Y` and `latest` when this is the highest release, each tag for both images before the next, and checks each tag names the signed digest. Publishes the Release. | The release. |
+| `publish` | Checks that the tag has one Release, still a draft, holding exactly the two bundles, the two SBOMs, `SHA256SUMS` and its signature. Tags the images `X.Y.Z`, then `X.Y` and `latest` when this is the highest release, each tag for both images before the next, and checks each tag names the signed digest. Publishes the Release. | The release. |
 
 How operators check what this produces: [Verify a release](../how-to/verify-a-release.md). How they
 move to it: [Upgrade](../how-to/upgrade.md).
@@ -66,9 +71,12 @@ move to it: [Upgrade](../how-to/upgrade.md).
 - **A later job failed for a transient reason** (a network error, a registry hiccup): open the run
   and choose **Re-run failed jobs** within 7 days. It keeps the jobs that succeeded and their
   outputs.
-- **A later job failed because of the workflow or the code:** nothing anyone can pull or download
-  exists yet. Delete the draft Release and the tag, fix it on `main`, and tag the next rc or patch
-  version.
+- **A later job failed because of the workflow or the code, before `publish`'s "Tag the images"
+  step:** nothing anyone can pull or download exists yet. Delete the draft Release and the tag, fix
+  it on `main`, and tag the next rc or patch version.
+- **`publish` failed after "Tag the images" (when publishing the Release):** the image tags
+  already exist and name the signed digests, so re-run `publish` with **Re-run failed jobs**; do not
+  delete the tag or cut another version for it.
 - **A published release is never changed** (Immutable Releases): fix it with the next patch
   version.
 
@@ -112,13 +120,15 @@ candidates:
       `cosign attest --type https://spdx.dev/Document/v2.3 --predicate <sbom>` (`--type spdxjson`
       would record `https://spdx.dev/Document`, which the verify commands do not match), then cut
       the next rc.
-- [ ] Download the rc bundle, `docker load -i images.tar`, and in a checkout of the rc tag run:
+- [ ] Download the rc bundle, unpack it (`tar -xf easy-update-center-0.1.0-rc.1-airgapped-amd64.tar`),
+      load its images (`docker load -i images.tar`, inside the unpacked folder), and in a checkout of
+      the rc tag run:
 
       ```bash
       make it-airgapped PREBUILT=1 \
-        UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:0.1.0-rc.N \
-        WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:0.1.0-rc.N \
-        UC_TEST_IMAGE=easy-update-center/uc-test:0.1.0-rc.N
+        UC_IMAGE=ghcr.io/haletechco/easy-update-center-uc:0.1.0-rc.1 \
+        WEB_IMAGE=ghcr.io/haletechco/easy-update-center-web:0.1.0-rc.1 \
+        UC_TEST_IMAGE=easy-update-center/uc-test:0.1.0-rc.1
       ```
 
       `PREBUILT=1` keeps the loaded images. The test image, named for the rc so that it does not
@@ -128,6 +138,10 @@ candidates:
       [Deploy air-gapped](../getting-started/airgapped.md)). `uc status` shows a `live_release` and
       `uc_version` `0.1.0-rc.1`.
 - [ ] The pre-release's notes match the Unreleased section, and their links open.
+- [ ] Watch `docker save` on both paths, which may need `--platform` when its images came from
+      multi-architecture indexes: in `ci.yml`'s `images` job (which the Release passes images pulled
+      from the indexes) and in `release.yml`'s `bundle` job. If either fails or saves the wrong
+      architecture, add `--platform` there.
 - [ ] If anything fails, fix it on `main` and cut `0.1.0-rc.2`; repeat until an rc passes.
 - [ ] Cut `0.1.0` (`prepare 0.1.0` moves the CHANGELOG), then make the packages public
       ([GitHub setup](github-setup.md), step 8).
