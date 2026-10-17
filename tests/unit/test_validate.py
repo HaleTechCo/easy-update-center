@@ -217,3 +217,59 @@ def test_an_offered_core_needs_latest_core_txt(tmp_path):
 def test_count_plugins(tmp_path):
     assert count_plugins(build(tmp_path) / 'current') == 2
     assert count_plugins(tmp_path / 'nope') is None
+
+
+def edit_versions(staging, change):
+    path = staging / 'current' / 'plugin-versions.json'
+    doc = json.loads(path.read_text())
+    change(doc)
+    path.write_text(json.dumps(doc))
+
+
+def test_plugin_versions_that_does_not_parse_is_refused(tmp_path):
+    staging = build(tmp_path)
+    (staging / 'current' / 'plugin-versions.json').write_text('{not json')
+    with pytest.raises(ValidationError) as err:
+        validate(staging)
+    assert any(
+        p.startswith('current/plugin-versions.json does not parse')
+        for p in err.value.problems
+    )
+
+
+def test_plugin_versions_must_be_signed_with_the_configured_certificate(tmp_path):
+    staging = build(tmp_path)
+    edit_versions(staging, lambda doc: doc['signature'].update(certificates=['other']))
+    with pytest.raises(ValidationError) as err:
+        validate(staging)
+    assert (
+        'current/plugin-versions.json is not signed with the configured signing '
+        'certificate'
+    ) in err.value.problems
+
+
+@pytest.mark.parametrize('url', ['https://get.jenkins.io/git.hpi', None, 5])
+def test_a_plugin_versions_download_url_outside_the_site_is_refused(tmp_path, url):
+    staging = build(tmp_path)
+
+    def change(doc):
+        doc['plugins']['git']['5.2.0']['url'] = url
+
+    edit_versions(staging, change)
+    with pytest.raises(
+        ValidationError, match=re.escape(f'plugin-versions git:5.2.0 {url}')
+    ):
+        validate(staging)
+
+
+def test_old_versions_in_plugin_versions_need_no_download_map_entry(tmp_path):
+    staging = build(tmp_path)
+
+    def change(doc):
+        doc['plugins']['git']['4.0.0'] = {'url': f'{ROOT}/plugins/git/4.0.0/git.hpi'}
+
+    edit_versions(staging, change)
+    # only what the site documents offer must be in the map, not every old release
+    assert validate(staging, download_map=dict.fromkeys(OFFERED, 'x')).offered == (
+        frozenset(OFFERED)
+    )
