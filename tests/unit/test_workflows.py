@@ -724,8 +724,10 @@ def test_the_first_run_creates_a_draft_release(tmp_path):
     )
 
 
-def test_a_candidate_is_drafted_as_a_prerelease(tmp_path):
-    result = run_draft(tmp_path, exists=False, prerelease='true')
+@pytest.mark.parametrize('prerelease', ['true', ''])
+def test_anything_but_false_is_drafted_as_a_prerelease(tmp_path, prerelease):
+    # the same rule as tagging and publishing: only 'false' is a release
+    result = run_draft(tmp_path, exists=False, prerelease=prerelease)
     assert result.returncode == 0, result.stdout
     assert '--prerelease' in last_call(tmp_path, 'gh')
 
