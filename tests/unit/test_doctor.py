@@ -22,6 +22,7 @@ from uc.aql import Gav, RepoFile, classify
 from uc.doctor import (
     RECORD_LOCK_FILE,
     ArtifactSource,
+    DoctorError,
     DoctorReport,
     analyze,
     attach_adapter_report,
@@ -877,3 +878,114 @@ def test_the_doctor_gives_the_repository_ca_only_without_the_adapter(
         ArtifactSource.from_settings(settings, CREDS, allow_network=False).ca_file
         == want
     )
+
+
+def test_format_report_prints_each_section_of_the_source_with_its_count(
+    tmp_path, secrets_dir
+):
+    report = DoctorReport(
+        plugins=2,
+        cores=['2.528.1'],
+        hpi_without_pom=['a/orphan-1.0.hpi'],
+        war_without_pom=['b/jenkins-war-2.540.war'],
+        non_maven=['plugins/x/1.0/x.hpi'],
+        stub_poms=['stub:1.0'],
+        missing_dependencies=['git:5.10.0 requires nope 1.0 (not in the repository)'],
+        tiers={'weeklyCores': ['2.540'], 'stableCores': ['2.528.1']},
+    )
+    lines = format_report(report, make_settings(tmp_path, secrets_dir)).splitlines()
+    assert lines == [
+        'Source: artifactory repository jenkins at http://artifactory:8081/artifactory/',
+        'Plugins with a POM: 2',
+        'Jenkins cores with a POM: 2.528.1',
+        "Tiers in the live release: weekly ['2.540'], stable ['2.528.1']",
+        '',
+        'Dropped by the generator: 3',
+        '  .hpi/.jpi without a .pom (1):',
+        '    a/orphan-1.0.hpi',
+        '  jenkins-war without a .pom (1):',
+        '    b/jenkins-war-2.540.war',
+        '  not in Maven layout (1):',
+        '    plugins/x/1.0/x.hpi',
+        'Stub POMs (degraded names, descriptions, SCM links) (1):',
+        '  stub:1.0',
+        'Dependency problems (1):',
+        '  git:5.10.0 requires nope 1.0 (not in the repository)',
+    ]
+
+
+def test_format_report_says_when_nothing_is_dropped_and_omits_empty_sections(
+    tmp_path, secrets_dir
+):
+    text = format_report(DoctorReport(plugins=1), make_settings(tmp_path, secrets_dir))
+    assert 'Nothing in the source is dropped by the generator.' in text
+    for absent in ('Dropped by', 'Stub POMs', 'Dependency problems', 'Not checked'):
+        assert absent not in text
+
+
+def test_format_report_lists_what_the_adapter_dropped_instead_of_the_plain_sections(
+    tmp_path, secrets_dir
+):
+    settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on')
+    report = DoctorReport(
+        hpi_without_pom=['a/orphan-1.0.hpi'],
+        repo_adapter={
+            'derived_poms': [],
+            'replaced_poms': [],
+            'needs_pom': [],
+            'misplaced': [{'path': 'bad/x-1.hpi', 'correct_path': 'good/x-1.hpi'}],
+            'skipped': [{'path': 'odd/y-1.hpi', 'reason': 'no manifest'}],
+            'dates_from_repository': [{'path': 'z/z-1.hpi', 'reason': 'no date'}],
+        },
+    )
+    lines = format_report(report, settings).splitlines()
+    assert 'Dropped by the generator: 3' in lines
+    assert '  misplaced: move to the path its manifest names (1):' in lines
+    assert '    bad/x-1.hpi  ->  good/x-1.hpi' in lines
+    assert '  skipped (1):' in lines
+    assert '    odd/y-1.hpi: no manifest' in lines
+    assert 'dates from the repository (no usable archive date) (1):' in lines
+    assert '  z/z-1.hpi: no date' in lines
+    # the adapter reports archives without a POM itself: the plain list is not shown
+    assert '.hpi/.jpi without a .pom' not in '\n'.join(lines)
+
+
+def test_a_fetch_that_cannot_reach_the_repository_is_a_doctor_error():
+    with StubServer({}) as stub:
+        url = stub.url + '/artifactory/'
+    source = ArtifactSource(
+        url, 'jenkins', 'uc', 'secret', cache_dir=None, allow_network=True, timeout=2
+    )
+    with pytest.raises(DoctorError):
+        source.pom(GIT)
+
+
+@pytest.mark.parametrize('status_code', [401, 403, 500])
+def test_a_fetch_answered_with_an_error_status_is_a_doctor_error(status_code):
+    path = '/artifactory/jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom'
+    with StubServer({('GET', path): (status_code, {}, b'no')}) as stub:
+        source = ArtifactSource(
+            stub.url + '/artifactory/',
+            'jenkins',
+            'uc',
+            'secret',
+            cache_dir=None,
+            allow_network=True,
+        )
+        with pytest.raises(DoctorError, match=f'failed with HTTP {status_code}'):
+            source.pom(GIT)
+
+
+def test_a_source_that_may_not_use_the_network_never_fetches(tmp_path):
+    with StubServer({}) as stub:
+        source = ArtifactSource(
+            stub.url + '/artifactory/',
+            'jenkins',
+            'uc',
+            'secret',
+            cache_dir=tmp_path / 'cache',
+            allow_network=False,
+        )
+        assert source.pom(GIT) is None
+        assert source.manifest(GIT) is None
+    assert stub.requests == []
