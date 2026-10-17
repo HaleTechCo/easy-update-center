@@ -33,7 +33,8 @@ ISSUER=https://token.actions.githubusercontent.com
 
 You need only [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3 or later (the
 workflow signs with a cosign that writes the newer bundle format, which older versions cannot read).
-No GitHub account and no `gh` are needed.
+No GitHub account and no `gh` are needed. On Windows, `winget install Sigstore.Cosign` installs it as
+`cosign-windows-amd64.exe`: run the commands below with that name, or copy it to `cosign.exe`.
 
 A tag can be moved later; a digest cannot. So read each image's digest from its tag once, then
 verify and run that digest, never the tag again. For the uc image, with the release's version in

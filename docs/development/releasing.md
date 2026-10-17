@@ -35,8 +35,8 @@ images are tagged `X.Y.Z-rc.N` only, and it never moves `X.Y` or `latest`.
    the highest version tag, release candidates included: `0.1.0` may follow `0.1.0-rc.2`, but
    `0.1.0-rc.2` may not follow `0.1.0-rc.3`.
 2. Open the pull request "Release X.Y.Z", let CI pass, and merge it. Check its diff: the CHANGELOG
-   heading and the four image lines in `compose.yaml`, nothing else (for a candidate, only the four
-   image lines).
+   heading and the two image lines in `compose.yaml` (the uc image, written once for every service
+   that runs it, and the web image), nothing else (for a candidate, only the two image lines).
 3. Tag the commit the merge put on `main`, and push the tag. Only admins can push release tags
    ([GitHub setup](github-setup.md), step 5):
 
