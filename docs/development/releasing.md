@@ -101,7 +101,12 @@ candidates:
       packages are public, sign in first with `docker login ghcr.io`.
 - [ ] `docker run --rm ghcr.io/haletechco/easy-update-center-uc:0.1.0-rc.1 --version` prints
       `uc 0.1.0-rc.1`.
-- [ ] The commands of [Verify a release](../how-to/verify-a-release.md) pass for the rc tag.
+- [ ] The commands of [Verify a release](../how-to/verify-a-release.md) pass for the rc tag. They
+      use `cosign verify-attestation` on the attestations that `actions/attest` pushed to the
+      registry; that cosign reads them is expected (the same bundle format) but unproven. If it
+      finds no attestation, switch `release.yml`'s attestations to `cosign attest` (the provenance
+      predicate from `actions/attest-build-provenance/predicate`, the SBOM with `--type spdxjson`)
+      and cut the next rc.
 - [ ] Download the rc bundle, `docker load -i images.tar`, and in a checkout of the rc tag run:
 
       ```bash
