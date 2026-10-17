@@ -75,15 +75,17 @@ def test_a_latin1_pom_is_usable():
 
 def test_safe_root_refuses_what_the_byte_check_cannot_see():
     assert safe_root(b'<project/>') is not None
-    utf16 = (
-        '<?xml version="1.0" encoding="UTF-16"?>'
-        '<!DOCTYPE p [<!ENTITY x "y">]><project/>'
-    ).encode('utf-16')
-    assert safe_root(utf16) is None  # a declaration the ASCII byte check would miss
-    assert (
-        safe_root('<project/>'.encode('utf-16-le')) is None
-    )  # UTF-16 without a BOM is full of NULs
-    assert safe_root(b'<project>\xff</project>') is None  # not UTF-8
+    # expat reads UTF-16 without a BOM from the declaration's first bytes, so only the
+    # NUL check keeps its entity declaration, which the ASCII byte check cannot see, out
+    utf16 = ('<?xml version="1.0"?><!DOCTYPE p [<!ENTITY x "y">]><project/>').encode(
+        'utf-16-le'
+    )
+    assert safe_root(utf16) is None
+    # expat reads windows-1252 too, so only the encoding check refuses the \x80
+    windows_1252 = (
+        b'<?xml version="1.0" encoding="windows-1252"?><project>\x80</project>'
+    )
+    assert safe_root(windows_1252) is None
 
 
 def test_dependency_group_comes_from_the_dependencies():
