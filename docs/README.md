@@ -42,6 +42,7 @@ Which page to read for which job. New here? Start with the [README](../README.md
 - [Modes](architecture/modes.md)
 - [repo-adapter](architecture/repo-adapter.md)
 - [Signing and trust](architecture/signing.md)
+- [Why wrap update-center2](architecture/why-update-center2.md)
 
 ## Development
 
