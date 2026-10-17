@@ -3,6 +3,9 @@
 Redirects, the User-Agent and error wrapping of the GET helper.
 """
 
+import socket
+import threading
+
 import pytest
 
 from httpstub import StubServer
@@ -57,3 +60,22 @@ def test_an_unreadable_ca_file_is_an_http_error(tmp_path):
 )
 def test_credentials_follow_a_redirect_only_within_one_origin(old, new, expected):
     assert http.forwards_credentials(old, new) is expected
+
+
+def test_get_turns_a_non_http_answer_into_an_http_error():
+    server = socket.create_server(('127.0.0.1', 0))
+
+    def answer():
+        conn, _ = server.accept()
+        with conn:
+            conn.recv(4096)
+            conn.sendall(b'garbage')
+
+    thread = threading.Thread(target=answer)
+    thread.start()
+    try:
+        with pytest.raises(HttpError, match=r'GET .* failed'):
+            get(f'http://127.0.0.1:{server.getsockname()[1]}/x')
+    finally:
+        thread.join()
+        server.close()

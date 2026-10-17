@@ -103,8 +103,9 @@ def get(
     try:
         with _GET_OPENER.open(request, timeout=timeout) as response:
             return response.read()
-    # URLError and HTTPError are OSError subclasses
-    except (OSError, ValueError) as exc:
+    # URLError and HTTPError are OSError subclasses; HTTPException is a non-HTTP
+    # answer or a body cut short
+    except (OSError, ValueError, http.client.HTTPException) as exc:
         if isinstance(exc, urllib.error.HTTPError):
             exc.close()  # it holds the response
         msg = f'GET {url} failed: {exc}'
