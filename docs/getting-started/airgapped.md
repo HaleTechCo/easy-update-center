@@ -231,6 +231,9 @@ REPO_CA_FILE=/etc/ssl/uc-repo-ca.crt
 COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.repo-ca.yaml
 ```
 
+With `REPO_ADAPTER=off` the scheduler reads the repository itself, so mount the bundle into the
+`scheduler` service too. Through the repo-adapter, the scheduler talks plain http and needs none.
+
 This bundle is **added to** the system bundle, unlike `DOWNLOAD_PROXY_CA_FILE`, which replaces it
 for downloads ([Backend with a private CA](../how-to/proxy-downloads.md#backend-with-a-private-ca)).
 

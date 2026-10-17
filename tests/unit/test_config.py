@@ -155,6 +155,15 @@ def test_repository_settings_can_be_set():
     assert (s.repo_max_archive_mb, s.core_age_days) == (64, 400)
 
 
+def test_the_source_ca_file_is_the_repositorys_only_without_the_adapter():
+    env = {**AIRGAPPED, 'REPO_CA_FILE': '/etc/ssl/x.crt'}
+    through_adapter = load_settings(env)
+    assert through_adapter.source_ca_file is None
+    assert through_adapter.repo_ca_file == Path('/etc/ssl/x.crt')
+    direct = load_settings({**env, 'REPO_ADAPTER': 'off'})
+    assert direct.source_ca_file == Path('/etc/ssl/x.crt')
+
+
 def test_online_private_artifactory_can_turn_the_adapter_on():
     s = load_settings(
         {

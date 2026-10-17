@@ -188,7 +188,7 @@ def _build_and_publish(
                 settings.repo_key,
                 creds.repo_username,
                 creds.repo_password,
-                settings.repo_ca_file,
+                settings.source_ca_file,
             )
         )
         current = validate.load_site_json(
