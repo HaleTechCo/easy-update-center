@@ -16,7 +16,7 @@ from procurefixture import (
     sha1,
     staged,
 )
-from uc.http import Http
+from uc.http import Http, HttpError
 from uc.procure import ProcureError
 from uc.procure.push import push
 from ucsupport import make_settings
@@ -610,3 +610,79 @@ def test_a_staged_file_that_became_a_link_out_of_the_folder_is_refused(
         f'TAMPERED  {POM}  (changed or missing since it was downloaded; '
         'stage or record it again)'
     ) in lines
+
+
+class PutFails(RecordingHttp):
+    """An Http whose uploads fail at the transport level."""
+
+    def request(self, url, **kwargs):
+        """Fail every PUT as a dropped connection would; make the rest."""
+        if kwargs.get('method') == 'PUT':
+            self.calls.append(('PUT', url))
+            msg = f'PUT {url} failed: connection reset'
+            raise HttpError(msg)
+        return super().request(url, **kwargs)
+
+
+def test_an_upload_that_fails_in_transit_is_reported_and_the_push_goes_on(
+    keeper, tmp_path, secrets_dir
+):
+    repo, url = keeper
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    http = PutFails()
+    code, lines = run(
+        keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage', http=http
+    )
+    assert code == 1
+    assert (
+        f'FAILED    {POM}  (PUT {url}maven/jenkins/{POM} failed: connection reset)'
+    ) in lines
+    assert (
+        lines[-1]
+        == f'0 uploaded, 0 already present, 1 problem(s) -> {url}maven/jenkins/'
+    )
+    assert [method for method, _ in http.calls] == ['GET', 'HEAD', 'PUT']
+    assert not (repo / POM).exists()
+
+
+def test_an_upload_the_repository_cannot_confirm_afterwards_failed(
+    tmp_path, secrets_dir
+):
+    answers = iter([(404, {}, b''), (500, {}, b'')])
+    routes = {
+        ('GET', f'/maven/jenkins/{POM}.sha1'): lambda _headers, _body: next(answers),
+        ('HEAD', f'/maven/jenkins/{POM}'): (404, {}, b''),
+        ('PUT', f'/maven/jenkins/{POM}'): (201, {}, b''),
+    }
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    with StubServer(routes) as stub:
+        code, lines = run(
+            keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage'
+        )
+    assert code == 1
+    assert f'FAILED    {POM}  (the repository answered HTTP 500)' in lines
+    assert not [line for line in lines if line.startswith('next:')]
+
+
+@pytest.mark.parametrize('kind', ['keeper', 'artifactory'])
+def test_a_plain_staged_file_the_repository_holds_differently_is_not_replaced(
+    request, tmp_path, secrets_dir, kind
+):
+    # only a file staged to replace an unusable one is told to be deleted first
+    repo, url = request.getfixturevalue(kind)
+    publish(repo, POM, b'<other/>')
+    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    settings = (
+        keeper_settings(tmp_path, secrets_dir, url)
+        if kind == 'keeper'
+        else artifactory_settings(tmp_path, secrets_dir, url)
+    )
+    http = RecordingHttp()
+    code, lines = run(settings, tmp_path / 'stage', http=http)
+    assert code == 1
+    assert (
+        f'DIFFERENT {POM}  (the repository holds another file '
+        f'(sha1 {sha1(b"<other/>")}))'
+    ) in lines
+    assert 'PUT' not in [method for method, _ in http.calls]
+    assert (repo / POM).read_bytes() == b'<other/>'
