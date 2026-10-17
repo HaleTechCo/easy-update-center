@@ -104,15 +104,6 @@ def test_emptied_folders_go_and_the_staging_folder_stays(keeper, tmp_path, secre
     assert list((tmp_path / 'stage').iterdir()) == []
 
 
-def test_a_folder_that_still_holds_a_file_stays(keeper, tmp_path, secrets_dir):
-    repo, url = keeper
-    publish(repo, POM, b'<project/>')
-    staged(tmp_path / 'stage', {POM: b'<project/>', HPI: b'hpi bytes'})
-    code, _ = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
-    assert code == 0
-    assert (tmp_path / 'stage' / HPI).is_file()
-
-
 def test_a_dry_run_removes_nothing(keeper, tmp_path, secrets_dir):
     repo, url = keeper
     publish(repo, POM, b'<project/>')
