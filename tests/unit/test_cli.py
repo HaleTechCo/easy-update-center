@@ -448,6 +448,30 @@ def test_generate_accepts_wait():
     assert build_parser().parse_args(['generate', '--wait']).wait is True
 
 
+@pytest.mark.parametrize(
+    ('argv', 'expected'),
+    [
+        (['generate'], {'force': False, 'wait': False}),
+        (['generate', '--force'], {'force': True, 'wait': False}),
+        (['generate', '--wait'], {'force': False, 'wait': True}),
+    ],
+)
+def test_generate_passes_force_and_wait_through(
+    argv, expected, monkeypatch, tmp_path, secrets_dir
+):
+    # the scheduler relies on --wait reaching generate()
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    seen = {}
+
+    def fake_generate(_settings, **kwargs):
+        seen.update(kwargs)
+        return '20260922T010000Z'
+
+    monkeypatch.setattr(cli, 'generate', fake_generate)
+    assert main(argv) == 0
+    assert seen == expected
+
+
 def test_pki_init_names_the_files_under_the_display_dir(tmp_path, capsys):
     assert (
         main(
