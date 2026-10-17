@@ -149,6 +149,10 @@ def query_repository(  # noqa: PLR0917
     if not all(isinstance(r, dict) for r in results):
         msg = 'AQL response has a result that is not an object'
         raise AqlError(msg)
+    for field in ('path', 'name'):
+        if not all(isinstance(r.get(field, ''), str) for r in results):
+            msg = f'AQL response has a result whose {field} is not text'
+            raise AqlError(msg)
     try:
         return [
             RepoFile(

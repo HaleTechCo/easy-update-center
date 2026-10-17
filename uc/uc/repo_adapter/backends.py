@@ -227,6 +227,14 @@ def _basic(username: str, password: str) -> dict[str, str]:
     }
 
 
+def _text(value: object) -> str:
+    """Return value, or raise the TypeError a listing parse reports as BackendError."""
+    if not isinstance(value, str):
+        msg = f'{value!r} is not text'
+        raise TypeError(msg)
+    return value
+
+
 def _quote(path: str) -> str:
     return urllib.parse.quote(path, safe='/!+-._~')
 
@@ -280,8 +288,8 @@ class ArtifactoryBackend:
             results = json.loads(response.body)['results']
             return [
                 RepoEntry(
-                    r['path'],
-                    r['name'],
+                    _text(r['path']),
+                    _text(r['name']),
                     r['sha256'],
                     r.get('actual_sha1'),
                     int(r.get('size') or 0),
