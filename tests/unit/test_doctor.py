@@ -28,6 +28,7 @@ from uc.doctor import (
     attach_adapter_report,
     attach_core_check,
     check_since,
+    core_lines,
     find_missing_cores,
     format_report,
     inspect_repository,
@@ -990,3 +991,66 @@ def test_a_source_that_may_not_use_the_network_never_fetches(tmp_path):
         assert source.pom(GIT) is None
         assert source.manifest(GIT) is None
     assert stub.requests == []
+
+
+@pytest.mark.parametrize(
+    ('text', 'expected'),
+    [
+        ('Short-Name: git', {'Short-Name': 'git'}),
+        ('', {}),
+        ('\n\r\nShort-Name: git\n', {'Short-Name': 'git'}),
+        # a line without ': ' is no attribute, and a continuation after it joins nothing
+        ('Garbage\n more\nShort-Name: git\n', {'Short-Name': 'git'}),
+    ],
+    ids=['no-trailing-newline', 'empty', 'leading-blank-lines', 'line-without-colon'],
+)
+def test_parse_manifest_tolerates_odd_manifests(text, expected):
+    assert parse_manifest(text) == expected
+
+
+def test_a_dependency_the_newest_release_satisfies_is_not_reported():
+    listing = classify(
+        plugin('git', '5.10.0', 'hpi', 'pom')
+        + plugin('credentials', '2.6.1', 'hpi', 'pom')
+    )
+    source = FakeSource(
+        poms={},
+        manifests={'git': 'Plugin-Dependencies: credentials:2.6.1\n'},
+    )
+    report = analyze(listing, versions(), source)
+    assert report.missing_dependencies == []
+    assert report.missing_dependency_details == []
+    assert report.exit_code() == 0
+
+
+@pytest.mark.parametrize(
+    ('fetch', 'text'),
+    [
+        (
+            False,
+            'Required cores not checked (manifest unavailable; run with --fetch): 2',
+        ),
+        (
+            True,
+            'Required cores not checked (manifest unavailable from the repository): 2',
+        ),
+    ],
+)
+def test_required_cores_not_checked_blames_the_repository_only_when_fetch_was_on(
+    fetch, text
+):
+    # no manifest could be read for two releases, so no required core is known
+    report = DoctorReport(required_cores={}, cores_unchecked=2)
+    assert core_lines(report, fetch=fetch) == [text]
+    assert ('--fetch' in text) is (not fetch)
+
+
+def test_the_report_says_required_cores_were_not_checked(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir)
+    report = DoctorReport(required_cores={}, cores_unchecked=2)
+    assert format_report(report, settings).splitlines()[-1] == (
+        'Required cores not checked (manifest unavailable; run with --fetch): 2'
+    )
+    assert format_report(report, settings, fetch=True).splitlines()[-1] == (
+        'Required cores not checked (manifest unavailable from the repository): 2'
+    )
