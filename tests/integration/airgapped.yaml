@@ -65,7 +65,7 @@ services:
     networks: [internet]
     entrypoint: ["python3", "/tests/integration/seed.py", "repo", "--downloads", "/seed/downloads",
                  "--out", "/seed/repo", "--repository", "jenkins",
-                 "--cores", "${LTS_OLD:-x},${LTS_NEW:-x},${WEEKLY:-x}", "--jenkins-version", "${LTS_OLD:-x}",
+                 "--cores", "${LTS_OLD:-x},${LTS_NEW:-x},${WEEKLY:-x}", "--jenkins-version", "${LTS_OLD:-x}", "--weekly", "${WEEKLY:-x}",
                  "--top-plugin", "${SEED_TOP_PLUGIN:-timestamper}"]
     volumes:
       - seed:/seed

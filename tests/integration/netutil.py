@@ -8,6 +8,8 @@ import urllib.request
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
+WAIT_FOR_SECONDS = 300
+
 
 @dataclass
 class Response:
@@ -23,7 +25,7 @@ class Response:
         return self.headers.get('location')
 
 
-def fetch(url: str, headers: dict[str, str] | None = None) -> Response:
+def fetch(url: str) -> Response:
     """GET without following redirects."""
     parts = urlsplit(url)
     connection_class = (
@@ -37,7 +39,7 @@ def fetch(url: str, headers: dict[str, str] | None = None) -> Response:
         connection.request(
             'GET',
             path or '/',
-            headers={'User-Agent': 'uc-integration-test', **(headers or {})},
+            headers={'User-Agent': 'uc-integration-test'},
         )
         response = connection.getresponse()
         return Response(
@@ -57,8 +59,8 @@ def get(url: str) -> bytes:
         return response.read()
 
 
-def wait_for(url: str, timeout: float = 300) -> None:
-    deadline = time.monotonic() + timeout
+def wait_for(url: str) -> None:
+    deadline = time.monotonic() + WAIT_FOR_SECONDS
     while True:
         try:
             if fetch(url).status == 200:
@@ -66,6 +68,6 @@ def wait_for(url: str, timeout: float = 300) -> None:
         except OSError:
             pass
         if time.monotonic() > deadline:
-            msg = f'{url} did not answer 200 within {timeout}s'
+            msg = f'{url} did not answer 200 within {WAIT_FOR_SECONDS}s'
             raise TimeoutError(msg)
         time.sleep(2)

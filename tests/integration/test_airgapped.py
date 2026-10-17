@@ -6,12 +6,10 @@ installing plugins. `make it-airgapped` runs it once per repository type.
 
 from __future__ import annotations
 
-import datetime as dt
 import json
 import os
 import subprocess
 import sys
-import zipfile
 from pathlib import Path
 
 import pytest
@@ -20,7 +18,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from jenkins import Jenkins
 from netutil import fetch, get, wait_for
-from uc.repo_adapter.archive import archive_date, plausible
 from uc.versions import VersionTool
 
 WEB = 'http://web:8080'
@@ -30,6 +27,8 @@ CONTROLLERS = {
     'jenkins-lts-new': os.environ['LTS_NEW'],
     'jenkins-weekly': os.environ['WEEKLY'],
 }
+WEEKLY = os.environ['WEEKLY']
+NEEDS_WEEKLY = 'uc-test-needs-weekly'
 TOP_PLUGIN = os.environ['SEED_TOP_PLUGIN']
 DOWNLOAD_PREFIX = os.environ['DOWNLOAD_PREFIX']
 SEEDED = json.loads(Path('/seed/repo/seeded.json').read_text())
@@ -156,7 +155,7 @@ def test_doctor_record_saves_the_report_and_its_counts():
         result.stderr
     )
     status = json.loads(Path('/data/status.json').read_text(encoding='utf-8'))
-    assert status['doctor']['checked_at'].endswith('Z')
+    assert status['doctor']['recorded_at'].endswith('Z')
     assert status['doctor']['missing_cores'] is not None
     assert (
         json.loads(Path('/data/doctor/report.json').read_text(encoding='utf-8'))[
@@ -179,24 +178,11 @@ def test_descriptions_are_read_from_inside_the_archives():
 
 @pytest.mark.usefixtures('release')
 def test_release_dates_are_read_from_the_archives():
-    path = Path('/seed/repo/jenkins') / SEEDED['paths'][TOP_PLUGIN]
-    with zipfile.ZipFile(path) as archive:
-        built = archive_date(archive)
-    version = path.parent.name
+    # seed.py gives every synthetic plugin's manifest the DOS time 2024-03-05 12:30:40.
     stamp = json.loads(get(WEB + '/current/plugin-versions.json'))['plugins'][
-        TOP_PLUGIN
-    ][version]['releaseTimestamp']
-    released = dt.datetime.strptime(stamp[:19], '%Y-%m-%dT%H:%M:%S').replace(
-        tzinfo=dt.UTC
-    )
-    if plausible(built, dt.datetime.now(dt.UTC)) is None:
-        assert abs(released - built) < dt.timedelta(
-            minutes=1
-        )  # the build date, not the upload
-    else:
-        assert abs(released - dt.datetime.now(dt.UTC)) < dt.timedelta(
-            days=1
-        )  # reported fallback
+        'uc-test-old-a'
+    ]['1.0']['releaseTimestamp']
+    assert stamp[:19] == '2024-03-05T12:30:40'
 
 
 def test_every_stored_core_that_plugins_require_gets_a_tier(release):
@@ -247,6 +233,9 @@ def test_routing_offers_only_compatible_plugins(controller):
     doc = json.loads(get(response.location))
     required = [p['requiredCore'] for p in doc['plugins'].values()]
     assert all(c <= 0 for c in VERSIONS.compare_many([(r, version) for r in required]))
+    # The seeded plugin that needs the weekly core: only controllers that new get it.
+    fits = VERSIONS.compare_many([(WEEKLY, version)])[0] <= 0
+    assert (NEEDS_WEEKLY in doc['plugins']) == fits
 
 
 @pytest.mark.usefixtures('release')
@@ -267,7 +256,6 @@ def test_controller_trusts_the_signature_and_installs(controller):
     installed = parse(jenkins.script(INSTALL % {'plugin': TOP_PLUGIN}))[
         'INSTALL'
     ].split(',')
-    assert installed, installed
     assert all(status.startswith('Success') for status in installed), installed
 
 
@@ -286,7 +274,6 @@ def test_proxy_mode_installs_without_anonymous_artifactory_access():
     installed = parse(jenkins.script(INSTALL % {'plugin': TOP_PLUGIN}))[
         'INSTALL'
     ].split(',')
-    assert installed, installed
     assert all(status.startswith('Success') for status in installed), installed
 
 

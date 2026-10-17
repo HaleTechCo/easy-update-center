@@ -244,21 +244,11 @@ def main() -> None:
         action='store_true',
         help='allow file reads without credentials',
     )
-    parser.add_argument(
-        '--checksum-policy',
-        choices=('server', 'client'),
-        default='server',
-        help=(
-            'client: serve <path>.sha1 only for uploads that sent X-Checksum-Sha1, '
-            "as Artifactory's local repositories do by default"
-        ),
-    )
     args = parser.parse_args()
     handler = make_handler(
         args.root,
         args.credentials,
         anonymous_read=args.anonymous_read,
-        checksum_policy=args.checksum_policy,
     )
     ThreadingHTTPServer(('0.0.0.0', args.port), handler).serve_forever()
 
