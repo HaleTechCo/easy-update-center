@@ -50,7 +50,7 @@ case "${DOWNLOAD_ACCESS}" in
             echo "entrypoint: warning: DOWNLOAD_BACKEND_URL uses plain http: download_proxy_auth crosses the network in the clear" >&2
         fi
         export DOWNLOAD_PROXY_CA_FILE="${DOWNLOAD_PROXY_CA_FILE:-/etc/ssl/certs/ca-certificates.crt}"
-        [[ -r "${DOWNLOAD_PROXY_CA_FILE}" ]] || die "DOWNLOAD_PROXY_CA_FILE ${DOWNLOAD_PROXY_CA_FILE} cannot be read"
+        [[ -f "${DOWNLOAD_PROXY_CA_FILE}" && -r "${DOWNLOAD_PROXY_CA_FILE}" ]] || die "DOWNLOAD_PROXY_CA_FILE ${DOWNLOAD_PROXY_CA_FILE} cannot be read"
         auth_file=/run/secrets/download_proxy_auth
         credentials="$(tr -d '\r\n' < "${auth_file}" 2> /dev/null || true)"
         [[ "${credentials}" == *:* ]] || die "DOWNLOAD_ACCESS=proxy needs username:password in ${auth_file}"
@@ -62,7 +62,7 @@ case "${DOWNLOAD_ACCESS}" in
 esac
 
 if [[ -n "${TLS_CERT_FILE:-}" || -n "${TLS_KEY_FILE:-}" ]]; then
-    [[ -r "${TLS_CERT_FILE:-}" && -r "${TLS_KEY_FILE:-}" ]] || die "TLS_CERT_FILE and TLS_KEY_FILE must both be readable"
+    [[ -f "${TLS_CERT_FILE:-}" && -r "${TLS_CERT_FILE:-}" && -f "${TLS_KEY_FILE:-}" && -r "${TLS_KEY_FILE:-}" ]] || die "TLS_CERT_FILE and TLS_KEY_FILE must both be readable"
     [[ "${PUBLIC_URL}" == https://* ]] || die "with TLS_CERT_FILE and TLS_KEY_FILE set, PUBLIC_URL must start with https:// (port 8080 then only redirects to it)"
     defines+=(-D TLS -D NEED_SSL)
 fi
