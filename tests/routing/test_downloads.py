@@ -142,6 +142,19 @@ def test_cache_headers():
     assert fetch('web-full', '/status.json').headers['cache-control'] == 'no-store'
 
 
+def test_errors_are_not_cached_by_shared_caches():
+    # A shared cache must not keep a 404 after the plugin is procured.
+    miss = fetch('web-artifactory', '/download/plugins/git/9.9.9/git.hpi')
+    assert miss.status == 404
+    assert 'public' not in miss.headers.get('cache-control', '')
+    redirect = fetch('web-artifactory', '/download/plugins/git/5.2.0/git.hpi')
+    assert redirect.status == 302
+    assert redirect.headers['cache-control'] == 'public, max-age=3600'
+    missing = fetch('web-full', '/no-such-file.json')
+    assert missing.status == 404
+    assert 'public' not in missing.headers.get('cache-control', '')
+
+
 def test_json_is_compressed_when_asked():
     response = fetch(
         'web-full', '/current/update-center.actual.json', {'Accept-Encoding': 'gzip'}

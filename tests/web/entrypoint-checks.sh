@@ -67,6 +67,7 @@ expect_exit 64 "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL" -e PUBL
 expect_exit 64 "DOWNLOAD_ACCESS=proxy needs DOWNLOAD_BACKEND_URL set explicitly" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy
 expect_exit 64 "needs username:password" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy -e DOWNLOAD_BACKEND=artifactory -e DOWNLOAD_BACKEND_URL=https://repo.corp/jenkins
 expect_exit 64 "TLS_CERT_FILE and TLS_KEY_FILE must both be readable" -e PUBLIC_URL=http://uc -e TLS_CERT_FILE=/nope
+expect_exit 64 "DOWNLOAD_PROXY_CA_FILE /nope cannot be read" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy -e DOWNLOAD_BACKEND=artifactory -e DOWNLOAD_BACKEND_URL=https://repo.corp/jenkins -e DOWNLOAD_PROXY_CA_FILE=/nope
 expect_exit 64 "PUBLIC_URL must start with https://" -e PUBLIC_URL=http://uc -e TLS_CERT_FILE=/etc/ssl/certs/ca-certificates.crt -e TLS_KEY_FILE=/etc/ssl/certs/ca-certificates.crt
 
 no_credentials="DOWNLOAD_BACKEND_URL must not contain credentials or an @; for proxied downloads put them in secrets/download_proxy_auth"
@@ -81,6 +82,8 @@ expect_exit 64 "${no_credentials}" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=a
 expect_exit 64 "${no_credentials}" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e "DOWNLOAD_BACKEND_URL=http://backend.example#a@b"
 expect_serving "http://backend.example?x=a#b"
 expect_serving "https://repo.corp/artifactory/jenkins"
+# Every trailing slash goes, as uc strips them.
+expect_serves "entrypoint: serving https://h; downloads: artifactory http://b/r (redirect)" -e PUBLIC_URL=https://h// -e DOWNLOAD_BACKEND=artifactory -e DOWNLOAD_BACKEND_URL=http://b/r//
 
 # Compose passes an unset variable as empty: MODE then chooses the backend, as uc does; an explicit
 # DOWNLOAD_BACKEND wins over MODE.
@@ -112,4 +115,14 @@ docker run -d --name "${name}-proxy" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=
     -e DOWNLOAD_BACKEND_URL=http://repo.corp/jenkins --entrypoint sh "${image}" \
     -c 'mkdir -p /tmp/s && printf u:p > /tmp/s/a && sed "s#/run/secrets/download_proxy_auth#/tmp/s/a#" /usr/local/bin/entrypoint.sh > /tmp/e.sh && exec bash /tmp/e.sh' > /dev/null
 expect_log "${name}-proxy" "warning: DOWNLOAD_BACKEND_URL uses plain http" "warns that proxy credentials would cross in the clear"
+# A web container still waiting for its first release stops promptly on SIGTERM, not after Docker's
+# 10 s timeout.
+start=${SECONDS}
+docker stop "${name}" > /dev/null
+if ((SECONDS - start <= 5)); then
+    echo "ok: stops within 5 seconds while waiting for the first release"
+else
+    echo "FAIL: docker stop took $((SECONDS - start)) s while waiting for the first release"
+    failures=$((failures + 1))
+fi
 exit "${failures}"

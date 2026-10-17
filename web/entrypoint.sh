@@ -16,7 +16,7 @@ case "${MODE:-}" in
     '' | online | airgapped) ;;
     *) die "MODE must be online or airgapped (got '${MODE}')" ;;
 esac
-export PUBLIC_URL="${PUBLIC_URL%/}"
+export PUBLIC_URL="${PUBLIC_URL%"${PUBLIC_URL##*[!/]}"}"
 # The mode's default backend, the rule uc's settings registry has (uc/uc/settings.py: DOWNLOAD_BACKEND).
 if [[ -z "${DOWNLOAD_BACKEND:-}" ]]; then
     if [[ "${MODE:-}" == airgapped ]]; then DOWNLOAD_BACKEND=artifactory; else DOWNLOAD_BACKEND=mirror; fi
@@ -40,7 +40,7 @@ esac
 # Any @ is refused, as uc refuses it (uc/uc/config.py): a URL parser ends the user info at a /, ? or
 # #, so a token holding one would pass for the host.
 [[ "${backend_url}" != *@* ]] || die "DOWNLOAD_BACKEND_URL must not contain credentials or an @; for proxied downloads put them in secrets/download_proxy_auth"
-export DOWNLOAD_BACKEND_URL="${backend_url%/}"
+export DOWNLOAD_BACKEND_URL="${backend_url%"${backend_url##*[!/]}"}"
 
 case "${DOWNLOAD_ACCESS}" in
     redirect) ;;
@@ -49,12 +49,13 @@ case "${DOWNLOAD_ACCESS}" in
         if [[ "${DOWNLOAD_BACKEND_URL}" != https://* ]]; then
             echo "entrypoint: warning: DOWNLOAD_BACKEND_URL uses plain http: download_proxy_auth crosses the network in the clear" >&2
         fi
+        export DOWNLOAD_PROXY_CA_FILE="${DOWNLOAD_PROXY_CA_FILE:-/etc/ssl/certs/ca-certificates.crt}"
+        [[ -r "${DOWNLOAD_PROXY_CA_FILE}" ]] || die "DOWNLOAD_PROXY_CA_FILE ${DOWNLOAD_PROXY_CA_FILE} cannot be read"
         auth_file=/run/secrets/download_proxy_auth
         credentials="$(tr -d '\r\n' < "${auth_file}" 2> /dev/null || true)"
         [[ "${credentials}" == *:* ]] || die "DOWNLOAD_ACCESS=proxy needs username:password in ${auth_file}"
         DOWNLOAD_PROXY_AUTH_HEADER="Basic $(printf '%s' "${credentials}" | base64 -w0)"
         export DOWNLOAD_PROXY_AUTH_HEADER
-        export DOWNLOAD_PROXY_CA_FILE="${DOWNLOAD_PROXY_CA_FILE:-/etc/ssl/certs/ca-certificates.crt}"
         defines+=(-D ACCESS_PROXY -D NEED_SSL)
         ;;
     *) die "DOWNLOAD_ACCESS must be redirect or proxy (got '${DOWNLOAD_ACCESS}')" ;;
@@ -69,12 +70,15 @@ fi
 echo "entrypoint: serving ${PUBLIC_URL}; downloads: ${DOWNLOAD_BACKEND} ${DOWNLOAD_BACKEND_URL} (${DOWNLOAD_ACCESS})" >&2
 
 # Apache refuses to start without DocumentRoot and the RewriteMap file.
+# Stop at once on a stop signal: bash would otherwise run a trap only after the foreground sleep.
+trap 'exit 0' TERM INT WINCH
 waited=0
 until [[ -e /data/live/.htdownload-map ]]; do
     if ((waited % 60 == 0)); then
         echo "entrypoint: waiting for the first published release in /data/live" >&2
     fi
-    sleep 5
+    sleep 5 &
+    wait $!
     waited=$((waited + 5))
 done
 
