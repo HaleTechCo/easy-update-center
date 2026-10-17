@@ -434,3 +434,160 @@ def test_an_artifact_keeper_download_that_differs_from_its_listing_is_refused(tm
         pytest.raises(HttpError, match='does not match'),
     ):
         keeper(stub, tmp_path).facts(listed, GIT, plugin=True)
+
+
+def test_a_range_reader_ends_at_a_body_shorter_than_the_listing_says():
+    # a listing size larger than the file: the read ends, it does not ask again forever
+    with StubServer({('GET', '/short'): (206, {}, b'abc')}) as stub:
+        reader = RangeReader(Http(None), stub.url + '/short', {}, 1000)
+        assert reader.read() == b'abc'
+        assert len(stub.requests) == 1
+
+
+AQL_PATH = ('POST', '/artifactory/api/search/aql')
+AQL_ROW = {
+    'path': 'org/x/1',
+    'name': 'x-1.pom',
+    'sha256': 'a' * 64,
+    'modified': '2026-09-02T00:00:00.000Z',
+}
+
+
+@pytest.mark.parametrize(
+    'body',
+    [
+        b'<html>nginx</html>',
+        b'{}',
+        b'[]',
+        b'{"results": 5}',
+        json.dumps({'results': [{'name': 'x-1.pom'}]}).encode(),
+        json.dumps({'results': [{**AQL_ROW, 'size': 'big'}]}).encode(),
+    ],
+    ids=['not JSON', 'no results', 'a list', 'results not a list', 'no path', 'size'],
+)
+def test_an_artifactory_listing_in_an_unexpected_shape_is_a_backend_error(body):
+    with (
+        StubServer({AQL_PATH: (200, {}, body)}) as stub,
+        pytest.raises(BackendError, match='unexpected AQL response'),
+    ):
+        artifactory(stub).list()
+
+
+@pytest.mark.parametrize('status', [401, 403, 500])
+def test_artifactory_files_and_entries_that_answer_an_error_are_backend_errors(status):
+    routes = {
+        ('GET', '/artifactory/jenkins/org/x/1/x-1.pom'): (status, {}, b''),
+        ('GET', f'/artifactory/jenkins/{HPI_PATH}!/index.jelly'): (status, {}, b''),
+    }
+    with StubServer(routes) as stub:
+        backend = artifactory(stub)
+        with pytest.raises(BackendError, match=f'HTTP {status}'):
+            backend.get('org/x/1/x-1.pom', 1024)
+        with pytest.raises(BackendError, match=f'HTTP {status}'):
+            backend.entry(HPI_PATH, 'index.jelly', 1024)
+
+
+@pytest.mark.parametrize('status', [401, 403, 500])
+def test_a_pom_the_repository_refuses_is_reported_unreadable(status, tmp_path):
+    results = [{**AQL_ROW, 'repo': 'jenkins', 'actual_sha1': 'b' * 40, 'size': 5}]
+    pom = '/artifactory/jenkins/org/x/1/x-1.pom'
+    routes = {
+        AQL_PATH: (200, {}, json.dumps({'results': results}).encode()),
+        ('GET', pom): (status, {}, b''),
+    }
+    now = dt.datetime(2026, 9, 23, tzinfo=UTC)
+    with StubServer(routes) as stub:
+        index = build_index(
+            artifactory(stub), Cache(tmp_path / 'cache'), key='jenkins', now=now
+        )
+    assert index.rows == []
+    assert [r['reason'] for r in index.report.replaced_poms] == [
+        f'unreadable: GET {stub.url}{pom} failed with HTTP {status}'
+    ]
+
+
+def test_artifactory_describes_a_repository_jar_through_an_entry_request():
+    jar = 'org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.jar'
+    routes = {
+        ('GET', f'/artifactory/jenkins/{jar}!/index.jelly'): (200, {}, b'<div/>'),
+    }
+    with StubServer(routes) as stub:
+        backend = artifactory(stub)
+        assert backend.jar_description(jar) == b'<div/>'
+        assert backend.jar_description('org/x/1/x-1.jar') is None
+
+
+KEEPER_LIST = '/api/v1/repositories/jenkins-prod-local/artifacts?per_page=100&page=1'
+
+
+def keeper_listing(items):
+    return (200, {}, json.dumps({'items': items}).encode())
+
+
+def test_a_keeper_listing_that_answers_an_error_is_a_backend_error(tmp_path):
+    with (
+        StubServer({('GET', KEEPER_LIST): (500, {}, b'oops')}) as stub,
+        pytest.raises(BackendError, match=r'listing .* failed with HTTP 500'),
+    ):
+        keeper(stub, tmp_path).list()
+
+
+def test_a_keeper_listing_that_is_not_json_is_a_backend_error(tmp_path):
+    with (
+        StubServer({('GET', KEEPER_LIST): (200, {}, b'<html>proxy</html>')}) as stub,
+        pytest.raises(BackendError, match='unexpected listing response'),
+    ):
+        keeper(stub, tmp_path).list()
+
+
+def _without(item, field):
+    return {k: v for k, v in item.items() if k != field}
+
+
+@pytest.mark.parametrize(
+    'items',
+    [
+        [_without(keeper_item(HPI_PATH, 'a' * 64), 'checksum_sha256')],
+        [keeper_item(HPI_PATH, 'a' * 64, created='yesterday')],
+        [keeper_item(HPI_PATH, 'a' * 64, size='big')],
+        [{'path': HPI_PATH}],
+    ],
+    ids=['no checksum', 'bad created_at', 'size_bytes not a number', 'a bare item'],
+)
+def test_a_keeper_item_in_an_unexpected_shape_is_a_backend_error(items, tmp_path):
+    with (
+        StubServer({('GET', KEEPER_LIST): keeper_listing(items)}) as stub,
+        pytest.raises(BackendError, match='unexpected listing response'),
+    ):
+        keeper(stub, tmp_path).list()
+
+
+def test_a_keeper_answers_404_with_none_and_other_errors_with_a_backend_error(tmp_path):
+    base = '/maven/jenkins-prod-local/'
+    routes = {('GET', f'{base}org/x/1/x-1.pom'): (403, {}, b'scan policy')}
+    with StubServer(routes) as stub:
+        backend = keeper(stub, tmp_path)
+        assert backend.get('org/x/2/x-2.pom', 1024) is None
+        assert backend.get('org/x/2/x-2.jar', 1024) is None
+        with pytest.raises(BackendError, match='HTTP 403'):
+            backend.get('org/x/1/x-1.pom', 1024)
+        # no .sha1 file at all: the same error as a malformed one
+        with pytest.raises(BackendError, match='no valid sha1 file'):
+            backend.sha1(entry(b'x', 'org/x/2/x-2.hpi'))
+
+
+def test_a_keeper_jar_that_is_absent_or_not_a_zip_has_no_description(tmp_path):
+    jar = '/maven/jenkins-prod-local/org/x/1/x-1.jar'
+    routes = {
+        ('GET', jar): (200, {}, b'<html>not a jar</html>'),
+        ('GET', '/maven/jenkins-prod-local/org/x/2/x-2.jar'): (
+            200,
+            {},
+            make_jar(b'<div/>'),
+        ),
+    }
+    with StubServer(routes) as stub:
+        backend = keeper(stub, tmp_path)
+        assert backend.jar_description('org/x/1/x-1.jar') is None
+        assert backend.jar_description('org/x/3/x-3.jar') is None
+        assert backend.jar_description('org/x/2/x-2.jar') == b'<div/>'
