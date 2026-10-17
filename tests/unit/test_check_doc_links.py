@@ -127,3 +127,49 @@ def test_main_refuses_a_tracked_scan_that_lists_nothing(tmp_path, monkeypatch, c
     monkeypatch.chdir(tmp_path)
     assert links.main(['--tracked']) == 2
     assert 'git listed no file to check' in capsys.readouterr().err
+
+
+def test_a_heading_in_a_fence_is_no_anchor_and_an_explicit_id_is(tmp_path):
+    page = tmp_path / 'page.md'
+    page.write_text(
+        '# Real\n```\n# shell comment\n```\n<a id="custom-id"></a>\n'
+        '~~~\n# also not\n~~~\n',
+        encoding='utf-8',
+    )
+    assert links.anchors_in(page) == {'real', 'custom-id'}
+
+
+def test_a_link_in_angle_brackets_may_hold_a_space(tmp_path):
+    page = _docs(tmp_path)
+    (tmp_path / 'docs' / 'my guide.md').write_text('# Part\n', encoding='utf-8')
+    page.write_text(
+        '[ok](<my guide.md#part>) [file](<gone file.md>) '
+        '[anchor](<my guide.md#gone>)\n',
+        encoding='utf-8',
+    )
+    assert links.broken_links(page, tmp_path) == [
+        f'{page}: no such file: gone file.md',
+        f'{page}: no such anchor: my guide.md#gone',
+    ]
+
+
+def test_a_bare_root_level_file_name_is_a_reference_only_when_the_file_exists(
+    tmp_path,
+):
+    (tmp_path / 'SAMPLE.md').write_text('# Sample\n', encoding='utf-8')
+    script = tmp_path / 'tool.py'
+    # notes.md is prose: no such file at the root, so nothing to check
+    script.write_text('# see SAMPLE.md#gone and notes.md\n', encoding='utf-8')
+    assert links.broken_links(script, tmp_path) == [
+        f'{script}: no such anchor: SAMPLE.md#gone'
+    ]
+
+
+def test_links_to_other_sites_are_not_followed(tmp_path):
+    page = _docs(tmp_path)
+    page.write_text(
+        '[a](https://x.example/gone.md) [b](http://x.example/gone.md#nope) '
+        '[c](mailto:me@example.com) [d](ftp://x.example/gone.md)\n',
+        encoding='utf-8',
+    )
+    assert links.broken_links(page, tmp_path) == []
