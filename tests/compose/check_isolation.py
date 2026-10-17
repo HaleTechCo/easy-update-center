@@ -35,7 +35,7 @@ STAGING = '/procurement'
 SETUP_MOUNTS = {
     '/setup/secrets': ('secrets', False),
 }
-SETUP_ENTRYPOINT = ['uc-setup']
+SETUP_ENTRYPOINT = ['/usr/bin/tini', '--', 'uc-setup']
 ADAPTER_VOLUME = 'repo-adapter-data'
 ADAPTER_DIR = '/data/repo-adapter'
 
@@ -61,6 +61,13 @@ def adapter_volume_problems(services: dict) -> list[str]:
     adapter = volume_mounts(services['repo-adapter'])
     if any(source == 'uc-data' for source, _ in adapter.values()):
         problems.append('repo-adapter mounts uc-data; it gets only its own volume')
+    if any(
+        volume.get('type') == 'bind'
+        for volume in services['repo-adapter'].get('volumes') or []
+    ):
+        problems.append(
+            'repo-adapter bind-mounts a host folder; it gets only its volume'
+        )
     if adapter.get(ADAPTER_DIR) != (ADAPTER_VOLUME, False):
         problems.append(
             f'repo-adapter must mount {ADAPTER_VOLUME} at {ADAPTER_DIR} read-write'
@@ -236,7 +243,7 @@ def main() -> None:
             problems.append(f'setup receives secrets {sorted(secrets(setup))}')
         if setup.get('entrypoint') != SETUP_ENTRYPOINT:
             problems.append(
-                'setup must run uc-setup as its entrypoint, '
+                'setup must run uc-setup under tini as its entrypoint, '
                 f'not {setup.get("entrypoint")!r}'
             )
         problems += setup_mount_problems(setup)
