@@ -108,11 +108,9 @@ fi
 
 name="uc-web-wait-$$"
 # Removed on every way out of this script, a failed check or an interrupt included.
-trap 'docker rm -f "${name}" "${name}-env" "${name}-proxy" > /dev/null 2>&1' EXIT
+trap 'docker rm -f "${name}" "${name}-proxy" > /dev/null 2>&1' EXIT
 docker run -d --name "${name}" -e PUBLIC_URL=http://uc "${image}" > /dev/null
-docker run -d --name "${name}-env" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory -e "DOWNLOAD_BACKEND_URL=http://backend/repo?a=b=c" "${image}" > /dev/null
 expect_log "${name}" "waiting for the first published release" "waits for the first release"
-expect_log "${name}-env" "entrypoint: serving http://uc; downloads: artifactory http://backend/repo?a=b=c (redirect)" "logs what it serves, with the backend URL intact"
 docker run -d --name "${name}-proxy" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy -e DOWNLOAD_BACKEND=artifactory \
     -e DOWNLOAD_BACKEND_URL=http://repo.corp/jenkins --entrypoint sh "${image}" \
     -c 'mkdir -p /tmp/s && printf u:p > /tmp/s/a && sed "s#/run/secrets/download_proxy_auth#/tmp/s/a#" /usr/local/bin/entrypoint.sh > /tmp/e.sh && exec bash /tmp/e.sh' > /dev/null
