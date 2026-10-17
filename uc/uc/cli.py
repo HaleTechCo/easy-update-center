@@ -1,6 +1,7 @@
 """Command-line entry point.
 
-uc generate | doctor | procure | rollback | status | schedule | repo-adapter | pki
+uc generate | doctor | procure | rollback | status | config | schedule |
+repo-adapter | pki
 (docs/reference/cli.md).
 """
 
@@ -241,7 +242,11 @@ def build_parser() -> argparse.ArgumentParser:
         help='with --example: the mode the example is for (default: online)',
     )
     sub.add_parser(
-        'schedule', help='run generate on GENERATE_SCHEDULE (the scheduler service)'
+        'schedule',
+        help=(
+            'run generate on GENERATE_SCHEDULE and, when set, doctor --record on '
+            'DOCTOR_SCHEDULE (the scheduler service)'
+        ),
     )
 
     adapter = sub.add_parser(
@@ -265,7 +270,12 @@ def build_parser() -> argparse.ArgumentParser:
         dest='pki_command', required=True
     )
     init = pki.add_parser('init', help='create a root CA and a signing certificate')
-    init.add_argument('--out', type=Path, required=True)
+    init.add_argument(
+        '--out',
+        type=Path,
+        required=True,
+        help='the directory to write the PKI files to',
+    )
     init.add_argument(
         '--display-dir',
         type=Path,
@@ -292,7 +302,12 @@ def build_parser() -> argparse.ArgumentParser:
     rotate = pki.add_parser(
         'rotate', help='issue a new signing certificate from the root in --dir/root/'
     )
-    rotate.add_argument('--dir', type=Path, required=True)
+    rotate.add_argument(
+        '--dir',
+        type=Path,
+        required=True,
+        help='the directory holding the PKI files (the root is in root/ under it)',
+    )
     rotate.add_argument(
         '--display-dir',
         type=Path,
@@ -319,7 +334,12 @@ def build_parser() -> argparse.ArgumentParser:
         help=f'organization in the subject (default: {DEFAULT_ORG})',
     )
     show = pki.add_parser('show', help='print subjects, expiry and fingerprints')
-    show.add_argument('--dir', type=Path, required=True)
+    show.add_argument(
+        '--dir',
+        type=Path,
+        required=True,
+        help='the directory holding the PKI files',
+    )
     return parser
 
 
@@ -482,8 +502,13 @@ def procure_options(args: argparse.Namespace, settings: Settings) -> StageOption
         dependencies=args.dependencies,
         wars=tuple(args.war),
         since=args.since if args.since is not None else (settings.doctor_since or None),
-        staging=args.staging or DEFAULT_STAGING,
+        staging=_staging(args),
     )
+
+
+def _staging(args: argparse.Namespace) -> Path:
+    # every uc procure command has --staging
+    return args.staging or DEFAULT_STAGING
 
 
 def warn_plain_http(settings: Settings, names: Iterable[str] | None = None) -> None:
@@ -499,7 +524,7 @@ def _procure(args: argparse.Namespace, settings: Settings) -> int:
     warn_plain_http(settings, ('REPO_URL', 'REPO_API_URL', 'PROCUREMENT_SOURCE_URL'))
     if args.staging is not None:
         check_staging_outside_data_dir(args.staging, settings.data_dir, '--staging')
-    staging = getattr(args, 'staging', None) or DEFAULT_STAGING
+    staging = _staging(args)
     if args.procure_command == 'push':
         return push(settings, staging, dry_run=args.dry_run)
     if args.procure_command == 'record':
