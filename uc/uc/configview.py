@@ -127,12 +127,12 @@ def run(
         for name, default in INTERNAL.items()
         if r.env.get(name, '').strip() not in ('', default)
     ]
-    # names an older release documented: uc still follows them (tests point them at
-    # their own paths)
+    # internal names the tests set: uc still follows them (tests point them at their
+    # own paths)
     if leftovers:
         err.write(
-            'uc: note: not settings, but uc still follows them: '
-            f'{", ".join(leftovers)}; remove them from .env (only the tests set them)\n'
+            'uc: note: internal names the tests set; uc still follows them: '
+            f'{", ".join(leftovers)}; remove them from .env\n'
         )
     try:
         settings = settings_from(r)

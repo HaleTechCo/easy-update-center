@@ -238,7 +238,7 @@ setting would show as `dependency failed to start` instead of `uc: error: ...`. 
 | `--mode` | With `--example`: the mode the example is for, `online` (the default) or `airgapped`. |
 
 An invalid configuration exits 1; without options, after printing every value it could work out.
-When the environment still holds an internal path an older release documented, such as
+When the environment still holds an internal name that only the tests set, such as
 `REPO_ADAPTER_URL`, with a value other than its default, every form also prints a `uc: note:` line
 naming it on standard error: uc still follows those names, so remove them from `.env`.
 How settings combine: [How settings are read](configuration.md#how-settings-are-read).
