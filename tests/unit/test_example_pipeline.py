@@ -46,7 +46,7 @@ TOLERATED_DOCTOR = re.compile(
     r'(?s:.*?)\brc > 1\b'
 )
 STAGED = (
-    'Staging into /procurement from http://source.example/:\n'
+    'Staging into ./procurement from http://source.example/:\n'
     'staged    io/jenkins/x.hpi\n'
     '1 staged, 0 kept, 0 problem(s)\n'
     f'{review_line(DEFAULT_STAGING, 1)}\n'
@@ -54,7 +54,7 @@ STAGED = (
 NOTHING_STAGED = (
     'Inspecting the repository...\n'
     'next: uc procure stage --poms\n\n'
-    'Staging into /procurement from http://source.example/:\n'
+    'Staging into ./procurement from http://source.example/:\n'
     '0 staged, 0 kept, 0 problem(s)\n'
 )
 """A stage report with nothing staged.

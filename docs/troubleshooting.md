@@ -25,7 +25,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](ref
 
 | Symptom | Cause and fix |
 |---|---|
-| `Repository credentials missing: provide /run/secrets/repo_username and /run/secrets/repo_password` | The credential files are empty or missing. Write them: [online](getting-started/online.md#3-add-credentials), [air-gapped](getting-started/airgapped.md#4-add-credentials). Air-gapped with `REPO_ADAPTER=off`, also add [`compose.repo-credentials.yaml`](reference/secrets.md#repository-credentials-without-the-adapter) to `COMPOSE_FILE`. |
+| `repository credentials missing: provide /run/secrets/repo_username and /run/secrets/repo_password` | The credential files are empty or missing. Write them: [online](getting-started/online.md#3-add-credentials), [air-gapped](getting-started/airgapped.md#4-add-credentials). Air-gapped with `REPO_ADAPTER=off`, also add [`compose.repo-credentials.yaml`](reference/secrets.md#repository-credentials-without-the-adapter) to `COMPOSE_FILE`. |
 | The listing fails with HTTP 403 (online) | Anonymous or wrong credentials: repo.jenkins-ci.org needs a Jenkins community account ([Accounts](getting-started/requirements.md#accounts)). |
 | The listing fails with HTTP 403 (Artifactory) | The account cannot read the repository. Give it read permission on the repository (no admin rights are needed), or use another account. |
 | A stack trace from `GitHubSource`: `java.io.IOException: This endpoint requires you to be authenticated` | Not an error: the warning for a missing GitHub token. The run continues without labels from GitHub topics ([GitHub token](reference/secrets.md#github-token)). |
@@ -33,7 +33,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](ref
 | A container logs `Permission denied` reading a file under `/run/secrets/` (Linux) | The file was replaced (copied over, or saved by an editor that writes a new file) and lost its mode, or it belongs to another user than `UC_UID`. Run `docker compose run --rm setup secrets`, then `docker compose up -d`. |
 | `PUBLIC_URL must be a bare origin such as https://uc.example.com` | `PUBLIC_URL` has a path, query or fragment. Give the update center its own hostname ([A hostname for PUBLIC_URL](getting-started/requirements.md#a-hostname-for-public_url)). |
 | `PUBLIC_URL points at localhost, which Jenkins controllers cannot reach` | Use a name controllers can resolve. `ALLOW_LOCAL_PUBLIC_URL=true` exists for tests only. |
-| `uc: another generation holds /data/.lock` (exit code 75) | A generation or rollback is already running, often the scheduler's. Wait for it; `docker compose logs -f scheduler` shows it. |
+| `uc: error: another generation or rollback holds /data/.lock` (exit code 75) | A generation or rollback is already running, often the scheduler's. Wait for it; `docker compose logs -f scheduler` shows it. |
 | `could not obtain resources (...) and no last-good copy exists` | The first run could not fetch upstream data. Online: check access to api.github.com and codeload.github.com, or set `RESOURCES_SOURCE=bundled`. Air-gapped with `RESOURCES_SOURCE=url`: check `RESOURCES_URL` and `RESOURCES_SHA256`. |
 | Behind an outbound proxy: `could not obtain resources`, or tool installers not mirrored, while the generator itself works | The proxy is set only for the JVM. Set `HTTPS_PROXY` (and `NO_PROXY=repo-adapter`) in `.env` too ([Read by bundled software](reference/configuration.md#read-by-bundled-software)). |
 | Warning `resources fetch failed (...); using last-good copy` | The run published with the previous data. Fix access as above; `status.json` shows the data's age. |
@@ -49,8 +49,8 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](ref
 
 | Symptom | Cause and fix |
 |---|---|
-| `missing signing material: /run/secrets/update-center.key (see 'uc pki init')` | Run `docker compose run --rm setup`: it creates the signing keys when `secrets/update-center.key` is missing. On Linux, if the files exist, run `docker compose run --rm setup secrets` ([File modes](reference/secrets.md#file-modes)). |
-| `signing certificate expires in N days (minimum 30); run 'uc pki rotate'` | [Rotate the signing certificate](how-to/rotate-signing-certificate.md), then recreate the scheduler. |
+| `missing signing material: /run/secrets/update-center.key; run 'docker compose run --rm setup'` | Run `docker compose run --rm setup`: it creates the signing keys when `secrets/update-center.key` is missing. On Linux, if the files exist, run `docker compose run --rm setup secrets` ([File modes](reference/secrets.md#file-modes)). |
+| `signing certificate expires in N days (minimum 30); run 'docker compose run --rm setup pki-rotate'` | [Rotate the signing certificate](how-to/rotate-signing-certificate.md), then recreate the scheduler. |
 | `... update-center.key does not match ... update-center.cert` | The key and certificate come from different runs of `uc pki`. Restore the matching pair, or rotate. |
 | `... update-center.cert is not issued by ... root-ca.crt` | `root-ca.crt` was replaced without the signing certificate (or the reverse). Restore the matching files. |
 | `uc: error: no certificate in <dir>` (from `uc pki show --dir <dir>`) | Neither `root-ca.crt` nor `update-center.cert` is in that folder. Point `--dir` at the folder that holds them (`secrets/` on the host, `/setup/secrets` inside `setup`). Both certificates are secrets of `uc`, so `docker compose run --rm --no-deps uc pki show --dir /run/secrets` shows what the stack sees. |

@@ -43,8 +43,8 @@ def versions():
     return VersionTool(Path('/opt/uc/generator'), Path('/opt/uc/tools'))
 
 
-def inspection(report):
-    return Inspection(report, classify([]), NoPoms())
+def inspection(report, *, fetch=False):
+    return Inspection(report, classify([]), NoPoms(), fetch)
 
 
 def test_one_run_stages_poms_cores_and_dependencies(releases, tmp_path, secrets_dir):
@@ -130,6 +130,28 @@ def test_a_run_on_unchecked_releases_says_to_fetch(releases, tmp_path, secrets_d
     )
     assert lines[-1] == '0 staged, 0 kept, 0 problem(s)'
     assert not [line for line in lines if line.startswith('next:')]
+
+
+def test_a_fetching_run_on_unchecked_releases_blames_the_repository(
+    releases, tmp_path, secrets_dir
+):
+    _, url = releases
+    out = io.StringIO()
+    settings = make_settings(tmp_path, secrets_dir, PROCUREMENT_SOURCE_URL=url)
+    download(
+        inspection(DoctorReport(unchecked=2, cores_unchecked=3), fetch=True),
+        settings,
+        poms=False,
+        dependencies=True,
+        wars=[],
+        staging_dir=tmp_path / 'stage',
+        versions=versions(),
+        out=out,
+    )
+    assert out.getvalue().splitlines()[-2] == (
+        'warning   2 plugin release(s) not checked for dependencies and 3 for '
+        'required cores (POM or manifest unavailable from the repository)'
+    )
 
 
 def test_a_failure_exits_1_and_the_rest_is_staged(releases, tmp_path, secrets_dir):

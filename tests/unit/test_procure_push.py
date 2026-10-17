@@ -142,7 +142,7 @@ def test_a_file_changed_after_download_is_refused(keeper, tmp_path, secrets_dir)
     assert not (repo / POM).exists()
     assert (
         f'TAMPERED  {POM}  (changed or missing since it was downloaded; '
-        'download it again)'
+        'stage or record it again)'
     ) in lines
 
 
@@ -648,5 +648,5 @@ def test_a_staged_file_that_became_a_link_out_of_the_folder_is_refused(
     assert not (repo / POM).exists()
     assert (
         f'TAMPERED  {POM}  (changed or missing since it was downloaded; '
-        'download it again)'
+        'stage or record it again)'
     ) in lines

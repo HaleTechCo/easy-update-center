@@ -107,8 +107,8 @@ def clean(
                 'not in the repository yet'
                 if here
                 else (
-                    'missing from the folder and not in the repository; download it '
-                    'again'
+                    'missing from the folder and not in the repository; stage or '
+                    'record it again'
                 ),
             )
         elif have != local:

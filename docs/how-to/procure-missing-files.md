@@ -175,7 +175,7 @@ them, when they are the staged file's ([Large files](#large-files)).
 | `present` | The repository already holds the same file; also shown when the same file arrives from elsewhere while pushing (an HTTP 409 whose sha1 matches). |
 | `would put` | Dry run: it would be uploaded. |
 | `DIFFERENT` | The repository holds another file at that path, or Artifact Keeper stored other bytes there without recording them; it is left alone. |
-| `TAMPERED` | The staged file changed, or is missing, since it was downloaded: download it again. Or it cannot be read: check its permissions. |
+| `TAMPERED` | The staged file changed, or is missing, since it was downloaded: stage or record it again. Or it cannot be read: check its permissions. |
 | `ERROR`, `FAILED` | The repository refused or failed (for example 401: check `secrets/repo_push_auth`), or Artifactory holds the path but publishes no checksum for it (check that file by hand). `FAILED` shows the repository's own reason when it gives one; a 409 from Artifact Keeper after you deleted a file is its tombstone (see [Review](#3-review)); a 503 `request timed out`, a 502 or a broken connection on a large file is a timeout ([Large files](#large-files)). |
 | `unlisted` | In the folder but not in `procurement.json`, so not pushed: record it with `uc procure record` ([Files you place by hand](#files-you-place-by-hand)) or delete it. The summary counts these. |
 
@@ -239,7 +239,7 @@ pushing. Like push, it reads the repository with `secrets/repo_push_auth`.
 |---|---|
 | `removed` | The repository holds the same file: the staged copy and its entry are deleted. With `already gone from the folder`, only the entry was left. |
 | `would remove` | Dry run: it would be deleted. |
-| `kept` | The repository does not hold it yet, or Artifact Keeper stored it without recording it ([Large files](#large-files)): push it (or, when it is missing from the folder too, download it again). |
+| `kept` | The repository does not hold it yet, or Artifact Keeper stored it without recording it ([Large files](#large-files)): push it (or, when it is missing from the folder too, stage or record it again). |
 | `DIFFERENT` | The repository holds another file at that path, or the staged file changed since it was downloaded: kept for you to look into. |
 | `ERROR` | It could not be checked (for example 401: check `secrets/repo_push_auth`) or deleted: kept. |
 

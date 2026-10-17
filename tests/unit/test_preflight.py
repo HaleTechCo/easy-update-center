@@ -133,7 +133,7 @@ def test_load_credentials_with_github_token(tmp_path, secrets_dir):
 
 def test_load_credentials_requires_the_repository_account(tmp_path, secrets_dir):
     (secrets_dir / 'repo_password').write_text('')
-    with pytest.raises(PreflightError, match='Repository credentials missing'):
+    with pytest.raises(PreflightError, match='repository credentials missing'):
         load_credentials(make_settings(tmp_path, secrets_dir))
 
 

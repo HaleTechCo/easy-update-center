@@ -17,7 +17,7 @@ from uc.config import read_secret
 from uc.http import LONG_TIMEOUT, TIMEOUT, Http, HttpError
 
 from . import ProcureError
-from .staging import MANIFEST, Staging, in_layout
+from .staging import MANIFEST, Staging, in_layout, shown_staging
 from .upstream import SIDE_FILE_LIMIT, parse_sha1
 
 if TYPE_CHECKING:
@@ -213,7 +213,7 @@ def push(
         raise ProcureError(msg)
     if not (staging_dir / MANIFEST).is_file():
         msg = (
-            f'nothing to push: no {MANIFEST} in {staging_dir}; '
+            f'nothing to push: no {MANIFEST} in {shown_staging(staging_dir)}; '
             'stage files with uc procure stage first'
         )
         raise ProcureError(msg)
@@ -248,7 +248,7 @@ def push(
             say(
                 'TAMPERED',
                 path,
-                'changed or missing since it was downloaded; download it again',
+                'changed or missing since it was downloaded; stage or record it again',
             )
             continue
         try:

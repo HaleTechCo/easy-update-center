@@ -14,7 +14,7 @@ from . import ProcureError
 from .dependencies import resolve_dependencies
 from .plan import plan_cores, plan_poms
 from .stager import Stager
-from .staging import Staging, review_line
+from .staging import Staging, review_line, shown_staging
 from .upstream import Upstream
 
 if TYPE_CHECKING:
@@ -74,7 +74,10 @@ def download(
     )
     stager = Stager(staging, source, out)
     print(
-        f'\nStaging into {staging_dir} from {settings.procurement_source_url}:',
+        (
+            f'\nStaging into {shown_staging(staging_dir)} '
+            f'from {settings.procurement_source_url}:'
+        ),
         file=out,
     )
     try:
@@ -92,12 +95,18 @@ def download(
     _newer_cores(staging, report, versions, out)
     # manifests missing from the cache hide dependencies and required cores
     if report.unchecked or report.cores_unchecked:
+        # with fetch on, the repository itself lacked them: --fetch is no advice
+        why = (
+            'unavailable from the repository)'
+            if inspection.fetch
+            else 'unavailable); run with --fetch so dependencies and required cores '
+            'are complete'
+        )
         print(
             (
                 f'warning   {report.unchecked} plugin release(s) not checked for '
                 f'dependencies and {report.cores_unchecked} for required cores (POM or '
-                'manifest unavailable); run with --fetch so dependencies and required '
-                'cores are complete'
+                f'manifest {why}'
             ),
             file=out,
         )

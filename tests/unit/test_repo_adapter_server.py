@@ -278,7 +278,7 @@ def test_make_server_needs_repository_credentials_only_when_on(tmp_path, secrets
     make_server(off, port=0, host='127.0.0.1').server_close()
     assert not off.repo_adapter_token_file.exists()
     on = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on')
-    with pytest.raises(PreflightError, match='Repository credentials missing'):
+    with pytest.raises(PreflightError, match='repository credentials missing'):
         make_server(on, port=0, host='127.0.0.1')
     (secrets_dir / 'repo_username').write_text('uc\n')
     (secrets_dir / 'repo_password').write_text('secret\n')

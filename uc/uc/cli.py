@@ -439,7 +439,7 @@ def _doctor(args: argparse.Namespace, settings: Settings) -> int:
     print(
         json.dumps(report.to_dict(), indent=2)
         if as_json
-        else format_report(report, settings)
+        else format_report(report, settings, fetch=fetch)
     )
     out = sys.stderr if as_json else sys.stdout  # keep stdout valid JSON
     if args.record:
@@ -522,7 +522,7 @@ def _procure(args: argparse.Namespace, settings: Settings) -> int:
         versions=versions,
         since=options.since,
     )
-    print(format_report(inspection.report, settings))
+    print(format_report(inspection.report, settings, fetch=options.fetch))
     return download(
         inspection,
         settings,

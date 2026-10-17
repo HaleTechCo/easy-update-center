@@ -164,7 +164,8 @@ def test_a_listed_file_already_gone_is_forgotten_once_the_repository_holds_it(
         line(
             'kept',
             HPI,
-            'missing from the folder and not in the repository; download it again',
+            'missing from the folder and not in the repository; '
+            'stage or record it again',
         )
         in lines
     )
