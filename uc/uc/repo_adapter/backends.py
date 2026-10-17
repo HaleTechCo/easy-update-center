@@ -93,6 +93,13 @@ def parse_time(value: str) -> dt.datetime:
     return dt.datetime.fromisoformat(value)
 
 
+class RangeLimitError(BackendError):
+    """An archive needs more Range reads than RANGE_READ_LIMIT allows.
+
+    The archive itself is unusable for dating, unlike a repository that fails once.
+    """
+
+
 class RangeReader(io.RawIOBase):
     """A seekable, read-only view of a remote file.
 
@@ -143,7 +150,7 @@ class RangeReader(io.RawIOBase):
                     f'{self.url}: more than {RANGE_READ_LIMIT} bytes read through '
                     'Range requests'
                 )
-                raise BackendError(msg)
+                raise RangeLimitError(msg)
             start = index * RANGE_BLOCK
             end = min(start + RANGE_BLOCK, self.size) - 1
             response = self.http.request(
@@ -327,8 +334,10 @@ class ArtifactoryBackend:
     def archive_released(self, entry: RepoEntry) -> dt.datetime | None:
         """Read the archive date from its central directory via Range requests.
 
-        None without Range support, or when the directory cannot be read: the
-        listing then keeps the repository's date.
+        None without Range support, or when the archive's directory is malformed or
+        over its size limits: the listing then keeps the repository's date. Any other
+        BackendError (a transient answer) propagates, so the archive is skipped and
+        tried again, not remembered as undatable.
         """
         url = self.base + _quote(entry.path)
         try:
@@ -337,7 +346,7 @@ class ArtifactoryBackend:
             return archive_date(
                 open_archive(RangeReader(self.http, url, self.auth, entry.size))
             )
-        except (ArchiveError, BackendError):
+        except (ArchiveError, RangeLimitError):
             return None
 
     def facts(
