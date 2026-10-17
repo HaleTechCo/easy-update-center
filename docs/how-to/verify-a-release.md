@@ -11,8 +11,9 @@ signs:
 
 - **Each image** (`ghcr.io/haletechco/easy-update-center-uc` and `-web`), with cosign, keyless: the
   signature proves which workflow built it, with no key to manage.
-- **Each image's build provenance and its SPDX SBOM**, as GitHub attestations. The SBOM lists the
-  contents of the linux/amd64 image; both are attached to the multi-architecture image's digest.
+- **Each image's build provenance and its SPDX SBOM**, as attestations in the registry next to the
+  image, signed by the same workflow. The SBOM lists the contents of the linux/amd64 image; both are
+  attached to the multi-architecture image's digest.
 - **`SHA256SUMS`**, which lists the checksum of every file a Release carries besides itself: the two
   air-gapped bundles and the SBOM files. It is signed with cosign `sign-blob`, and the signature is
   `SHA256SUMS.sigstore.json`.
@@ -30,11 +31,9 @@ ISSUER=https://token.actions.githubusercontent.com
 
 ## The images
 
-You need [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3 or later (the
-workflow signs with a cosign that writes the newer bundle format, which older versions cannot read)
-and the [GitHub CLI](https://cli.github.com/) (`gh`), signed in with `gh auth login`, which
-`gh attestation verify` needs. While the packages are still private (until the owner makes them
-public), `docker login ghcr.io` is needed too.
+You need only [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3 or later (the
+workflow signs with a cosign that writes the newer bundle format, which older versions cannot read).
+No GitHub account and no `gh` are needed.
 
 A tag can be moved later; a digest cannot. So read each image's digest from its tag once, then
 verify and run that digest, never the tag again. For the uc image, with the release's version in
@@ -50,24 +49,20 @@ place of `<digest>`:
 ```bash
 UC=ghcr.io/haletechco/easy-update-center-uc@<digest>
 cosign verify --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$UC"
-gh attestation verify "oci://$UC" \
-  --repo HaleTechCo/easy-update-center --source-ref refs/tags/v<version> \
-  --signer-workflow HaleTechCo/easy-update-center/.github/workflows/release.yml
-gh attestation verify "oci://$UC" \
-  --repo HaleTechCo/easy-update-center --source-ref refs/tags/v<version> \
-  --signer-workflow HaleTechCo/easy-update-center/.github/workflows/release.yml \
-  --predicate-type https://spdx.dev/Document/v2.3
+cosign verify-attestation --type slsaprovenance1   --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$UC"
+cosign verify-attestation --type https://spdx.dev/Document/v2.3   --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$UC"
 ```
 
 Then the same for the web image: its digest from `ghcr.io/haletechco/easy-update-center-web:<version>`,
 and the three checks against `ghcr.io/haletechco/easy-update-center-web@<digest>`.
 
-Success: `cosign verify` prints the checks it made and the signature's JSON, and each
-`gh attestation verify` prints `Verification succeeded!` with the attestation it matched. The first
-`gh` command checks the build provenance; the second the SBOM, which you can also read from the
-Release as `easy-update-center-uc-<version>.spdx.json`.
+Success: each command exits 0. `cosign verify` prints the checks it made and the signature's JSON;
+each `cosign verify-attestation` prints a "Verification for ..." line and then the verified
+attestation's payload as JSON. The first `verify-attestation` command checks the build provenance;
+the second the SBOM, which you can also read from the Release as
+`easy-update-center-uc-<version>.spdx.json`.
 
-A failure, whatever the message, means **do not run the image**: it was not signed by this
+A non-zero exit or any error, whatever the message, means **do not run the image**: it was not signed by this
 project's workflow, or it is not the image that was signed. Check the version and the image name for
 a typo first; if they are right, report it as a security issue ([SECURITY.md](../../SECURITY.md)).
 
