@@ -151,14 +151,14 @@ run pki-rotate
 same "pki-rotate with a file at /setup/root: exits 1" 1 "${rc}"
 says "pki-rotate with a file at /setup/root: says to mount the folder" "/setup/root is a file: mount the folder that holds root-ca.key"
 
-# 7. The uc image never imports from the working directory: uc runs from /data, where other
+# 6. The uc image never imports from the working directory: uc runs from /data, where other
 # containers write, and python3 -m would put it first on sys.path.
 mkdir -p /tmp/planted/uc && printf 'raise SystemExit("planted")\n' > /tmp/planted/uc/__init__.py
 output="$(setpriv --reuid="${host%%:*}" --regid="${host##*:}" --clear-groups env HOME=/tmp sh -c 'cd /tmp/planted && uc --version' 2>&1)"
 says "PYTHONSAFEPATH: uc ignores a uc package in the working directory" "uc "
 rm -rf /tmp/planted
 
-# 8. A killed pki init can leave its work folder, with a root key in it: the next run removes it.
+# 7. A killed pki init can leave its work folder, with a root key in it: the next run removes it.
 fresh
 mkdir -p "${secrets}/.init-stale/root" && : > "${secrets}/.init-stale/root/root-ca.key"
 chown -R "${host}" "${secrets}/.init-stale"
@@ -167,14 +167,14 @@ same "stale init folder: exits 0" 0 "${rc}"
 says "stale init folder: says it removed it" "removed secrets/.init-stale, left by an interrupted pki init"
 if [[ -e "${secrets}/.init-stale" ]]; then fail "stale init folder: is gone"; else pass "stale init folder: is gone"; fi
 
-# 9. setup refuses to run as root: the files it writes would be root's.
+# 8. setup refuses to run as root: the files it writes would be root's.
 fresh
 output="$(sh "${setup}" secrets 2>&1)"
 rc=$?
 same "as root: exits 1" 1 "${rc}"
 says "as root: names UC_UID and UC_GID" "setup must not run as root: set UC_UID and UC_GID in .env"
 
-# 9b. A container that started before setup makes Docker create a directory at each missing secret
+# 8b. A container that started before setup makes Docker create a directory at each missing secret
 # path: stop, naming every one, before creating anything.
 fresh
 mkdir "${secrets}/update-center.key" "${secrets}/root-ca.crt" "${secrets}/repo_username"
@@ -186,7 +186,7 @@ done
 lacks "directories at secret paths: creates nothing" "created any missing"
 if [[ ! -e "${secrets}/repo_password" ]]; then pass "directories at secret paths: no credential file created"; else fail "directories at secret paths: repo_password was created"; fi
 
-# 9c. root-ca.crt alone (a Compose secret of uc and scheduler) is refused before any file is made.
+# 8c. root-ca.crt alone (a Compose secret of uc and scheduler) is refused before any file is made.
 fresh
 mkdir "${secrets}/root-ca.crt"
 run
@@ -194,7 +194,7 @@ same "directory at root-ca.crt: exits 1" 1 "${rc}"
 says "directory at root-ca.crt: names it" "secrets/root-ca.crt is a directory, not a file"
 if [[ ! -e "${secrets}/repo_password" ]]; then pass "directory at root-ca.crt: no credential file created"; else fail "directory at root-ca.crt: repo_password was created"; fi
 
-# 6. Usage.
+# 9. Usage.
 fresh
 expect_usage bogus
 expect_usage '' extra
