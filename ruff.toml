@@ -19,6 +19,11 @@ src = [".", "uc", "tests/support", "tests/integration", "tests/routing"]
 # limits itself to `types_or: [python, pyi]`; this keeps a bare `ruff format .` idempotent too.
 extend-exclude = ["*.md"]
 
+# tools/release.py runs on the GitHub runner's python3, which is Python 3.12 (ubuntu-24.04), so
+# its syntax and rules must stay within 3.12 even though the rest of the tree targets 3.13.
+[per-file-target-version]
+"tools/release.py" = "py312"
+
 [lint]
 select = ["ALL"]
 fixable = ["ALL"]
