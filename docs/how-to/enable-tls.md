@@ -67,12 +67,14 @@ COMPOSE_FILE=compose.yaml:compose.tls.yaml                              # online
 COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.tls.yaml       # air-gapped
 ```
 
+`PUBLIC_URL` must name the port controllers actually reach. `HTTPS_PORT` defaults to 8443, so either
+set `HTTPS_PORT=443` in `.env` and use `https://jenkins-updates.example.com`, or keep 8443 and put
+it in the URL, `https://jenkins-updates.example.com:8443`.
+
 Set `PUBLIC_URL=https://...` in `.env` before `docker compose up -d`: with the certificate and key
 set, the web container refuses to start while `PUBLIC_URL` is not `https://`. Then run
 `docker compose up -d`. Port 8443 (`HTTPS_PORT` on the host) then serves TLS with Mozilla's
 "intermediate" settings and 8080 only redirects to it.
 
-`PUBLIC_URL` must name the port controllers actually reach. `HTTPS_PORT` defaults to 8443, so either
-set `HTTPS_PORT=443` in `.env` and use `https://jenkins-updates.example.com`, or keep 8443 and put
-it in the URL, `https://jenkins-updates.example.com:8443`. Publish a new release if a release
-was already published under a different `PUBLIC_URL`: `docker compose run --rm uc generate`.
+Publish a new release if a release was already published under a different `PUBLIC_URL`:
+`docker compose run --rm uc generate`.

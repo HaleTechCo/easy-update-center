@@ -104,9 +104,14 @@ candidates:
 - [ ] The commands of [Verify a release](../how-to/verify-a-release.md) pass for the rc tag. They
       use `cosign verify-attestation` on the attestations that `actions/attest` pushed to the
       registry; that cosign reads them is expected (the same bundle format) but unproven. If it
-      finds no attestation, switch `release.yml`'s attestations to `cosign attest` (the provenance
-      predicate from `actions/attest-build-provenance/predicate`, the SBOM with `--type spdxjson`)
-      and cut the next rc.
+      finds no attestation, first check `cosign version` (3 or later) and whether
+      `cosign verify-attestation` needs `--new-bundle-format`; if it does, add the flag to the
+      commands in verify-a-release.md. If it still finds none, switch `release.yml`'s attestations
+      to `cosign attest`: `cosign attest --type slsaprovenance1 --predicate <provenance predicate>`
+      (the predicate from `actions/attest-build-provenance/predicate`) and
+      `cosign attest --type https://spdx.dev/Document/v2.3 --predicate <sbom>` (`--type spdxjson`
+      would record `https://spdx.dev/Document`, which the verify commands do not match), then cut
+      the next rc.
 - [ ] Download the rc bundle, `docker load -i images.tar`, and in a checkout of the rc tag run:
 
       ```bash

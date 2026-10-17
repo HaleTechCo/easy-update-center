@@ -49,8 +49,8 @@ place of `<digest>`:
 ```bash
 UC=ghcr.io/haletechco/easy-update-center-uc@<digest>
 cosign verify --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$UC"
-cosign verify-attestation --type slsaprovenance1   --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$UC"
-cosign verify-attestation --type https://spdx.dev/Document/v2.3   --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$UC"
+cosign verify-attestation --type slsaprovenance1 --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$UC"
+cosign verify-attestation --type https://spdx.dev/Document/v2.3 --certificate-identity "$IDENTITY" --certificate-oidc-issuer "$ISSUER" "$UC"
 ```
 
 Then the same for the web image: its digest from `ghcr.io/haletechco/easy-update-center-web:<version>`,
@@ -62,8 +62,8 @@ attestation's payload as JSON. The first `verify-attestation` command checks the
 the second the SBOM, which you can also read from the Release as
 `easy-update-center-uc-<version>.spdx.json`.
 
-A non-zero exit or any error, whatever the message, means **do not run the image**: it was not signed by this
-project's workflow, or it is not the image that was signed. Check the version and the image name for
+A non-zero exit or any error, whatever the message, means **do not run the image**: it was not
+signed by this project's workflow, or it is not the image that was signed. Check the version and the image name for
 a typo first; if they are right, report it as a security issue ([SECURITY.md](../../SECURITY.md)).
 
 ## Run the digests you verified
