@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 
 from . import aql, http, status
 from .config import PUBLIC_RELEASES_URL
-from .errors import UcError
+from .errors import UcError, UsageError
 from .pom import safe_root
 from .settings import CORE_VERSION
 from .timeutil import iso
@@ -449,7 +449,7 @@ def check_since(since: str | None) -> None:
     """Refuse a --since that is not a Jenkins version."""
     if since is not None and not CORE_VERSION.match(since):
         msg = f'--since takes a Jenkins version such as 2.462.1 (got {since!r})'
-        raise DoctorError(msg)
+        raise UsageError(msg)
 
 
 def find_missing_cores(

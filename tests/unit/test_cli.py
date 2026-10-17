@@ -187,7 +187,7 @@ def test_procure_stage_refuses_a_bad_war_before_listing(
 ):
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
-    assert main(['procure', 'stage', '--war', '2.479.x']) == 1
+    assert main(['procure', 'stage', '--war', '2.479.x']) == 2
     assert (
         '--war takes a Jenkins version such as 2.479.1, or required'
         in capsys.readouterr().err
@@ -211,7 +211,7 @@ def test_procure_stage_refuses_a_bad_since_before_listing(
                 str(tmp_path / 'stage'),
             ]
         )
-        == 1
+        == 2
     )
     assert '--since takes a Jenkins version' in capsys.readouterr().err
     assert not (tmp_path / 'stage').exists()
@@ -221,8 +221,17 @@ def test_doctor_refuses_a_bad_since_before_listing(
     monkeypatch, tmp_path, secrets_dir, capsys
 ):
     use_env(monkeypatch, tmp_path, secrets_dir)
-    assert main(['doctor', '--since', 'two']) == 1
+    assert main(['doctor', '--since', 'two']) == 2
     assert '--since takes a Jenkins version' in capsys.readouterr().err
+
+
+def test_a_version_with_a_trailing_newline_is_refused_with_exit_2(
+    monkeypatch, tmp_path, secrets_dir
+):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
+    assert main(['doctor', '--since', '2.462.1\n']) == 2
+    assert main(['procure', 'stage', '--war', '2.462.1\n']) == 2
 
 
 def test_clean_dry_run_on_an_empty_folder(monkeypatch, tmp_path, secrets_dir, capsys):

@@ -141,9 +141,9 @@ Air-gapped, it is refused unless `PROCUREMENT_SOURCE_URL` names a copy the updat
 | `--staging DIR` | The staging folder (default `/procurement`). |
 
 Exits 0 when everything planned is staged; 1 when a file could not be staged, or the run is refused
-(`uc: error: ...`: air-gapped without `PROCUREMENT_SOURCE_URL`, a `--war` that is neither a version
-nor `required`); 2 when nothing is selected
-(`uc: error: nothing to stage: choose --poms, --dependencies or --war VERSION|required`). Whenever
+(`uc: error: ...`: air-gapped without `PROCUREMENT_SOURCE_URL`); 2 when nothing is selected
+(`uc: error: nothing to stage: choose --poms, --dependencies or --war VERSION|required`) or a
+`--war` or `--since` is not a Jenkins version (and, for `--war`, not `required`). Whenever
 `procurement.json` lists files, it ends with
 `next: review ./procurement (procurement.json lists N files), then uc procure push`.
 

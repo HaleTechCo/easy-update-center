@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from uc.aql import WAR_ARTIFACT, WAR_GROUP, Gav
 from uc.doctor import CORE_VERSION
+from uc.errors import UsageError
 
 from . import ProcureError
 from .stager import Wanted
@@ -123,7 +124,7 @@ def check_war_args(values: Sequence[str]) -> None:
                 '--war takes a Jenkins version such as 2.479.1, or required '
                 f'(got {value!r})'
             )
-            raise ProcureError(msg)
+            raise UsageError(msg)
 
 
 @dataclass(frozen=True)

@@ -21,7 +21,6 @@ from uc.aql import Gav, RepoFile, classify
 from uc.doctor import (
     RECORD_LOCK_FILE,
     ArtifactSource,
-    DoctorError,
     DoctorReport,
     analyze,
     attach_adapter_report,
@@ -38,6 +37,7 @@ from uc.doctor import (
     required_cores,
     run_doctor,
 )
+from uc.errors import UsageError
 from uc.model import Credentials
 from uc.status import read_status
 from uc.versions import VersionTool
@@ -469,9 +469,11 @@ def test_without_a_core_or_since_there_is_no_floor():
     assert find_missing_cores(REQUIRED, [], None, versions()) == (None, [], 0, None)
 
 
-@pytest.mark.parametrize('since', ['2.x', 'latest', '2.462.1\n2.479.1', ''])
+@pytest.mark.parametrize(
+    'since', ['2.x', 'latest', '2.462.1\n2.479.1', '2.462.1\n', '']
+)
 def test_since_must_be_a_jenkins_version(since):
-    with pytest.raises(DoctorError, match='--since takes a Jenkins version'):
+    with pytest.raises(UsageError, match='--since takes a Jenkins version'):
         check_since(since)
 
 

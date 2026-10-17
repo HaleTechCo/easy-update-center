@@ -40,7 +40,7 @@ ACCESS_MODES = ('redirect', 'proxy')
 RESOURCE_SOURCES = ('github', 'url', 'bundled')
 UPSTREAM_POPULARITY_URL = 'https://raw.githubusercontent.com/jenkins-infra/infra-statistics/gh-pages/plugin-installation-trend/latestNumbers.json'
 UPSTREAM_TOOL_INSTALLERS_URL = 'https://updates.jenkins.io/updates/'
-CORE_VERSION = re.compile(r'^[0-9]+\.[0-9]+(\.[0-9]+)?$')
+CORE_VERSION = re.compile(r'^[0-9]+\.[0-9]+(\.[0-9]+)?\Z')
 """A Jenkins core version such as 2.462 or 2.462.1.
 
 The pattern of the `version` setting type, DOCTOR_SINCE and uc doctor's version
