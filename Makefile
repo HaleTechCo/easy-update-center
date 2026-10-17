@@ -144,7 +144,8 @@ it-online: build ## Run the online integration test (needs JENKINS_COMMUNITY_USE
 it-full: ## Run the online integration test on the full catalog; takes hours
 	$(MAKE) it-online UC_EXTRA_ARGS= JAVA_TOOL_OPTIONS=-Xmx6g
 
-UC2_VERSION ?= 3.18.4
+# Read from the Dockerfile's pin, so upgrading uc/Dockerfile is the only edit needed.
+UC2_VERSION ?= $(shell sed -n 's/^ARG UC2_VERSION=//p' uc/Dockerfile)
 UPSTREAM_FILES = site/generate.sh site/generate-htaccess.sh site/test/test.sh \
   src/main/java/io/jenkins/update_center/Main.java \
   src/main/java/io/jenkins/update_center/DirectoryTreeBuilder.java \

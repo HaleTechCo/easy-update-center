@@ -24,7 +24,7 @@ listed below, and whether the patches still apply. Review each diff:
 | Upstream change | What to check |
 |---|---|
 | `site/generate.sh` | The argument lines in `uc/uc/args.py` ([Step 6](../architecture/generation-pipeline.md#step-6-arguments-file)) and the layout in `uc/uc/layout.py` ([Step 8](../architecture/generation-pipeline.md#step-8-layout-and-download-map)). |
-| `site/generate-htaccess.sh` | `uc/uc/htaccess.py`: the five download rules and the partial-tier strings must still match exactly; the run fails loudly if not ([Step 5](../architecture/generation-pipeline.md#step-5-htaccess)). |
+| `site/generate-htaccess.sh` | `uc/uc/htaccess.py`: the five download rules and the partial-tier strings must still match exactly; the run fails loudly if not ([Step 5](../architecture/generation-pipeline.md#step-5-htaccess)). `uc/templates/htaccess-static` holds a copy of this script's static rules, and its line 3 names the upstream version they came from; update both. |
 | `site/test/test.sh` | Port new expectations into `tests/routing/test_upstream_rules.py`. |
 | `Main.java`, `DirectoryTreeBuilder.java`, `MetadataWriter.java`, `Signer.java` | Removed or renamed options used in `uc/uc/args.py`. `--connection-check-url` is the one upstream's own script does not use. |
 | `MavenArtifact.java` | `DOWNLOADS_ROOT_URL` still controls download URLs. |
