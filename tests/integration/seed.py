@@ -39,6 +39,9 @@ HTML_404 = (
 # LTS releases from early 2024: always more than 400 days old by the time this test
 # runs.
 OLD_CORES = ('2.426.3', '2.440.3')
+# Every synthetic plugin's manifest carries this DOS time (even seconds), which the
+# release-date test reads back as UTC.
+ARCHIVE_DATE = (2024, 3, 5, 12, 30, 40)
 PROCURE_CORE = '2.999.1'  # a core only the procurement test's upstream has
 
 
@@ -82,7 +85,7 @@ def synthetic_hpi(
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w') as archive:
         archive.writestr(
-            'META-INF/MANIFEST.MF',
+            zipfile.ZipInfo('META-INF/MANIFEST.MF', date_time=ARCHIVE_DATE),
             (
                 'Manifest-Version: 1.0\r\nGroup-Id: io.jenkins.uctest\r\n'
                 f'Artifact-Id: {artifact}\r\nShort-Name: {artifact}\r\n'
@@ -327,6 +330,15 @@ def repo(args: argparse.Namespace) -> None:
             'hpi',
             data=synthetic_hpi(plugin_id, core, embed_pom=True),
         )
+    # Needs the weekly core: the routing test expects it only in the weekly tier.
+    put(
+        root,
+        'io.jenkins.uctest',
+        'uc-test-needs-weekly',
+        '1.0',
+        'hpi',
+        data=synthetic_hpi('uc-test-needs-weekly', args.weekly, embed_pom=True),
+    )
     put(
         root,
         'io.jenkins.uctest',
@@ -386,6 +398,7 @@ def main() -> None:
     build.add_argument('--repository', required=True)
     build.add_argument('--cores', required=True)
     build.add_argument('--jenkins-version', required=True)
+    build.add_argument('--weekly', required=True)
     build.add_argument('--top-plugin', required=True)
     args = parser.parse_args()
     versions() if args.command == 'versions' else repo(args)

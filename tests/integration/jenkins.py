@@ -11,6 +11,9 @@ import time
 import urllib.parse
 import urllib.request
 
+READY_TIMEOUT = 600
+SCRIPT_TIMEOUT = 900
+
 
 class Jenkins:
     """One Jenkins controller, reached over HTTP with a cookie-keeping opener."""
@@ -22,12 +25,12 @@ class Jenkins:
             urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
         )
 
-    def wait_ready(self, timeout: float = 600) -> None:
+    def wait_ready(self) -> None:
         """Poll /login until it answers 200.
 
-        Raise TimeoutError after timeout seconds.
+        Raise TimeoutError after READY_TIMEOUT seconds.
         """
-        deadline = time.monotonic() + timeout
+        deadline = time.monotonic() + READY_TIMEOUT
         while True:
             try:
                 with self.opener.open(self.base + '/login', timeout=10) as response:
@@ -45,7 +48,7 @@ class Jenkins:
         with self.opener.open(self.base + '/login', timeout=10) as response:
             return response.headers['X-Jenkins']
 
-    def script(self, groovy: str, timeout: float = 900) -> str:
+    def script(self, groovy: str) -> str:
         """Run groovy in the script console and return its output.
 
         It sends a fresh CSRF crumb.
@@ -59,5 +62,5 @@ class Jenkins:
             data=urllib.parse.urlencode({'script': groovy}).encode(),
             headers={crumb['crumbRequestField']: crumb['crumb']},
         )
-        with self.opener.open(request, timeout=timeout) as response:
+        with self.opener.open(request, timeout=SCRIPT_TIMEOUT) as response:
             return response.read().decode()
