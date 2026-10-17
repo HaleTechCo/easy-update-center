@@ -19,8 +19,12 @@ Easy Update Center for Jenkins @VERSION@: air-gapped bundle for linux/@ARCH@
      cd easy-update-center-@VERSION@
      cp .env.airgapped.example .env
 
-3. In .env, set PUBLIC_URL, REPO_URL, REPO_KEY and DOWNLOAD_BACKEND_URL, and uncomment COMPOSE_FILE.
-   compose.yaml already names the images you loaded.
+3. Configure .env as docs/getting-started/airgapped.md step 3 ("Configure") describes. At least:
+   UC_UID and UC_GID on Linux (id -u, id -g), PUBLIC_URL, REPO_TYPE (artifactory by default;
+   artifact-keeper for Artifact Keeper), REPO_URL, REPO_KEY, DOWNLOAD_BACKEND_URL, and uncomment
+   COMPOSE_FILE. compose.yaml already names the images you loaded. To keep the root CA's key off
+   this host from the start, create the PKI on an offline machine before step 4
+   (docs/how-to/rotate-signing-certificate.md). Run no other docker compose command before setup.
 
 4. Run docker compose run --rm setup, then continue with docs/getting-started/airgapped.md
    from "Add credentials".

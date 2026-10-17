@@ -117,8 +117,6 @@ that up now, before step 6: [Repository behind a private CA](#repository-behind-
 
 Every setting: [Configuration reference](../reference/configuration.md).
 
-Once the images are loaded or built, `docker compose run --rm --no-deps uc config` shows what each setting ends up as.
-
 ## 4. Add credentials
 
 `docker compose run --rm setup` does first-time setup: it creates the credential files, readable by
@@ -140,6 +138,10 @@ What each file holds, for each repository type: [Secrets reference](../reference
 
 `setup` is safe to repeat: it creates only what is missing, and never replaces the keys or a
 credential file. Each step: [The setup service](../reference/cli.md#the-setup-service).
+
+Run `uc` only after setup: Compose mounts the files in `secrets/`, and a container that starts before
+they exist makes Docker create a directory at each path, which setup then refuses.
+Now `docker compose run --rm --no-deps uc config` shows what each setting ends up as.
 
 ## 5. Move the root key offline
 

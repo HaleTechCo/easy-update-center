@@ -174,6 +174,16 @@ rc=$?
 same "as root: exits 1" 1 "${rc}"
 says "as root: names UC_UID and UC_GID" "setup must not run as root: set UC_UID and UC_GID in .env"
 
+# 9b. A container that started before setup makes Docker create a directory at each missing secret
+# path: stop, naming the first one, before creating anything.
+fresh
+mkdir "${secrets}/update-center.key" "${secrets}/repo_username"
+run
+same "directories at secret paths: exits 1" 1 "${rc}"
+says "directories at secret paths: names the key" "secrets/update-center.key is a directory, not a file: Docker creates one when a container starts before setup; remove it and run setup again"
+lacks "directories at secret paths: creates nothing" "created any missing"
+if [[ ! -e "${secrets}/repo_password" ]]; then pass "directories at secret paths: no credential file created"; else fail "directories at secret paths: repo_password was created"; fi
+
 # 6. Usage.
 fresh
 expect_usage bogus
