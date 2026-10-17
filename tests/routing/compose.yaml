@@ -69,15 +69,6 @@ services:
     volumes:
       - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: artifactory}}
 
-  web-keeper:
-    <<: *web
-    environment:
-      PUBLIC_URL: "http://web-keeper:8080"
-      DOWNLOAD_BACKEND: artifactory
-      DOWNLOAD_BACKEND_URL: "http://keeper.internal/maven/jenkins"
-    volumes:
-      - {type: volume, source: fixtures, target: /data, read_only: true, volume: {subpath: artifactory}}
-
   web-proxy:
     <<: *web
     environment:
@@ -144,7 +135,6 @@ services:
       web-proxy-tls: {condition: service_healthy}
       web-tls: {condition: service_healthy}
       web-artifactory: {condition: service_healthy}
-      web-keeper: {condition: service_healthy}
       web-proxy: {condition: service_healthy}
       web-weekly: {condition: service_healthy}
       web-stable: {condition: service_healthy}

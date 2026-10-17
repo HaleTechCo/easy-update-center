@@ -226,6 +226,13 @@ def main(root: Path) -> None:
         root, 'stable', 'http://web-stable:8080', Tiers((), ('2.528.1', '2.528.3'))
     )
     scenario(root, 'zero', 'http://web-zero:8080', Tiers())
+    # A file at a path the download map does not list: the 404 rule must win over it.
+    for release_id in (R1, R2):
+        stray = (
+            root / 'artifactory/releases' / release_id / 'download/plugins/git/9.9.9'
+        )
+        stray.mkdir(parents=True)
+        (stray / 'git.hpi').write_text('not a plugin')
     for path in root.rglob('*'):
         if not path.is_symlink():
             path.chmod(0o755 if path.is_dir() else 0o644)
