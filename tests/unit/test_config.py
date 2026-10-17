@@ -256,6 +256,12 @@ def test_read_secret(tmp_path):
     assert read_secret(tmp_path / 'value') == 's3cret'
 
 
+def test_a_secret_that_cannot_be_read_is_a_config_error(tmp_path):
+    (tmp_path / 'repo_password').mkdir()
+    with pytest.raises(ConfigError, match=r'repo_password cannot be read: .+'):
+        read_secret(tmp_path / 'repo_password')
+
+
 def test_procurement_defaults():
     s = load_settings(AIRGAPPED)
     assert s.procurement_source_url == 'https://repo.jenkins-ci.org/releases/'

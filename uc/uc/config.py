@@ -739,6 +739,9 @@ def read_secret(path: Path) -> str | None:
         value = path.read_text(encoding='utf-8').strip()
     except FileNotFoundError:
         return None
+    except OSError as exc:  # a directory, or a file the uc user may not read
+        msg = f'{path} cannot be read: {exc.strerror}'
+        raise ConfigError(msg) from exc
     return value or None
 
 
