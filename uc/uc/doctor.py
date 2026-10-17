@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     from .model import Credentials
     from .versions import VersionTool
 
-HTTP_NOT_FOUND = 404
 SMALL_FILE_LIMIT = 1024 * 1024
 """The largest POM or MANIFEST.MF doctor fetches, as the repo-adapter caps them."""
 REPORT_FILE = Path('doctor') / 'report.json'
@@ -120,7 +119,7 @@ class DoctorReport:
             if self.required_cores is not None
             else None,
             'repo_adapter': (
-                {name: len(self._adapter(name)) for name in ADAPTER_SECTIONS}
+                {name: len(self._adapter(name)) for name in _report_lists()}
                 if self.repo_adapter is not None
                 else None
             ),
@@ -131,14 +130,11 @@ class DoctorReport:
         return asdict(self)
 
 
-ADAPTER_SECTIONS = (
-    'derived_poms',
-    'replaced_poms',
-    'needs_pom',
-    'misplaced',
-    'skipped',
-    'dates_from_repository',
-)
+def _report_lists() -> tuple[str, ...]:
+    # circular: repo_adapter.archive imports parse_manifest from this module
+    from .repo_adapter.listing import REPORT_LISTS  # noqa: PLC0415
+
+    return REPORT_LISTS
 
 
 # the keys of each section that uc doctor and uc procure read, as strings
@@ -171,14 +167,13 @@ def attach_adapter_report(report: DoctorReport, settings: Settings) -> DoctorRep
     Only when the adapter is on.
     """
     if settings.repo_adapter:
-        # circular: repo_adapter.archive imports parse_manifest from this module
         from .repo_adapter.listing import read_report  # noqa: PLC0415
 
         data = read_report(settings.repo_adapter_report_file) or {}
         # the volume is the adapter's to write: a malformed section counts as missing
         report.repo_adapter = {
             name: data[name] if _well_formed(name, data.get(name)) else []
-            for name in ADAPTER_SECTIONS
+            for name in _report_lists()
         }
     return report
 
@@ -289,7 +284,7 @@ class ArtifactSource:
             )
         except http.HttpError as exc:
             raise DoctorError(str(exc)) from exc
-        if response.status == HTTP_NOT_FOUND:
+        if response.status == HTTPStatus.NOT_FOUND:
             return None
         if response.status != HTTPStatus.OK:
             msg = f'GET {url} failed with HTTP {response.status}'

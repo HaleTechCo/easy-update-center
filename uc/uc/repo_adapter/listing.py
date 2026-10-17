@@ -27,7 +27,8 @@ if TYPE_CHECKING:
 
     from .cache import Cache
 
-ARCHIVE_EXTENSIONS = ('hpi', 'jpi', 'war')
+# the archives whose POM and dates the adapter reads, wars included
+POM_ARCHIVE_EXTENSIONS = ('hpi', 'jpi', 'war')
 REPORT_LISTS = (
     'derived_poms',
     'replaced_poms',
@@ -182,7 +183,8 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
     consumed: set[str] = set()
 
     for entry in sorted(
-        (e for e in entries if e.extension in ARCHIVE_EXTENSIONS), key=lambda e: e.path
+        (e for e in entries if e.extension in POM_ARCHIVE_EXTENSIONS),
+        key=lambda e: e.path,
     ):
         report.archives += 1
         gav = to_gav(RepoFile(entry.directory, entry.name))

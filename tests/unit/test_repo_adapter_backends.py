@@ -434,9 +434,3 @@ def test_an_artifact_keeper_download_that_differs_from_its_listing_is_refused(tm
         pytest.raises(HttpError, match='does not match'),
     ):
         keeper(stub, tmp_path).facts(listed, GIT, plugin=True)
-
-
-def test_the_backends_sha1_pattern_refuses_a_trailing_newline():
-    pattern = backends._SHA1  # noqa: SLF001
-    assert pattern.match('a' * 40)
-    assert not pattern.match('a' * 40 + '\n')

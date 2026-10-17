@@ -9,7 +9,6 @@ import base64
 import datetime as dt
 import io
 import json
-import re
 import tempfile
 import urllib.error
 import urllib.parse
@@ -19,7 +18,14 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Protocol, override
 
 from uc.aql import AQL_TEMPLATE, LISTING_LIMIT
-from uc.http import LONG_TIMEOUT, Http, HttpError
+from uc.http import (
+    LONG_TIMEOUT,
+    SHA1,
+    SIDE_FILE_LIMIT,
+    Http,
+    HttpError,
+    parse_sha1_file,
+)
 
 from .archive import (
     CENTRAL_DIRECTORY_LIMIT,
@@ -42,10 +48,7 @@ if TYPE_CHECKING:
 RANGE_BLOCK = 256 * 1024
 RANGE_READ_LIMIT = CENTRAL_DIRECTORY_LIMIT + 1024 * 1024
 """The most one RangeReader fetches: a central directory, its end records, a margin."""
-SHA1_FILE_LIMIT = 4096
-"""A .sha1 file: 40 hex characters, sometimes followed by a file name."""
 LISTED_EXTENSIONS = ('.hpi', '.jpi', '.war', '.pom')
-_SHA1 = re.compile(r'^[0-9a-f]{40}\Z')
 
 
 class BackendError(HttpError):
@@ -326,7 +329,7 @@ class ArtifactoryBackend:
 
         BackendError when it has no valid one.
         """
-        if not entry.sha1 or not _SHA1.match(entry.sha1):
+        if not entry.sha1 or not SHA1.match(entry.sha1):
             msg = f'no sha1 for {entry.path} in the AQL listing'
             raise BackendError(msg)
         return entry.sha1
@@ -473,9 +476,8 @@ class ArtifactKeeperBackend:
 
         BackendError when it is missing or malformed.
         """
-        data = self.get(entry.path + '.sha1', SHA1_FILE_LIMIT)
-        value = (data or b'').decode('ascii', 'replace').strip().split(' ')[0].lower()
-        if not _SHA1.match(value):
+        value = parse_sha1_file(self.get(entry.path + '.sha1', SIDE_FILE_LIMIT) or b'')
+        if value is None:
             msg = f'no valid sha1 file for {entry.path}'
             raise BackendError(msg)
         return value

@@ -10,7 +10,7 @@ import pytest
 
 from httpstub import StubServer
 from uc import http
-from uc.http import HttpError, get
+from uc.http import SHA1, HttpError, get, parse_sha1_file
 
 
 def test_get_follows_redirects():
@@ -79,3 +79,21 @@ def test_get_turns_a_non_http_answer_into_an_http_error():
     finally:
         thread.join()
         server.close()
+
+
+def test_the_sha1_pattern_refuses_a_trailing_newline():
+    assert SHA1.match('a' * 40)
+    assert not SHA1.match('a' * 40 + '\n')
+
+
+@pytest.mark.parametrize(
+    ('body', 'expected'),
+    [
+        (b'A' * 40, 'a' * 40),
+        (b'a' * 40 + b'  git.hpi\n', 'a' * 40),
+        (b'', None),
+        (b'<html>not found</html>', None),
+    ],
+)
+def test_parse_sha1_file(body, expected):
+    assert parse_sha1_file(body) == expected

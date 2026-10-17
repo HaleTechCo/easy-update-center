@@ -20,6 +20,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -52,7 +53,6 @@ Health follows the server, not the settings.
 """
 HEALTH_TIMEOUT = 3
 """Seconds uc repo-adapter --healthcheck waits for the adapter to answer."""
-HTTP_OK = 200
 MAX_REQUESTS = 32
 """Requests handled at once; more get 503 straight away instead of a thread each."""
 REQUEST_TIMEOUT = 120
@@ -487,7 +487,7 @@ def healthcheck(port: int | None = None) -> None:
         ) or type(exc).__name__
         msg = f'repo-adapter is not healthy on port {port}: {reason}'
         raise UnhealthyError(msg) from None
-    if status != HTTP_OK:
+    if status != HTTPStatus.OK:
         msg = f'repo-adapter is not healthy on port {port}: HTTP {status}'
         raise UnhealthyError(msg)
 

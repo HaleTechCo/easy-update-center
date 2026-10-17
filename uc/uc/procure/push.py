@@ -14,11 +14,11 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, TextIO
 
 from uc.config import read_secret
-from uc.http import LONG_TIMEOUT, TIMEOUT, Http, HttpError
+from uc.http import LONG_TIMEOUT, SIDE_FILE_LIMIT, TIMEOUT, Http, HttpError
 
 from . import ProcureError
 from .staging import MANIFEST, Staging, in_layout, shown_staging
-from .upstream import SIDE_FILE_LIMIT, parse_sha1
+from .upstream import parse_sha1
 
 if TYPE_CHECKING:
     from pathlib import Path

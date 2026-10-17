@@ -41,11 +41,12 @@ INTERNAL = {
     'REPO_ADAPTER_DIR': '',
     'UC_ALLOW_ROOT': '',
 }
-"""Container paths that the unit and integration tests point at their own.
+"""Environment variables that are not settings, with their defaults.
 
-Read from the environment, but not settings (not documented, not in uc config or the
-example files). An empty REPO_ADAPTER_DIR means repo-adapter/ in the data directory.
-UC_ALLOW_ROOT=1 lets uc run as root: the integration stacks run it so.
+The container paths and the adapter's URL are what the unit and integration tests point
+at their own; they are not documented, not in uc config or the example files. An empty
+REPO_ADAPTER_DIR means repo-adapter/ in the data directory. UC_ALLOW_ROOT=1 lets uc run
+as root: the integration stacks run it so.
 """
 _REPOSITORY_RE = re.compile(r'^[A-Za-z0-9._-]+$')
 # the scheme split_userinfo keeps in front of the user info uc config masks

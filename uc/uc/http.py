@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import http.client
+import re
 import ssl
 import urllib.error
 import urllib.request
@@ -26,6 +27,19 @@ USER_AGENT = f'easy-update-center/{uc_version()} (+https://github.com/HaleTechCo
 Getter = Callable[..., bytes]
 TIMEOUT = 60
 LONG_TIMEOUT = 600
+SIDE_FILE_LIMIT = 4096
+"""The most of a .sha1 file read: 40 hex characters, sometimes followed by a name."""
+SHA1 = re.compile(r'^[0-9a-f]{40}\Z')
+
+
+def parse_sha1_file(body: bytes) -> str | None:
+    """Return the digest a .sha1 file holds, lower-cased; None when it holds none.
+
+    '<digest>' or '<digest>  <name>', any case.
+    """
+    words = body.decode('ascii', 'replace').split()
+    value = words[0].lower() if words else ''
+    return value if SHA1.match(value) else None
 
 
 class HttpError(UcError):

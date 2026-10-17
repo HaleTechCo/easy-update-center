@@ -8,12 +8,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from uc.aql import RepoFile, to_gav
+from uc.http import SHA1
 
 from . import ProcureError
 
@@ -21,7 +21,6 @@ MANIFEST = 'procurement.json'
 FORMAT = 1
 KINDS = ('pom', 'dependency', 'core', 'local')
 EXTENSIONS = ('hpi', 'jpi', 'war', 'pom')
-SHA1 = re.compile(r'^[0-9a-f]{40}\Z')
 DEFAULT_STAGING = Path('/procurement')
 """The default staging folder.
 

@@ -38,7 +38,7 @@ FALLBACK_GROUPS = (
     'org.jenkinsci.plugins',
     'io.jenkins.blueocean',
 )
-ARCHIVE_EXTENSIONS = ('hpi', 'jpi')
+PLUGIN_EXTENSIONS = ('hpi', 'jpi')
 
 
 @dataclass(frozen=True)
@@ -134,7 +134,7 @@ def _staged_plugins(stager: Stager) -> dict[str, Gav]:
         if (
             staged.kind == 'dependency'
             and gav is not None
-            and gav.extension in ARCHIVE_EXTENSIONS
+            and gav.extension in PLUGIN_EXTENSIONS
         ):
             result[gav.artifact_id] = gav
     return result
@@ -244,7 +244,7 @@ def _locate(need: Need, stager: Stager) -> Gav | None:
     groups += [group for group in FALLBACK_GROUPS if group != need.group]
     label = f'{need.artifact} {need.version}'
     for group in groups:
-        for extension in ARCHIVE_EXTENSIONS:
+        for extension in PLUGIN_EXTENSIONS:
             gav = Gav(group, need.artifact, need.version, extension)
             try:
                 found = stager.upstream.sha1(gav.maven_path) is not None
