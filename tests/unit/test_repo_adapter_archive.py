@@ -10,7 +10,7 @@ import zipfile
 
 import pytest
 
-from archivefixture import make_hpi, pom_xml
+from archivefixture import extended_timestamp, make_hpi, pom_xml
 from uc.repo_adapter.archive import (
     CENTRAL_DIRECTORY_LIMIT,
     ArchiveError,
@@ -232,3 +232,107 @@ def test_manifest_coordinates_that_could_leave_their_path_are_ignored(
         f'Plugin-Version: {version}\r\n\r\n'
     ).encode()
     assert manifest_coordinates(manifest) is None
+
+
+def _end_record(*, entries=0, size=0):
+    return b'PK\x05\x06' + struct.pack('<HHHHIIH', 0, 0, entries, entries, size, 0, 0)
+
+
+def _zip64_locator(record_offset):
+    return b'PK\x06\x07' + struct.pack('<IQI', 0, record_offset, 1)
+
+
+def _with_end_record_fields(**fields):
+    """Return a plain zip whose end record has its entry count or size replaced."""
+    data = bytearray(zip_of({'a.txt': b'x'}))
+    eocd = data.rfind(b'PK\x05\x06')
+    if 'entries' in fields:
+        data[eocd + 10 : eocd + 12] = struct.pack('<H', fields['entries'])
+    if 'size' in fields:
+        data[eocd + 12 : eocd + 16] = struct.pack('<I', fields['size'])
+    return bytes(data)
+
+
+def _bad_central_directory():
+    data = bytearray(zip_of({'a.txt': b'x'}))
+    central = data.find(b'PK\x01\x02')
+    data[central : central + 4] = b'XXXX'
+    return bytes(data)
+
+
+_PLAIN = zip_of({'a.txt': b'hello', 'b.txt': b'world'})
+_PLAIN_SIZE = central_directory_size(io.BytesIO(_PLAIN))
+_NO_LOCATOR = 'zip64 archive without a zip64 end record locator'
+_NO_RECORD = 'zip64 end of central directory record not found'
+
+
+@pytest.mark.parametrize(
+    ('data', 'size', 'error'),
+    [
+        pytest.param(_end_record(), 0, None, id='an empty zip: no negative seek'),
+        pytest.param(
+            _zip64_locator(0) + _end_record(entries=0xFFFF, size=0xFFFFFFFF),
+            None,
+            _NO_RECORD,
+            id='a locator at the start: no record before it',
+        ),
+        pytest.param(
+            b'junk' * 25 + as_zip64(_PLAIN),
+            _PLAIN_SIZE,
+            None,
+            id='a locator pointing at no record: the one before it counts',
+        ),
+        pytest.param(
+            _with_end_record_fields(size=0xFFFFFFFF),
+            None,
+            _NO_LOCATOR,
+            id='the size marker without a locator',
+        ),
+        pytest.param(
+            _with_end_record_fields(entries=0xFFFF),
+            None,
+            _NO_LOCATOR,
+            id='the count marker without a locator',
+        ),
+        pytest.param(
+            b'\x00' * 100
+            + _zip64_locator(0)
+            + _end_record(entries=0xFFFF, size=0xFFFFFFFF),
+            None,
+            _NO_RECORD,
+            id='a locator and no zip64 record at either offset',
+        ),
+        pytest.param(
+            _bad_central_directory(),
+            None,
+            'unreadable archive: Bad magic number for central directory',
+            id='a valid end record over a bad central directory',
+        ),
+    ],
+)
+def test_crafted_zips_are_sized_or_refused(data, size, error):
+    if error is not None:
+        with pytest.raises(ArchiveError, match=error):
+            open_archive(io.BytesIO(data))
+    else:
+        assert central_directory_size(io.BytesIO(data)) == size
+
+
+def test_a_manifest_date_is_found_after_other_extra_fields():
+    stamp = int(dt.datetime(2023, 11, 18, 20, 14, tzinfo=UTC).timestamp())
+    info = zipfile.ZipInfo('META-INF/MANIFEST.MF', date_time=(2013, 2, 25, 16, 44, 0))
+    # Info-ZIP's 'ux' (uid/gid) block comes first, as in archives made on Unix
+    info.extra = struct.pack('<HHBBIBI', 0x7875, 11, 1, 4, 1000, 4, 1000)
+    info.extra += extended_timestamp(stamp)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w') as archive:
+        archive.writestr(info, b'Manifest-Version: 1.0\r\n')
+    opened = open_archive(io.BytesIO(buffer.getvalue()))
+    assert archive_date(opened) == dt.datetime(2023, 11, 18, 20, 14, tzinfo=UTC)
+
+
+def test_a_manifest_with_the_zero_dos_date_has_no_date():
+    data = bytearray(zip_of({'META-INF/MANIFEST.MF': b'Manifest-Version: 1.0\r\n'}))
+    central = data.find(b'PK\x01\x02')
+    data[central + 12 : central + 16] = b'\x00' * 4  # DOS time and date 0: 1980-00-00
+    assert archive_date(open_archive(io.BytesIO(bytes(data)))) is None
