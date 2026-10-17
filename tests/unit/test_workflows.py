@@ -835,6 +835,12 @@ def test_publish_refuses_a_draft_without_exactly_the_six_assets(tmp_path, assets
     assert '::error::the draft of v0.1.0 has the assets [' in result.stdout
 
 
+def test_publish_refuses_a_release_that_is_no_longer_a_draft(tmp_path):
+    result = run_draft_check(tmp_path, [[release('v0.1.0', ASSETS, draft=False)]])
+    assert result.returncode == 1
+    assert '::error::v0.1.0 is already published' in result.stdout
+
+
 def test_publish_publishes_the_draft(tmp_path):
     stubs = stub(tmp_path, 'gh', RELEASE_GH_STUB)
     env = {

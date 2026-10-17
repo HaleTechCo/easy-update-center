@@ -193,6 +193,7 @@ jobs:
     needs: [lint, images, test, it-airgapped]
     if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - name: Every job succeeded
         env:
