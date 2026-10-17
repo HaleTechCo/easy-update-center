@@ -148,6 +148,31 @@ def test_a_fetching_run_on_unchecked_releases_blames_the_repository(
     )
 
 
+def test_a_war_the_repository_already_holds_is_noted_and_not_staged(
+    releases, tmp_path, secrets_dir
+):
+    _, url = releases
+    out = io.StringIO()
+    settings = make_settings(tmp_path, secrets_dir, PROCUREMENT_SOURCE_URL=url)
+    code = download(
+        inspection(DoctorReport(cores=['2.541.3'])),
+        settings,
+        poms=False,
+        dependencies=False,
+        wars=['2.541.3'],
+        staging_dir=tmp_path / 'stage',
+        versions=versions(),
+        out=out,
+    )
+    assert code == 0
+    lines = out.getvalue().splitlines()
+    assert 'skipped   jenkins-war 2.541.3  (already in the repository)' in lines
+    assert lines[-1] == '0 staged, 0 kept, 0 problem(s)'
+    assert (
+        json.loads((tmp_path / 'stage' / 'procurement.json').read_text())['files'] == {}
+    )
+
+
 def test_a_failure_exits_1_and_the_rest_is_staged(releases, tmp_path, secrets_dir):
     root, url = releases
     publish(root, AD_POM, pom_xml(PLUGINS, 'active-directory', '2.967.v1'))
