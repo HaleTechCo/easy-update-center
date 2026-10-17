@@ -9,6 +9,10 @@ first: [GitHub setup](github-setup.md).
 Versions are SemVer, tagged `vX.Y.Z`. The first release is `0.1.0`. Until 1.0, a minor release may
 change the interface (settings, commands, Compose files), and its CHANGELOG entry says how to move.
 
+A version must be above every existing version tag, release candidates included, so there are no
+patch releases of an older minor: a fix always goes out as the next version. Every release moves
+the `X.Y` and `latest` image tags and is the GitHub Release marked latest.
+
 A release candidate, `X.Y.Z-rc.N`, rehearses `X.Y.Z`: it is published as a GitHub pre-release, its
 images are tagged `X.Y.Z-rc.N` only, and it never moves `X.Y` or `latest`.
 
@@ -51,14 +55,14 @@ it succeeded.
 
 | Job | What it does | What it leaves behind |
 |---|---|---|
-| `check` | Refuses a tag on a commit not on `main` and, through `tools/release.py check`, a version not above every other tag, a release without its CHANGELOG section, a candidate without Unreleased entries, and a `compose.yaml` naming other images. Works out `prerelease`, `latest` and `minor_latest`. | Nothing. |
+| `check` | Refuses a tag on a commit not on `main` and, through `tools/release.py check`, a version not above every other tag, a release without its CHANGELOG section, a candidate without Unreleased entries, and a `compose.yaml` naming other images. Works out `prerelease`. | Nothing. |
 | `images` | Builds the `uc` and `web` images per architecture on a native runner, without cache, and pushes each by digest. | Untagged per-architecture images. |
 | `index` | Joins the architectures into one index per image, from exactly one digest per architecture. | Each index, tagged `build-<commit>` only. |
 | `ci` | Runs the CI workflow against those exact images, the linux/amd64 ones only: the arm64 images are built and signed but not tested. | Nothing. |
 | `sign` | Signs the indexes with cosign and attests their provenance and SBOMs (an SBOM lists the linux/amd64 image's contents, attested on the multi-architecture digest). | Signatures and attestations. |
 | `bundle` | Builds the air-gapped bundle per architecture from the signed digests. | Workflow artifacts, kept 7 days. |
 | `draft` | Writes and signs `SHA256SUMS`, and creates or updates the draft Release with the bundles, SBOMs and checksums (a pre-release for a candidate). | A draft only maintainers see. |
-| `publish` | Checks that the tag has one Release, still a draft, holding exactly the two bundles, the two SBOMs, `SHA256SUMS` and its signature. Tags the images `X.Y.Z`, then `X.Y` and `latest` when this is the highest release, each tag for both images before the next, and checks each tag names the signed digest. Publishes the Release. | The release. |
+| `publish` | Checks that the tag has one Release, still a draft, holding exactly the two bundles, the two SBOMs, `SHA256SUMS` and its signature. Tags the images `X.Y.Z`, then `X.Y` and `latest` for a release, each tag for both images before the next, and checks each tag names the signed digest. Publishes the Release. | The release. |
 
 How operators check what this produces: [Verify a release](../how-to/verify-a-release.md). How they
 move to it: [Upgrade](../how-to/upgrade.md).
@@ -74,6 +78,10 @@ move to it: [Upgrade](../how-to/upgrade.md).
 - **A later job failed because of the workflow or the code, before `publish`'s "Tag the images"
   step:** nothing anyone can pull or download exists yet. Delete the draft Release and the tag, fix
   it on `main`, and tag the next rc or patch version.
+- **`publish` failed inside "Tag the images":** a transient error (network, registry): **Re-run
+  failed jobs**, the step is idempotent. A digest mismatch (the log says a tag "is X, not the signed
+  Y"): the tag is wrong and not to be trusted, so delete the draft Release and the tag, find the
+  cause, and cut the next version.
 - **`publish` failed after "Tag the images" (when publishing the Release):** the image tags
   already exist and name the signed digests, so re-run `publish` with **Re-run failed jobs**; do not
   delete the tag or cut another version for it.

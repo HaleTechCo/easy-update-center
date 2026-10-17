@@ -392,8 +392,7 @@ CHECK_STUBS = {
     'git': '#!/bin/sh\necho "$*" >> "$STUB_DIR/git.log"\nexit "$STUB_ON_MAIN"\n',
     'python3': (
         '#!/bin/sh\necho "$*" >> "$STUB_DIR/python3.log"\n'
-        'printf "version=0.1.0\\nprerelease=false\\nlatest=true\\n'
-        'minor_latest=true\\n"\n'
+        'printf "version=0.1.0\\nprerelease=false\\n"\n'
     ),
 }
 """Stubs for the check step.
@@ -496,7 +495,7 @@ def test_the_release_checks_a_pushed_tag_on_main(tmp_path):
     assert last_call(tmp_path, 'git') == 'merge-base --is-ancestor abc123 origin/main'
     assert last_call(tmp_path, 'python3') == 'tools/release.py check 0.1.0'
     output = (tmp_path / 'output').read_text(encoding='utf-8')
-    assert output == 'version=0.1.0\nprerelease=false\nlatest=true\nminor_latest=true\n'
+    assert output == 'version=0.1.0\nprerelease=false\n'
 
 
 def test_the_release_refuses_a_tag_that_is_not_on_main(tmp_path):
@@ -509,7 +508,8 @@ def test_the_release_refuses_a_tag_that_is_not_on_main(tmp_path):
 DOCKER_STUB = """#!/bin/sh
 echo "$*" >> "$STUB_DIR/docker.log"
 case "$*" in
-    'buildx imagetools inspect'*) echo "${STUB_DIGEST:-sha256:1111}" ;;
+    'buildx imagetools inspect'*-uc:*) echo "${STUB_UC_DIGEST:-sha256:1111}" ;;
+    'buildx imagetools inspect'*-web:*) echo "${STUB_WEB_DIGEST:-sha256:2222}" ;;
 esac
 """
 UC = 'ghcr.io/haletechco/easy-update-center-uc'
@@ -550,7 +550,7 @@ def test_the_index_job_tags_nothing_a_user_would_pull(tmp_path):
         assert re.findall(r'--tag (\S+)', line) == [f'{repo}:build-abc123']
         assert line.endswith(f'{repo}@sha256:aaaa {repo}@sha256:bbbb')
     assert output.read_text(encoding='utf-8') == (
-        'uc-digest=sha256:1111\nweb-digest=sha256:1111\n'
+        'uc-digest=sha256:1111\nweb-digest=sha256:2222\n'
     )
 
 
@@ -580,63 +580,52 @@ def test_the_index_job_refuses_a_stray_digest_before_creating_any_index(tmp_path
 def run_tagging(
     tmp_path: Path,
     *,
-    latest: str,
-    minor_latest: str,
+    prerelease: str,
     version: str = '0.2.1',
-    resolves_to: str = 'sha256:1111',
+    uc_resolves_to: str = 'sha256:1111',
 ) -> subprocess.CompletedProcess[str]:
     stubs = stub(tmp_path, 'docker', DOCKER_STUB)
     env = {
         'PATH': f'{stubs}:{PATH}',
         'STUB_DIR': str(tmp_path),
-        'STUB_DIGEST': resolves_to,
+        'STUB_UC_DIGEST': uc_resolves_to,
         'VERSION': version,
-        'LATEST': latest,
-        'MINOR_LATEST': minor_latest,
+        'PRERELEASE': prerelease,
         'UC_DIGEST': 'sha256:1111',
-        'WEB_DIGEST': 'sha256:1111',
+        'WEB_DIGEST': 'sha256:2222',
         **REPOS,
     }
     script = release_step('publish', 'Tag the images')['run']
     return run_bash(tmp_path, script, env, tmp_path)
 
 
-@pytest.mark.parametrize(
-    ('latest', 'minor_latest', 'tags'),
-    [
-        ('true', 'true', ['0.2.1', '0.2', 'latest']),
-        ('false', 'true', ['0.2.1', '0.2']),
-        ('false', 'false', ['0.2.1']),
-    ],
-)
-def test_publish_tags_the_signed_index_as_it_is(tmp_path, latest, minor_latest, tags):
-    result = run_tagging(tmp_path, latest=latest, minor_latest=minor_latest)
+DIGESTS = {UC: 'sha256:1111', WEB: 'sha256:2222'}
+
+
+def test_publish_tags_a_release_as_x_y_z_x_y_and_latest(tmp_path):
+    result = run_tagging(tmp_path, prerelease='false')
     assert result.returncode == 0, result.stdout
     creates = docker_calls(tmp_path, 'buildx imagetools create')
     # each tag for both images before the next tag, so a failure never leaves a moving
-    # tag naming a mixed pair
+    # tag naming a mixed pair; each image's tags name that image's own digest
     assert creates == [
-        f'buildx imagetools create --tag {repo}:{tag} {repo}@sha256:1111'
-        for tag in tags
+        f'buildx imagetools create --tag {repo}:{tag} {repo}@{DIGESTS[repo]}'
+        for tag in ['0.2.1', '0.2', 'latest']
         for repo in (UC, WEB)
     ]
 
 
 def test_publish_tags_a_candidate_with_its_own_version_only(tmp_path):
-    result = run_tagging(
-        tmp_path, latest='false', minor_latest='false', version='0.3.0-rc.1'
-    )
+    result = run_tagging(tmp_path, prerelease='true', version='0.3.0-rc.1')
     assert result.returncode == 0, result.stdout
     assert docker_calls(tmp_path, 'buildx imagetools create') == [
-        f'buildx imagetools create --tag {repo}:0.3.0-rc.1 {repo}@sha256:1111'
+        f'buildx imagetools create --tag {repo}:0.3.0-rc.1 {repo}@{DIGESTS[repo]}'
         for repo in (UC, WEB)
     ]
 
 
 def test_publish_stops_when_a_tag_names_another_digest(tmp_path):
-    result = run_tagging(
-        tmp_path, latest='true', minor_latest='true', resolves_to='sha256:9999'
-    )
+    result = run_tagging(tmp_path, prerelease='false', uc_resolves_to='sha256:9999')
     assert result.returncode == 1
     assert (
         f'::error::{UC}:0.2.1 is sha256:9999, not the signed sha256:1111'
@@ -841,17 +830,21 @@ def test_publish_refuses_a_release_that_is_no_longer_a_draft(tmp_path):
     assert '::error::v0.1.0 is already published' in result.stdout
 
 
-def test_publish_publishes_the_draft(tmp_path):
+@pytest.mark.parametrize(
+    ('version', 'prerelease', 'latest'),
+    [('0.1.0', 'false', 'true'), ('0.2.0-rc.1', 'true', 'false')],
+)
+def test_publish_publishes_the_draft(tmp_path, version, prerelease, latest):
     stubs = stub(tmp_path, 'gh', RELEASE_GH_STUB)
     env = {
         'PATH': f'{stubs}:{PATH}',
         'STUB_DIR': str(tmp_path),
-        'VERSION': '0.1.0',
-        'LATEST': 'true',
+        'VERSION': version,
+        'PRERELEASE': prerelease,
     }
     script = release_step('publish', 'Publish the GitHub Release')['run']
     result = run_bash(tmp_path, script, env, tmp_path)
     assert result.returncode == 0, result.stdout
-    assert (
-        last_call(tmp_path, 'gh') == 'release edit v0.1.0 --draft=false --latest=true'
+    assert last_call(tmp_path, 'gh') == (
+        f'release edit v{version} --draft=false --latest={latest}'
     )

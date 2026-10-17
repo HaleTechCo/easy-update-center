@@ -10,7 +10,7 @@
 #   sign    signs and attests them by digest;
 #   bundle  builds the air-gapped bundles from the signed digests;
 #   draft   writes the assets and a draft Release;
-#   publish tags the images (X.Y.Z, plus X.Y and latest for the highest release) and publishes it.
+#   publish tags the images (X.Y.Z, plus X.Y and latest for a release) and publishes it.
 # A failed run is finished with "Re-run failed jobs"; a published release is never changed
 # (Immutable Releases, docs/development/github-setup.md).
 #
@@ -46,8 +46,6 @@ jobs:
     outputs:
       version: ${{ steps.check.outputs.version }}
       prerelease: ${{ steps.check.outputs.prerelease }}
-      latest: ${{ steps.check.outputs.latest }}
-      minor_latest: ${{ steps.check.outputs.minor_latest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -402,7 +400,7 @@ jobs:
       packages: write
     env:
       VERSION: ${{ needs.check.outputs.version }}
-      LATEST: ${{ needs.check.outputs.latest }}
+      PRERELEASE: ${{ needs.check.outputs.prerelease }}
     steps:
       # gh release edit below publishes whichever draft gh finds for the tag, and a published
       # release is never changed: so first make sure there is one, still a draft, with exactly
@@ -448,13 +446,11 @@ jobs:
       # tag: X.Y.Z first, so a failure never leaves X.Y or latest naming a mixed pair.
       - name: Tag the images
         env:
-          MINOR_LATEST: ${{ needs.check.outputs.minor_latest }}
           UC_DIGEST: ${{ needs.index.outputs.uc-digest }}
           WEB_DIGEST: ${{ needs.index.outputs.web-digest }}
         run: |
           tags=("${VERSION}")
-          if [[ "${MINOR_LATEST}" == true ]]; then tags+=("${VERSION%.*}"); fi
-          if [[ "${LATEST}" == true ]]; then tags+=(latest); fi
+          if [[ "${PRERELEASE}" == false ]]; then tags+=("${VERSION%.*}" latest); fi
           for tag in "${tags[@]}"; do
               for image in uc web; do
                   if [[ "${image}" == uc ]]; then repo="${UC_REPO}" digest="${UC_DIGEST}"; else repo="${WEB_REPO}" digest="${WEB_DIGEST}"; fi
@@ -470,4 +466,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh release edit "v${VERSION}" --draft=false --latest="${LATEST}"
+        run: |
+          latest=true
+          if [[ "${PRERELEASE}" == true ]]; then latest=false; fi
+          gh release edit "v${VERSION}" --draft=false --latest="${latest}"

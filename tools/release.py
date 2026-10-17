@@ -12,10 +12,11 @@ See docs/development/releasing.md.
         tag.
     python3 tools/release.py check VERSION
         Refuse a tag vVERSION the Release workflow must not publish, then print
-        version=, prerelease=, latest= and minor_latest= (true|false) for
-        $GITHUB_OUTPUT: whether VERSION is a release candidate, the highest release,
-        and the highest in its X.Y, so the workflow moves the latest and X.Y image
-        tags only for a release that is. A published version is never published again.
+        version= and prerelease= (true|false) for $GITHUB_OUTPUT: whether VERSION is a
+        release candidate, so the workflow moves the X.Y and latest image tags for
+        every release and for no candidate. VERSION is above every other version tag,
+        so a release is always the highest. A published version is never published
+        again.
     python3 tools/release.py notes VERSION
         Print that version's CHANGELOG.md section without its heading (a release
         candidate's: the Unreleased entries): the GitHub Release's notes, with relative
@@ -111,7 +112,7 @@ def _refuse_not_above_highest(version: str, tags: Iterable[str]) -> None:
     """Refuse version unless it is above every version tag in tags."""
     top = highest(tags)
     if top is not None and parse_version(version) <= parse_version(top):
-        msg = f'{version} is not above the highest release, {top}'
+        msg = f'{version} is not above the highest version tag, {top}'
         raise ReleaseError(msg)
 
 
@@ -248,10 +249,10 @@ def check(
     The tag must exist and be above every other release and release candidate: a
     published version is never published again. A release needs its CHANGELOG section,
     a candidate Unreleased entries; compose.yaml must name the version's images. Return
-    whether it is a candidate (prerelease), and, for a release, whether it is the
-    highest release overall (latest) and within its X.Y (minor_latest).
+    whether it is a candidate (prerelease): a release is above every other tag, so it
+    is always the latest and the highest of its X.Y.
     """
-    parsed = parse_version(version)
+    parse_version(version)
     tag = f'v{version}'
     if tag not in tags:
         msg = f'{tag} does not exist: push the tag first'
@@ -272,23 +273,7 @@ def check(
     if pin_images(compose, version) != compose:
         msg = f'compose.yaml names other images than {version}: {pull_request}'
         raise ReleaseError(msg)
-    if candidate:
-        return {'prerelease': True, 'latest': False, 'minor_latest': False}
-    top = highest(others, releases_only=True)
-    minor_top = highest(
-        (
-            other
-            for other in others
-            if (match := TAG.fullmatch(other))
-            and parse_version(match[1])[:2] == parsed[:2]
-        ),
-        releases_only=True,
-    )
-    return {
-        'prerelease': False,
-        'latest': top is None or parsed > parse_version(top),
-        'minor_latest': minor_top is None or parsed > parse_version(minor_top),
-    }
+    return {'prerelease': candidate}
 
 
 def git_tags() -> list[str]:
@@ -314,8 +299,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     check_command = commands.add_parser(
         'check',
         help=(
-            'refuse a tag the workflow must not publish; '
-            'print version=, prerelease=, latest= and minor_latest='
+            'refuse a tag the workflow must not publish; print version= and prerelease='
         ),
     )
     check_command.add_argument('version')
