@@ -11,9 +11,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, TextIO
 
 from uc.aql import WAR_ARTIFACT, WAR_GROUP, Gav, RepoFile, to_gav
-from uc.doctor import CORE_VERSION, required_jenkins_version
+from uc.doctor import required_jenkins_version
 from uc.pom import pom_coordinates, unusable_reason
 from uc.repo_adapter.archive import SMALL_ENTRY_LIMIT
+from uc.settings import CORE_VERSION
 from uc.timeutil import iso, utcnow
 
 from . import ProcureError

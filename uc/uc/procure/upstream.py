@@ -8,16 +8,15 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
-from uc.http import TIMEOUT, Http, HttpError
+from uc.http import SIDE_FILE_LIMIT, TIMEOUT, Http, HttpError, parse_sha1_file
 from uc.repo_adapter.archive import SMALL_ENTRY_LIMIT
 
 from . import ProcureError
-from .staging import SHA1, sha1_of
+from .staging import sha1_of
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-SIDE_FILE_LIMIT = 4096
 POM_LIMIT = SMALL_ENTRY_LIMIT
 
 
@@ -30,9 +29,8 @@ def parse_sha1(body: bytes) -> str:
 
     '<digest>' or '<digest>  <name>', any case; raise ProcureError otherwise.
     """
-    words = body.decode('ascii', 'replace').split()
-    value = words[0].lower() if words else ''
-    if not SHA1.match(value):
+    value = parse_sha1_file(body)
+    if value is None:
         msg = 'not a sha1 file'
         raise ProcureError(msg)
     return value
