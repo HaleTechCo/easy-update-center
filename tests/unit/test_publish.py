@@ -66,6 +66,29 @@ def test_publish_makes_the_release_live(tmp_path):
     assert not (tmp_path / 'live.tmp').exists()
 
 
+@pytest.mark.parametrize('kind', ['dangling link', 'link to a release', 'file'])
+def test_a_stale_live_tmp_from_a_killed_swap_does_not_stop_the_next_publish(
+    tmp_path, kind
+):
+    # a run killed between symlink_to and replace leaves live.tmp behind
+    make_release(tmp_path, R1)
+    stale = tmp_path / 'live.tmp'
+    if kind == 'file':
+        stale.write_text('stale')
+    else:
+        stale.symlink_to(
+            'releases/gone' if kind == 'dangling link' else f'releases/{R1}'
+        )
+    second = create_staging(tmp_path, R2)
+    (second / 'marker').write_text('second')
+    publish(tmp_path, second, R2)
+    assert (tmp_path / 'live').readlink() == Path(f'releases/{R2}')
+    assert (tmp_path / 'live' / 'marker').read_text() == 'second'
+    assert not stale.exists()
+    assert not stale.is_symlink()
+    assert (releases_dir(tmp_path) / R1 / 'marker').read_text() == R1
+
+
 def test_create_staging_replaces_leftovers(tmp_path):
     (create_staging(tmp_path, R1) / 'leftover').write_text('x')
     assert not (create_staging(tmp_path, R1) / 'leftover').exists()
