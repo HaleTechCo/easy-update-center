@@ -100,7 +100,7 @@ ignore = [
 "uc/uc/http.py" = ["S310"]
 "uc/uc/repo_adapter/backends.py" = ["S310"]
 # Same reasoning for the pre-commit hook shims under tools/: they exist to launch other tools
-# (shfmt, docker) resolved from PATH. tools/ is not a package (INP001).
+# (docker, git) resolved from PATH. tools/ is not a package (INP001).
 "tools/*.py" = ["INP001", "S603", "S607"]
 # Tests are not a package (INP001), use bare asserts (S101), and compare against
 # literal expected values (PLR2004) - that is what makes them readable as specs. Individual

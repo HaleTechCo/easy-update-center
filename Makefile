@@ -11,20 +11,20 @@ UC_VERSION ?= dev
 .DEFAULT_GOAL := help
 
 # Unit tests read the Python, templates and lint tools straight from the working tree, plus the
-# workflows in .github/ and the docs
-# (VersionTool.java is compiled into the image, so changing it needs `make build-uc`).
+# workflows in .github/ and the docs. VersionTool.java is compiled into the image: test-unit
+# rebuilds it first, but with PREBUILT=1 a changed VersionTool.java needs `make build-uc` without it.
 SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro" \
              -v "$(CURDIR)/tools:/tools:ro" \
              -v "$(CURDIR)/web:/web:ro" \
              -v "$(CURDIR)/docs:/docs:ro" \
-             $(if $(wildcard examples/pipelines),-v "$(CURDIR)/examples/pipelines:/examples/pipelines:ro") \
-             $(if $(wildcard .github),-v "$(CURDIR)/.github:/github:ro") \
+             -v "$(CURDIR)/examples/pipelines:/examples/pipelines:ro" \
+             -v "$(CURDIR)/.github:/github:ro" \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
              -v "$(CURDIR)/.env.airgapped.example:/examples/env.airgapped.example:ro"
 
-.PHONY: help build build-uc build-web uc-image test test-unit test-web test-routing test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
+.PHONY: help build build-uc build-web test test-unit test-web test-routing test-setup test-pipelines compose-check examples it-airgapped it-clean it-online it-full upstream-diff
 
 # PREBUILT=1 (CI, after `docker load`): build-uc and build-web keep an image that already exists
 # instead of building it again. Without it they always build.
@@ -45,11 +45,6 @@ build-uc:
 
 build-web:
 	$(call UNLESS_PREBUILT,$(WEB_IMAGE))docker build -t $(WEB_IMAGE) web
-
-# The uc image, built only when it is missing: the targets that merely run it must also work on a
-# host that loaded pre-built images and has no internet access.
-uc-image:
-	@docker image inspect $(UC_IMAGE) >/dev/null 2>&1 || docker build --target runtime -t $(UC_IMAGE) uc
 
 ##@ Development
 
@@ -72,14 +67,14 @@ test-setup: build-uc ## Check uc-setup in the uc image
 	docker run --rm --user 0:0 --entrypoint bash -v "$(CURDIR)/uc/bin:/scripts:ro" \
 	  -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" -v "$(CURDIR)/tests/setup:/tests:ro" $(UC_IMAGE) /tests/setup-checks.sh
 
-test-pipelines: build-uc ## Check the example pipelines run the procurement stages in order, with the approval before the push
+test-pipelines: build-uc ## Check the example pipeline runs the procurement stages in order, with the approval before the push
 	docker run --rm $(SRC_MOUNTS) $(UC_TEST_IMAGE) -q /tests/unit/test_pipeline_examples.py
 
 # The example .env files are generated from the settings registry (uc/uc/settings.py), using the
 # working tree's code; test-unit fails while a committed copy is out of date.
 EXAMPLE = docker run --rm -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" $(UC_IMAGE) config --example
 
-examples: uc-image ## Regenerate the example .env files from the settings registry
+examples: build-uc ## Regenerate the example .env files from the settings registry
 	$(EXAMPLE) --mode online > .env.online.example
 	$(EXAMPLE) --mode airgapped > .env.airgapped.example
 
