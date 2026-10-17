@@ -89,11 +89,14 @@ def test_github_source(tmp_path, secrets_dir):
         b'{"sha": "%s"}' % SHA.encode(),
         b'{"sha": "%s", "commit": null}' % SHA.encode(),
         b'{"sha": "%s", "commit": []}' % SHA.encode(),
+        b'{"sha": "%s", "commit": "x"}' % SHA.encode(),
+        b'{"sha": "%s", "commit": [1]}' % SHA.encode(),
         b'{"sha": "%s", "commit": {}}' % SHA.encode(),
         b'{"sha": "%s", "commit": {"committer": null}}' % SHA.encode(),
         b'{"sha": "%s", "commit": {"committer": {}}}' % SHA.encode(),
         b'{"sha": "%s", "commit": {"committer": {"date": 5}}}' % SHA.encode(),
-        b'{"sha": "' + SHA.encode() + b'\\n"}',
+        b'{"sha": "' + SHA.encode() + b'\\n", "commit": {"committer": {"date": '
+        b'"2026-09-16T13:29:23Z"}}}',
     ],
 )
 def test_an_unusable_github_answer_falls_back_to_last_good(
@@ -105,8 +108,12 @@ def test_an_unusable_github_answer_falls_back_to_last_good(
     )
     save_last_good(first, settings.data_dir)
 
-    def get(_url, _headers=None, _timeout=60):
-        return answer
+    tarball = make_tar(UPSTREAM)
+
+    def get(url, _headers=None, _timeout=60):
+        # Only the commit answer is unusable: a valid tarball for the codeload
+        # request means nothing but the validation can refuse these.
+        return tarball if 'codeload' in url else answer
 
     second = prepare_resources(settings, tmp_path / 'w2', NOW, get=get)
     assert second.info.ref == SHA
