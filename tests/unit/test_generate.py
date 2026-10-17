@@ -155,6 +155,30 @@ def test_failed_validation_keeps_the_live_release(tmp_path, secrets_dir):
     assert (data / 'releases' / '.failed-20260922T090000Z').is_dir()
 
 
+def test_a_site_document_that_is_not_an_object_fails_validation(tmp_path, secrets_dir):
+    settings = make_settings(tmp_path, secrets_dir)  # the Artifactory download backend
+    fake = FakeJar(TIERS, cert_der_b64(settings.signing_cert_file))
+
+    def run_jar(cmd, env, log):
+        fake(cmd, env, log)
+        if '--arguments-file' in cmd:
+            arguments = Path(cmd[cmd.index('--arguments-file') + 1])
+            for line in arguments.read_text().splitlines():
+                tokens = line.split(' ')
+                if '--www-dir' in tokens:
+                    www = Path(tokens[tokens.index('--www-dir') + 1])
+                    (www / 'update-center.actual.json').write_text('[]')
+
+    tools = Toolchain(
+        run_jar=run_jar,
+        aql_query=lambda *_args: repo_files(),
+        http_get=no_network,
+        versions=SimpleVersions(),
+    )
+    with pytest.raises(ValidationError, match='does not parse: not a JSON object'):
+        generate(settings, tools=tools, now=T1, base_env={})
+
+
 def test_jar_failure_is_recorded(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     with pytest.raises(JarError):

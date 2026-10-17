@@ -191,9 +191,12 @@ def _build_and_publish(
                 settings.source_ca_file,
             )
         )
-        current = validate.load_site_json(
-            staging / 'current' / 'update-center.actual.json'
-        )
+        try:
+            current = validate.load_site_json(
+                staging / 'current' / 'update-center.actual.json'
+            )
+        except (OSError, ValueError):
+            current = {}  # validate_release below refuses the document and says why
         mapping, map_warnings = downloadmap.build_download_map(
             listing, downloadmap.preferred_groups(current)
         )
