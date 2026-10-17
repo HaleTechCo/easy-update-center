@@ -127,6 +127,7 @@ def test_rollback(tmp_path):
     assert rollback(tmp_path) == R2
     assert live_release(tmp_path) == R2
     assert rollback(tmp_path, R3) == R3
+    assert live_release(tmp_path) == R3
     with pytest.raises(PublishError, match='unknown release'):
         rollback(tmp_path, 'nope')
     swap_live(tmp_path, R1)

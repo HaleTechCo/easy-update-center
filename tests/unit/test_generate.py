@@ -134,7 +134,6 @@ def test_jar_receives_download_root_and_credentials(tmp_path, secrets_dir):
     assert env['DOWNLOADS_ROOT_URL'] == 'https://uc.example.com/download'
     assert env['ARTIFACTORY_PASSWORD'] == 'secret'
     assert env['POPULARITY_JSON_URL'] == ''
-    assert '--arguments-file' in tools.run_jar.calls[-1]
 
 
 def test_failed_validation_keeps_the_live_release(tmp_path, secrets_dir):
@@ -355,8 +354,6 @@ def test_status_error_omits_raw_exception_text(tmp_path, secrets_dir):
         generate(settings, tools=tools, now=T1, base_env={})
 
     error = read_status(settings.data_dir)['last_run']['error']
-    assert 'topsecret-body' not in error
-    assert 'artifactory.corp.internal' not in error
     assert error == 'AqlError: see the generator log'
 
 

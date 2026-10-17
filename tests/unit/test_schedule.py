@@ -69,8 +69,15 @@ def test_first_run_generates_then_hands_over_to_supercronic(tmp_path, secrets_di
 
 def test_a_bad_schedule_stops_before_the_first_run(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, DOCTOR_SCHEDULE='nightly')
+    calls = []
     with pytest.raises(ScheduleError):
-        run(settings, tmp_path, lambda: None)
+        run_schedule(
+            settings,
+            generate_once=lambda: calls.append('generate'),
+            exec_=lambda *_args: calls.append('exec'),
+            crontab=tmp_path / 'crontab',
+        )
+    assert calls == []
     assert not (tmp_path / 'crontab').exists()
 
 
@@ -90,8 +97,10 @@ def test_failed_first_run_still_schedules(tmp_path, secrets_dir):
         msg = 'generator crashed'
         raise RuntimeError(msg)
 
-    calls = run(settings, tmp_path, boom)
-    assert calls[-1][0] == 'supercronic'
+    assert run(settings, tmp_path, boom) == [
+        'generate',
+        ['supercronic', '-passthrough-logs', str(tmp_path / 'crontab')],
+    ]
 
 
 def test_the_scheduler_hands_supercronic_its_environment(
