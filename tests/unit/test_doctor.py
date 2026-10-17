@@ -924,6 +924,25 @@ def test_format_report_says_when_nothing_is_dropped_and_omits_empty_sections(
         assert absent not in text
 
 
+def test_format_report_shows_a_lone_orphan_pom_the_adapter_skipped(
+    tmp_path, secrets_dir
+):
+    settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on')
+    lists = ('derived_poms', 'replaced_poms', 'needs_pom', 'misplaced')
+    report = DoctorReport(
+        repo_adapter={
+            **{name: [] for name in lists},
+            'skipped': [{'path': 'odd/y-1.pom', 'reason': 'no archive beside it'}],
+            'dates_from_repository': [],
+        },
+    )
+    lines = format_report(report, settings).splitlines()
+    assert 'Dropped by the generator: 1' in lines
+    assert '  skipped (1):' in lines
+    assert '    odd/y-1.pom: no archive beside it' in lines
+    assert report.exit_code() == 1
+
+
 def test_format_report_lists_what_the_adapter_dropped_instead_of_the_plain_sections(
     tmp_path, secrets_dir
 ):
