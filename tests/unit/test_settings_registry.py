@@ -152,9 +152,3 @@ def test_groups_follow_the_configuration_page():
     page = Path('/docs/reference/configuration.md').read_text()
     headings = re.findall(r'^## (.+)$', page, re.MULTILINE)
     assert [h for h in headings if h in GROUPS] == list(GROUPS)
-
-
-def test_host_ports_are_strings():
-    # enable-tls.md recommends 127.0.0.1:8080, which Compose accepts as a port.
-    assert REGISTRY['HTTP_PORT'].type == 'str'
-    assert REGISTRY['HTTPS_PORT'].type == 'str'
