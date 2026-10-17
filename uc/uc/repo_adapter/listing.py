@@ -15,11 +15,11 @@ from typing import TYPE_CHECKING
 
 from uc.aql import Gav, RepoFile, to_gav
 from uc.config import PUBLIC_RELEASES_URL, UnsafeFileError, read_untrusted
-from uc.http import HttpError
+from uc.http import SMALL_FILE_LIMIT, HttpError
 from uc.pom import Coordinates, unusable_reason
 from uc.timeutil import iso
 
-from .archive import SMALL_ENTRY_LIMIT, ArchiveError, ArchiveFacts, plausible
+from .archive import ArchiveError, ArchiveFacts, plausible
 from .backends import Backend, RepoEntry, artifactory_time, parse_time
 
 if TYPE_CHECKING:
@@ -145,7 +145,7 @@ def _repository_pom(
 ) -> tuple[bytes | None, str | None]:
     """Return a repository POM's checked bytes and None, or None and why it is unusable.
 
-    Rule 3. The bytes returned match the listing's sha256, are at most SMALL_ENTRY_LIMIT
+    Rule 3. The bytes returned match the listing's sha256, are at most SMALL_FILE_LIMIT
     and pass unusable_reason; the adapter serves exactly them.
     """
     cached = cache.pom_verdict(entry.sha256)
@@ -155,7 +155,7 @@ def _repository_pom(
         data = cache.repository_pom(entry.sha256)
         if data is not None:
             return data, None
-    data = backend.get(entry.path, SMALL_ENTRY_LIMIT)
+    data = backend.get(entry.path, SMALL_FILE_LIMIT)
     if data is None:
         reason = 'missing from the repository'
     elif hashlib.sha256(data).hexdigest() != entry.sha256:

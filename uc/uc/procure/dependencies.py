@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING
 
 from uc.aql import Gav, RepoFile, to_gav
 from uc.doctor import parse_dependencies, parse_manifest, required_jenkins_version
+from uc.http import SMALL_FILE_LIMIT
 from uc.pom import COORDINATE, GROUP_ID, dependency_group
 from uc.repo_adapter.archive import (
     MANIFEST,
-    SMALL_ENTRY_LIMIT,
     ArchiveError,
     open_archive,
     read_entry,
@@ -58,7 +58,7 @@ def archive_manifest(file: Path) -> dict[str, str]:
     """Return the main section of a staged archive's META-INF/MANIFEST.MF."""
     try:
         with file.open('rb') as stream, open_archive(stream) as archive:
-            data = read_entry(archive, MANIFEST, SMALL_ENTRY_LIMIT)
+            data = read_entry(archive, MANIFEST, SMALL_FILE_LIMIT)
     except (OSError, ArchiveError) as exc:
         msg = f'{file.name}: {exc}'
         raise ProcureError(msg) from exc

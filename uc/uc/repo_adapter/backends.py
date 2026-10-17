@@ -22,6 +22,7 @@ from uc.http import (
     LONG_TIMEOUT,
     SHA1,
     SIDE_FILE_LIMIT,
+    SMALL_FILE_LIMIT,
     Http,
     HttpError,
     parse_sha1_file,
@@ -30,7 +31,6 @@ from uc.http import (
 from .archive import (
     CENTRAL_DIRECTORY_LIMIT,
     INNER_JAR_LIMIT,
-    SMALL_ENTRY_LIMIT,
     ArchiveError,
     ArchiveFacts,
     archive_date,
@@ -371,7 +371,7 @@ class ArtifactoryBackend:
 
         None on HTTP 404.
         """
-        return self.entry(jar_path, 'index.jelly', SMALL_ENTRY_LIMIT)
+        return self.entry(jar_path, 'index.jelly', SMALL_FILE_LIMIT)
 
 
 class ArtifactKeeperBackend:

@@ -13,13 +13,7 @@ import pytest
 
 from procurefixture import SOURCE, stage
 from uc.procure import ProcureError
-from uc.procure.staging import (
-    MANIFEST,
-    Staging,
-    check_path,
-    review_line,
-    sha1_of,
-)
+from uc.procure.staging import MANIFEST, Staging, check_path, review_line, sha1_of
 
 POM = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.pom'
 

@@ -8,8 +8,14 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
-from uc.http import SIDE_FILE_LIMIT, TIMEOUT, Http, HttpError, parse_sha1_file
-from uc.repo_adapter.archive import SMALL_ENTRY_LIMIT
+from uc.http import (
+    SIDE_FILE_LIMIT,
+    SMALL_FILE_LIMIT,
+    TIMEOUT,
+    Http,
+    HttpError,
+    parse_sha1_file,
+)
 
 from . import ProcureError
 from .staging import sha1_of
@@ -17,7 +23,7 @@ from .staging import sha1_of
 if TYPE_CHECKING:
     from pathlib import Path
 
-POM_LIMIT = SMALL_ENTRY_LIMIT
+POM_LIMIT = SMALL_FILE_LIMIT
 
 
 class NotFoundError(ProcureError):

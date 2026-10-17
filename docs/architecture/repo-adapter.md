@@ -126,7 +126,7 @@ Archives are untrusted input.
 | An inner `.jar` | 64 MiB |
 | The zip directory read for dates | 16 MiB; Artifactory keeps a larger one with the repository's time, Artifact Keeper (which opens the whole archive) skips it and reports it |
 | The listing response | 256 MiB |
-| Backend request timeout | 600 s for the Artifactory listing and every file or archive download; 60 s for Artifact Keeper's listing pages and the Range reads |
+| Backend request timeout | 600 s for the Artifactory listing and file reads (`get`), Artifact Keeper's file reads and its whole-archive downloads; 60 s for Artifact Keeper's listing pages, Artifactory's `!/` entry reads, the Range support probe and every Range read |
 | Requests handled at once | 32; more get 503 |
 | An idle connection | closed after 120 s |
 | A listing request's `Content-Length` | at most 64 KiB (413); not a number, or negative: 400 |

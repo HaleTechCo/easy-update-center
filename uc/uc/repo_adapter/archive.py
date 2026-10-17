@@ -16,12 +16,12 @@ from typing import TYPE_CHECKING, BinaryIO
 
 from uc.doctor import parse_manifest
 from uc.errors import UcError
+from uc.http import SMALL_FILE_LIMIT
 from uc.pom import COORDINATE, GROUP_ID
 
 if TYPE_CHECKING:
     from uc.pom import Coordinates
 
-SMALL_ENTRY_LIMIT = 1024 * 1024  # a POM, MANIFEST.MF or index.jelly
 INNER_JAR_LIMIT = 64 * 1024 * 1024
 CENTRAL_DIRECTORY_LIMIT = 16 * 1024 * 1024
 EARLIEST_RELEASE = dt.datetime(2004, 1, 1, tzinfo=dt.UTC)
@@ -232,7 +232,7 @@ def manifest_coordinates(manifest: bytes | None) -> Coordinates | None:
 
 def jar_description(jar: bytes) -> bytes | None:
     """Return the index.jelly of a jar held in memory, None when it has none."""
-    return read_entry(open_archive(io.BytesIO(jar)), 'index.jelly', SMALL_ENTRY_LIMIT)
+    return read_entry(open_archive(io.BytesIO(jar)), 'index.jelly', SMALL_FILE_LIMIT)
 
 
 def find_description(read: EntryReader, artifact_id: str, version: str) -> bytes | None:
@@ -246,7 +246,7 @@ def find_description(read: EntryReader, artifact_id: str, version: str) -> bytes
             description = jar_description(jar)
             if description is not None:
                 return description
-    return read('WEB-INF/classes/index.jelly', SMALL_ENTRY_LIMIT)
+    return read('WEB-INF/classes/index.jelly', SMALL_FILE_LIMIT)
 
 
 def extract_facts(
@@ -260,9 +260,9 @@ def extract_facts(
 
     `read` serves entries from a local zip or `!/` requests.
     """
-    manifest = read(MANIFEST, SMALL_ENTRY_LIMIT)
+    manifest = read(MANIFEST, SMALL_FILE_LIMIT)
     coordinates = manifest_coordinates(manifest) if plugin else None
     group, artifact, version = coordinates or path_coordinates
-    pom = read(f'META-INF/maven/{group}/{artifact}/pom.xml', SMALL_ENTRY_LIMIT)
+    pom = read(f'META-INF/maven/{group}/{artifact}/pom.xml', SMALL_FILE_LIMIT)
     description = find_description(read, artifact, version) if plugin else None
     return ArchiveFacts(manifest, coordinates, pom, description, released)

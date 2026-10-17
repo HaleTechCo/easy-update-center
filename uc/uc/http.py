@@ -29,6 +29,8 @@ TIMEOUT = 60
 LONG_TIMEOUT = 600
 SIDE_FILE_LIMIT = 4096
 """The most of a .sha1 file read: 40 hex characters, sometimes followed by a name."""
+SMALL_FILE_LIMIT = 1024 * 1024
+"""The most of a POM, MANIFEST.MF or index.jelly read, and of a staged file checked."""
 SHA1 = re.compile(r'^[0-9a-f]{40}\Z')
 
 
