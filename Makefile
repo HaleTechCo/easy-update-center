@@ -107,7 +107,10 @@ IT_STATE = uc-it-airgapped_uc-data uc-it-airgapped_uc-data-proxy uc-it-airgapped
 it-airgapped: build ## Run the air-gapped integration test against a seeded repository (IT_TYPES=, ARGS=)
 	docker compose -f $(IT_DIR)/airgapped.yaml --profile seed run --rm -T seed-versions > $(IT_DIR)/.versions.env
 	cat $(IT_DIR)/.versions.env
-	$(IT_AIR) --profile seed run --rm seed-plugins
+	$(IT_AIR) --profile seed run --rm seed-plugins || { \
+	  echo "seed-plugins failed or timed out on the mirrors; downloading from archives.jenkins.io"; \
+	  $(IT_AIR) --profile seed run --rm --entrypoint rm seed-plugins -rf /seed/downloads && \
+	  $(IT_AIR) --profile seed run --rm -e JENKINS_UC_DOWNLOAD_URL=https://archives.jenkins.io/plugins seed-plugins; }
 	$(IT_AIR) --profile seed run --rm seed-repo
 	$(IT_AIR) --profile seed run --rm pki
 	rc=0; for type in $(IT_TYPES); do \
