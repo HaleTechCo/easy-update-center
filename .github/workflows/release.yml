@@ -384,7 +384,7 @@ jobs:
               gh release upload "v${VERSION}" assets/* --clobber
           elif grep -qFx 'release not found' "${RUNNER_TEMP}/view.err"; then
               flags=(--draft --verify-tag --title "${VERSION}" --notes-file "${RUNNER_TEMP}/notes.md")
-              if [[ "${PRERELEASE}" == true ]]; then flags+=(--prerelease); fi
+              if [[ "${PRERELEASE}" != false ]]; then flags+=(--prerelease); fi
               gh release create "v${VERSION}" "${flags[@]}" assets/*
           else
               echo "::error::cannot tell whether v${VERSION} has a Release: $(cat "${RUNNER_TEMP}/view.err")"
