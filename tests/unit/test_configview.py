@@ -176,15 +176,15 @@ def test_check_reports_a_missing_download_url():
 
 
 def test_internal_paths_left_in_the_environment_are_noted():
-    # Names an older release documented; uc still follows them, so one left in .env
-    # changes where it looks.
+    # Internal names the tests set; uc still follows them, so one left in .env changes
+    # where it looks.
     code, out, err = show(
         env_for(REPO_ADAPTER_URL='http://repo-adapter:9091/artifactory/'), check=True
     )
     assert (code, out) == (0, 'configuration ok\n')
     assert err == (
-        'uc: note: not settings, but uc still follows them: REPO_ADAPTER_URL; '
-        'remove them from .env (only the tests set them)\n'
+        'uc: note: internal names the tests set; uc still follows them: '
+        'REPO_ADAPTER_URL; remove them from .env\n'
     )
 
 

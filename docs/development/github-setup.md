@@ -55,17 +55,17 @@ Read).
 ## 6. Security and moderation
 
 - Settings > Advanced Security: enable private vulnerability reporting
-  ([SECURITY.md](../../SECURITY.md) points reporters to it) and Dependabot alerts. Secret scanning and
-  push protection are already on for public repositories.
+  ([SECURITY.md](../../SECURITY.md) points reporters to it) and Dependabot alerts, and turn on
+  **secret scanning** and **push protection**. They are not on by default here.
 - Settings > Advanced Security > Code scanning: **CodeQL analysis**, Default setup, with the
-  languages Python and GitHub Actions. Free for public repositories.
+  languages GitHub Actions, Java (Kotlin) and Python. Free for public repositories.
 - Settings > Moderation options > Reported content: accept reports from **All users**, so anyone can
   report a comment, issue or pull request to the admins privately, as the Enforcement section of
   [CODE_OF_CONDUCT.md](../../CODE_OF_CONDUCT.md) says (free for public repositories owned by an
   organization). Reports appear under the repository's reported content list for admins to review.
 
 Dependabot's version updates need no setting: `.github/dependabot.yml` opens one weekly pull request
-each for the actions, the base images and the lint tools.
+each for the actions, the base images, the pre-commit hooks and pre-commit itself (pip).
 
 ## 7. Secrets
 
