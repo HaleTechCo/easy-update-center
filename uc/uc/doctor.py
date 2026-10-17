@@ -34,8 +34,6 @@ if TYPE_CHECKING:
     from .model import Credentials
     from .versions import VersionTool
 
-SMALL_FILE_LIMIT = 1024 * 1024
-"""The largest POM or MANIFEST.MF doctor fetches, as the repo-adapter caps them."""
 REPORT_FILE = Path('doctor') / 'report.json'
 """Where uc doctor --record saves the full report, under the data directory.
 
@@ -279,7 +277,7 @@ class ArtifactSource:
             response = self._http.request(
                 url,
                 headers={'Authorization': self._auth},
-                limit=SMALL_FILE_LIMIT,
+                limit=http.SMALL_FILE_LIMIT,
                 timeout=self.timeout,
             )
         except http.HttpError as exc:

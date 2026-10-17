@@ -472,6 +472,7 @@ def _doctor(args: argparse.Namespace, settings: Settings) -> int:
             report,
             downloads=downloads_allowed(settings),
             since=args.since,
+            # doctor has no --staging: it only names the default in its hint
             staging=DEFAULT_STAGING,
         )
     ) is not None:

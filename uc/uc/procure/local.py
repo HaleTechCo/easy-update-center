@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, TextIO
 
 from uc.aql import WAR_ARTIFACT, WAR_GROUP, Gav, RepoFile, to_gav
 from uc.doctor import required_jenkins_version
+from uc.http import SMALL_FILE_LIMIT
 from uc.pom import pom_coordinates, unusable_reason
-from uc.repo_adapter.archive import SMALL_ENTRY_LIMIT
 from uc.settings import CORE_VERSION
 from uc.timeutil import iso, utcnow
 
@@ -143,8 +143,8 @@ def check_local(file: Path, path: str, inside: Path) -> str | None:
         msg = 'not a file of its own inside the staging folder'
         raise ProcureError(msg)
     if gav.extension == 'pom':
-        if file.stat().st_size > SMALL_ENTRY_LIMIT:
-            msg = f'larger than {SMALL_ENTRY_LIMIT} bytes'
+        if file.stat().st_size > SMALL_FILE_LIMIT:
+            msg = f'larger than {SMALL_FILE_LIMIT} bytes'
             raise ProcureError(msg)
         reason = unusable_reason(
             file.read_bytes(), (gav.group_id, gav.artifact_id, gav.version)
@@ -171,7 +171,7 @@ def declared(file: Path, extension: str) -> Declared | None:
         if extension == 'pom':
             coordinates = (
                 pom_coordinates(file.read_bytes())
-                if file.stat().st_size <= SMALL_ENTRY_LIMIT
+                if file.stat().st_size <= SMALL_FILE_LIMIT
                 else None
             )
             source = 'its POM'
