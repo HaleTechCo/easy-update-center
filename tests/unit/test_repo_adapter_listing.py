@@ -291,6 +291,15 @@ def test_parent_poms_pass_through_and_bogus_ones_are_reported(tmp_path):
     ]
 
 
+def test_an_orphan_pom_outside_maven_layout_is_reported(tmp_path):
+    other = 'a/b/1.0/other.pom'
+    _, index = index_of({other: pom_xml('a', 'b', '1.0')}, tmp_path)
+    assert index.rows == []
+    assert index.report.skipped == [
+        {'path': other, 'reason': 'not in Maven layout; left out of the listing'}
+    ]
+
+
 def test_the_cache_spares_a_second_download(tmp_path):
     files = {f'{AD}.hpi': make_hpi(*AD_GAV), f'{AD}.pom': NGINX_404}
     backend = FakeBackend(files)

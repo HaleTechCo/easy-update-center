@@ -301,6 +301,10 @@ def build_index(backend: Backend, cache: Cache, *, key: str, now: dt.datetime) -
             continue
         gav = to_gav(RepoFile(entry.directory, entry.name))
         if gav is None:
+            # upstream would reject it: it is left out, and reported
+            report.skipped.append(
+                {'path': path, 'reason': 'not in Maven layout; left out of the listing'}
+            )
             continue
         try:
             data, verdict = _repository_pom(

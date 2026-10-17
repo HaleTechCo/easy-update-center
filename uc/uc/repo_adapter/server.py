@@ -15,6 +15,7 @@ import os
 import secrets
 import socket
 import sys
+import tempfile
 import threading
 import urllib.error
 import urllib.parse
@@ -127,11 +128,11 @@ def ensure_token(path: Path) -> str:
         return existing
     path.parent.mkdir(parents=True, exist_ok=True)
     token = secrets.token_hex(32)
-    tmp = path.with_name(f'.{path.name}.{os.getpid()}')
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    # a fresh name each time: a file left by a killed start must not stop this one
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.token.')
     with os.fdopen(fd, 'w', encoding='utf-8') as out:
         out.write(token + '\n')
-    tmp.replace(path)
+    Path(tmp).replace(path)
     return token
 
 
