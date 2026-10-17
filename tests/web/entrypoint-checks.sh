@@ -115,10 +115,10 @@ docker run -d --name "${name}-proxy" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=
     -e DOWNLOAD_BACKEND_URL=http://repo.corp/jenkins --entrypoint sh "${image}" \
     -c 'mkdir -p /tmp/s && printf u:p > /tmp/s/a && sed "s#/run/secrets/download_proxy_auth#/tmp/s/a#" /usr/local/bin/entrypoint.sh > /tmp/e.sh && exec bash /tmp/e.sh' > /dev/null
 expect_log "${name}-proxy" "warning: DOWNLOAD_BACKEND_URL uses plain http" "warns that proxy credentials would cross in the clear"
-# A web container still waiting for its first release stops promptly on SIGTERM, not after Docker's
-# 10 s timeout.
+# Guards that web stops promptly while waiting for its first release: a bash that is PID 1 ignores
+# TERM without a trap, so this takes the whole -t 10 (Docker's default stop timeout) unless the entrypoint handles it.
 start=${SECONDS}
-docker stop "${name}" > /dev/null
+docker stop -t 10 "${name}" > /dev/null
 if ((SECONDS - start <= 5)); then
     echo "ok: stops within 5 seconds while waiting for the first release"
 else
