@@ -347,6 +347,22 @@ def test_a_malformed_adapter_report_keeps_only_well_formed_sections(
     assert 'archive date 1980-02-01 is before 2004' in text
 
 
+@pytest.mark.parametrize('gav', ['a:b', 'a:b:c:d', 'no-colons', ''])
+@pytest.mark.parametrize('section', ['derived_poms', 'needs_pom'])
+def test_an_adapter_report_with_a_malformed_gav_is_ignored(
+    tmp_path, secrets_dir, section, gav
+):
+    settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on')
+    settings.repo_adapter_dir.mkdir(parents=True)
+    settings.repo_adapter_report_file.write_text(
+        json.dumps({section: [{'gav': gav, 'url': 'https://x/y.pom'}]})
+    )
+    report = attach_adapter_report(
+        analyze(classify([]), versions(), FakeSource({}, {})), settings
+    )
+    assert report.summary()['repo_adapter'][section] == 0
+
+
 def test_without_the_adapter_there_is_no_adapter_report(tmp_path, secrets_dir):
     report = attach_adapter_report(
         analyze(classify([]), versions(), FakeSource({}, {})),
