@@ -388,3 +388,17 @@ def test_the_command_line_prepares_and_checks_a_candidate(
     assert release.main(['check', '0.3.0-rc.1']) == 0
     expected = 'version=0.3.0-rc.1\nprerelease=true\n'
     assert capsys.readouterr().out == expected
+
+
+NO_UNRELEASED = '# Changelog\n\n## [0.1.0] - 2026-10-01\n\n- First release.\n'
+
+
+def test_a_changelog_without_an_unreleased_section_is_refused():
+    with pytest.raises(release.ReleaseError, match='has no "## Unreleased" section'):
+        release.unreleased(NO_UNRELEASED)
+    with pytest.raises(release.ReleaseError, match='has no "## Unreleased" section'):
+        release.prepare(NO_UNRELEASED, '0.2.0', '2026-11-02')
+    with pytest.raises(release.ReleaseError, match='has no "## Unreleased" section'):
+        release.check(
+            '0.2.0-rc.1', ['v0.1.0', 'v0.2.0-rc.1'], NO_UNRELEASED, COMPOSE_RC
+        )
