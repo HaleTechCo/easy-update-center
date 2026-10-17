@@ -45,12 +45,17 @@ services:
       - ../../tests:/tests:ro
       - ../../uc/uc:/opt/uc/python/uc:ro
 
+  # updates.jenkins.io sends each plugin download to a nearby mirror, and jenkins-plugin-cli has no
+  # connect timeout: a mirror the runner cannot reach stalls every plugin for minutes. The time
+  # limit ends such a run, and make it-airgapped downloads again from archives.jenkins.io, the
+  # Jenkins project's reference server, which the mirrors fall back on too.
   seed-plugins:
     image: jenkins/jenkins:${LTS_OLD:-lts}
     profiles: ["seed"]
     user: "0:0"
     networks: [internet]
-    entrypoint: ["jenkins-plugin-cli", "--plugins", "${SEED_PLUGINS:-timestamper}", "--plugin-download-directory", "/seed/downloads"]
+    entrypoint: ["timeout", "${SEED_PLUGINS_TIMEOUT:-300}", "jenkins-plugin-cli", "--plugins", "${SEED_PLUGINS:-timestamper}",
+                 "--plugin-download-directory", "/seed/downloads"]
     volumes:
       - seed:/seed
 

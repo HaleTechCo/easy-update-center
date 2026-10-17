@@ -163,10 +163,11 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: make "${TARGET}" PREBUILT=1
 
+  # A run takes about 3 minutes; the limit ends a stuck one well before it holds up a release.
   it-airgapped:
     needs: images
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
