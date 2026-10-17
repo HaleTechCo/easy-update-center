@@ -149,17 +149,21 @@ def query_repository(  # noqa: PLR0917
     if not all(isinstance(r, dict) for r in results):
         msg = 'AQL response has a result that is not an object'
         raise AqlError(msg)
-    return [
-        RepoFile(
-            r.get('path', ''),
-            r.get('name', ''),
-            r.get('sha256'),
-            r.get('actual_sha1'),
-            int(r.get('size') or 0),
-            r.get('modified') or '',
-        )
-        for r in results
-    ]
+    try:
+        return [
+            RepoFile(
+                r.get('path', ''),
+                r.get('name', ''),
+                r.get('sha256'),
+                r.get('actual_sha1'),
+                int(r.get('size') or 0),
+                r.get('modified') or '',
+            )
+            for r in results
+        ]
+    except (ValueError, TypeError, OverflowError) as exc:
+        msg = 'AQL response has a result whose size is not a number'
+        raise AqlError(msg) from exc
 
 
 @dataclass(frozen=True)

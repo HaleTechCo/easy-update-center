@@ -334,10 +334,17 @@ def push(
             continue
         try:
             status, reason = target.put(path, data, staged.sha1)
-            after = target.sha1(path)
         except ProcureError as exc:
             problems += 1
             say('FAILED', path, str(exc))
+            continue
+        try:
+            after = target.sha1(path)
+        except ProcureError as exc:
+            problems += 1
+            # without this the line would read as if the upload itself had failed
+            accepted = 'the upload was accepted, but ' if status in UPLOADED else ''
+            say('FAILED', path, f'{accepted}its .sha1 could not be read back: {exc}')
             continue
         if after == staged.sha1 and status in UPLOADED:
             uploaded += 1
