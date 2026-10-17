@@ -1,6 +1,6 @@
 """Unit tests for uc.downloadmap.
 
-Building, writing and reading the .htdownload-map RewriteMap.
+Building and writing the .htdownload-map RewriteMap.
 """
 
 from uc.aql import Gav, Listing, RepoFile, classify

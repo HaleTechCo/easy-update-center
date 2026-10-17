@@ -126,7 +126,7 @@ def read_entry(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
     """Read an entry's bytes.
 
     None when absent, ArchiveError when its size exceeds limit. zipfile never reads
-    past the size in the header, so that check bounds the data too.
+    past the central directory's size, so that check bounds the data too.
     """
     try:
         info = archive.getinfo(name)

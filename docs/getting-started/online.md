@@ -124,7 +124,7 @@ docker compose logs -f scheduler
 The generator logs each manifest and POM it downloads. The first run prints no `published release <id>` line, unlike later scheduled runs. It is done when
 `docker compose run --rm uc status` shows a `live_release`.
 Until then, the web container logs "waiting for the first published release" and answers nothing.
-A failed run logs a Python traceback saying why
+A failed run is logged as `uc: error: ...` (a traceback for an unexpected error), saying why
 ([Troubleshooting](../troubleshooting.md#generation), which also explains the `GitHubSource` stack
 trace a missing GitHub token prints).
 
