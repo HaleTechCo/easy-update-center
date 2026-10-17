@@ -45,7 +45,7 @@ RANGE_READ_LIMIT = CENTRAL_DIRECTORY_LIMIT + 1024 * 1024
 SHA1_FILE_LIMIT = 4096
 """A .sha1 file: 40 hex characters, sometimes followed by a file name."""
 LISTED_EXTENSIONS = ('.hpi', '.jpi', '.war', '.pom')
-_SHA1 = re.compile(r'^[0-9a-f]{40}$')
+_SHA1 = re.compile(r'^[0-9a-f]{40}\Z')
 
 
 class BackendError(HttpError):

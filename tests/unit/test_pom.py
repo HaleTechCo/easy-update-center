@@ -6,7 +6,14 @@ POM coordinates and the reasons a repository POM is unusable.
 import pytest
 
 from archivefixture import pom_xml
-from uc.pom import dependency_group, pom_coordinates, safe_root, unusable_reason
+from uc.pom import (
+    COORDINATE,
+    GROUP_ID,
+    dependency_group,
+    pom_coordinates,
+    safe_root,
+    unusable_reason,
+)
 
 GIT = ('org.jenkins-ci.plugins', 'git', '5.2.0')
 NGINX_404 = (
@@ -127,3 +134,9 @@ def test_any_other_property_is_unknown():
 def test_no_pom_or_not_xml_is_unknown():
     assert dependency_group(None, 'x') is None
     assert dependency_group(NGINX_404, 'x') is None
+
+
+@pytest.mark.parametrize('pattern', [GROUP_ID, COORDINATE])
+def test_the_coordinate_patterns_refuse_a_trailing_newline(pattern):
+    assert pattern.match('org.jenkins-ci.plugins')
+    assert not pattern.match('org.jenkins-ci.plugins\n')
