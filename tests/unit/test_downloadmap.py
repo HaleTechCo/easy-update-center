@@ -7,7 +7,6 @@ from uc.aql import Gav, Listing, RepoFile, classify
 from uc.downloadmap import (
     build_download_map,
     preferred_groups,
-    read_download_map,
     write_download_map,
 )
 
@@ -93,13 +92,9 @@ def test_preferred_groups_ignores_a_plugins_section_that_is_not_an_object():
     assert preferred_groups({'plugins': 'git'}) == {}
 
 
-def test_write_and_read_roundtrip(tmp_path):
+def test_write_download_map_writes_sorted_lines(tmp_path):
     path = tmp_path / '.htdownload-map'
     write_download_map({'war/2.528.1': 'w.war', 'plugins/git/5.2.0': 'g.hpi'}, path)
     assert path.read_text() == 'plugins/git/5.2.0 g.hpi\nwar/2.528.1 w.war\n'
-    assert read_download_map(path) == {
-        'war/2.528.1': 'w.war',
-        'plugins/git/5.2.0': 'g.hpi',
-    }
     write_download_map({}, path)
     assert path.read_text() == ''

@@ -75,16 +75,3 @@ def write_download_map(mapping: Mapping[str, str], path: Path) -> None:
         ''.join(f'{key} {value}\n' for key, value in sorted(mapping.items())),
         encoding='utf-8',
     )
-
-
-def read_download_map(path: Path) -> dict[str, str]:
-    """Read a map written by write_download_map.
-
-    Skips lines without both a key and a value.
-    """
-    result: dict[str, str] = {}
-    for line in path.read_text(encoding='utf-8').splitlines():
-        key, _, value = line.partition(' ')
-        if key and value:
-            result[key] = value
-    return result
