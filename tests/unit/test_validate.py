@@ -110,6 +110,16 @@ def test_wrong_signing_certificate(tmp_path):
         validate(build(tmp_path), signing_cert_b64='OTHER')
 
 
+@pytest.mark.parametrize(
+    'name', ['current/update-center.actual.json', 'current/plugin-versions.json']
+)
+def test_a_site_document_that_is_not_an_object_is_refused(tmp_path, name):
+    staging = build(tmp_path)
+    (staging / name).write_text('[]')
+    with pytest.raises(ValidationError, match='does not parse: not a JSON object'):
+        validate(staging)
+
+
 def test_download_urls_must_use_public_url(tmp_path):
     with pytest.raises(
         ValidationError,

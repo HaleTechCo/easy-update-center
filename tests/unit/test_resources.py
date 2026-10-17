@@ -79,6 +79,33 @@ def test_github_source(tmp_path, secrets_dir):
     assert json.loads((dest / INFO_FILE).read_text())['ref'] == SHA
 
 
+@pytest.mark.parametrize(
+    'answer',
+    [
+        b'["not", "an", "object"]',
+        b'null',
+        b'{"sha": null}',
+        b'{"sha": 7}',
+        b'{"sha": "' + SHA.encode() + b'\\n"}',
+    ],
+)
+def test_an_unusable_github_answer_falls_back_to_last_good(
+    tmp_path, secrets_dir, answer
+):
+    settings = make_settings(tmp_path, secrets_dir, RESOURCES_SOURCE='github')
+    first = prepare_resources(
+        settings, tmp_path / 'w1', NOW, get=github_getter(make_tar(UPSTREAM))
+    )
+    save_last_good(first, settings.data_dir)
+
+    def get(_url, _headers=None, _timeout=60):
+        return answer
+
+    second = prepare_resources(settings, tmp_path / 'w2', NOW, get=get)
+    assert second.info.ref == SHA
+    assert 'using last-good copy' in second.warnings[0]
+
+
 def test_url_source_checks_sha256(tmp_path, secrets_dir):
     tarball = make_tar({name[len(PREFIX) :]: data for name, data in UPSTREAM.items()})
     digest = hashlib.sha256(tarball).hexdigest()

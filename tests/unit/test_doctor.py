@@ -232,6 +232,25 @@ def test_run_doctor_includes_live_tiers(tmp_path, secrets_dir):
     assert report.exit_code() == 0
 
 
+@pytest.mark.parametrize('content', ['[]', '"weekly"', 'null', '{bad'])
+def test_run_doctor_ignores_a_tiers_file_that_is_not_an_object(
+    tmp_path, secrets_dir, content
+):
+    settings = make_settings(tmp_path, secrets_dir)
+    release = settings.data_dir / 'releases' / '20260922T000000Z'
+    release.mkdir(parents=True)
+    (release / 'tiers.json').write_text(content)
+    (settings.data_dir / 'live').symlink_to('releases/20260922T000000Z')
+    report = run_doctor(
+        settings,
+        CREDS,
+        fetch=False,
+        versions=VersionTool.from_settings(settings),
+        query=lambda *_args: plugin('git', '5.2.0', 'hpi', 'pom'),
+    )
+    assert report.tiers is None
+
+
 ADAPTER_REPORT = {
     'derived_poms': [
         {

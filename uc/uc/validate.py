@@ -58,13 +58,18 @@ class ValidationResult:
 def load_site_json(path: Path) -> Any:
     """Parse a site JSON file.
 
-    Unwraps the updateCenter.post(...) JSONP wrapper when present.
+    Unwraps the updateCenter.post(...) JSONP wrapper when present; ValueError when the
+    document is not a JSON object.
     """
     text = path.read_text(encoding='utf-8').strip()
     if text.startswith(JSONP_PREFIX):
         text = text[len(JSONP_PREFIX) :].rstrip()
         text = text.removesuffix(');')
-    return json.loads(text)
+    doc = json.loads(text)
+    if not isinstance(doc, dict):
+        msg = 'not a JSON object'
+        raise ValueError(msg)  # noqa: TRY004 - callers catch ValueError for bad JSON
+    return doc
 
 
 def count_plugins(site: Path) -> int | None:
