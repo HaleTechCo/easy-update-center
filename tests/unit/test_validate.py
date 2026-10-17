@@ -273,3 +273,25 @@ def test_old_versions_in_plugin_versions_need_no_download_map_entry(tmp_path):
     assert validate(staging, download_map=dict.fromkeys(OFFERED, 'x')).offered == (
         frozenset(OFFERED)
     )
+    # the check is live, and of what the site documents offer it names only the
+    # missing one: the map lacks 4.0.0 as well
+    incomplete = dict.fromkeys(OFFERED - {'plugins/git/5.2.0'}, 'x')
+    with pytest.raises(ValidationError) as err:
+        validate(staging, download_map=incomplete)
+    assert err.value.problems == ['download map has no entry for plugins/git/5.2.0']
+
+
+@pytest.mark.parametrize('name', ['update-center.json', 'update-center.actual.json'])
+def test_a_truncated_site_document_is_refused_and_its_site_checked_no_further(
+    tmp_path, name
+):
+    staging = build(tmp_path)
+    good = (staging / 'dynamic-2.540' / name).read_text()
+    (staging / 'dynamic-2.540' / name).write_text(good[: len(good) // 2])
+    with pytest.raises(ValidationError) as err:
+        validate(staging)
+    parse = [p for p in err.value.problems if 'does not parse' in p]
+    assert len(parse) == 1
+    assert parse[0].startswith('dynamic-2.540/ update-center JSON does not parse: ')
+    # the other sites are still checked, and this one stops at the parse error
+    assert not [p for p in err.value.problems if 'dynamic-2.540' in p and p != parse[0]]
