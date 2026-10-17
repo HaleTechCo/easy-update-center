@@ -45,12 +45,11 @@ Bypass list: the **Repository admin** role, bypass mode Always. Only admins can 
 delete a release tag, and pushing one is what publishes a release
 ([Releasing](releasing.md#cut-a-release)).
 
-Why this holds: no workflow token can push to `main` or create a release tag. Only `release.yml`'s `draft`
-and `publish` jobs hold `contents: write`, to create and publish the GitHub Release on the tag that
-already exists, and the
-Release workflow's `check` job refuses a tag on a commit that is not on `main`. Keep the admin role
-to people you would let publish a release (today one maintainer, with members' base permission
-Read).
+Why this holds: no workflow token can push to `main` or create a release tag. Only `release.yml`'s
+`draft` and `publish` jobs hold `contents: write`, to create and publish the GitHub Release on the
+tag that already exists, and the Release workflow's `check` job refuses a tag on a commit that is
+not on `main`. Keep the admin role to people you would let publish a release (today one
+maintainer, with members' base permission Read).
 
 ## 6. Security and moderation
 

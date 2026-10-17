@@ -418,7 +418,7 @@ jobs:
               exit 1
           fi
           if [[ "$(jq '.[0].draft' "${RUNNER_TEMP}/tagged.json")" != true ]]; then
-              echo "::error::v${VERSION} is already published, and a published release is never changed: release the next version"
+              echo "::error::v${VERSION} is already published: if this run published it, the release is done; otherwise release the next version"
               exit 1
           fi
           assets="$(jq --raw-output '[.[0].assets[].name] | sort | join(" ")' "${RUNNER_TEMP}/tagged.json")"
@@ -443,7 +443,9 @@ jobs:
           password: ${{ github.token }}
       # One source and no annotations: the tag names the signed index as it is. Any other digest
       # stops the run before the Release is published. Each tag for both images before the next
-      # tag: X.Y.Z first, so a failure never leaves X.Y or latest naming a mixed pair.
+      # tag: X.Y.Z first, so a failure there never leaves X.Y or latest naming a mixed pair. A
+      # mismatch at a later tag stops the run with the earlier tags good and needs the manual
+      # recovery in docs/development/releasing.md.
       - name: Tag the images
         env:
           UC_DIGEST: ${{ needs.index.outputs.uc-digest }}
@@ -467,6 +469,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          latest=true
-          if [[ "${PRERELEASE}" == true ]]; then latest=false; fi
+          latest=false
+          if [[ "${PRERELEASE}" == false ]]; then latest=true; fi
           gh release edit "v${VERSION}" --draft=false --latest="${latest}"

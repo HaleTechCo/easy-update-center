@@ -42,13 +42,16 @@ images are tagged `X.Y.Z-rc.N` only, and it never moves `X.Y` or `latest`.
 
    ```bash
    git switch main && git pull
-   git log -1                                # the "Release X.Y.Z" merge: note its SHA
+   git log --oneline -10                     # find the "Release X.Y.Z" commit: copy its SHA
    git tag -s vX.Y.Z -m "Release X.Y.Z" <sha>   # -s signs it; -a if you have no signing key
    git push origin vX.Y.Z
    ```
 
-   Name the SHA: after the pull, `main` may already hold another pull request's merge, which an
-   unnamed tag would label as the release.
+   Name the SHA, and take it from the release pull request's commit, not from `git log -1`: after
+   the pull, `main` may already hold another pull request's merge, which an unnamed tag would label
+   as the release. The commit's subject depends on how the pull request was merged (the repository
+   allows rebase and squash merges only), so if the log is unclear, copy the commit SHA that the
+   pull request page shows after the merge.
 
 The tag starts the Release workflow. Its jobs run in this order; each starts only if the ones before
 it succeeded.
@@ -76,17 +79,26 @@ move to it: [Upgrade](../how-to/upgrade.md).
   and choose **Re-run failed jobs** within 7 days. It keeps the jobs that succeeded and their
   outputs.
 - **A later job failed because of the workflow or the code, before `publish`'s "Tag the images"
-  step:** nothing anyone can pull or download exists yet. Delete the draft Release and the tag, fix
-  it on `main`, and tag the next rc or patch version.
-- **`publish` failed inside "Tag the images":** a transient error (network, registry): **Re-run
-  failed jobs**, the step is idempotent. A digest mismatch (the log says a tag "is X, not the signed
-  Y"): the tag is wrong and not to be trusted, so delete the draft Release and the tag, find the
-  cause, and cut the next version.
-- **`publish` failed after "Tag the images" (when publishing the Release):** the image tags
-  already exist and name the signed digests, so re-run `publish` with **Re-run failed jobs**; do not
-  delete the tag or cut another version for it.
-- **A published release is never changed** (Immutable Releases): fix it with the next patch
+  step:** no version, `X.Y` or `latest` image tag exists yet (the `build-<commit>` indexes do), and
+  no Release is published. Delete the draft Release and the tag, fix it on `main`, and tag the next
+  rc or the next version. If the abandoned version was a release, its CHANGELOG section stays:
+  add a line to Unreleased saying `X.Y.Z` was never published, so that it goes under the next
   version.
+- **`publish` failed inside "Tag the images":** a transient error (network, registry): re-run
+  `publish` with **Re-run failed jobs** while no newer version tag exists (an older release's
+  re-run would move `X.Y` and `latest` back); the step is idempotent. A digest mismatch (the log
+  says a tag "is X, not the signed Y"): the run stops at the first tag that names another digest,
+  and the tags before it are good. Delete the draft Release, the git tag, and the mismatched
+  image's package version in GHCR (the package's settings page). If the bad tag was `X.Y` or
+  `latest`, point it back with
+  `docker buildx imagetools create --tag <repo>:<tag> <repo>:<previous version>`. Then find the
+  cause and cut the next version.
+- **`publish` failed after "Tag the images" (when publishing the Release):** the image tags
+  already exist and name the signed digests, so re-run `publish` with **Re-run failed jobs** while
+  no newer version tag exists, otherwise cut the next version; do not delete the tag. If it says
+  the release is "already published", the edit may have succeeded without the run seeing the
+  answer: if this run published it, the release is done; otherwise cut the next version.
+- **A published release is never changed** (Immutable Releases): fix it with the next version.
 
 ## Security fixes in the base images
 
@@ -101,8 +113,8 @@ operators only in a new release. Two things say when one is due:
   "Fixable vulnerabilities in the published images", listing them, or updates it; a later scan
   that finds none closes it. Before the first release it skips with a notice.
 
-While that issue is open, merge Dependabot's pull request if one is waiting, then cut a patch
-release with a CHANGELOG entry under `### Security` naming the vulnerabilities. A fix in a package
+While that issue is open, merge Dependabot's pull request if one is waiting, then cut the next
+version with a CHANGELOG entry under `### Security` naming the vulnerabilities. A fix in a package
 the base image ships arrives with the base image's next build, so if the rebuilt images still have
 it, wait for Dependabot's next pull request.
 
@@ -128,9 +140,10 @@ candidates:
       `cosign attest --type https://spdx.dev/Document/v2.3 --predicate <sbom>` (`--type spdxjson`
       would record `https://spdx.dev/Document`, which the verify commands do not match), then cut
       the next rc.
-- [ ] Download the rc bundle, unpack it (`tar -xf easy-update-center-0.1.0-rc.1-airgapped-amd64.tar`),
-      load its images (`docker load -i images.tar`, inside the unpacked folder), and in a checkout of
-      the rc tag run:
+- [ ] Download the rc bundle, unpack it
+      (`tar -xf easy-update-center-0.1.0-rc.1-airgapped-amd64.tar`), load its images
+      (`docker load -i images.tar`, inside the unpacked folder), and in a checkout of the rc tag
+      run:
 
       ```bash
       make it-airgapped PREBUILT=1 \
@@ -142,13 +155,19 @@ candidates:
       `PREBUILT=1` keeps the loaded images. The test image, named for the rc so that it does not
       exist yet, is built on the rc's uc image, as the Release workflow's `ci` job builds it, so
       every container runs the rc's images (with the checkout's `uc` code mounted, the rc tag's).
+
+      Then check each bundle's architecture: load its `images.tar` (the arm64 bundle last, since
+      it overwrites the same tags) and run
+      `docker image inspect --format '{{.Os}}/{{.Architecture}}' ghcr.io/haletechco/easy-update-center-uc:0.1.0-rc.1`
+      (and the same for the web image). It prints `linux/amd64` for the amd64 bundle and
+      `linux/arm64` for the arm64 one.
 - [ ] Deploy the rc end to end ([Deploy online](../getting-started/online.md) or
       [Deploy air-gapped](../getting-started/airgapped.md)). `uc status` shows a `live_release` and
       `uc_version` `0.1.0-rc.1`.
 - [ ] The pre-release's notes match the Unreleased section, and their links open.
 - [ ] Watch `docker save` on both paths, which may need `--platform` when its images came from
-      multi-architecture indexes: in `ci.yml`'s `images` job (which the Release passes images pulled
-      from the indexes) and in `release.yml`'s `bundle` job. If either fails or saves the wrong
+      multi-architecture indexes: in `ci.yml`'s `images` job (to which the Release passes images
+      pulled from the indexes) and in `release.yml`'s `bundle` job. If either fails or saves the wrong
       architecture, add `--platform` there.
 - [ ] If anything fails, fix it on `main` and cut `0.1.0-rc.2`; repeat until an rc passes.
 - [ ] Cut `0.1.0` (`prepare 0.1.0` moves the CHANGELOG), then make the packages public
