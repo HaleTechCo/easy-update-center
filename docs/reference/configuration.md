@@ -154,7 +154,7 @@ directory, not by the containers.
 | Setting | Default | Notes |
 |---|---|---|
 | `COMPOSE_FILE` | `compose.yaml` | The Compose files every plain `docker compose` command uses. Set it whenever you use an override, in either mode, so later commands keep it: `compose.yaml:compose.airgapped.yaml` air-gapped, plus `compose.tls.yaml`, `compose.repo-ca.yaml` or `compose.proxy-ca.yaml` when you use them, and `compose.build.yaml` to run images built from your checkout ([Or build from source](../getting-started/online.md#or-build-from-source)). On Windows, separate the files with `;`. Without it, add `-f` for each file to every command. |
-| `UC_ENV_FILE` | `.env` | The file every uc-image service loads as `env_file`; web takes its variables from Compose's own `.env` (or `--env-file`). Lets several configurations sit side by side. |
+| `UC_ENV_FILE` | `.env` | The file every uc-image service loads as `env_file`. Web does not use it: it takes its variables from Compose's own `.env`, or from `--env-file`. To run several configurations side by side, see [Several configurations](#several-configurations). |
 | `UC_UID` | `10001` | The user id every container runs as. On Linux, set it to the output of `id -u`, so the files in `secrets/` and `procurement/` stay yours. |
 | `UC_GID` | `10001` | The group id every container runs as. On Linux, the output of `id -g`. |
 | `UC_IMAGE` | this release's | The image for `uc`, `scheduler`, `repo-adapter` and `setup`. Unset, `compose.yaml` names this release's, `ghcr.io/haletechco/easy-update-center-uc:<version>`, and `compose.build.yaml` names `easy-update-center/uc:local`. |
@@ -175,6 +175,31 @@ docker compose run --rm --no-deps --user 0:0 --cap-add CHOWN --cap-add DAC_READ_
 
 The first gives the data volume to the new user, skipping the repo-adapter's volume, which `uc`
 mounts read-only; the second gives the repo-adapter's volume from the repo-adapter service.
+
+## Several configurations
+
+`UC_ENV_FILE` alone does not separate two configurations: web still reads Compose's `.env`, and the
+project is always named `easy-update-center`, so two would share one set of volumes. Give each
+configuration its own env file, name the file inside itself, and select it and a project name on
+every command:
+
+```bash
+# .env.staging, besides the usual settings:
+UC_ENV_FILE=.env.staging
+HTTP_PORT=9080
+HTTPS_PORT=9443
+
+docker compose --env-file .env.staging -p staging config --quiet
+docker compose --env-file .env.staging -p staging up -d
+docker compose --env-file .env.staging -p staging run --rm uc status
+```
+
+`--env-file` feeds Compose's own interpolation, so web, `UC_ENV_FILE` itself and the ports take
+their values from that file. `-p` replaces the project name, so the volumes (`uc-data`, the
+repository adapter's) and networks are named `staging_...` and are separate. Each configuration
+needs its own `HTTP_PORT` and `HTTPS_PORT`. `./secrets`, `./config` and `./procurement` are folders
+of the project directory and are shared by every project that runs from it; to keep them apart, put
+each configuration in its own copy of the directory.
 
 ## Testing and evaluation
 
