@@ -303,3 +303,40 @@ def test_bytes_artifact_keeper_stored_without_recording_them_are_kept_for_push(
         f'0 removed, 1 kept, 0 problem(s) -> {stub.url}/maven/jenkins/',
     ]
     assert [request[0] for request in stub.requests] == ['GET', 'HEAD']
+
+
+def test_a_file_that_is_a_link_out_of_the_folder_is_skipped_and_left_alone(
+    keeper, tmp_path, secrets_dir
+):
+    repo, url = keeper
+    publish(repo, POM, b'<project/>')
+    stage_dir, outside = tmp_path / 'stage', tmp_path / 'outside.pom'
+    outside.write_bytes(b'<project/>')
+    # placed by hand, so procurement.json does not list it
+    (stage_dir / POM).parent.mkdir(parents=True)
+    (stage_dir / POM).symlink_to(outside)
+    code, lines = run(keeper_settings(tmp_path, secrets_dir, url), stage_dir)
+    assert code == 0
+    assert lines == [f'0 removed, 0 kept, 0 problem(s) -> {url}maven/jenkins/']
+    assert (stage_dir / POM).is_symlink()
+    assert outside.read_bytes() == b'<project/>'
+
+
+def test_a_recorded_file_replaced_by_a_link_out_is_forgotten_not_followed(
+    keeper, tmp_path, secrets_dir
+):
+    repo, url = keeper
+    publish(repo, POM, b'<project/>')
+    stage_dir, outside = tmp_path / 'stage', tmp_path / 'outside.pom'
+    staged(stage_dir, {POM: b'<project/>'})
+    outside.write_bytes(b'<project/>')
+    (stage_dir / POM).unlink()
+    (stage_dir / POM).symlink_to(outside)
+    code, lines = run(keeper_settings(tmp_path, secrets_dir, url), stage_dir)
+    # the repository holds what was recorded, so the entry is done; the link goes and
+    # what it led to is untouched
+    assert code == 0
+    assert lines[0] == line('removed', POM, 'already gone from the folder')
+    assert not (stage_dir / POM).is_symlink()
+    assert outside.read_bytes() == b'<project/>'
+    assert listed(stage_dir) == set()

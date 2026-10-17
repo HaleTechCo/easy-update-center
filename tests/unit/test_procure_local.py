@@ -343,3 +343,20 @@ def test_fix_never_moves_a_file_out_of_the_staging_folder(tmp_path):
     ) in lines
     assert list(outside.iterdir()) == []
     assert (root / 'copy.hpi').is_file()
+
+
+def test_a_file_that_is_a_link_out_of_the_staging_folder_is_refused(tmp_path):
+    root, outside = tmp_path / 'stage', tmp_path / 'outside'
+    (root / AD).parent.mkdir(parents=True)
+    outside.mkdir()
+    (outside / 'real.hpi').write_bytes(
+        make_hpi(PLUGINS, 'active-directory', '2.967.v1')
+    )
+    (root / (AD + '.hpi')).symlink_to(outside / 'real.hpi')
+    code, lines = run(root)
+    assert code == 1
+    assert (
+        f'REFUSED   {AD}.hpi  (not a file of its own inside the staging folder)'
+    ) in lines
+    assert lines[-1] == summary(0, 1)
+    assert not (root / 'procurement.json').exists()
