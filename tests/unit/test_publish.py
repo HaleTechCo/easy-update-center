@@ -187,3 +187,30 @@ def test_run_lock_can_wait_for_the_holder(tmp_path):
         assert not entered.wait(0.3)
     thread.join(5)
     assert entered.is_set()
+
+
+def test_a_fresh_volume_has_no_releases_and_nothing_to_roll_back_to(tmp_path):
+    assert list_releases(tmp_path) == []
+    with pytest.raises(PublishError, match='no earlier release to roll back to'):
+        rollback(tmp_path)
+
+
+def test_reclaim_orphans_unlinks_a_file_or_link_named_like_a_staging_tree(tmp_path):
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    (outside / 'keep').write_text('x')
+    root = releases_dir(tmp_path)
+    root.mkdir(parents=True)
+    (root / f'{R2}.staging').write_text('a file')
+    (root / f'{R3}.staging').symlink_to(outside, target_is_directory=True)
+    (tmp_path / 'work').mkdir()
+    (tmp_path / 'work' / R2).symlink_to(outside, target_is_directory=True)
+    assert reclaim_orphans(tmp_path, R1) == [
+        f'releases/{R2}.staging',
+        f'releases/{R3}.staging',
+        f'work/{R2}',
+    ]
+    assert not list(root.iterdir())
+    assert not list((tmp_path / 'work').iterdir())
+    # the links were removed, not followed
+    assert (outside / 'keep').read_text() == 'x'
