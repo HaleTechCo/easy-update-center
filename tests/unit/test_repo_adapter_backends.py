@@ -8,6 +8,7 @@ import datetime as dt
 import hashlib
 import io
 import json
+import threading
 import zipfile
 
 import pytest
@@ -440,7 +441,15 @@ def test_a_range_reader_ends_at_a_body_shorter_than_the_listing_says():
     # a listing size larger than the file: the read ends, it does not ask again forever
     with StubServer({('GET', '/short'): (206, {}, b'abc')}) as stub:
         reader = RangeReader(Http(None), stub.url + '/short', {}, 1000)
-        assert reader.read() == b'abc'
+        result = []
+        # without the end of read() it spins forever: bound it so that is a failure
+        thread = threading.Thread(
+            target=lambda: result.append(reader.read()), daemon=True
+        )
+        thread.start()
+        thread.join(5)
+        assert not thread.is_alive(), 'read() never ended'
+        assert result == [b'abc']
         assert len(stub.requests) == 1
 
 
