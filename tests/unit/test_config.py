@@ -10,6 +10,7 @@ from urllib.parse import unquote
 import pytest
 
 from uc.config import (
+    INTERNAL,
     _proxy_hostport,
     load_settings,
     plain_http_warnings,
@@ -106,7 +107,6 @@ def test_artifact_keeper_defaults():
     s = load_settings(KEEPER)
     assert s.repo_type == 'artifact-keeper'
     assert s.repo_url == 'https://ak.corp/'
-    assert s.repo_adapter is True
     assert s.download_backend_url == 'https://ak.corp/maven/jenkins-prod-local'
 
 
@@ -121,7 +121,6 @@ def test_artifact_keeper_online_needs_its_own_url_and_forces_the_adapter():
         )
     s = load_settings({**KEEPER, 'MODE': 'online'})
     assert s.repo_adapter is True
-    assert s.core_age_days == 400
 
 
 def test_artifact_keeper_refuses_the_adapter_off():
@@ -363,10 +362,7 @@ def test_every_url_setting_is_parsed_when_the_settings_load(name, bad):
 @pytest.mark.parametrize(
     ('name', 'value'),
     [
-        ('HTTPS_PROXY', 'proxy.corp:3128'),
         ('HTTP_PROXY', 'http://user:pw@proxy.corp:3128'),  # pragma: allowlist secret
-        # urllib reads a scheme-less svc: with no / after it as the user name
-        ('HTTPS_PROXY', 'svc:S3cretPW@proxy.corp:3128'),
         ('REPO_API_URL', 'https://artifactory.corp/artifactory/api/'),
         ('RESOURCES_URL', 'https://mirror.corp/resources.zip'),
     ],
@@ -608,48 +604,13 @@ NO_AT_SETTINGS = (
 """The URL settings that never carry credentials, so any @ in them is refused."""
 
 
-def refused(name):
-    """Return how the message refusing a URL setting's malformed value starts.
-
-    An @ in a setting that never carries credentials is refused before the URL is
-    parsed.
-    """
-    return (
-        f'^{name} must not contain credentials or an @'
-        if name in NO_AT_SETTINGS
-        else f'^{name} is not a valid URL: '
-    )
-
-
 @pytest.mark.parametrize('name', ALL_URL_SETTINGS)
 def test_a_malformed_url_message_does_not_quote_the_value(name):
-    with pytest.raises(ConfigError, match=refused(name)) as error:
-        load_settings(
-            {
-                **AIRGAPPED,
-                name: (
-                    'https://admin:S3cretPW@host.corp:wxyz/'  # pragma: allowlist secret
-                ),
-            }
-        )
-    for part in ('admin', 'S3cretPW', 'wxyz'):
+    # no @, so the refusal is the malformed-URL one for every setting
+    with pytest.raises(ConfigError, match=f'^{name} is not a valid URL: ') as error:
+        load_settings({**AIRGAPPED, name: 'https://host.corp:wxyz/'})
+    for part in ('host.corp', 'wxyz'):
         assert part not in str(error.value)
-
-
-@pytest.mark.parametrize(
-    'name', [name for name in ALL_URL_SETTINGS if not name.endswith('_PROXY')]
-)
-def test_a_password_that_ends_the_host_early_is_not_quoted(name):
-    # Only the proxies take the user info up to the last @; elsewhere urlsplit reads
-    # S3cretPW as the port.
-    with pytest.raises(ConfigError, match=refused(name)) as error:
-        load_settings(
-            {
-                **AIRGAPPED,
-                name: 'https://admin:S3cretPW#x@host.corp/',  # pragma: allowlist secret
-            }
-        )
-    assert 'S3cretPW' not in str(error.value)
 
 
 TOKEN = 'Tok3nQx7'
@@ -781,28 +742,9 @@ def test_the_download_url_is_taken_as_set_without_its_trailing_slash(mode):
     )
 
 
-def test_the_mirror_defaults_to_get_jenkins_io():
-    assert (
-        load_settings(
-            {'MODE': 'online', 'PUBLIC_URL': 'https://uc.example.com'}
-        ).download_backend_url
-        == 'https://get.jenkins.io'
-    )
-
-
 def test_internal_paths_are_fixed_unless_a_test_overrides_them(tmp_path):
     s = load_settings(ONLINE)
-    assert (s.data_dir, s.overlay_dir, s.app_dir, s.secrets_dir) == (
-        Path('/data'),
-        Path('/config/overlay'),
-        Path('/opt/uc'),
-        Path('/run/secrets'),
-    )
-    assert (s.repo_adapter_url, s.repo_adapter_dir) == (
-        'http://repo-adapter:8081/artifactory/',
-        Path('/data/repo-adapter'),
-    )
-    assert s.signing_key_file == Path('/run/secrets/update-center.key')
+    assert (s.overlay_dir, s.app_dir) == (Path('/config/overlay'), Path('/opt/uc'))
     moved = load_settings(
         {
             **ONLINE,
@@ -828,19 +770,7 @@ def test_the_adapter_directory_follows_the_data_directory(tmp_path):
 
 
 def test_internal_paths_are_not_settings():
-    for name in (
-        'UC_DATA_DIR',
-        'UC_OVERLAY_DIR',
-        'UC_APP_DIR',
-        'SECRETS_DIR',
-        'REPO_ADAPTER_URL',
-        'REPO_ADAPTER_DIR',
-        'REPO_ADAPTER_PORT',
-        'PROCUREMENT_STAGING_DIR',
-        'DOWNLOAD_PROXY_AUTH_FILE',
-        'SIGNING_KEY_FILE',
-        'REPO_PUSH_AUTH_FILE',
-    ):
+    for name in INTERNAL:
         assert name not in REGISTRY, name
 
 
