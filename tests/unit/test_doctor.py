@@ -809,3 +809,29 @@ def test_a_doctor_fetch_keeps_the_credentials_off_another_host():
             assert source.pom(gav) == b'<project/>'
     _method, _path, headers, _body = other.requests[0]
     assert 'Authorization' not in headers
+
+
+@pytest.mark.parametrize(('adapter', 'expected'), [('on', None), ('off', 'ca')])
+def test_the_doctor_gives_the_repository_ca_only_without_the_adapter(
+    tmp_path, secrets_dir, adapter, expected
+):
+    ca = tmp_path / 'corp-ca.pem'
+    settings = make_settings(
+        tmp_path, secrets_dir, REPO_ADAPTER=adapter, REPO_CA_FILE=str(ca)
+    )
+    queried = []
+
+    def query(*args):
+        queried.append(args)
+        return plugin('git', '5.2.0', 'hpi', 'pom')
+
+    inspection = inspect_repository(
+        settings, CREDS, fetch=False, versions=versions(), query=query
+    )
+    want = ca if expected else None
+    assert queried[0][4] == want  # the query's ca_file argument
+    assert inspection.source.ca_file == want
+    assert (
+        ArtifactSource.from_settings(settings, CREDS, allow_network=False).ca_file
+        == want
+    )
