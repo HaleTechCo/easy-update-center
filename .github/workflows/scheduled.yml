@@ -45,6 +45,9 @@ jobs:
         env:
           JENKINS_COMMUNITY_USERNAME: ${{ secrets.JENKINS_COMMUNITY_USERNAME }}
           JENKINS_COMMUNITY_PASSWORD: ${{ secrets.JENKINS_COMMUNITY_PASSWORD }}
+          # the run's own read-only token: the generator reads plugin repositories' topics (labels)
+          GITHUB_USERNAME: x-access-token
+          GITHUB_TOKEN: ${{ github.token }}
         run: make it-online
 
   upstream-watch:

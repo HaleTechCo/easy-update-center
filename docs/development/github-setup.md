@@ -70,7 +70,8 @@ each for the actions, the base images, the pre-commit hooks and pre-commit itsel
 
 Settings > Secrets and variables > Actions: `JENKINS_COMMUNITY_USERNAME` and
 `JENKINS_COMMUNITY_PASSWORD`, a free Jenkins community account, for the weekly `it-online` run.
-Without them the run is skipped with a notice.
+Without them the run is skipped with a notice. The run passes its own automatic token as the GitHub
+token, so plugin labels from GitHub topics are tested too, with no secret to add.
 
 ## 8. After the first release
 
