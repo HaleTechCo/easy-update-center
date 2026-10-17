@@ -360,3 +360,48 @@ def test_a_file_that_is_a_link_out_of_the_staging_folder_is_refused(tmp_path):
     ) in lines
     assert lines[-1] == summary(0, 1)
     assert not (root / 'procurement.json').exists()
+
+
+def test_a_pom_whose_version_is_an_unresolved_property_is_refused_without_a_path(
+    tmp_path,
+):
+    # <version>${revision}</version> would name a path with ${...} in it
+    publish(
+        tmp_path,
+        AD + '.pom',
+        pom_xml(PLUGINS, 'active-directory', '${revision}'),
+    )
+    code, lines = run(tmp_path, fix=True)
+    assert code == 1
+    (refused,) = [line for line in lines if line.startswith('REFUSED')]
+    assert refused.startswith(f'REFUSED   {AD}.pom  (not a usable POM for its path')
+    assert 'belongs at' not in refused
+    assert (tmp_path / (AD + '.pom')).is_file()
+    assert Staging.open(tmp_path, SOURCE).files == {}
+
+
+@pytest.mark.parametrize(
+    ('group', 'artifact'),
+    [(PLUGINS, 'a/b'), ('a..b', 'active-directory'), (PLUGINS, '../x')],
+)
+@pytest.mark.parametrize('fix', [False, True])
+def test_a_manifest_naming_an_unsafe_path_is_not_believed_and_the_file_stays_put(
+    tmp_path, group, artifact, fix
+):
+    publish(
+        tmp_path,
+        AD + '.hpi',
+        make_hpi(
+            PLUGINS,
+            'active-directory',
+            '2.967.v1',
+            manifest_group=group,
+            manifest_artifact=artifact,
+        ),
+    )
+    code, lines = run(tmp_path, fix=fix)
+    # recorded where it lies, as for a manifest that names nothing
+    assert code == 0
+    assert not [line for line in lines if 'belongs at' in line]
+    assert (tmp_path / (AD + '.hpi')).is_file()
+    assert AD + '.hpi' in Staging.open(tmp_path, SOURCE).files
