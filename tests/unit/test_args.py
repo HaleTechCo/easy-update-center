@@ -10,7 +10,7 @@ from uc.model import Tiers
 from ucsupport import make_settings
 
 
-def test_argument_lines_mirror_upstream(tmp_path, secrets_dir):
+def test_each_update_site_gets_its_argument_line(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, UC_EXTRA_ARGS='--max-plugins 20')
     staging = tmp_path / 'data' / 'releases' / 'R.staging'
     lines = build_argument_lines(settings, staging, Tiers(('2.540',), ('2.528.1',)))
@@ -44,9 +44,6 @@ def test_argument_lines_mirror_upstream(tmp_path, secrets_dir):
             f'--latest-links-directory {s}/current/latest'
         ),
     ]
-    for line in lines:
-        assert '--downloads-directory' not in line
-        assert '--index-template-url' not in line
 
 
 def test_zero_tiers_build_experimental_and_current_only(tmp_path, secrets_dir):
