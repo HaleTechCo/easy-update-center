@@ -25,6 +25,11 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: [version-update:semver-major]
+      # Dependabot reads maven's tag as a version with the JDK as its build number
+      # (3.9-eclipse-temurin-21 is 3.9.21), so a new Java looks like a patch: the tag stays, and only
+      # its digest moves.
+      - dependency-name: maven
+        update-types: [version-update:semver-minor, version-update:semver-patch]
     groups:
       images:
         patterns: ['*']
