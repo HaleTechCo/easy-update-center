@@ -175,14 +175,24 @@ same "as root: exits 1" 1 "${rc}"
 says "as root: names UC_UID and UC_GID" "setup must not run as root: set UC_UID and UC_GID in .env"
 
 # 9b. A container that started before setup makes Docker create a directory at each missing secret
-# path: stop, naming the first one, before creating anything.
+# path: stop, naming every one, before creating anything.
 fresh
-mkdir "${secrets}/update-center.key" "${secrets}/repo_username"
+mkdir "${secrets}/update-center.key" "${secrets}/root-ca.crt" "${secrets}/repo_username"
 run
 same "directories at secret paths: exits 1" 1 "${rc}"
-says "directories at secret paths: names the key" "secrets/update-center.key is a directory, not a file: Docker creates one when a container starts before setup; remove it and run setup again"
+for name in update-center.key root-ca.crt repo_username; do
+    says "directories at secret paths: names ${name}" "secrets/${name} is a directory, not a file: Docker creates one when a container starts before setup; remove it and run setup again"
+done
 lacks "directories at secret paths: creates nothing" "created any missing"
 if [[ ! -e "${secrets}/repo_password" ]]; then pass "directories at secret paths: no credential file created"; else fail "directories at secret paths: repo_password was created"; fi
+
+# 9c. root-ca.crt alone (a Compose secret of uc and scheduler) is refused before any file is made.
+fresh
+mkdir "${secrets}/root-ca.crt"
+run
+same "directory at root-ca.crt: exits 1" 1 "${rc}"
+says "directory at root-ca.crt: names it" "secrets/root-ca.crt is a directory, not a file"
+if [[ ! -e "${secrets}/repo_password" ]]; then pass "directory at root-ca.crt: no credential file created"; else fail "directory at root-ca.crt: repo_password was created"; fi
 
 # 6. Usage.
 fresh
