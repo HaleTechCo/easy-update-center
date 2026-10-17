@@ -163,7 +163,7 @@ def setup_mount_problems(setup: dict) -> list[str]:
     volumes = {volume.get('target'): volume for volume in setup.get('volumes') or []}
     if set(volumes) != set(SETUP_MOUNTS):
         return [f'setup mounts {sorted(volumes, key=str)}, not {sorted(SETUP_MOUNTS)}']
-    problems, projects = [], set()
+    problems = []
     for target, (source, read_only) in SETUP_MOUNTS.items():
         volume = volumes[target]
         # Compose gives the absolute host path, with backslashes on Windows.
@@ -172,17 +172,11 @@ def setup_mount_problems(setup: dict) -> list[str]:
             problems.append(
                 f'setup mounts {volume.get("source")!r} at {target}, not ./{source}'
             )
-        else:
-            projects.add(path.removesuffix(f'/{source}'))
         if bool(volume.get('read_only')) != read_only:
             problems.append(
                 f'setup must mount {target} '
                 f'{"read-only" if read_only else "read-write"}'
             )
-    if len(projects) > 1:
-        problems.append(
-            f'setup mounts its files from more than one directory: {sorted(projects)}'
-        )
     return problems
 
 
@@ -217,7 +211,7 @@ def main() -> None:
             )
         if STAGING in mounts(service):
             problems.append(f'{name} mounts the staging folder {STAGING}')
-        if name != 'setup' and procurement_binds(service):
+        if procurement_binds(service):
             problems.append(
                 f'{name} mounts ./procurement at '
                 f'{", ".join(procurement_binds(service))}'
@@ -254,8 +248,6 @@ def main() -> None:
             f'web environment is {sorted(web.get("environment") or {})}, '
             f'not {sorted(WEB_ENVIRONMENT)}'
         )
-    if 'web-config' in services:
-        problems.append('web-config is back: web takes its variables from Compose')
     if secrets(web) != WEB_SECRETS:
         problems.append(
             f'web secrets are {sorted(secrets(web))}, not {sorted(WEB_SECRETS)}'

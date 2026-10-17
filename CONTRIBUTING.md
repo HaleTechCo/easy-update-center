@@ -83,7 +83,7 @@ releases and the vulnerability scan of the latest release's images.
 
 Unit tests read `uc/uc/`, `uc/templates/`, `tools/`, `examples/pipelines/` and `.github/` straight
 from the working tree, so they need no rebuild. Changing `uc/java/VersionTool.java` or a Dockerfile
-needs `make build` first.
+needs `make build` first only with `PREBUILT=1`, which keeps an image that already exists; without it the test targets rebuild.
 
 The example settings files (`.env.online.example`, `.env.airgapped.example`) are generated from the settings registry, `uc/uc/settings.py`. After
 changing a setting there, run `make examples` and commit what it rewrites; `make test-unit` fails

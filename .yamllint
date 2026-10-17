@@ -26,7 +26,7 @@ rules:
   truthy:
     allowed-values: ["true", "false"]
     check-keys: false
-  # Inline comments use a single leading space ("- id: ruff  # ...").
+  # Inline comments need at least one space before the "#" (the repo writes two: "- id: ruff  # ...").
   comments:
     min-spaces-from-content: 1
   comments-indentation: disable
