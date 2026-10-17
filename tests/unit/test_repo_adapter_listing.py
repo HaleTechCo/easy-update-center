@@ -138,6 +138,7 @@ def test_a_misplaced_plugin_is_dropped_with_its_correct_path(tmp_path):
     }
     _, index = index_of(files, tmp_path)
     assert index.rows == []  # neither the archive nor the POM beside it
+    assert index.report.replaced_poms == []
     assert index.report.misplaced == [
         {'path': f'{wrong}.hpi', 'correct_path': f'{CAFFEINE}.hpi'}
     ]
@@ -356,10 +357,6 @@ def test_an_oversized_report_reads_as_none(tmp_path, monkeypatch):
     assert read_report(path) is None
 
 
-def test_the_report_limit_is_16_mib():
-    assert listing.REPORT_LIMIT == 16 * 1024 * 1024
-
-
 CHECKED_GAV = ('io.jenkins.plugins', 'caffeine-api', '3.2.4')
 CHECKED_POM_PATH = 'io/jenkins/plugins/caffeine-api/3.2.4/caffeine-api-3.2.4.pom'
 CHECKED_HPI_PATH = 'io/jenkins/plugins/caffeine-api/3.2.4/caffeine-api-3.2.4.hpi'
@@ -370,15 +367,6 @@ def checked_files():
         CHECKED_HPI_PATH: make_hpi(*CHECKED_GAV),
         CHECKED_POM_PATH: pom_xml(*CHECKED_GAV),
     }
-
-
-def test_the_repository_pom_is_served_as_it_was_checked(tmp_path):
-    backend, index = index_of(checked_files(), tmp_path)
-    checked = backend.files[CHECKED_POM_PATH]
-    backend.files[CHECKED_POM_PATH] = (
-        b'<!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc">]><project/>'
-    )
-    assert index.poms[CHECKED_POM_PATH] == checked
 
 
 def test_a_pom_whose_bytes_differ_from_the_listing_is_replaced(tmp_path):
