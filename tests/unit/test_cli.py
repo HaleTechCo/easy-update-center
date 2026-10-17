@@ -472,6 +472,17 @@ def test_generate_passes_force_and_wait_through(
     assert seen == expected
 
 
+def test_generate_says_which_release_it_published(
+    monkeypatch, tmp_path, secrets_dir, capsys
+):
+    use_env(monkeypatch, tmp_path, secrets_dir)
+    monkeypatch.setattr(
+        cli, 'generate', lambda _settings, **_kwargs: '20260922T010000Z'
+    )
+    assert main(['generate']) == 0
+    assert capsys.readouterr().out == 'published release 20260922T010000Z\n'
+
+
 def test_pki_init_names_the_files_under_the_display_dir(tmp_path, capsys):
     assert (
         main(
