@@ -127,7 +127,7 @@ def test_repo_adapter_refuses_to_start_without_repository_credentials(
     monkeypatch.setenv('REPO_ADAPTER', 'on')
     (secrets_dir / 'repo_password').write_text('')
     assert main(['repo-adapter', '--port', '0']) == 1
-    assert 'uc: error: Repository credentials missing' in capsys.readouterr().err
+    assert 'uc: error: repository credentials missing' in capsys.readouterr().err
 
 
 def test_pki_init_and_show(tmp_path, capsys):
@@ -331,7 +331,7 @@ def test_staging_flag_outside_the_data_volume_is_accepted(
     monkeypatch.setattr(
         'uc.cli.inspect_repository', lambda *_, **__: SimpleNamespace(report=None)
     )
-    monkeypatch.setattr('uc.cli.format_report', lambda *_: 'report')
+    monkeypatch.setattr('uc.cli.format_report', lambda *_, **__: 'report')
     monkeypatch.setattr('uc.cli.download', lambda *_, **__: seen.append(1) or 0)
     argv = ['procure', command, '--staging', str(tmp_path / 'elsewhere')]
     if command == 'stage':

@@ -54,7 +54,7 @@ class RunLock:
             )
         except BlockingIOError:
             os.close(fd)
-            msg = f'another generation holds {self.path}'
+            msg = f'another generation or rollback holds {self.path}'
             raise LockBusyError(msg) from None
         self._fd = fd
         return self

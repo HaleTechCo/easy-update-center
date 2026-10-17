@@ -399,6 +399,11 @@ def test_format_report(tmp_path, secrets_dir):
     assert 'Dropped by the generator: 1' in text
     assert 'org/jenkins-ci/plugins/orphan/1.0/orphan-1.0.hpi' in text
     assert 'Not checked (POM or manifest unavailable; run with --fetch): 1' in text
+    fetched = format_report(
+        analyze(listing, versions(), FakeSource({}, {})), settings, fetch=True
+    )
+    assert 'Not checked (POM or manifest unavailable from the repository): 1' in fetched
+    assert '--fetch' not in fetched
 
 
 class ReleaseSource:

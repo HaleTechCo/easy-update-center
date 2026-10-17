@@ -89,7 +89,9 @@ def check_signing(settings: Settings, now: dt.datetime) -> CertInfo:
         settings.root_ca_file,
     ):
         if not path.is_file():
-            msg = f"missing signing material: {path} (see 'uc pki init')"
+            msg = (
+                f"missing signing material: {path}; run 'docker compose run --rm setup'"
+            )
             raise PreflightError(msg)
     if not key_matches_cert(settings.signing_key_file, settings.signing_cert_file):
         msg = f'{settings.signing_key_file} does not match {settings.signing_cert_file}'
@@ -99,7 +101,8 @@ def check_signing(settings: Settings, now: dt.datetime) -> CertInfo:
     if days < settings.certificate_minimum_valid_days:
         msg = (
             f'signing certificate expires in {days} days (minimum '
-            f"{settings.certificate_minimum_valid_days}); run 'uc pki rotate'"
+            f'{settings.certificate_minimum_valid_days}); run '
+            "'docker compose run --rm setup pki-rotate'"
         )
         raise PreflightError(msg)
     if not verify_chain(settings.root_ca_file, settings.signing_cert_file):
@@ -117,7 +120,7 @@ def load_repository_credentials(settings: Settings) -> tuple[str, str]:
     password = read_secret(settings.repo_password_file)
     if not user or not password:
         msg = (
-            f'Repository credentials missing: provide {settings.repo_username_file} '
+            f'repository credentials missing: provide {settings.repo_username_file} '
             f'and {settings.repo_password_file}'
         )
         raise PreflightError(msg)

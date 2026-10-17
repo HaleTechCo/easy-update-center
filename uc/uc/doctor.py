@@ -526,6 +526,9 @@ class Inspection:
     report: DoctorReport
     listing: Listing
     source: Source
+    fetch: bool = False
+    # whether the run could download what the cache lacked: the report then names the
+    # repository, not --fetch, as why a POM or manifest was unavailable
 
 
 def inspect_repository(
@@ -562,7 +565,7 @@ def inspect_repository(
             tiers = json.loads(tiers_file.read_text(encoding='utf-8'))
             if isinstance(tiers, dict):
                 report.tiers = tiers
-    return Inspection(report, listing, source)
+    return Inspection(report, listing, source, fetch)
 
 
 RECORD_LOCK_FILE = REPORT_FILE.with_name('.record.lock')
@@ -622,8 +625,21 @@ def record(report: DoctorReport, data_dir: Path, now: dt.datetime) -> Path:
     return path
 
 
-def format_report(report: DoctorReport, settings: Settings) -> str:
-    """Render the report as the human-readable text uc doctor prints."""
+def unavailable(*, fetch: bool) -> str:
+    """Return how the report says a POM or manifest was unavailable."""
+    return (
+        'unavailable from the repository' if fetch else 'unavailable; run with --fetch'
+    )
+
+
+def format_report(
+    report: DoctorReport, settings: Settings, *, fetch: bool = False
+) -> str:
+    """Render the report as the human-readable text uc doctor prints.
+
+    fetch says whether the run could download POMs and manifests: when it could, a
+    missing one is the repository's doing, and --fetch is no advice.
+    """
     lines = [
         (
             f'Source: {settings.repo_type} repository {settings.repo_key} '
@@ -698,16 +714,16 @@ def format_report(report: DoctorReport, settings: Settings) -> str:
     section('Stub POMs (degraded names, descriptions, SCM links)', report.stub_poms)
     section('Dependency problems', report.missing_dependencies)
     if report.required_cores is not None:
-        lines.extend(core_lines(report))
+        lines.extend(core_lines(report, fetch=fetch))
     if report.unchecked:
         lines.append(
-            'Not checked (POM or manifest unavailable; run with --fetch): '
+            f'Not checked (POM or manifest {unavailable(fetch=fetch)}): '
             f'{report.unchecked}'
         )
     return '\n'.join(lines)
 
 
-def core_lines(report: DoctorReport) -> list[str]:
+def core_lines(report: DoctorReport, *, fetch: bool = False) -> list[str]:
     """Return the report's lines on required cores the repository lacks."""
     required = list(report.required_cores or {})
     lines: list[str] = []
@@ -763,7 +779,7 @@ def core_lines(report: DoctorReport) -> list[str]:
                 )
     if report.cores_unchecked:
         lines.append(
-            'Required cores not checked (manifest unavailable; run with --fetch): '
+            f'Required cores not checked (manifest {unavailable(fetch=fetch)}): '
             f'{report.cores_unchecked}'
         )
     return lines

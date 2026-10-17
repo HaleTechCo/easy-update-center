@@ -116,9 +116,14 @@ def sha1_of(file: Path) -> str:
     return digest.hexdigest()
 
 
+def _shown_manifest(manifest: Path) -> str:
+    return f'{shown_staging(manifest.parent)}/{MANIFEST}'
+
+
 def _refuse(manifest: Path, detail: object) -> ProcureError:
     msg = (
-        f'{manifest} is not a procurement.json this version of uc wrote ({detail}); '
+        f'{_shown_manifest(manifest)} is not a procurement.json this version of uc '
+        f'wrote ({detail}); '
         'move it away and download again'
     )
     return ProcureError(msg)
@@ -167,7 +172,7 @@ class Staging:
             check_path(path)
             if staged.kind not in KINDS or not SHA1.match(str(staged.sha1)):
                 msg = (
-                    f'{manifest}: {path} has kind {staged.kind!r} '
+                    f'{_shown_manifest(manifest)}: {path} has kind {staged.kind!r} '
                     f'and sha1 {staged.sha1!r}'
                 )
                 raise ProcureError(msg)
@@ -182,8 +187,8 @@ class Staging:
         target = self.root / check_path(path)
         if not target.parent.resolve().is_relative_to(self.root.resolve()):
             msg = (
-                f'{path}: a folder on its way is a link out of {self.root}; '
-                'remove the link'
+                f'{path}: a folder on its way is a link out of '
+                f'{shown_staging(self.root)}; remove the link'
             )
             raise ProcureError(msg)
         return target
@@ -207,8 +212,8 @@ class Staging:
             fd, name = tempfile.mkstemp(dir=self.root, prefix='.part-')
         except OSError as exc:
             msg = (
-                f'cannot write to {self.root}: {exc}. Check that UC_UID and UC_GID '
-                'in .env are the owner of ./procurement (id -u, id -g)'
+                f'cannot write to {shown_staging(self.root)}: {exc}. Check that UC_UID '
+                'and UC_GID in .env are the owner of ./procurement (id -u, id -g)'
             )
             raise ProcureError(msg) from exc
         os.close(fd)
