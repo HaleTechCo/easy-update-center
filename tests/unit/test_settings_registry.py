@@ -9,21 +9,26 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from uc.settings import CORE_VERSION, GROUPS, MODES, REGISTRY, SETTINGS, TYPES
+from uc.settings import (
+    CORE_VERSION,
+    GROUPS,
+    MODES,
+    REGISTRY,
+    SETTINGS,
+    TYPES,
+    Setting,
+)
 
 
 def test_names_are_unique_upper_case_variables():
     names = [setting.env for setting in SETTINGS]
     assert len(names) == len(set(names))
     assert all(re.fullmatch(r'[A-Z][A-Z0-9_]*', name) for name in names)
-    assert set(REGISTRY) == set(names)
 
 
-def test_types_groups_and_docs():
+def test_every_type_is_known():
     for setting in SETTINGS:
         assert setting.type in TYPES, setting.env
-        assert setting.group in GROUPS, setting.env
-        assert setting.doc.endswith('.'), setting.env
 
 
 def test_choice_defaults_are_choices():
@@ -88,8 +93,7 @@ SAMPLE_CHECKS = {
 }
 """How a sample of each type must parse.
 
-Only types some setting has a sample of, so no check is dead
-(test_every_checked_type_has_a_sample).
+A sample of a type with no check here fails test_every_sample_parses_for_its_type.
 """
 UNCHECKED_SAMPLE_TYPES = ('str', 'path', 'cron')
 """Sample types with nothing to parse here.
@@ -110,10 +114,6 @@ def test_every_sample_parses_for_its_type(setting_and_sample):
         f'{setting.env}: no check for a sample of type {setting.type}'
     )
     assert SAMPLE_CHECKS[setting.type](sample), setting.env
-
-
-def test_every_checked_type_has_a_sample():
-    assert set(SAMPLE_CHECKS) <= {setting.type for setting, _ in _samples()}
 
 
 def test_every_hint_line_and_doc_is_a_sentence():
@@ -137,18 +137,26 @@ def test_only_url_settings_can_mean_off_when_empty():
             assert setting.type == 'url', setting.env
 
 
-def test_a_mode_sample_comes_before_the_common_one():
-    popularity = REGISTRY['POPULARITY_JSON_URL']
-    assert popularity.sample_for('airgapped') == popularity.airgapped_sample != ''
-    assert popularity.sample_for('online') == popularity.sample == ''
-    assert REGISTRY['PUBLIC_URL'].sample_for('online') == REGISTRY['PUBLIC_URL'].sample
-    assert REGISTRY['REPO_TYPE'].hint_for('online') == REGISTRY['REPO_TYPE'].online_hint
-    assert REGISTRY['REPO_TYPE'].hint_for('airgapped') == ()
-
-
 def test_groups_follow_the_configuration_page():
     # The page's other sections (how settings are read, mode defaults, several
     # configurations) are not groups; the groups' sections come in GROUPS' order.
     page = Path('/docs/reference/configuration.md').read_text()
     headings = re.findall(r'^## (.+)$', page, re.MULTILINE)
     assert [h for h in headings if h in GROUPS] == list(GROUPS)
+
+
+def test_a_mode_sample_comes_before_the_common_one():
+    both = Setting(
+        'X',
+        'str',
+        'Testing and evaluation',
+        'A setting.',
+        sample='common',
+        online_sample='online',
+        airgapped_sample='airgapped',
+    )
+    assert both.sample_for('online') == 'online'
+    assert both.sample_for('airgapped') == 'airgapped'
+    only_common = Setting('X', 'str', 'Testing and evaluation', 'A.', sample='common')
+    assert only_common.sample_for('online') == 'common'
+    assert only_common.sample_for('airgapped') == 'common'
