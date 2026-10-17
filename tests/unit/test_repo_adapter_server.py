@@ -5,6 +5,7 @@ The adapter's HTTP endpoints, the credentials they need and its token.
 
 import base64
 import datetime as dt
+import io
 import os
 import re
 import socket
@@ -13,6 +14,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,6 +29,7 @@ from uc.doctor import ArtifactSource
 from uc.errors import UcError
 from uc.preflight import PreflightError
 from uc.repo_adapter import server as server_module
+from uc.repo_adapter.backends import ArtifactKeeperBackend
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import read_report
 from uc.repo_adapter.server import (
@@ -515,3 +518,107 @@ def test_a_client_that_never_finishes_its_request_is_cut_off(running, monkeypatc
         started = time.monotonic()
         assert conn.recv(1024) == b''
     assert time.monotonic() - started < 4
+
+
+def test_an_idle_adapter_answers_repository_reads_503(running):
+    _, url = running({}, adapter_on=False)
+    status, _, body = fetch(f'{url}{KEY}/{BASE}.pom', token=None)
+    assert (status, body) == (503, b'REPO_ADAPTER is off\n')
+
+
+def test_a_description_request_without_a_directory_is_404(running):
+    _, url = running({f'{BASE}.hpi': make_hpi(*GAV)})
+    aql(url)
+    assert fetch(f'{url}{KEY}/x.jar!/index.jelly')[0] == 404
+
+
+def test_a_keeper_jar_without_index_jelly_falls_back_to_the_hpis_description(running):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w') as jar:
+        jar.writestr('x/Plugin.class', b'\xca\xfe')
+    _, url = running({f'{BASE}.hpi': make_hpi(*GAV), f'{BASE}.jar': buffer.getvalue()})
+    aql(url)
+    status, _, body = fetch(f'{url}{KEY}/{BASE}.jar!/index.jelly')
+    assert (status, body) == (200, b'<div>An excellent plugin.</div>')
+
+
+def test_an_artifactory_repository_jar_description_is_served(running):
+    _, url = running(
+        {
+            f'{BASE}.hpi': make_hpi(*GAV),
+            f'{BASE}.jar': make_jar(b'<div>From the jar.</div>'),
+        },
+        backend_type='artifactory',
+    )
+    aql(url)
+    status, _, body = fetch(f'{url}{KEY}/{BASE}.jar!/index.jelly')
+    assert (status, body) == (200, b'<div>From the jar.</div>')
+
+
+def test_a_head_request_gets_the_headers_and_no_body(running):
+    own = pom_xml(*GAV, name='Own')
+    _, url = running({f'{BASE}.hpi': make_hpi(*GAV), f'{BASE}.pom': own})
+    aql(url)
+    with socket.create_connection(('127.0.0.1', port_of(url)), timeout=5) as conn:
+        conn.sendall(f'HEAD /artifactory/{KEY}/{BASE}.pom HTTP/1.0\r\n\r\n'.encode())
+        reply = b''
+        while chunk := conn.recv(4096):
+            reply += chunk
+    head, _, body = reply.partition(b'\r\n\r\n')
+    assert head.startswith(b'HTTP/1.0 200')
+    assert f'Content-Length: {len(own)}'.encode() in head
+    assert body == b''
+
+
+def test_a_get_outside_the_repository_prefix_is_404(running):
+    _, url = running({f'{BASE}.hpi': make_hpi(*GAV)})
+    aql(url)
+    assert fetch(f'{url}{KEY}/{BASE}.pom')[0] == 200
+    # a key of the same length: only the prefix check tells it from the real one
+    assert fetch(f'{url}{"x" * len(KEY)}/{BASE}.pom')[0] == 404
+    assert (
+        fetch(url.replace('/artifactory/', '/other/') + f'{KEY}/{BASE}.pom')[0] == 404
+    )
+
+
+def test_the_first_get_after_a_restart_answers_502_when_the_repository_fails(running):
+    backend, url = running({f'{BASE}.hpi': make_hpi(*GAV)})
+
+    def explode():
+        msg = 'boom'
+        raise RuntimeError(msg)
+
+    backend.list = explode
+    assert fetch(f'{url}{KEY}/{BASE}.pom')[0] == 502
+
+
+def test_a_listing_request_over_64_kib_is_refused(running):
+    _, url = running({})
+    auth = base64.b64encode(f'uc:{TOKEN}'.encode()).decode()
+    length = server_module.QUERY_LIMIT + 1
+    # refused on the header alone: the body is never read, so none is sent
+    status = raw(
+        port_of(url),
+        (
+            'POST /artifactory/api/search/aql HTTP/1.1\r\nHost: x\r\n'
+            f'Authorization: Basic {auth}\r\nContent-Length: {length}\r\n\r\n'
+        ).encode(),
+        timeout=3,
+    )
+    assert status.startswith('HTTP/1.0 413')
+
+
+def test_an_artifact_keeper_adapter_is_wired_with_its_token_and_tmp_dir(
+    tmp_path, secrets_dir
+):
+    settings = make_settings(
+        tmp_path, secrets_dir, REPO_ADAPTER='on', REPO_TYPE='artifact-keeper'
+    )
+    backend = server_module.create_adapter(settings).backend
+    assert isinstance(backend, ArtifactKeeperBackend)
+    username = (secrets_dir / 'repo_username').read_text().strip()
+    token = (secrets_dir / 'repo_password').read_text().strip()
+    assert backend.bearer == {'Authorization': f'Bearer {token}'}
+    basic = backend.basic['Authorization'].removeprefix('Basic ')
+    assert base64.b64decode(basic).decode() == f'{username}:{token}'
+    assert backend.tmp_dir == settings.repo_adapter_dir / 'tmp'
