@@ -201,7 +201,10 @@ def test_overlay_warning_without_id(tmp_path):
     overlay = tmp_path / 'overlay'
     overlay.mkdir()
     (overlay / 'warnings.json').write_text('[{"message": "no id"}]')
-    with pytest.raises(ResourcesError, match="needs an 'id'"):
+    with pytest.raises(
+        ResourcesError,
+        match=r"^config/overlay/warnings\.json: every overlay warning needs an 'id'",
+    ):
         merge_overlay(upstream, overlay, tmp_path / 'merged')
 
 
@@ -220,7 +223,35 @@ def test_overlay_warning_with_duplicate_id(tmp_path):
         )
     )
     with pytest.raises(
-        ResourcesError, match=r'duplicate warning id\(s\) in the overlay: SECURITY-1234'
+        ResourcesError,
+        match=r'^config/overlay/warnings\.json: .*id\(s\): SECURITY-1234',
+    ):
+        merge_overlay(upstream, overlay, tmp_path / 'merged')
+
+
+@pytest.mark.parametrize(
+    ('content', 'message'),
+    [
+        (b'[{"id": ', r'not valid JSON \(line 1 column'),
+        (b'["\xff\xfe"]', 'not UTF-8'),
+        (b'[{"id": 1}, {"id": 1}]', r'duplicate warning id\(s\): 1$'),
+        (b'[{"id": [1]}, {"id": [1]}]', r'duplicate warning id\(s\): \[1\]$'),
+        (b'[{"id": {"a": 1}}]', None),
+        (b'{"id": 1}', 'must be a JSON array'),
+    ],
+)
+def test_malformed_overlay_warnings_name_the_file(tmp_path, content, message):
+    upstream = tmp_path / 'up'
+    upstream.mkdir()
+    (upstream / 'warnings.json').write_text('[]')
+    overlay = tmp_path / 'overlay'
+    overlay.mkdir()
+    (overlay / 'warnings.json').write_bytes(content)
+    if message is None:  # an unhashable id on its own is fine
+        merge_overlay(upstream, overlay, tmp_path / 'merged')
+        return
+    with pytest.raises(
+        ResourcesError, match=f'^config/overlay/warnings.json: .*{message}'
     ):
         merge_overlay(upstream, overlay, tmp_path / 'merged')
 
