@@ -47,7 +47,9 @@ def server(tmp_path):
             ('127.0.0.1', 0),
             make_handler(tmp_path, 'uc:pw', anonymous_read=anonymous_read),
         )
-        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        threading.Thread(
+            target=httpd.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True
+        ).start()
         servers.append(httpd)
         return f'http://127.0.0.1:{httpd.server_address[1]}/artifactory/'
 
@@ -129,7 +131,9 @@ def writable(tmp_path):
     httpd = ThreadingHTTPServer(
         ('127.0.0.1', 0), make_handler(tmp_path, 'uc:secret', anonymous_read=False)
     )
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    threading.Thread(
+        target=httpd.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True
+    ).start()
     yield f'http://127.0.0.1:{httpd.server_address[1]}/artifactory/'
     httpd.shutdown()
     httpd.server_close()
@@ -160,7 +164,9 @@ def test_client_checksums_are_served_only_when_the_upload_sent_one(tmp_path):
             tmp_path, 'uc:secret', anonymous_read=True, checksum_policy='client'
         ),
     )
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    threading.Thread(
+        target=httpd.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True
+    ).start()
     base = (
         f'http://127.0.0.1:{httpd.server_address[1]}/artifactory/jenkins/org/example/'
     )
