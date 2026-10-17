@@ -321,6 +321,23 @@ def test_generation_through_the_adapter(tmp_path, secrets_dir):
     )  # counts only: it is public
 
 
+def test_the_listing_through_the_adapter_takes_no_ca_file(tmp_path, secrets_dir):
+    # the scheduler has no CA bundle mounted, and the adapter speaks plain http
+    settings = make_settings(
+        tmp_path,
+        secrets_dir,
+        REPO_ADAPTER='on',
+        REPO_CA_FILE=str(tmp_path / 'missing-ca.crt'),
+    )
+    settings.repo_adapter_dir.mkdir(parents=True)
+    settings.repo_adapter_token_file.write_text(ADAPTER_TOKEN + '\n')
+    queries = []
+    tools = tools_for(settings)
+    tools.aql_query = lambda *args: queries.append(args) or repo_files()
+    generate(settings, tools=tools, now=T1, base_env={})
+    assert queries[0][-1] is None
+
+
 def test_status_error_omits_raw_exception_text(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     secret = (

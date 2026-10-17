@@ -45,7 +45,8 @@ def test_each_example_says_where_its_mode_reads_and_downloads_from():
 def test_the_ca_settings_say_where_to_mount_the_bundle():
     text = example_env('airgapped')
     assert (
-        '# Mount the bundle into the repo-adapter (and uc) and point this at it. '
+        '# Mount the bundle into the repo-adapter and uc (and the scheduler, only '
+        'with REPO_ADAPTER off) and point this at it. '
         'See docs/getting-started/airgapped.md#repository-behind-a-private-ca.\n'
         '# REPO_CA_FILE='
     ) in text

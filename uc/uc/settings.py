@@ -228,7 +228,8 @@ SETTINGS: tuple[Setting, ...] = (
         sample='/etc/ssl/uc-repo-ca.crt',
         hint=(
             (
-                'Mount the bundle into the repo-adapter (and uc) and point this at it. '
+                'Mount the bundle into the repo-adapter and uc (and the scheduler, '
+                'only with REPO_ADAPTER off) and point this at it. '
                 'See docs/getting-started/airgapped.md#repository-behind-a-private-ca.'
             ),
         ),

@@ -249,6 +249,15 @@ class Settings:
         )
 
     @property
+    def source_ca_file(self) -> Path | None:
+        """Return the CA bundle for requests to source_url and source_api_url.
+
+        None through the adapter, which speaks plain http: only the repository
+        itself needs REPO_CA_FILE, and the scheduler has no bundle mounted.
+        """
+        return None if self.repo_adapter else self.repo_ca_file
+
+    @property
     def public_repository(self) -> bool:
         """Return whether the source repository is repo.jenkins-ci.org.
 

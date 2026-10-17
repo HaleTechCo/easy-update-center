@@ -36,7 +36,7 @@ printf '%s' 'svc-easy-update-center' > secrets/repo_username
 | `github_username`, `github_token` | yes | no | no |
 | `download_proxy_auth` | no | no | yes (read only when `DOWNLOAD_ACCESS=proxy`) |
 | `repo_push_auth` | `uc` only (never `scheduler`) | no | no |
-| `repo-ca.crt` (with `compose.repo-ca.yaml`) | `uc` only | yes | no |
+| `repo-ca.crt` (with `compose.repo-ca.yaml`) | `uc` (`scheduler` only with `REPO_ADAPTER=off`) | yes | no |
 | `proxy-ca.crt` (with `compose.proxy-ca.yaml`) | no | no | yes |
 
 Only the one-shot `uc` service, which runs when you call it, receives `repo_push_auth`; the

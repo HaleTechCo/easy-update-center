@@ -210,7 +210,7 @@ class ArtifactSource:
             creds.repo_password,
             cache_dir=settings.cache_dir,
             allow_network=allow_network,
-            ca_file=settings.repo_ca_file,
+            ca_file=settings.source_ca_file,
         )
 
     def pom(self, gav: Gav) -> bytes | None:
@@ -520,7 +520,7 @@ def inspect_repository(
         settings.repo_key,
         creds.repo_username,
         creds.repo_password,
-        settings.repo_ca_file,
+        settings.source_ca_file,
     )
     listing = aql.classify(files)
     source = ArtifactSource.from_settings(settings, creds, allow_network=fetch)
