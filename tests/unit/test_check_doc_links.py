@@ -16,7 +16,7 @@ _spec.loader.exec_module(links)
 
 
 def test_heading_slug_keeps_hyphen_runs_like_github():
-    assert links.heading_slug('uc.env / web.env') == 'ucenv--webenv'
+    assert links.heading_slug('Online / air-gapped') == 'online--air-gapped'
     assert (
         links.heading_slug('`tools/` - pre-commit shims') == 'tools---pre-commit-shims'
     )

@@ -565,21 +565,6 @@ def inspect_repository(
     return Inspection(report, listing, source)
 
 
-def run_doctor(
-    settings: Settings,
-    creds: Credentials,
-    *,
-    fetch: bool,
-    versions: VersionTool,
-    since: str | None = None,
-    query: Callable[..., list[aql.RepoFile]] = aql.query_repository,
-) -> DoctorReport:
-    """List the source repository and analyze it (see inspect_repository)."""
-    return inspect_repository(
-        settings, creds, fetch=fetch, versions=versions, since=since, query=query
-    ).report
-
-
 RECORD_LOCK_FILE = REPORT_FILE.with_name('.record.lock')
 """Held while a recorded report is saved.
 

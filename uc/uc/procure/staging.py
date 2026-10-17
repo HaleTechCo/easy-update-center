@@ -23,7 +23,7 @@ KINDS = ('pom', 'dependency', 'core', 'local')
 EXTENSIONS = ('hpi', 'jpi', 'war', 'pom')
 SHA1 = re.compile(r'^[0-9a-f]{40}$')
 DEFAULT_STAGING = Path('/procurement')
-"""PROCUREMENT_STAGING_DIR's default.
+"""The default staging folder.
 
 Where compose.yaml mounts ./procurement in the uc container.
 """

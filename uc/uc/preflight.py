@@ -190,8 +190,8 @@ DATA_ENTRIES = (
 )
 """What uc keeps at the top of the data volume.
 
-On a volume this release creates, /data itself is world-writable and sticky, so these
-are what another uid owns.
+On a new volume (the image's /data is 1777), /data itself is world-writable and
+sticky, so these are what another uid owns.
 """
 
 ADAPTER_ENTRIES = ('token', 'cache', 'tmp', 'report.json')

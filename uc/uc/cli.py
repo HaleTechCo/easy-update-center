@@ -36,9 +36,10 @@ from .pki import (
 from .preflight import ADAPTER_ENTRIES, check_data_dir, load_credentials
 from .procure.clean import clean
 from .procure.download import check_download_allowed, download, downloads_allowed
-from .procure.local import stage_local
+from .procure.local import record as record_staged
 from .procure.plan import check_war_args, suggest_stage
 from .procure.push import push
+from .procure.staging import DEFAULT_STAGING
 from .repo_adapter.server import PORT, healthcheck, serve
 from .schedule import run_schedule
 from .settings import MODES
@@ -366,7 +367,7 @@ def _dispatch(args: argparse.Namespace) -> int:
     if args.command == 'config':
         return _config(args)
     if args.command == 'repo-adapter' and args.healthcheck:
-        # reads no settings: health is the running server's, not the files'
+        # reads no settings: health is the running server's, not the settings'
         healthcheck(args.port)
         return 0
     settings = load_settings()
@@ -451,7 +452,7 @@ def _doctor(args: argparse.Namespace, settings: Settings) -> int:
             report,
             downloads=downloads_allowed(settings),
             since=args.since,
-            staging=settings.procurement_staging_dir,
+            staging=DEFAULT_STAGING,
         )
     ) is not None:
         print(line, file=out)
@@ -481,7 +482,7 @@ def procure_options(args: argparse.Namespace, settings: Settings) -> StageOption
         dependencies=args.dependencies,
         wars=tuple(args.war),
         since=args.since if args.since is not None else (settings.doctor_since or None),
-        staging=args.staging or settings.procurement_staging_dir,
+        staging=args.staging or DEFAULT_STAGING,
     )
 
 
@@ -498,11 +499,11 @@ def _procure(args: argparse.Namespace, settings: Settings) -> int:
     warn_plain_http(settings, ('REPO_URL', 'REPO_API_URL', 'PROCUREMENT_SOURCE_URL'))
     if args.staging is not None:
         check_staging_outside_data_dir(args.staging, settings.data_dir, '--staging')
-    staging = getattr(args, 'staging', None) or settings.procurement_staging_dir
+    staging = getattr(args, 'staging', None) or DEFAULT_STAGING
     if args.procure_command == 'push':
         return push(settings, staging, dry_run=args.dry_run)
     if args.procure_command == 'record':
-        return stage_local(
+        return record_staged(
             staging, settings.procurement_source_url, fix=args.fix, out=sys.stdout
         )
     if args.procure_command == 'clean':

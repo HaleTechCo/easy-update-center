@@ -77,6 +77,6 @@ def public_warnings(warnings: Iterable[str]) -> list[str]:
 
     Each parenthesised detail becomes '(see the generator log)' and any other URL
     <url>: either can name an internal host or path, and the generator log keeps the
-    full text (spec 1.7).
+    full text (docs/reference/status-json.md).
     """
     return [_URL.sub('<url>', _without_details(warning)) for warning in warnings]

@@ -57,8 +57,8 @@ def test_public_warnings_replace_every_url():
     ids=['url', 'url-only', 'nested', 'unclosed', 'coordinates'],
 )
 def test_public_warnings_reduce_each_parenthesised_detail_to_the_log(warning, public):
-    # Exception text can name an internal host without a URL (spec 1.7: reduced to
-    # what failed).
+    # Exception text can name an internal host without a URL: see
+    # docs/reference/status-json.md (reduced to what failed).
     assert public_warnings([warning]) == [public]
 
 
