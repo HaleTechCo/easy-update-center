@@ -67,8 +67,6 @@ def example_env(mode: str) -> str:
     parts = [ENV_HEADER.format(mode=mode, note=_note(mode))]
     for group in GROUPS:
         members = [setting for setting in SETTINGS if setting.group == group]
-        if not members:
-            continue
         parts.append(f'\n# ---- {group} ----\n')
         for setting in members:
             active, value = shown(setting, mode)
