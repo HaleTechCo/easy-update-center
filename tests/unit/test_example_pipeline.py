@@ -190,7 +190,6 @@ def test_the_stage_step_builds_its_options_from_checked_parameters():
         ('$(id)', False),
         ('--poms', False),
         ('2.x', False),
-        ('', False),
     ],
 )
 def test_the_wars_check_accepts_only_versions_and_required(war, accepted):

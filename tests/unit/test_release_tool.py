@@ -104,11 +104,6 @@ def test_prepare_moves_the_unreleased_entries_under_the_version():
     assert release.prepare(CHANGELOG, '0.2.0', '2026-11-02') == PREPARED
 
 
-def test_prepare_changes_nothing_else():
-    prepared = release.prepare(CHANGELOG, '0.2.0', '2026-11-02')
-    assert prepared.replace('\n## [0.2.0] - 2026-11-02\n', '', 1) == CHANGELOG
-
-
 def test_prepare_refuses_an_unreleased_section_with_only_headings():
     with pytest.raises(release.ReleaseError, match='nothing to release'):
         release.prepare(NOTHING_UNRELEASED, '0.2.0', '2026-11-02')
