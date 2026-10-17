@@ -260,8 +260,8 @@ runs:
 supercronic never starts a job while its previous run is still going, and a scheduled generation
 waits for another generation or a rollback. When no release is live, `uc schedule` first generates
 one in its own process: that run prints no `published release` line, and a failure is logged as
-`uc: error: ...` (a traceback for an unexpected error) and scheduling continues. A bad schedule stops the scheduler at start, with a message
-naming the setting.
+`uc: error: ...` (a traceback for an unexpected error) and scheduling continues. A bad schedule
+stops the scheduler at start, with a message naming the setting.
 
 ## uc repo-adapter
 
