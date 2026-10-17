@@ -134,15 +134,15 @@ def fetch_upstream(
         if not isinstance(sha, str) or not _SHA.fullmatch(sha):
             msg = f'unexpected GitHub response for {settings.resources_ref!r}'
             raise ResourcesError(msg)
+        committer = (commit.get('commit') or {}).get('committer')
+        date = committer.get('date') if isinstance(committer, dict) else None
+        if not isinstance(date, str):
+            msg = f'unexpected GitHub response for {settings.resources_ref!r}'
+            raise ResourcesError(msg)
         _extract_resources(
             get(f'https://codeload.github.com/{GITHUB_REPO}/tar.gz/{sha}'), dest
         )
-        info = ResourcesInfo(
-            'github',
-            sha,
-            iso(parse_iso(commit['commit']['committer']['date'])),
-            iso(now),
-        )
+        info = ResourcesInfo('github', sha, iso(parse_iso(date)), iso(now))
     else:
         archive = get(settings.resources_url)
         digest = hashlib.sha256(archive).hexdigest()
@@ -162,14 +162,18 @@ def fetch_upstream(
     return info
 
 
+class _UpstreamWarningsError(ResourcesError):
+    """Upstream's own warnings.json is unusable, which is not the overlay's fault."""
+
+
 def _id_key(warning_id: object) -> str:
     return json.dumps(warning_id, sort_keys=True)  # ids from a file may be unhashable
 
 
 def _merge_warnings(base: object, extra: object) -> list:
     if not isinstance(base, list):
-        msg = "upstream's warnings.json must be a JSON array"
-        raise ResourcesError(msg)
+        msg = "upstream's resources/warnings.json must be a JSON array"
+        raise _UpstreamWarningsError(msg)
     if not isinstance(extra, list):
         msg = 'warnings.json must be a JSON array'
         raise ResourcesError(msg)
@@ -181,7 +185,7 @@ def _merge_warnings(base: object, extra: object) -> list:
         {str(w['id']) for w, k in zip(extra, keys, strict=True) if keys.count(k) > 1}
     )
     if duplicates:
-        msg = f'duplicate warning id(s): {", ".join(duplicates)}'
+        msg = f'duplicate warning id(s) in the overlay: {", ".join(duplicates)}'
         raise ResourcesError(msg)
     by_key = dict(zip(keys, extra, strict=True))
     merged = [
@@ -234,6 +238,8 @@ def merge_overlay(upstream: Path, overlay: Path, dest: Path) -> list[str]:
                     json.loads(target.read_text(encoding='utf-8')),
                     _read_overlay_json(item),
                 )
+            except _UpstreamWarningsError:
+                raise
             except ResourcesError as exc:
                 msg = f'config/overlay/{item.name}: {exc}'
                 raise ResourcesError(msg) from exc

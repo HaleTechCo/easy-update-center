@@ -61,7 +61,8 @@ def preferred_groups(update_center: Mapping) -> dict[str, str]:
     In a generated update-center.json document.
     """
     result: dict[str, str] = {}
-    for plugin_id, entry in (update_center.get('plugins') or {}).items():
+    plugins = update_center.get('plugins')
+    for plugin_id, entry in (plugins if isinstance(plugins, dict) else {}).items():
         gav = entry.get('gav', '') if isinstance(entry, dict) else ''
         if isinstance(gav, str) and gav.count(':') == _GAV_COLONS:
             result[plugin_id] = gav.split(':', 1)[0]

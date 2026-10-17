@@ -81,7 +81,7 @@ def count_plugins(site: Path) -> int | None:
         return len(
             load_site_json(site / 'update-center.actual.json').get('plugins') or {}
         )
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError, TypeError):
         return None
 
 
@@ -152,6 +152,14 @@ def validate_release(
                 f'{label} is not signed with the configured signing certificate'
             )
 
+    def members(value: Any, label: str) -> dict:
+        """Return value's items, or none after recording that it is not an object."""
+        value = value or {}
+        if not isinstance(value, dict):
+            problems.append(f'{label} is not an object')
+            return {}
+        return value
+
     def check_url(url: Any, label: str, *, collect: bool) -> None:
         key = download_key(url, downloads_root) if isinstance(url, str) else None
         if key is None:
@@ -176,7 +184,8 @@ def validate_release(
             check_url(doc['core'].get('url'), f'{site.name} core', collect=True)
             if site.name == 'current' and not (site / 'latestCore.txt').is_file():
                 problems.append('current/ is missing latestCore.txt')
-        for plugin_id, plugin in (doc.get('plugins') or {}).items():
+        label = f'{site.name}/update-center.actual.json: plugins'
+        for plugin_id, plugin in members(doc.get('plugins'), label).items():
             url = plugin.get('url') if isinstance(plugin, dict) else None
             check_url(url, f'{site.name} {plugin_id}', collect=True)
 
@@ -188,8 +197,13 @@ def validate_release(
             problems.append(f'current/plugin-versions.json does not parse: {exc}')
         else:
             check_signature(versions, 'current/plugin-versions.json')
-            for plugin_id, by_version in (versions.get('plugins') or {}).items():
-                for version, entry in (by_version or {}).items():
+            label = 'current/plugin-versions.json: plugins'
+            for plugin_id, by_version in members(
+                versions.get('plugins'), label
+            ).items():
+                for version, entry in members(
+                    by_version, f'{label}.{plugin_id}'
+                ).items():
                     url = entry.get('url') if isinstance(entry, dict) else None
                     check_url(
                         url, f'plugin-versions {plugin_id}:{version}', collect=False

@@ -86,6 +86,13 @@ def test_github_source(tmp_path, secrets_dir):
         b'null',
         b'{"sha": null}',
         b'{"sha": 7}',
+        b'{"sha": "%s"}' % SHA.encode(),
+        b'{"sha": "%s", "commit": null}' % SHA.encode(),
+        b'{"sha": "%s", "commit": []}' % SHA.encode(),
+        b'{"sha": "%s", "commit": {}}' % SHA.encode(),
+        b'{"sha": "%s", "commit": {"committer": null}}' % SHA.encode(),
+        b'{"sha": "%s", "commit": {"committer": {}}}' % SHA.encode(),
+        b'{"sha": "%s", "commit": {"committer": {"date": 5}}}' % SHA.encode(),
         b'{"sha": "' + SHA.encode() + b'\\n"}',
     ],
 )
@@ -221,6 +228,20 @@ def test_overlay_merge(tmp_path):
     )
 
 
+def test_a_broken_upstream_warnings_file_is_not_blamed_on_the_overlay(tmp_path):
+    upstream = tmp_path / 'up'
+    upstream.mkdir()
+    (upstream / 'warnings.json').write_text('{}')
+    overlay = tmp_path / 'overlay'
+    overlay.mkdir()
+    (overlay / 'warnings.json').write_text('[]')
+    with pytest.raises(
+        ResourcesError,
+        match=r"^upstream's resources/warnings\.json must be a JSON array$",
+    ):
+        merge_overlay(upstream, overlay, tmp_path / 'merged')
+
+
 def test_overlay_warning_without_id(tmp_path):
     upstream = tmp_path / 'up'
     upstream.mkdir()
@@ -251,7 +272,10 @@ def test_overlay_warning_with_duplicate_id(tmp_path):
     )
     with pytest.raises(
         ResourcesError,
-        match=r'^config/overlay/warnings\.json: .*id\(s\): SECURITY-1234',
+        match=(
+            r'^config/overlay/warnings\.json: duplicate warning id\(s\) '
+            r'in the overlay: SECURITY-1234$'
+        ),
     ):
         merge_overlay(upstream, overlay, tmp_path / 'merged')
 
@@ -261,8 +285,11 @@ def test_overlay_warning_with_duplicate_id(tmp_path):
     [
         (b'[{"id": ', r'not valid JSON \(line 1 column'),
         (b'["\xff\xfe"]', 'not UTF-8'),
-        (b'[{"id": 1}, {"id": 1}]', r'duplicate warning id\(s\): 1$'),
-        (b'[{"id": [1]}, {"id": [1]}]', r'duplicate warning id\(s\): \[1\]$'),
+        (b'[{"id": 1}, {"id": 1}]', r'duplicate warning id\(s\) in the overlay: 1$'),
+        (
+            b'[{"id": [1]}, {"id": [1]}]',
+            r'duplicate warning id\(s\) in the overlay: \[1\]$',
+        ),
         (b'[{"id": {"a": 1}}]', None),
         (b'{"id": 1}', 'must be a JSON array'),
     ],

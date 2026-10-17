@@ -120,6 +120,29 @@ def test_a_site_document_that_is_not_an_object_is_refused(tmp_path, name):
         validate(staging)
 
 
+@pytest.mark.parametrize('plugins', [['git'], 'git', 5])
+@pytest.mark.parametrize(
+    'name', ['current/update-center.actual.json', 'current/plugin-versions.json']
+)
+def test_a_plugins_section_that_is_not_an_object_is_refused(tmp_path, name, plugins):
+    staging = build(tmp_path)
+    doc = json.loads((staging / name).read_text())
+    doc['plugins'] = plugins
+    (staging / name).write_text(json.dumps(doc))
+    with pytest.raises(ValidationError, match=f'{name}: plugins is not an object'):
+        validate(staging)
+
+
+def test_a_plugin_versions_entry_that_is_not_an_object_is_refused(tmp_path):
+    staging = build(tmp_path)
+    name = 'current/plugin-versions.json'
+    doc = json.loads((staging / name).read_text())
+    doc['plugins'] = {'git': ['5.2.0']}
+    (staging / name).write_text(json.dumps(doc))
+    with pytest.raises(ValidationError, match=f'{name}: plugins.git is not an object'):
+        validate(staging)
+
+
 def test_download_urls_must_use_public_url(tmp_path):
     with pytest.raises(
         ValidationError,
