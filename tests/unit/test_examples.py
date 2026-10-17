@@ -115,6 +115,12 @@ def test_the_airgapped_example_shows_procured_upstream_data():
     assert 'generic-local/updates/' not in online
 
 
+@pytest.mark.parametrize('mode', MODES)
+def test_each_example_sets_the_compose_path_separator(mode):
+    # so its COMPOSE_FILE line works on Windows too, where Compose splits on ;
+    assert '\nCOMPOSE_PATH_SEPARATOR=:\n' in example_env(mode)
+
+
 def test_the_compose_file_example_differs_by_mode():
     airgapped, online = example_env('airgapped'), example_env('online')
     assert (

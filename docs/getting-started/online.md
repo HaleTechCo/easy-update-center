@@ -34,7 +34,7 @@ rest of `.env` in the next step, and check the version after setup in step 3.
 
 To run the current `main` instead, or a change of your own, clone it and build the images.
 `compose.build.yaml` builds them from your checkout and runs them instead of the release's;
-`COMPOSE_FILE` in `.env` makes every command use it (on Windows, separate the files with `;`).
+`COMPOSE_FILE` in `.env` makes every command use it.
 
 ```bash
 git clone https://github.com/HaleTechCo/easy-update-center.git
