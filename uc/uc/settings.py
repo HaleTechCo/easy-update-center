@@ -23,10 +23,10 @@ GROUPS = (
     'Doctor',
     'Signing',
     'Web and TLS',
-    'Procurement',
+    'Compose',
     'Testing and evaluation',
     'Read by bundled software',
-    'Compose',
+    'Procurement',
 )
 """The tables of docs/reference/configuration.md, in page order.
 
@@ -563,10 +563,11 @@ SETTINGS: tuple[Setting, ...] = (
         ),
         sample='repo-adapter',
     ),
+    # Compose
     Setting(
         'COMPOSE_FILE',
         'str',
-        'Read by bundled software',
+        'Compose',
         (
             'The Compose files every plain docker compose command uses (on Windows, '
             'separate them with ;).'
@@ -586,7 +587,6 @@ SETTINGS: tuple[Setting, ...] = (
             ),
         ),
     ),
-    # Compose
     Setting(
         'UC_ENV_FILE',
         'path',
@@ -641,17 +641,23 @@ SETTINGS: tuple[Setting, ...] = (
     ),
     Setting(
         'HTTP_PORT',
-        'int',
+        'str',
         'Compose',
-        "Host port published for the web container's HTTP listener.",
+        (
+            'Host port, or address:port (127.0.0.1:8080), '
+            "published for the web container's HTTP listener."
+        ),
         default='8080',
         env_only=True,
     ),
     Setting(
         'HTTPS_PORT',
-        'int',
+        'str',
         'Compose',
-        "Host port published for the web container's TLS listener.",
+        (
+            'Host port, or address:port (127.0.0.1:8443), '
+            "published for the web container's TLS listener."
+        ),
         default='8443',
         env_only=True,
     ),
