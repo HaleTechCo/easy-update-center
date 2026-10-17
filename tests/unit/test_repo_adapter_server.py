@@ -5,6 +5,7 @@ The adapter's HTTP endpoints, the credentials they need and its token.
 
 import base64
 import datetime as dt
+import os
 import re
 import socket
 import stat
@@ -248,6 +249,14 @@ def test_ensure_token_creates_a_private_token_once(tmp_path):
     assert len(token) == 64
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
     assert ensure_token(path) == token
+
+
+def test_a_leftover_token_temp_file_does_not_stop_the_adapter(tmp_path):
+    path = tmp_path / 'token'
+    (tmp_path / f'.token.{os.getpid()}').write_text('left by a killed adapter')
+    token = ensure_token(path)
+    assert path.read_text().strip() == token
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
 def test_make_server_needs_repository_credentials_only_when_on(tmp_path, secrets_dir):

@@ -306,6 +306,28 @@ def test_the_adapter_report_adds_sections_and_counts_its_drops(tmp_path, secrets
     assert 'archive date 1980-02-01 is before 2004' in text
 
 
+def test_a_malformed_adapter_report_keeps_only_well_formed_sections(
+    tmp_path, secrets_dir
+):
+    settings = make_settings(tmp_path, secrets_dir, REPO_ADAPTER='on')
+    settings.repo_adapter_dir.mkdir(parents=True)
+    valid = ADAPTER_REPORT['dates_from_repository']
+    settings.repo_adapter_report_file.write_text(
+        json.dumps(
+            {'skipped': 5, 'derived_poms': [{'gav': 1}], 'dropped': valid}
+            | {'dates_from_repository': valid}
+        )
+    )
+    report = attach_adapter_report(
+        analyze(classify([]), versions(), FakeSource({}, {})), settings
+    )
+    counts = report.summary()['repo_adapter']
+    assert counts['skipped'] == counts['derived_poms'] == 0
+    assert counts['dates_from_repository'] == 1
+    text = format_report(report, settings)
+    assert 'archive date 1980-02-01 is before 2004' in text
+
+
 def test_without_the_adapter_there_is_no_adapter_report(tmp_path, secrets_dir):
     report = attach_adapter_report(
         analyze(classify([]), versions(), FakeSource({}, {})),

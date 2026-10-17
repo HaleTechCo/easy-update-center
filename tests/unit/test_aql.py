@@ -127,6 +127,12 @@ def test_query_repository_sends_the_upstream_query():
     assert body.decode() == AQL_TEMPLATE % 'jenkins'
 
 
+def test_an_aql_row_that_is_not_an_object_is_refused():
+    routes = {('POST', '/artifactory/api/search/aql'): (200, {}, b'{"results": [1]}')}
+    with StubServer(routes) as stub, pytest.raises(AqlError, match='not an object'):
+        query_repository(stub.url + '/artifactory/api/', 'jenkins', 'uc', 'secret')
+
+
 def test_query_repository_http_error():
     routes = {('POST', '/api/search/aql'): (403, {}, b'forbidden')}
     with (

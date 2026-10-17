@@ -141,6 +141,25 @@ ADAPTER_SECTIONS = (
 )
 
 
+# the keys of each section that uc doctor and uc procure read, as strings
+_SECTION_KEYS = {
+    'derived_poms': ('gav', 'url'),
+    'replaced_poms': ('path', 'reason', 'url'),
+    'needs_pom': ('gav', 'url'),
+    'misplaced': ('path', 'correct_path'),
+    'skipped': ('path', 'reason'),
+    'dates_from_repository': ('path', 'reason'),
+}
+
+
+def _well_formed(name: str, section: object) -> bool:
+    return isinstance(section, list) and all(
+        isinstance(item, dict)
+        and all(isinstance(item.get(key), str) for key in _SECTION_KEYS[name])
+        for item in section
+    )
+
+
 def attach_adapter_report(report: DoctorReport, settings: Settings) -> DoctorReport:
     """Add the repo-adapter's report of what it filled in and what it dropped.
 
@@ -151,7 +170,11 @@ def attach_adapter_report(report: DoctorReport, settings: Settings) -> DoctorRep
         from .repo_adapter.listing import read_report  # noqa: PLC0415
 
         data = read_report(settings.repo_adapter_report_file) or {}
-        report.repo_adapter = {name: data.get(name) or [] for name in ADAPTER_SECTIONS}
+        # the volume is the adapter's to write: a malformed section counts as missing
+        report.repo_adapter = {
+            name: data[name] if _well_formed(name, data.get(name)) else []
+            for name in ADAPTER_SECTIONS
+        }
     return report
 
 
