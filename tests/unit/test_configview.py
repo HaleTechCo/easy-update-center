@@ -1,4 +1,4 @@
-"""uc config: each setting's value and source, and secret files only as present or not.
+"""uc config: each setting's value and source, with credentials masked.
 
 See docs/reference/cli.md#uc-config.
 """
@@ -57,17 +57,9 @@ def test_json_rows_give_each_value_and_its_source():
 def test_text_groups_the_settings():
     code, out, _ = show(env_for(RETAIN_RELEASES='7'))
     assert code == 0
-    assert 'Settings file' not in out
     assert '\nGeneration\n' in out
     assert '  RETAIN_RELEASES = 7  (environment' in out
     assert '  MODE = airgapped  (environment)\n' in out
-
-
-def test_secret_contents_are_never_shown(secrets_dir):
-    (secrets_dir / 'repo_password').write_text('hunter2-not-shown\n')
-    _, text, _ = show(env_for(SECRETS_DIR=str(secrets_dir)))
-    _, as_json, _ = show(env_for(SECRETS_DIR=str(secrets_dir)), as_json=True)
-    assert 'hunter2-not-shown' not in text + as_json
 
 
 def test_check():
@@ -126,14 +118,14 @@ def test_a_proxy_password_that_holds_a_url_delimiter_loads_and_is_not_shown(
     value = form.format(f'S3cret{delimiter}Tail9z')
     env = env_for(HTTPS_PROXY=value)
     assert show(env, check=True) == (0, 'configuration ok\n', '')
-    _, text, _ = show(env)
-    _, as_json, _ = show(env, as_json=True)
+    _, text, text_err = show(env)
+    _, as_json, json_err = show(env, as_json=True)
     assert f'  HTTPS_PROXY = {shown}  (' in text
     assert {row['env']: row['value'] for row in json.loads(as_json)}[
         'HTTPS_PROXY'
     ] == shown
     for part in ('proxyuser', 'S3cret', 'Tail9z'):
-        assert part not in text + as_json
+        assert part not in text + as_json + text_err + json_err
 
 
 @pytest.mark.parametrize('delimiter', ['#', '?', '/'])

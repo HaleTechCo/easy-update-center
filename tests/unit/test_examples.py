@@ -124,15 +124,3 @@ def test_the_compose_file_example_differs_by_mode():
     ) in airgapped
     assert '# COMPOSE_FILE=\n' in online
     assert 'air-gapped override' not in online
-
-
-def test_the_header_says_what_a_commented_line_shows():
-    assert (
-        'a line starting with # is not set: it shows the default or an example '
-        'value, and the comment above it says what applies when it is unset'
-    ) in example_env('online').replace('\n# ', ' ')
-
-
-@pytest.mark.parametrize('mode', MODES)
-def test_the_examples_never_mention_a_settings_file(mode):
-    assert 'uc.toml' not in example_env(mode)

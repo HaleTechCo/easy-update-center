@@ -644,23 +644,18 @@ ENCODED_AT = 'https://host.corp/jenkins%40corp'  # an encoded @ is not one
 
 
 @pytest.mark.parametrize(
-    ('load', 'name', 'field', 'expected'),
+    ('name', 'field', 'expected'),
     [
-        (load_settings, 'PUBLIC_URL', 'public_url', ENCODED_AT),
-        (load_settings, 'REPO_URL', 'repo_url', ENCODED_AT + '/'),
-        (load_settings, 'DOWNLOAD_BACKEND_URL', 'download_backend_url', ENCODED_AT),
-        (
-            load_settings,
-            'PROCUREMENT_SOURCE_URL',
-            'procurement_source_url',
-            ENCODED_AT + '/',
-        ),
+        ('PUBLIC_URL', 'public_url', ENCODED_AT),
+        ('REPO_URL', 'repo_url', ENCODED_AT + '/'),
+        ('DOWNLOAD_BACKEND_URL', 'download_backend_url', ENCODED_AT),
+        ('PROCUREMENT_SOURCE_URL', 'procurement_source_url', ENCODED_AT + '/'),
     ],
 )
 def test_a_url_setting_that_never_carries_credentials_loads_without_an_at(
-    load, name, field, expected
+    name, field, expected
 ):
-    assert getattr(load({**AIRGAPPED, name: ENCODED_AT}), field) == expected
+    assert getattr(load_settings({**AIRGAPPED, name: ENCODED_AT}), field) == expected
 
 
 @pytest.mark.parametrize(
