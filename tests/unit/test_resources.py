@@ -168,6 +168,30 @@ def test_missing_required_file(tmp_path, secrets_dir):
         fetch_upstream(settings, tmp_path / 'r', NOW, get=lambda *_a, **_k: tarball)
 
 
+@pytest.mark.parametrize(
+    'files',
+    [
+        {'README.adoc': b'readme'},
+        {'warnings.json': b'[]'},  # not under a resources/ folder
+        {'resources/other.json': b'[]'},
+    ],
+    ids=['no-resources', 'warnings-outside-resources', 'no-warnings-file'],
+)
+def test_an_archive_without_resources_warnings_json_is_refused(
+    tmp_path, secrets_dir, files
+):
+    settings = make_settings(
+        tmp_path, secrets_dir, RESOURCES_SOURCE='url', RESOURCES_URL='https://x/r.tgz'
+    )
+    with pytest.raises(
+        ResourcesError, match=r'^archive does not contain resources/warnings.json$'
+    ):
+        fetch_upstream(
+            settings, tmp_path / 'r', NOW, get=lambda *_a, **_k: make_tar(files)
+        )
+    assert not (tmp_path / 'r').exists()
+
+
 def test_unsafe_archive_path(tmp_path, secrets_dir):
     tarball = make_tar({'resources/warnings.json': b'[]', 'resources/../../evil': b'x'})
     settings = make_settings(
