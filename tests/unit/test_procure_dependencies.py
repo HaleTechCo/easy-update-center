@@ -4,11 +4,13 @@ Missing required dependencies, staged transitively.
 """
 
 import io
+import zipfile
 
 import pytest
 
 from archivefixture import make_hpi, pom_xml
-from procurefixture import RecordingHttp, publish
+from httpstub import StubServer, free_port
+from procurefixture import RecordingHttp, publish, stage
 from uc.aql import RepoFile, classify
 from uc.doctor import DoctorReport, Inspection
 from uc.http import Http
@@ -443,3 +445,146 @@ def test_a_dependency_entry_that_is_not_a_plugin_name_and_version_is_a_problem(
     assert [
         requested for requested in http.urls if 'evil' in requested or '..' in requested
     ] == []
+
+
+MAILER_HPI = path(PLUGINS, 'mailer', '534.v1', 'hpi')
+MAILER_POM = path(PLUGINS, 'mailer', '534.v1', 'pom')
+AD_DETAILS = [missing('active-directory', '2.0', 'mailer', '534.v1')]
+AD_LISTING = repository((PLUGINS, 'active-directory', '2.0'))
+
+
+def a_zip_without_a_manifest():
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w') as archive:
+        archive.writestr('WEB-INF/lib/mailer.jar', b'x')
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize(
+    ('archive', 'detail'),
+    [
+        (b'not a zip at all', 'not a zip archive'),
+        (a_zip_without_a_manifest(), 'has no META-INF/MANIFEST.MF'),
+    ],
+    ids=['not-a-zip', 'no-manifest'],
+)
+def test_a_staged_plugin_without_a_readable_manifest_is_a_problem_not_a_crash(
+    releases, tmp_path, archive, detail
+):
+    root, url = releases
+    publish(root, MAILER_HPI, archive)
+    publish(root, MAILER_POM, pom_xml(PLUGINS, 'mailer', '534.v1'))
+    stager, out = run(tmp_path, url, listing=AD_LISTING, details=AD_DETAILS)
+    # both files are staged and kept; only what the archive needs cannot be followed
+    assert set(stager.staging.files) == {MAILER_HPI, MAILER_POM}
+    assert stager.problems == 1
+    (failed,) = [
+        text for text in out.getvalue().splitlines() if text.startswith('FAILED')
+    ]
+    assert failed.startswith(f'FAILED    {MAILER_HPI}  (mailer-534.v1.hpi')
+    assert detail in failed
+
+
+def test_a_need_that_failed_is_reported_once_when_a_later_round_asks_again(
+    releases, tmp_path
+):
+    root, url = releases
+    release(root, PLUGINS, 'mailer', '534.v1', requires='nowhere:1.0')
+    stager, out = run(
+        tmp_path,
+        url,
+        listing=AD_LISTING,
+        details=[
+            missing('active-directory', '2.0', 'nowhere', '1.0'),
+            *AD_DETAILS,
+        ],
+    )
+    # round one fails nowhere 1.0; mailer, staged in the same round, asks for it again
+    assert stager.problems == 1
+    assert out.getvalue().count('FAILED    nowhere 1.0') == 1
+    assert MAILER_HPI in stager.staging.files
+
+
+@pytest.mark.parametrize('with_pom', [False, True], ids=['no-pom', 'pom-not-ours'])
+def test_a_superseded_dependency_loses_only_the_dependency_files_it_has(
+    releases, tmp_path, with_pom
+):
+    root, url = releases
+    release(root, PLUGINS, 'mailer', '534.v1')
+    staging = Staging.open(tmp_path / 'stage', url)
+    old_hpi = path(PLUGINS, 'mailer', '500.v1', 'hpi')
+    old_pom = path(PLUGINS, 'mailer', '500.v1', 'pom')
+    stage(staging, old_hpi, b'old hpi', kind='dependency')
+    if with_pom:
+        # a pom someone staged for another reason is not ours to delete
+        stage(staging, old_pom, b'<project/>', kind='pom')
+    staging.save()
+    stager, _ = run(tmp_path, url, listing=AD_LISTING, details=AD_DETAILS)
+    assert stager.problems == 0
+    assert old_hpi not in stager.staging.files
+    assert (old_pom in stager.staging.files) is with_pom
+    assert MAILER_HPI in stager.staging.files
+
+
+def test_a_plugin_found_upstream_without_its_pom_is_a_problem_and_not_followed(
+    releases, tmp_path
+):
+    root, url = releases
+    release(root, PLUGINS, 'mailer', '534.v1', requires='display-url-api:2.0')
+    release(root, PLUGINS, 'display-url-api', '2.0')
+    (root / MAILER_POM).unlink()
+    stager, out = run(tmp_path, url, listing=AD_LISTING, details=AD_DETAILS)
+    assert stager.problems == 1
+    assert f'FAILED    {MAILER_POM}  ({url}{MAILER_POM} not found)' in (
+        out.getvalue().splitlines()
+    )
+    # what mailer needs is not followed from an incomplete pair
+    assert path(PLUGINS, 'display-url-api', '2.0', 'hpi') not in stager.staging.files
+
+
+def test_a_plugin_found_upstream_whose_download_fails_is_a_problem(tmp_path):
+    sha1 = '0' * 40
+    routes = {
+        ('GET', f'/r/{MAILER_HPI}.sha1'): (200, {}, sha1.encode()),
+        ('GET', f'/r/{MAILER_HPI}'): (503, {}, b''),
+    }
+    with StubServer(routes) as stub:
+        stager, out = run(
+            tmp_path, stub.url + '/r/', listing=AD_LISTING, details=AD_DETAILS
+        )
+    assert stager.problems == 1
+    assert not stager.staging.files
+    assert f'FAILED    {MAILER_HPI}  (GET {stub.url}/r/{MAILER_HPI} failed' in (
+        out.getvalue()
+    )
+    assert not any(MAILER_POM in request[1] for request in stub.requests)
+
+
+@pytest.mark.parametrize('failure', ['http-500', 'unreachable'])
+def test_a_source_that_fails_on_a_checksum_ends_that_need_with_one_message(
+    tmp_path, failure
+):
+    first = f'/r/{path(PLUGINS, "mailer", "534.v1", "hpi")}.sha1'
+    routes = {('GET', first): (500, {}, b'')}
+    if failure == 'unreachable':
+        stager, out = run(
+            tmp_path,
+            f'http://127.0.0.1:{free_port()}/r/',
+            listing=AD_LISTING,
+            details=AD_DETAILS,
+        )
+        requests = None
+    else:
+        with StubServer(routes) as stub:
+            stager, out = run(
+                tmp_path, stub.url + '/r/', listing=AD_LISTING, details=AD_DETAILS
+            )
+        requests = [request[1] for request in stub.requests]
+    assert stager.problems == 1
+    assert not stager.staging.files
+    (message,) = out.getvalue().splitlines()
+    assert message.startswith('FAILED    mailer 534.v1  (GET ')
+    assert ('failed with HTTP 500' if requests else 'failed:') in message
+    if requests:
+        # the walk stops at the failure: no other group or extension is tried
+        assert requests == [first]
