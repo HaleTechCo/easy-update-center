@@ -46,7 +46,7 @@ def test_jar_environment(tmp_path, secrets_dir):
     assert env['CORE_AGE_DAYS'] == '0'
 
 
-def test_jar_environment_uses_explicit_port(tmp_path, secrets_dir):
+def test_jar_environment_spells_out_the_default_port(tmp_path, secrets_dir):
     settings = make_settings(
         tmp_path, secrets_dir, REPO_URL='https://art.corp/artifactory'
     )

@@ -49,7 +49,7 @@ def test_release_id():
     )
 
 
-def test_publish_swaps_live_atomically(tmp_path):
+def test_publish_makes_the_release_live(tmp_path):
     staging = create_staging(tmp_path, R1)
     (staging / 'marker').write_text('first')
     publish(tmp_path, staging, R1)

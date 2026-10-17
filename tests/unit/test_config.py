@@ -311,8 +311,13 @@ def test_doctor_since_accepts_jenkins_versions(value):
     assert load_settings({**AIRGAPPED, 'DOCTOR_SINCE': value}).doctor_since == value
 
 
-def test_doctor_since_empty_means_unset():
-    assert load_settings({**AIRGAPPED, 'DOCTOR_SINCE': ''}).doctor_since == ''
+@pytest.mark.parametrize('value', ['', '  '])
+def test_an_empty_variable_means_not_set_so_the_default_applies(value):
+    # settings whose default is not empty, one with a mode default
+    online = {**ONLINE, 'RETAIN_RELEASES': value, 'CORE_AGE_DAYS': value}
+    s = load_settings({**online, 'MIN_PLUGIN_RATIO': value})
+    assert (s.retain_releases, s.core_age_days, s.min_plugin_ratio) == (5, 400, 0.9)
+    assert load_settings({**AIRGAPPED, 'CORE_AGE_DAYS': value}).core_age_days == 0
 
 
 @pytest.mark.parametrize('value', ['latest', '2', '2.462.1.4', ' 2.x', '2.462-rc'])

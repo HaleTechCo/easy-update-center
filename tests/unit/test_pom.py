@@ -54,8 +54,15 @@ def test_a_usable_pom_has_no_reason():
         ),
         (b'<!DOCTYPE p [<!ENTITY x "y">]><project/>', 'declares a DOCTYPE or entities'),
         (
-            b'<project><version>${revision}${changelist}</version></project>',
-            'does not declare groupId, artifactId and version',
+            (
+                b'<project><groupId>org.jenkins-ci.plugins</groupId>'
+                b'<artifactId>git</artifactId>'
+                b'<version>${revision}${changelist}</version></project>'
+            ),
+            (
+                'declares org.jenkins-ci.plugins:git:${revision}${changelist}, '
+                'not org.jenkins-ci.plugins:git:5.2.0'
+            ),
         ),
     ],
 )
