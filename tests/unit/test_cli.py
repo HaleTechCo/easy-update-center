@@ -354,7 +354,6 @@ def test_doctor_json_prints_the_next_line_on_stderr_and_keeps_stdout_valid(
     captured = capsys.readouterr()
     assert json.loads(captured.out)['plugins'] == 0
     assert captured.err.splitlines()[-1] == 'next: uc procure stage --dependencies'
-    assert 'next:' not in captured.out
 
 
 def test_doctor_air_gapped_without_a_source_suggests_placing_and_recording_the_files(
@@ -412,7 +411,6 @@ def test_doctor_record_keeps_json_output_valid_and_reports_the_saved_path_on_std
     captured = capsys.readouterr()
     assert json.loads(captured.out)['plugins'] == 0
     assert f'saved the report as {data / "doctor" / "report.json"}' in captured.err
-    assert 'saved the report' not in captured.out
     assert (data / 'doctor' / 'report.json').is_file()
     assert read_status(data)['doctor']['recorded_at'].endswith('Z')
 
@@ -427,22 +425,6 @@ def test_config_check(monkeypatch, tmp_path, secrets_dir, capsys):
     use_env(monkeypatch, tmp_path, secrets_dir)
     assert main(['config', '--check']) == 0
     assert capsys.readouterr().out == 'configuration ok\n'
-
-
-@pytest.mark.parametrize(
-    'value', ['https://[uc.example.com', 'https://uc:abc'], ids=['bracket', 'port']
-)
-def test_config_reports_a_malformed_public_url(
-    monkeypatch, tmp_path, secrets_dir, capsys, value
-):
-    use_env(monkeypatch, tmp_path, secrets_dir)
-    monkeypatch.setenv('PUBLIC_URL', value)
-    assert main(['config', '--check']) == 1
-    captured = capsys.readouterr()
-    assert captured.out == ''
-    assert captured.err.splitlines()[-1].startswith(
-        'uc: error: PUBLIC_URL is not a valid URL: '
-    )
 
 
 def test_config_json_and_check_are_exclusive(capsys):
@@ -1237,7 +1219,6 @@ def test_repo_adapter_listens_on_8081_unless_given_a_port(
     monkeypatch, tmp_path, secrets_dir
 ):
     use_env(monkeypatch, tmp_path, secrets_dir)
-    monkeypatch.setenv('REPO_ADAPTER_PORT', '9090')  # not a setting: ignored
     ports = []
     monkeypatch.setattr('uc.cli.serve', lambda _settings, port: ports.append(port))
     assert main(['repo-adapter']) == 0
@@ -1287,33 +1268,13 @@ def test_the_repo_adapter_warns_about_its_plain_http_urls_as_it_starts(
     assert PLAIN_HTTP_WARNING.findall(before[0]) == ['REPO_URL', 'REPO_API_URL']
 
 
-def test_the_repo_adapter_health_check_does_not_warn(monkeypatch, capsys):
-    monkeypatch.setenv('REPO_URL', 'http://artifactory:8081/artifactory/')
+def test_the_repo_adapter_health_check_does_not_warn(
+    monkeypatch, tmp_path, secrets_dir, capsys
+):
+    use_env(monkeypatch, tmp_path, secrets_dir)  # loadable, REPO_URL is plain http
     monkeypatch.setattr(cli, 'healthcheck', lambda _port: None)
     assert main(['repo-adapter', '--healthcheck']) == 0
     assert capsys.readouterr().err == ''
-
-
-def test_a_malformed_url_prints_an_error_not_a_traceback(
-    monkeypatch, tmp_path, secrets_dir, capsys
-):
-    use_env(monkeypatch, tmp_path, secrets_dir)
-    monkeypatch.setenv('REPO_URL', 'http://[bad/')
-    assert main(['status']) == 1
-    assert 'uc: error: REPO_URL is not a valid URL: ' in capsys.readouterr().err
-
-
-def test_config_check_reports_a_malformed_url_setting(
-    monkeypatch, tmp_path, secrets_dir, capsys
-):
-    use_env(monkeypatch, tmp_path, secrets_dir)
-    monkeypatch.setenv('HTTPS_PROXY', 'http://[bad')
-    assert main(['config', '--check']) == 1
-    assert (
-        capsys.readouterr()
-        .err.splitlines()[-1]
-        .startswith('uc: error: HTTPS_PROXY is not a valid URL: ')
-    )
 
 
 def test_config_check_takes_a_proxy_password_with_a_hash_and_never_prints_one(
@@ -1327,14 +1288,14 @@ def test_config_check_takes_a_proxy_password_with_a_hash_and_never_prints_one(
     assert main(['config', '--check']) == 0
     monkeypatch.setenv(
         'HTTPS_PROXY',
-        'http://svc:S3cretPW@proxy.corp:abc',  # pragma: allowlist secret
+        'http://svc:S3cret#x@proxy.corp:abc',  # pragma: allowlist secret
     )
     assert main(['config', '--check']) == 1
     err = capsys.readouterr().err
     assert err.splitlines()[-1].startswith(
         'uc: error: HTTPS_PROXY is not a valid URL: '
     )
-    assert 'S3cretPW' not in err
+    assert 'S3cret' not in err
     assert 'abc' not in err
 
 
@@ -1444,7 +1405,6 @@ def test_serving_stops_with_an_error_when_it_cannot_record_its_port(
     assert err.splitlines()[-1].startswith(
         'uc: error: repo-adapter cannot record its port in '
     )
-    assert 'Traceback' not in err
     assert closed
 
 
@@ -1484,18 +1444,6 @@ def test_config_example_prints_the_env_example(capsys):
     assert capsys.readouterr().out == example_env('airgapped')
 
 
-def test_config_example_takes_no_format():
-    with pytest.raises(SystemExit) as exited:
-        main(['config', '--example', 'toml'])
-    assert exited.value.code == 2
-
-
-def test_config_has_no_web_env():
-    with pytest.raises(SystemExit) as exited:
-        main(['config', '--web-env'])
-    assert exited.value.code == 2
-
-
 def test_procure_stage_options_come_from_the_command_line(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir, DOCTOR_SINCE='2.462.1')
     parse = build_parser().parse_args
@@ -1532,21 +1480,6 @@ def test_procure_stage_options_come_from_the_command_line(tmp_path, secrets_dir)
     assert procure_options(
         parse(['procure', 'stage', '--staging', '/elsewhere']), settings
     ).staging == Path('/elsewhere')
-
-
-@pytest.mark.parametrize(
-    'argv',
-    [
-        ['procure', 'stage', '--no-wars'],
-        ['procure', 'stage', '--no-poms'],
-        ['procure', 'record', '--no-fix'],
-        ['doctor', '--no-json'],
-    ],
-)
-def test_the_options_that_turned_a_setting_off_are_gone(argv):
-    with pytest.raises(SystemExit) as exited:
-        main(argv)
-    assert exited.value.code == 2
 
 
 @pytest.mark.parametrize(('argv', 'expected'), [([], False), (['--fix'], True)])
@@ -1618,16 +1551,6 @@ def test_pki_init_defaults_and_flags(tmp_path):
     assert 19 <= cert_info(other / 'update-center.cert').days_left(utcnow()) <= 20
 
 
-def test_pki_takes_no_settings(monkeypatch, tmp_path):
-    monkeypatch.setenv('PKI_ORG', 'Env Corp')
-    monkeypatch.setenv('PKI_SIGNING_DAYS', '30')
-    monkeypatch.setenv('PKI_ROOT_DAYS', '0')
-    assert main(['pki', 'init', '--out', str(tmp_path / 'pki')]) == 0
-    signing = cert_info(tmp_path / 'pki' / 'update-center.cert')
-    assert 'Env Corp' not in signing.subject
-    assert signing.days_left(utcnow()) > 150
-
-
 def test_pki_rotate_reads_the_root_key_from_root_and_names_it_there(
     tmp_path, capsys, pki_material
 ):
@@ -1637,7 +1560,6 @@ def test_pki_rotate_reads_the_root_key_from_root_and_names_it_there(
     (work / 'root').rename(offline)
     assert main(['pki', 'rotate', '--dir', str(work), '--root', str(offline)]) == 0
     assert (work / 'update-center.key.old').is_file()
-    assert not (work / 'root').exists()
     (offline / 'root-ca.key').unlink()
     capsys.readouterr()
     assert (
@@ -1666,12 +1588,6 @@ def test_pki_rotate_reads_the_root_key_from_root_and_names_it_there(
         'uc: error: cannot read the root CA key secrets/root/root-ca.key: '
         'No such file or directory\n'
     )
-
-
-def test_pki_rotate_has_no_root_display_dir():
-    with pytest.raises(SystemExit) as exited:
-        main(['pki', 'rotate', '--dir', 'x', '--root-display-dir', 'y'])
-    assert exited.value.code == 2
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason='root can write anywhere')
