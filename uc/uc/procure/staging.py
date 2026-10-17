@@ -73,9 +73,7 @@ def check_path(path: str) -> str:
     directory, _, name = path.rpartition('/')
     gav = to_gav(RepoFile(directory, name)) if directory else None
     if (
-        path.startswith('/')
-        or '\\' in path
-        or any(part in {'', '.', '..'} for part in path.split('/'))
+        any(part in {'', '.', '..'} for part in path.split('/'))
         or gav is None
         or gav.extension not in EXTENSIONS
     ):
