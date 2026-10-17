@@ -107,3 +107,35 @@ def test_bad_tool_installer_keeps_previous_copy(tmp_path):
 def test_unreachable_tool_installers_without_previous(tmp_path):
     warnings = mirror_tool_installers(INDEX, tmp_path / 'updates', None, get=getter({}))
     assert warnings[0].startswith('tool installers not mirrored')
+
+
+LOGIN_PAGE = b'<html><body><a href="/login">Sign in</a></body></html>'
+
+
+def test_an_index_that_lists_no_installers_is_not_mirrored(tmp_path):
+    # a login or error page answers 200 with links, none of them installers
+    warnings = mirror_tool_installers(
+        INDEX, tmp_path / 'updates', None, get=getter({INDEX: LOGIN_PAGE})
+    )
+    assert warnings == [
+        f'tool installers not mirrored ({INDEX} lists no tool installer files)'
+    ]
+    assert not list((tmp_path / 'updates').iterdir())
+
+
+def test_an_index_that_lists_no_installers_keeps_the_previous_copy(tmp_path):
+    previous = tmp_path / 'previous'
+    previous.mkdir()
+    (previous / MAVEN).write_text("downloadService.post('old',{})")
+    warnings = mirror_tool_installers(
+        INDEX, tmp_path / 'updates', previous, get=getter({INDEX: LOGIN_PAGE})
+    )
+    assert warnings == [
+        (
+            f'tool installers not refreshed ({INDEX} lists no tool installer files); '
+            'kept the previous copy'
+        )
+    ]
+    assert (
+        tmp_path / 'updates' / MAVEN
+    ).read_text() == "downloadService.post('old',{})"
