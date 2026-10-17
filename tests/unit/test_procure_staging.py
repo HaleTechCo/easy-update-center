@@ -13,7 +13,14 @@ import pytest
 
 from procurefixture import SOURCE, stage
 from uc.procure import ProcureError
-from uc.procure.staging import MANIFEST, Staging, check_path, review_line, sha1_of
+from uc.procure.staging import (
+    MANIFEST,
+    SHA1,
+    Staging,
+    check_path,
+    review_line,
+    sha1_of,
+)
 
 POM = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.pom'
 
@@ -217,3 +224,8 @@ def test_a_delete_never_follows_a_symlinked_folder(tmp_path):
     with pytest.raises(ProcureError, match='link out of'):
         staging.remove('org/x/1/x-1.pom')
     assert (outside / '1' / 'x-1.pom').exists()
+
+
+def test_the_sha1_pattern_refuses_a_trailing_newline():
+    assert SHA1.match('a' * 40)
+    assert not SHA1.match('a' * 40 + '\n')

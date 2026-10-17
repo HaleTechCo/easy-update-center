@@ -21,7 +21,7 @@ MANIFEST = 'procurement.json'
 FORMAT = 1
 KINDS = ('pom', 'dependency', 'core', 'local')
 EXTENSIONS = ('hpi', 'jpi', 'war', 'pom')
-SHA1 = re.compile(r'^[0-9a-f]{40}$')
+SHA1 = re.compile(r'^[0-9a-f]{40}\Z')
 DEFAULT_STAGING = Path('/procurement')
 """The default staging folder.
 

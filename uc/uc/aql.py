@@ -30,8 +30,8 @@ WAR_GROUP = 'org.jenkins-ci.main'
 WAR_ARTIFACT = 'jenkins-war'
 LISTING_LIMIT = 256 * 1024 * 1024
 """The largest AQL answer read: about a million files."""
-_ALLOWED = re.compile(r'^[0-9A-Za-z+\-./_]*$')
-_REPOSITORY = re.compile(r'^[A-Za-z0-9._-]+$')
+_ALLOWED = re.compile(r'^[0-9A-Za-z+\-./_]*\Z')
+_REPOSITORY = re.compile(r'^[A-Za-z0-9._-]+\Z')
 
 
 class AqlError(UcError):

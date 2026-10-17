@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .archive import ArchiveFacts
 
-_SHA256 = re.compile(r'^[0-9a-f]{64}$')
+_SHA256 = re.compile(r'^[0-9a-f]{64}\Z')
 _SHARD_LENGTH = 2  # <root>/<sha256[:2]>/
 PRUNE_AFTER_DAYS = 30
 

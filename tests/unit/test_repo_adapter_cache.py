@@ -76,3 +76,12 @@ def test_prune_removes_entries_untouched_for_30_days(tmp_path):
     assert cache.prune() == 1
     assert cache.facts(old) is None
     assert cache.facts(fresh) == FACTS
+
+
+def test_the_sha256_pattern_refuses_a_trailing_newline():
+    from uc.repo_adapter import cache  # noqa: PLC0415
+
+    pattern = cache._SHA256  # noqa: SLF001
+
+    assert pattern.match('a' * 64)
+    assert not pattern.match('a' * 64 + '\n')

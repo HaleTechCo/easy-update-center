@@ -176,3 +176,9 @@ def test_an_aql_answer_over_the_limit_is_refused(monkeypatch):
         pytest.raises(aql.AqlError, match='larger than 10 bytes'),
     ):
         query_repository(stub.url + '/api/', 'jenkins', 'svc', 'pw')
+
+
+@pytest.mark.parametrize('pattern', [aql._ALLOWED, aql._REPOSITORY])  # noqa: SLF001
+def test_the_aql_name_patterns_refuse_a_trailing_newline(pattern):
+    assert pattern.match('plugins-release')
+    assert not pattern.match('plugins-release\n')
