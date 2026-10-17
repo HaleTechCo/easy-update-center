@@ -61,7 +61,7 @@ repository. More in the [architecture overview](docs/architecture/overview.md).
 
 ## Quick start
 
-You need a Linux host with Docker (Compose v2), a hostname for the update center, and a Jenkins
+You need a Linux host with Docker (Docker Compose 2.24.4 or later), a hostname for the update center, and a Jenkins
 community account (online) or an account on your repository (air-gapped):
 [Requirements](docs/getting-started/requirements.md). Take the latest version from the
 [Releases page](https://github.com/HaleTechCo/easy-update-center/releases).

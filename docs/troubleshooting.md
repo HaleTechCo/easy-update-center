@@ -24,7 +24,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](ref
 
 | Symptom | Cause and fix |
 |---|---|
-| `Repository credentials missing: provide /run/secrets/repo_username and /run/secrets/repo_password` | The credential files are empty or missing. Write them: [online](getting-started/online.md#3-add-credentials), [air-gapped](getting-started/airgapped.md#4-add-credentials). Air-gapped with `REPO_ADAPTER=off`, also add them back to the `secrets` lists in `compose.airgapped.yaml`. |
+| `Repository credentials missing: provide /run/secrets/repo_username and /run/secrets/repo_password` | The credential files are empty or missing. Write them: [online](getting-started/online.md#3-add-credentials), [air-gapped](getting-started/airgapped.md#4-add-credentials). Air-gapped with `REPO_ADAPTER=off`, also add [`compose.repo-credentials.yaml`](reference/secrets.md#repository-credentials-without-the-adapter) to `COMPOSE_FILE`. |
 | The listing fails with HTTP 403 (online) | Anonymous or wrong credentials: repo.jenkins-ci.org needs a Jenkins community account ([Accounts](getting-started/requirements.md#accounts)). |
 | The listing fails with HTTP 403 (Artifactory) | The account cannot read the repository. Give it read permission on the repository (no admin rights are needed), or use another account. |
 | A stack trace from `GitHubSource`: `java.io.IOException: This endpoint requires you to be authenticated` | Not an error: the warning for a missing GitHub token. The run continues without labels from GitHub topics ([GitHub token](reference/secrets.md#github-token)). |
