@@ -44,9 +44,30 @@ scheduler, which runs unattended, never does.
 
 Air-gapped, `compose.airgapped.yaml` leaves the repository credentials out of `scheduler` and `uc`:
 only the repo-adapter talks to the repository, and the others authenticate to the adapter with a
-token it creates in `/data/repo-adapter/token`. If you set `REPO_ADAPTER=off` in air-gapped mode,
-add `repo_username` and `repo_password` back to the `secrets` lists of `scheduler` and `uc` in
-`compose.airgapped.yaml`.
+token it creates in `/data/repo-adapter/token`.
+
+### Repository credentials without the adapter
+
+If you set `REPO_ADAPTER=off` in air-gapped mode, `scheduler` and `uc` read the repository
+themselves and need the credentials back. Do not edit `compose.airgapped.yaml`, which an upgrade
+replaces. Create `compose.repo-credentials.yaml` next to it:
+
+```yaml
+services:
+  scheduler:
+    secrets: [repo_username, repo_password]
+  uc:
+    secrets: [repo_username, repo_password]
+```
+
+Then add it to `COMPOSE_FILE` in `.env`:
+
+```bash
+COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.repo-credentials.yaml
+```
+
+Compose appends these lists to the ones the overlay set, so `docker compose config` then shows
+`repo_username` and `repo_password` on both services.
 
 The web container never receives the signing key.
 

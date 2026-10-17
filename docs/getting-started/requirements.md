@@ -13,7 +13,8 @@ What a host, a network and a set of accounts need before you deploy the update c
 
 ## Software
 
-- Docker Engine with Compose v2: `docker compose version` must work.
+- Docker Engine with Docker Compose 2.24.4 or later: `docker compose version` must work. The air-gapped
+  overlay uses the `!override` tag, which older Compose merges as a plain list instead.
 - git, to clone this repository (not needed to deploy an air-gapped bundle).
 
 Nothing else is installed on the host: the generator, Python and Apache all run in the containers.

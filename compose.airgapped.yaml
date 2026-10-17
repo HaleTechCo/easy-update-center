@@ -12,7 +12,9 @@ x-blocked-hosts: &blocked-hosts
 
 # The repo-adapter is on by default in air-gapped mode, so only it gets the repository credentials
 # (docs/architecture/repo-adapter.md#security): the !override lists leave them out of uc and
-# scheduler. With REPO_ADAPTER=off, add repo_username and repo_password back to both lists.
+# scheduler. !override needs Docker Compose 2.24.4 or later (docs/getting-started/requirements.md).
+# With REPO_ADAPTER=off, add compose.repo-credentials.yaml to COMPOSE_FILE, which lists both secrets
+# on scheduler and uc again (docs/reference/secrets.md#repository-credentials-without-the-adapter).
 services:
   scheduler:
     extra_hosts: *blocked-hosts
