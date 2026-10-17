@@ -78,7 +78,7 @@ services:
     user: "${UC_UID:-10001}:${UC_GID:-10001}"
     profiles: ["setup"]
     network_mode: none
-    entrypoint: ["uc-setup"]
+    entrypoint: ["/usr/bin/tini", "--", "uc-setup"]
     read_only: true
     tmpfs:
       - /tmp
@@ -100,7 +100,6 @@ services:
     # writes the volume web serves and the scheduler runs from.
     volumes:
       - repo-adapter-data:/data/repo-adapter
-      - ./config:/config:ro
     networks: [repo, repo-egress]
     secrets:
       - repo_username
