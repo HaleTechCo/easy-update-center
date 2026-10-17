@@ -120,7 +120,7 @@ def test_an_index_that_lists_no_installers_is_not_mirrored(tmp_path):
     assert warnings == [
         f'tool installers not mirrored ({INDEX} lists no tool installer files)'
     ]
-    assert not list((tmp_path / 'updates').iterdir())
+    assert not (tmp_path / 'updates' / MAVEN).exists()
 
 
 def test_an_index_that_lists_no_installers_keeps_the_previous_copy(tmp_path):

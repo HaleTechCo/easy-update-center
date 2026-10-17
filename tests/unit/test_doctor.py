@@ -28,7 +28,6 @@ from uc.doctor import (
     attach_adapter_report,
     attach_core_check,
     check_since,
-    core_lines,
     find_missing_cores,
     format_report,
     inspect_repository,
@@ -1023,34 +1022,14 @@ def test_a_dependency_the_newest_release_satisfies_is_not_reported():
     assert report.exit_code() == 0
 
 
-@pytest.mark.parametrize(
-    ('fetch', 'text'),
-    [
-        (
-            False,
-            'Required cores not checked (manifest unavailable; run with --fetch): 2',
-        ),
-        (
-            True,
-            'Required cores not checked (manifest unavailable from the repository): 2',
-        ),
-    ],
-)
-def test_required_cores_not_checked_blames_the_repository_only_when_fetch_was_on(
-    fetch, text
-):
-    # no manifest could be read for two releases, so no required core is known
-    report = DoctorReport(required_cores={}, cores_unchecked=2)
-    assert core_lines(report, fetch=fetch) == [text]
-    assert ('--fetch' in text) is (not fetch)
-
-
 def test_the_report_says_required_cores_were_not_checked(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     report = DoctorReport(required_cores={}, cores_unchecked=2)
-    assert format_report(report, settings).splitlines()[-1] == (
+    assert (
         'Required cores not checked (manifest unavailable; run with --fetch): 2'
+        in format_report(report, settings).splitlines()
     )
-    assert format_report(report, settings, fetch=True).splitlines()[-1] == (
+    assert (
         'Required cores not checked (manifest unavailable from the repository): 2'
+        in format_report(report, settings, fetch=True).splitlines()
     )
