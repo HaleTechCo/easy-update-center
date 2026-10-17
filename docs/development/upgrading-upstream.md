@@ -28,7 +28,7 @@ listed below, and whether the patches still apply. Review each diff:
 | `site/test/test.sh` | Port new expectations into `tests/routing/test_upstream_rules.py`. |
 | `Main.java`, `DirectoryTreeBuilder.java`, `MetadataWriter.java`, `Signer.java` | Removed or renamed options used in `uc/uc/args.py`. `--connection-check-url` is the one upstream's own script does not use. |
 | `MavenArtifact.java` | `DOWNLOADS_ROOT_URL` still controls download URLs. |
-| `ArtifactoryRepositoryImpl.java` | The listing query (`uc/uc/aql.py`), the cache layout (`uc/uc/doctor.py`), the authenticator's port check ([Step 3](../architecture/generation-pipeline.md#step-3-environment-for-the-generator)), and the three requests the repo-adapter answers ([Requests it answers](../architecture/repo-adapter.md#requests-it-answers)). |
+| `ArtifactoryRepositoryImpl.java` | The listing query (`uc/uc/aql.py`, and `tests/support/aqlfixture.py`'s `UPSTREAM_QUERY`, a literal copy of upstream's AQL query that must change with the pin), the cache layout (`uc/uc/doctor.py`), the authenticator's port check ([Step 3](../architecture/generation-pipeline.md#step-3-environment-for-the-generator)), and the three requests the repo-adapter answers ([Requests it answers](../architecture/repo-adapter.md#requests-it-answers)). |
 | `HPI.java` | The archive entries the repo-adapter serves: `META-INF/MANIFEST.MF` and `<artifactId>-<version>.jar!/index.jelly` ([Filling gaps](../architecture/repo-adapter.md#filling-gaps)). |
 | `Popularities.java` | Whether `0001-popularity-configurable-and-optional.patch` still applies, or is no longer needed. |
 | `json/TieredUpdateSitesGenerator.java` | Whether `0002-core-age-configurable.patch` still applies, or is no longer needed. |
