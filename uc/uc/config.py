@@ -742,6 +742,9 @@ def read_secret(path: Path) -> str | None:
     except OSError as exc:  # a directory, or a file the uc user may not read
         msg = f'{path} cannot be read: {exc.strerror}'
         raise ConfigError(msg) from exc
+    except UnicodeDecodeError as exc:  # e.g. UTF-16 from PowerShell 5.1's >
+        msg = f'{path} is not UTF-8 text'
+        raise ConfigError(msg) from exc
     return value or None
 
 
