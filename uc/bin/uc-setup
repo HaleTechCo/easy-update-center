@@ -123,6 +123,16 @@ do_pki_rotate() {
     do_secrets
 }
 
+refuse_directories() { # stop on a directory where setup keeps a secret file
+    # Docker creates an empty directory at every missing bind-mount path when a container starts
+    # before setup, and a directory there would pass the "exists" checks below.
+    for name in update-center.key update-center.cert ${credential_files}; do
+        [ ! -d "${secrets}/${name}" ] || die "secrets/${name} is a directory, not a file: Docker creates one when a container starts before setup; remove it and run setup again"
+    done
+}
+
+refuse_directories
+
 command=${1:-}
 [ $# -eq 0 ] || shift
 case ${command} in
