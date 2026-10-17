@@ -89,17 +89,12 @@ def to_gav(f: RepoFile) -> Gav | None:
     if not _ALLOWED.match(f.name) or not _ALLOWED.match(f.path):
         return None
     cut = f.path.rfind('/')
-    if cut <= 0:
-        return None
     version, ga = f.path[cut + 1 :], f.path[:cut]
     cut = ga.rfind('/')
     if cut <= 0:
         return None
     artifact, group = ga[cut + 1 :], ga[:cut].replace('/', '.')
-    dot = f.name.rfind('.')
-    if dot <= 0:
-        return None
-    extension = f.name[dot + 1 :]
+    extension = f.name[f.name.rfind('.') + 1 :]
     if f.name != f'{artifact}-{version}.{extension}':
         return None
     return Gav(group, artifact, version, extension)
