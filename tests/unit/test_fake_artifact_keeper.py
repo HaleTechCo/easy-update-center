@@ -31,7 +31,7 @@ BASE = 'io/jenkins/plugins/caffeine-api/3.2.4/caffeine-api-3.2.4'
 
 
 @pytest.fixture
-def keeper(tmp_path):
+def paged_keeper(tmp_path):
     repo = tmp_path / 'jenkins-prod-local'
     for number in range(150):  # more than one page of 100
         path = (
@@ -67,30 +67,30 @@ def backend(url, tmp_path):
     )
 
 
-def test_the_backend_pages_through_the_fake(keeper, tmp_path):
-    entries = backend(keeper, tmp_path).list()
+def test_the_backend_pages_through_the_fake(paged_keeper, tmp_path):
+    entries = backend(paged_keeper, tmp_path).list()
     assert len(entries) == 151
     assert entries[0].path == f'{BASE}.hpi'
 
 
-def test_the_fake_serves_side_files_and_refuses_anonymous_reads(keeper, tmp_path):
-    entries = {e.path: e for e in backend(keeper, tmp_path).list()}
-    assert len(backend(keeper, tmp_path).sha1(entries[f'{BASE}.hpi'])) == 40
+def test_the_fake_serves_side_files_and_refuses_anonymous_reads(paged_keeper, tmp_path):
+    entries = {e.path: e for e in backend(paged_keeper, tmp_path).list()}
+    assert len(backend(paged_keeper, tmp_path).sha1(entries[f'{BASE}.hpi'])) == 40
     with pytest.raises(urllib.error.HTTPError) as err:
-        urllib.request.urlopen(f'{keeper}maven/jenkins-prod-local/{BASE}.hpi')
+        urllib.request.urlopen(f'{paged_keeper}maven/jenkins-prod-local/{BASE}.hpi')
     err.value.close()  # it holds the response
     assert err.value.code == 401
     with pytest.raises(urllib.error.HTTPError) as err:
         urllib.request.urlopen(
-            f'{keeper}api/v1/repositories/jenkins-prod-local/artifacts'
+            f'{paged_keeper}api/v1/repositories/jenkins-prod-local/artifacts'
         )
     err.value.close()
     assert err.value.code == 401
 
 
-def test_the_listing_fills_in_the_pom_from_the_fake(keeper, tmp_path):
+def test_the_listing_fills_in_the_pom_from_the_fake(paged_keeper, tmp_path):
     index = build_index(
-        backend(keeper, tmp_path),
+        backend(paged_keeper, tmp_path),
         Cache(tmp_path / 'cache'),
         key='jenkins-prod-local',
         now=dt.datetime(2026, 9, 23, tzinfo=dt.UTC),
@@ -107,9 +107,9 @@ def test_the_listing_fills_in_the_pom_from_the_fake(keeper, tmp_path):
     )  # the archive, its derived POM and 150 standalone POMs
 
 
-def test_the_fake_accepts_an_upload_once(keeper, tmp_path):
+def test_the_fake_accepts_an_upload_once(paged_keeper, tmp_path):
     basic = 'Basic ' + base64.b64encode(b'zac:tok').decode()
-    url = f'{keeper}maven/jenkins-prod-local/org/example/new/1.0/new-1.0.pom'
+    url = f'{paged_keeper}maven/jenkins-prod-local/org/example/new/1.0/new-1.0.pom'
     stored = tmp_path / 'jenkins-prod-local' / 'org/example/new/1.0/new-1.0.pom'
     assert put(url, b'<project/>') == 401
     assert put(url, b'<project/>', basic) == 201
@@ -118,9 +118,9 @@ def test_the_fake_accepts_an_upload_once(keeper, tmp_path):
     assert stored.read_bytes() == b'<project/>'
 
 
-def test_the_fake_answers_head_without_a_body(keeper):
+def test_the_fake_answers_head_without_a_body(paged_keeper):
     basic = 'Basic ' + base64.b64encode(b'zac:tok').decode()
-    port = int(keeper.split(':')[2].split('/')[0])
+    port = int(paged_keeper.split(':')[2].split('/')[0])
 
     def head(path):
         # urllib never reads a body after HEAD, so the bytes are read off the socket
