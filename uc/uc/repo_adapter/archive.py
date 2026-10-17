@@ -125,7 +125,8 @@ def open_archive(stream: BinaryIO) -> zipfile.ZipFile:
 def read_entry(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
     """Read an entry's bytes.
 
-    None when absent, ArchiveError when it exceeds limit, whatever its header says.
+    None when absent, ArchiveError when its size exceeds limit. zipfile never reads
+    past the size in the header, so that check bounds the data too.
     """
     try:
         info = archive.getinfo(name)
@@ -136,7 +137,7 @@ def read_entry(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
         raise ArchiveError(msg)
     try:
         with archive.open(info) as entry:
-            data = entry.read(limit + 1)
+            data = entry.read(limit)
     except (
         zipfile.BadZipFile,
         OSError,
@@ -148,9 +149,6 @@ def read_entry(archive: zipfile.ZipFile, name: str, limit: int) -> bytes | None:
     ) as exc:
         msg = f'unreadable entry {name}: {exc}'
         raise ArchiveError(msg) from exc  # RuntimeError: encrypted
-    if len(data) > limit:
-        msg = f'{name} is larger than {limit} bytes'
-        raise ArchiveError(msg)
     return data
 
 
