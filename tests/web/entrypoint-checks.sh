@@ -63,6 +63,7 @@ expect_exit 64 "PUBLIC_URL must be set"
 expect_exit 64 "web must not run as root" --user 0:0 -e PUBLIC_URL=http://uc
 expect_exit 64 "MODE must be online or airgapped (got 'airgaped')" -e PUBLIC_URL=http://uc -e MODE=airgaped
 expect_exit 64 "DOWNLOAD_BACKEND must be mirror or artifactory" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=s3
+expect_exit 64 "DOWNLOAD_ACCESS must be redirect or proxy (got 'proxy2')" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy2
 expect_exit 64 "DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL" -e PUBLIC_URL=http://uc -e DOWNLOAD_BACKEND=artifactory
 expect_exit 64 "DOWNLOAD_ACCESS=proxy needs DOWNLOAD_BACKEND_URL set explicitly" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy
 expect_exit 64 "needs username:password" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy -e DOWNLOAD_BACKEND=artifactory -e DOWNLOAD_BACKEND_URL=https://repo.corp/jenkins
