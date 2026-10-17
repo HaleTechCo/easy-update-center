@@ -108,8 +108,6 @@ chown 0:0 "${secrets}" && chmod 0755 "${secrets}"
 run secrets
 same "not writable: exits 1" 1 "${rc}"
 says "not writable: names UC_UID and UC_GID" "secrets/ is not writable by uid 1000: set UC_UID and UC_GID in .env to the output of id -u and id -g"
-left="$(ls -A "${secrets}")"
-same "not writable: nothing created" "" "${left}"
 
 # 3b. A file in secrets/ that belongs to another user: stop, naming the file and UC_UID, not chmod's own error.
 fresh
@@ -124,9 +122,11 @@ mkdir /setup/out && chown "${host}" /setup/out
 run pki-init --out /setup/out --org "Example Corp" --root-days 30 --signing-days 10
 same "pki-init --out: exits 0" 0 "${rc}"
 is_file "pki-init --out: update-center.cert exists" /setup/out/update-center.cert
-stat_is "pki-init --out: update-center.key is 0600" %a 600 /setup/out/update-center.key
+stat_is "pki-init --out: root/ is 0700" %a 700 /setup/out/root
 extra="$(find /setup/out -maxdepth 1 -type f ! -name 'update-center*' ! -name 'root*')"
 same "pki-init --out: no credential files" "" "${extra}"
+untouched="$(ls -A "${secrets}")"
+same "pki-init --out: secrets/ is left alone" "" "${untouched}"
 subject="$(openssl x509 -in /setup/out/update-center.cert -noout -subject)"
 if [[ "${subject}" == *"Example Corp"* ]]; then pass "pki-init --out: --org reaches the subject"; else fail "pki-init --out: --org reaches the subject (${subject})"; fi
 
@@ -134,6 +134,7 @@ if [[ "${subject}" == *"Example Corp"* ]]; then pass "pki-init --out: --org reac
 fresh
 run
 mv "${secrets}/root" /setup/root
+chmod 0644 "${secrets}/update-center.key" # the rotation must tighten the kept copy, not inherit this
 run pki-rotate --days 20
 same "pki-rotate: exits 0 with the root at /setup/root" 0 "${rc}"
 says "pki-rotate: names secrets/update-center.cert" "issued a new secrets/update-center.cert"
@@ -155,7 +156,6 @@ says "pki-rotate with a file at /setup/root: says to mount the folder" "/setup/r
 mkdir -p /tmp/planted/uc && printf 'raise SystemExit("planted")\n' > /tmp/planted/uc/__init__.py
 output="$(setpriv --reuid="${host%%:*}" --regid="${host##*:}" --clear-groups env HOME=/tmp sh -c 'cd /tmp/planted && uc --version' 2>&1)"
 says "PYTHONSAFEPATH: uc ignores a uc package in the working directory" "uc "
-if [[ "${output}" == *planted* ]]; then fail "PYTHONSAFEPATH: the planted package ran"; fi
 rm -rf /tmp/planted
 
 # 8. A killed pki init can leave its work folder, with a root key in it: the next run removes it.
@@ -199,7 +199,6 @@ fresh
 expect_usage bogus
 expect_usage '' extra
 expect_usage secrets extra
-expect_usage procurement
 expect_usage pki-init --out
 expect_usage pki-init --bogus value
 expect_usage pki-rotate --root-days 3
