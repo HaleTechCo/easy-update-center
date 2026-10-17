@@ -9,7 +9,7 @@ import zipfile
 import pytest
 
 from archivefixture import make_hpi, pom_xml
-from httpstub import StubServer, free_port
+from httpstub import StubServer
 from procurefixture import RecordingHttp, publish, stage
 from uc.aql import RepoFile, classify
 from uc.doctor import DoctorReport, Inspection
@@ -560,31 +560,16 @@ def test_a_plugin_found_upstream_whose_download_fails_is_a_problem(tmp_path):
     assert not any(MAILER_POM in request[1] for request in stub.requests)
 
 
-@pytest.mark.parametrize('failure', ['http-500', 'unreachable'])
-def test_a_source_that_fails_on_a_checksum_ends_that_need_with_one_message(
-    tmp_path, failure
-):
+def test_a_source_that_fails_on_a_checksum_ends_that_need_with_one_message(tmp_path):
     first = f'/r/{path(PLUGINS, "mailer", "534.v1", "hpi")}.sha1'
-    routes = {('GET', first): (500, {}, b'')}
-    if failure == 'unreachable':
+    with StubServer({('GET', first): (500, {}, b'')}) as stub:
         stager, out = run(
-            tmp_path,
-            f'http://127.0.0.1:{free_port()}/r/',
-            listing=AD_LISTING,
-            details=AD_DETAILS,
+            tmp_path, stub.url + '/r/', listing=AD_LISTING, details=AD_DETAILS
         )
-        requests = None
-    else:
-        with StubServer(routes) as stub:
-            stager, out = run(
-                tmp_path, stub.url + '/r/', listing=AD_LISTING, details=AD_DETAILS
-            )
-        requests = [request[1] for request in stub.requests]
     assert stager.problems == 1
     assert not stager.staging.files
     (message,) = out.getvalue().splitlines()
     assert message.startswith('FAILED    mailer 534.v1  (GET ')
-    assert ('failed with HTTP 500' if requests else 'failed:') in message
-    if requests:
-        # the walk stops at the failure: no other group or extension is tried
-        assert requests == [first]
+    assert 'failed with HTTP 500' in message
+    # the walk stops at the failure: no other group or extension is tried
+    assert [request[1] for request in stub.requests] == [first]

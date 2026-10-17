@@ -149,6 +149,18 @@ def test_an_aql_answer_that_is_not_json_is_refused():
     assert isinstance(caught.value.__cause__, ValueError)
 
 
+@pytest.mark.parametrize('size', ['"abc"', '[1]', '1e999'])
+def test_an_aql_row_with_a_size_that_is_not_a_number_is_refused(size):
+    row = {'path': 'p', 'name': 'n', 'size': json.loads(size)}
+    body = json.dumps({'results': [row]}).encode()
+    routes = {('POST', '/api/search/aql'): (200, {}, body)}
+    with (
+        StubServer(routes) as stub,
+        pytest.raises(AqlError, match=r'^AQL response has a result whose size is '),
+    ):
+        query_repository(stub.url + '/api/', 'jenkins', 'uc', 'secret')
+
+
 @pytest.mark.parametrize('body', [b'{}', b'[]', b'{"results": null}', b'"x"'])
 def test_an_aql_answer_without_a_results_list_is_refused(body):
     routes = {('POST', '/api/search/aql'): (200, {}, body)}

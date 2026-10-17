@@ -628,21 +628,25 @@ def test_an_upload_that_fails_in_transit_is_reported_and_the_push_goes_on(
     keeper, tmp_path, secrets_dir
 ):
     repo, url = keeper
-    staged(tmp_path / 'stage', {POM: b'<project/>'})
+    staged(tmp_path / 'stage', {POM: b'<project/>', HPI: b'hpi bytes'})
     http = PutFails()
     code, lines = run(
         keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage', http=http
     )
     assert code == 1
-    assert (
-        f'FAILED    {POM}  (PUT {url}maven/jenkins/{POM} failed: connection reset)'
-    ) in lines
+    for path in (POM, HPI):
+        assert (
+            f'FAILED    {path}  (PUT {url}maven/jenkins/{path} failed: '
+            'connection reset)'
+        ) in lines
     assert (
         lines[-1]
-        == f'0 uploaded, 0 already present, 1 problem(s) -> {url}maven/jenkins/'
+        == f'0 uploaded, 0 already present, 2 problem(s) -> {url}maven/jenkins/'
     )
-    assert [method for method, _ in http.calls] == ['GET', 'HEAD', 'PUT']
+    # the second file is tried after the first failed
+    assert [method for method, _ in http.calls] == ['GET', 'HEAD', 'PUT'] * 2
     assert not (repo / POM).exists()
+    assert not (repo / HPI).exists()
 
 
 def test_an_upload_the_repository_cannot_confirm_afterwards_failed(
@@ -660,7 +664,10 @@ def test_an_upload_the_repository_cannot_confirm_afterwards_failed(
             keeper_settings(tmp_path, secrets_dir, stub.url + '/'), tmp_path / 'stage'
         )
     assert code == 1
-    assert f'FAILED    {POM}  (the repository answered HTTP 500)' in lines
+    assert (
+        f'FAILED    {POM}  (the upload was accepted, but its .sha1 could not be '
+        'read back: the repository answered HTTP 500)'
+    ) in lines
     assert not [line for line in lines if line.startswith('next:')]
 
 

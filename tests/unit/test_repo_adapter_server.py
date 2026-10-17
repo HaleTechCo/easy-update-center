@@ -72,7 +72,9 @@ def running(tmp_path):
         server = ThreadingHTTPServer(
             ('127.0.0.1', 0), make_handler(adapter, key=KEY, token=TOKEN)
         )
-        threading.Thread(target=server.serve_forever, daemon=True).start()
+        threading.Thread(
+            target=server.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True
+        ).start()
         started.append(server)
         return backend, f'http://127.0.0.1:{server.server_address[1]}/artifactory/'
 
@@ -256,6 +258,8 @@ def test_an_idle_adapter_only_answers_health(running):
     _, url = running({}, adapter_on=False)
     assert fetch(url.replace('/artifactory/', '/healthz'), token=None)[0] == 200
     assert aql(url)[0] == 503
+    status, _, body = fetch(f'{url}{KEY}/{BASE}.pom', token=None)
+    assert (status, body) == (503, b'REPO_ADAPTER is off\n')
 
 
 def test_ensure_token_creates_a_private_token_once(tmp_path):
@@ -381,7 +385,9 @@ def capped():
             make_handler(adapter, key=KEY, token=TOKEN),
             max_requests=max_requests,
         )
-        threading.Thread(target=server.serve_forever, daemon=True).start()
+        threading.Thread(
+            target=server.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True
+        ).start()
         started.append(server)
         return server.server_address[1]
 
@@ -518,12 +524,6 @@ def test_a_client_that_never_finishes_its_request_is_cut_off(running, monkeypatc
         started = time.monotonic()
         assert conn.recv(1024) == b''
     assert time.monotonic() - started < 4
-
-
-def test_an_idle_adapter_answers_repository_reads_503(running):
-    _, url = running({}, adapter_on=False)
-    status, _, body = fetch(f'{url}{KEY}/{BASE}.pom', token=None)
-    assert (status, body) == (503, b'REPO_ADAPTER is off\n')
 
 
 def test_a_description_request_without_a_directory_is_404(running):

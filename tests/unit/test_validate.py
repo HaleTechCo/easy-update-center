@@ -286,12 +286,20 @@ def test_a_truncated_site_document_is_refused_and_its_site_checked_no_further(
     tmp_path, name
 ):
     staging = build(tmp_path)
-    good = (staging / 'dynamic-2.540' / name).read_text()
-    (staging / 'dynamic-2.540' / name).write_text(good[: len(good) // 2])
+    for site in ('dynamic-2.540', 'dynamic-stable-2.528.1'):
+        good = (staging / site / name).read_text()
+        (staging / site / name).write_text(good[: len(good) // 2])
     with pytest.raises(ValidationError) as err:
         validate(staging)
     parse = [p for p in err.value.problems if 'does not parse' in p]
-    assert len(parse) == 1
-    assert parse[0].startswith('dynamic-2.540/ update-center JSON does not parse: ')
-    # the other sites are still checked, and this one stops at the parse error
-    assert not [p for p in err.value.problems if 'dynamic-2.540' in p and p != parse[0]]
+    # a broken site does not stop the check of the sites after it
+    assert [p.split('/ ')[0] for p in parse] == [
+        'dynamic-2.540',
+        'dynamic-stable-2.528.1',
+    ]
+    # and each stops at its own parse error
+    assert not [
+        p
+        for p in err.value.problems
+        if ('dynamic-2.540' in p or 'dynamic-stable-2.528.1' in p) and p not in parse
+    ]

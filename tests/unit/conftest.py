@@ -26,7 +26,9 @@ def serve(handler):
     Return the server and its URL.
     """
     httpd = ThreadingHTTPServer(('127.0.0.1', 0), handler)
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    threading.Thread(
+        target=httpd.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True
+    ).start()
     return httpd, f'http://127.0.0.1:{httpd.server_address[1]}/'
 
 
