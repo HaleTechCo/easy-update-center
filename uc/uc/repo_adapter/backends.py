@@ -235,6 +235,24 @@ def _text(value: object) -> str:
     return value
 
 
+def _aql_entry(row: dict) -> RepoEntry:
+    """Return one AQL result; TypeError, ValueError or KeyError when it is malformed."""
+    modified = _text(row['modified'])
+    created = _text(row.get('created') or modified)
+    parse_time(modified)  # refuse a time the listing step could not read later
+    parse_time(created)
+    sha1 = row.get('actual_sha1')
+    return RepoEntry(
+        _text(row['path']),
+        _text(row['name']),
+        _text(row['sha256']),
+        None if sha1 is None else _text(sha1),
+        int(row.get('size') or 0),
+        created,
+        modified,
+    )
+
+
 def _quote(path: str) -> str:
     return urllib.parse.quote(path, safe='/!+-._~')
 
@@ -285,19 +303,7 @@ class ArtifactoryBackend:
             msg = f'AQL query to {self.api_url} failed with HTTP {response.status}'
             raise BackendError(msg)
         try:
-            results = json.loads(response.body)['results']
-            return [
-                RepoEntry(
-                    _text(r['path']),
-                    _text(r['name']),
-                    r['sha256'],
-                    r.get('actual_sha1'),
-                    int(r.get('size') or 0),
-                    r.get('created') or r['modified'],
-                    r['modified'],
-                )
-                for r in results
-            ]
+            return [_aql_entry(r) for r in json.loads(response.body)['results']]
         except (ValueError, KeyError, TypeError) as exc:
             msg = f'unexpected AQL response from {self.api_url}: {exc}'
             raise BackendError(msg) from exc
@@ -439,14 +445,14 @@ class ArtifactKeeperBackend:
             body = self._page(cursor, page)
             try:
                 for item in body['items']:
-                    directory, _, name = item['path'].rpartition('/')
+                    directory, _, name = _text(item['path']).rpartition('/')
                     if name.endswith((*LISTED_EXTENSIONS, '.jar')) and directory:
                         created = artifactory_time(parse_time(item['created_at']))
                         entries.append(
                             RepoEntry(
                                 directory,
                                 name,
-                                item['checksum_sha256'],
+                                _text(item['checksum_sha256']),
                                 None,
                                 int(item['size_bytes']),
                                 created,

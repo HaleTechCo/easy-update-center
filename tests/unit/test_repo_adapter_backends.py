@@ -475,6 +475,12 @@ AQL_ROW = {
         json.dumps({'results': [{**AQL_ROW, 'path': 1}]}).encode(),
         json.dumps({'results': [{**AQL_ROW, 'name': None}]}).encode(),
         json.dumps({'results': [{**AQL_ROW, 'name': []}]}).encode(),
+        json.dumps({'results': [{**AQL_ROW, 'sha256': 5}]}).encode(),
+        json.dumps({'results': [{**AQL_ROW, 'actual_sha1': 5}]}).encode(),
+        json.dumps({'results': [{**AQL_ROW, 'modified': None}]}).encode(),
+        json.dumps({'results': [{**AQL_ROW, 'modified': 'yesterday'}]}).encode(),
+        json.dumps({'results': [{**AQL_ROW, 'created': 5}]}).encode(),
+        json.dumps({'results': [{**AQL_ROW, 'created': 'yesterday'}]}).encode(),
     ],
     ids=[
         'not JSON',
@@ -487,6 +493,12 @@ AQL_ROW = {
         'path number',
         'name null',
         'name list',
+        'sha256 number',
+        'sha1 number',
+        'modified null',
+        'modified not a time',
+        'created number',
+        'created not a time',
     ],
 )
 def test_an_artifactory_listing_in_an_unexpected_shape_is_a_backend_error(body):
@@ -575,8 +587,17 @@ def _without(item, field):
         [keeper_item(HPI_PATH, 'a' * 64, created='yesterday')],
         [keeper_item(HPI_PATH, 'a' * 64, size='big')],
         [{'path': HPI_PATH}],
+        [{**keeper_item(HPI_PATH, 'a' * 64), 'path': 5}],
+        [{**keeper_item(HPI_PATH, 'a' * 64), 'checksum_sha256': 5}],
     ],
-    ids=['no checksum', 'bad created_at', 'size_bytes not a number', 'a bare item'],
+    ids=[
+        'no checksum',
+        'bad created_at',
+        'size_bytes not a number',
+        'a bare item',
+        'path number',
+        'checksum number',
+    ],
 )
 def test_a_keeper_item_in_an_unexpected_shape_is_a_backend_error(items, tmp_path):
     with (
