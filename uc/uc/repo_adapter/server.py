@@ -171,9 +171,6 @@ class Adapter:
             index = build_index(
                 self.backend, self.cache, key=self.key, now=self.clock()
             )
-            if index.report is None:
-                msg = 'build_index returned a listing without a report'
-                raise RuntimeError(msg)
             write_report(index.report, self.report_file)
             self.index = index
             return index

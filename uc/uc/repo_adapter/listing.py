@@ -68,6 +68,7 @@ class Index:
     The AQL rows, and what GETs resolve against until the next listing.
     """
 
+    report: Report
     rows: list[dict] = field(default_factory=list)
     # path -> the bytes GETs serve: derived from the archive, or the repository's
     # as checked
@@ -80,7 +81,6 @@ class Index:
     jars: dict[str, RepoEntry] = field(default_factory=dict)
     # every plugin archive in the rows
     plugins: set[Coordinates] = field(default_factory=set)
-    report: Report | None = None
 
 
 def _reason(exc: Exception) -> str:
