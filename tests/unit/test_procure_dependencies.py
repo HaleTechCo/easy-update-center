@@ -435,3 +435,35 @@ def test_a_group_that_is_not_a_maven_group_falls_back_to_the_known_groups(
         for requested in http.urls
         if not requested.startswith(f'{url}org/jenkins-ci/plugins/mailer/')
     ] == []
+
+
+@pytest.mark.parametrize(
+    'entry', ['../evil:1.0', 'evil/name:1.0', 'nothing:1/../2', 'nothing:', ':1.0']
+)
+def test_a_dependency_entry_that_is_not_a_plugin_name_and_version_is_a_problem(
+    releases, tmp_path, entry
+):
+    # the entry comes from a downloaded archive's manifest, so it is untrusted
+    root, url = releases
+    release(root, PLUGINS, 'mailer', '534.v1', requires=f'{entry},display-url-api:2.0')
+    release(root, PLUGINS, 'display-url-api', '2.0')
+    http = RecordingHttp()
+    stager, out = run(
+        tmp_path,
+        url,
+        listing=repository((PLUGINS, 'active-directory', '2.0')),
+        details=[missing('active-directory', '2.0', 'mailer', '534.v1')],
+        http=http,
+    )
+    name, _, version = entry.partition(':')
+    assert stager.problems == 1
+    assert (
+        f'FAILED    {name} {version}  (not a plugin name and version '
+        '(required by mailer 534.v1))'
+    ) in out.getvalue().splitlines()
+    # the valid entry beside it is still staged, and no request names the bad one
+    assert path(PLUGINS, 'display-url-api', '2.0', 'hpi') in stager.staging.files
+    assert len(stager.staging.files) == 4
+    assert [
+        requested for requested in http.urls if 'evil' in requested or '..' in requested
+    ] == []
