@@ -78,7 +78,7 @@ services:
     user: "${UC_UID:-10001}:${UC_GID:-10001}"
     profiles: ["setup"]
     network_mode: none
-    entrypoint: ["/usr/bin/tini", "--", "uc-setup"]
+    entrypoint: ["uc-setup"]
     read_only: true
     tmpfs:
       - /tmp
