@@ -290,7 +290,7 @@ uc pki show --dir <dir>
 |---|---|
 | `init` | Creates a root CA (`root-ca.crt`, and `root/root-ca.key` to move offline) and a signing key and certificate (`update-center.key`, `update-center.cert`) issued by it. It refuses to overwrite any of them. |
 | `rotate` | Issues a new signing certificate from the root key in `<dir>/root/` (or `--root`), keeping the previous pair as `*.old` in place of an older one. It first checks that the root key and `root-ca.crt` can be read and belong together, and that `update-center.key` and `update-center.cert` are both there or both missing. It refuses an encrypted root key without asking for the passphrase: [decrypt it on the offline machine](../how-to/rotate-signing-certificate.md#issue-a-new-signing-certificate) for the rotation. |
-| `show` | Prints the subject, expiry (with days left) and SHA-256 fingerprint of the root and signing certificates. |
+| `show` | Prints the subject, expiry (with days left) and SHA-256 fingerprint of the root and signing certificates. With neither in `<dir>`, it exits 1 with `uc: error: no certificate in <dir>`. |
 
 When `init` or `rotate` fails, `<dir>` is left as it was. Both build the new files in a temporary
 directory inside `<dir>` and only then rename them into place, moving back what they moved when a

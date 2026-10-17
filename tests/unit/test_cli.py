@@ -553,6 +553,22 @@ def test_pki_rotate_names_the_certificate_under_the_display_dir(
     )
 
 
+def test_pki_show_without_a_certificate_exits_1(tmp_path, capsys):
+    assert main(['pki', 'show', '--dir', str(tmp_path)]) == 1
+    assert capsys.readouterr().err == f'uc: error: no certificate in {tmp_path}\n'
+
+
+def test_pki_rotate_without_a_current_pair_keeps_nothing(
+    tmp_path, capsys, pki_material
+):
+    work = tmp_path / 'pki'
+    shutil.copytree(pki_material, work)
+    (work / 'update-center.key').unlink()
+    (work / 'update-center.cert').unlink()
+    assert main(['pki', 'rotate', '--dir', str(work)]) == 0
+    assert capsys.readouterr().out == f'issued a new {work / "update-center.cert"}\n'
+
+
 def tree_state(directory):
     """Return every path under directory, with its mode and each file's bytes.
 

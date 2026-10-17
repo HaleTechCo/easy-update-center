@@ -28,6 +28,7 @@ from .pki import (
     SIGNING_CERT,
     SIGNING_DAYS,
     SIGNING_KEY,
+    PkiError,
     cert_info,
     init_pki,
     rotate_signing,
@@ -563,6 +564,7 @@ def _pki(args: argparse.Namespace) -> int:
             "move it to offline storage now; only 'uc pki rotate' needs it"
         )
     elif args.pki_command == 'rotate':
+        kept = (args.dir / SIGNING_KEY).exists() or (args.dir / SIGNING_CERT).exists()
         rotate_signing(
             args.dir,
             root_dir=args.root,
@@ -571,16 +573,19 @@ def _pki(args: argparse.Namespace) -> int:
             display_dir=args.display_dir,
         )
         print(
-            f'issued a new {(args.display_dir or args.dir) / SIGNING_CERT}; '
-            'the previous pair is kept as *.old'
+            f'issued a new {(args.display_dir or args.dir) / SIGNING_CERT}'
+            + ('; the previous pair is kept as *.old' if kept else '')
         )
     else:
         now = utcnow()
-        for name in (ROOT_CERT, SIGNING_CERT):
-            path = args.dir / name
+        certs = [args.dir / n for n in (ROOT_CERT, SIGNING_CERT)]
+        if not any(path.is_file() for path in certs):
+            msg = f'no certificate in {args.dir}'
+            raise PkiError(msg)
+        for path in certs:
             if path.is_file():
                 info = cert_info(path)
-                print(f'{name}: {info.subject}')
+                print(f'{path.name}: {info.subject}')
                 print(f'  expires {iso(info.not_after)} ({info.days_left(now)} days)')
                 print(f'  sha256 {info.fingerprint_sha256}')
     return 0
