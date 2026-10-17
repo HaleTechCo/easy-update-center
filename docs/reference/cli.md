@@ -21,8 +21,9 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](con
   image built from source.
 - Every command except three reads the [configuration](configuration.md) and fails at once with
   `uc: error: ...` when it is invalid. The three read none: `uc pki`, `uc config --example` and
-  `uc repo-adapter --healthcheck`. (`uc config` without `--example` reads it too, but prints what it
-  can instead of failing.)
+  `uc repo-adapter --healthcheck`. (`uc config` without `--example` reads it too: when it is
+  invalid, plain `uc config` first prints every value it can work out, then the error and exit 1;
+  `--check` and `--json` print only the error.)
 
 Exit codes shared by every command:
 

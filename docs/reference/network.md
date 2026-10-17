@@ -45,7 +45,7 @@ the JVM's and Python's proxy settings ([Read by bundled software](configuration.
 
 | Host | From | Why |
 |---|---|---|
-| `REPO_URL`'s host | `repo-adapter` | The listing, POMs, manifests and archives. |
+| `REPO_URL`'s host | `repo-adapter` | The listing, POMs, manifests and archives. With `REPO_ADAPTER=off`, `scheduler` and `uc` reach it instead, for the same. |
 | `RESOURCES_URL`'s host | `scheduler`, `uc` | Only when `RESOURCES_SOURCE=url`. |
 | `POPULARITY_JSON_URL`'s host | `scheduler`, `uc` | Only when set. |
 | `TOOL_INSTALLERS_URL`'s host | `scheduler`, `uc` | Only when set. |
