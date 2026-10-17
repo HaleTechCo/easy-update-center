@@ -35,7 +35,7 @@ STAGING = '/procurement'
 SETUP_MOUNTS = {
     '/setup/secrets': ('secrets', False),
 }
-SETUP_ENTRYPOINT = ['/usr/bin/tini', '--', 'uc-setup']
+SETUP_ENTRYPOINT = ['uc-setup']
 ADAPTER_VOLUME = 'repo-adapter-data'
 ADAPTER_DIR = '/data/repo-adapter'
 
@@ -243,7 +243,7 @@ def main() -> None:
             problems.append(f'setup receives secrets {sorted(secrets(setup))}')
         if setup.get('entrypoint') != SETUP_ENTRYPOINT:
             problems.append(
-                'setup must run uc-setup under tini as its entrypoint, '
+                'setup must run uc-setup as its entrypoint, '
                 f'not {setup.get("entrypoint")!r}'
             )
         problems += setup_mount_problems(setup)
