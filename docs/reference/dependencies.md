@@ -56,7 +56,7 @@ The Maven build downloads update-center2's dependencies; see
 | Component | Version | License | Why |
 |---|---|---|---|
 | python3-pytest | distribution package in the `test` image stage | MIT | Runs the unit, routing and integration suites. |
-| python3-yaml | distribution package in the `test` image stage | MIT | Read by the tests that check `compose.yaml` and the setup service. |
+| python3-yaml | distribution package in the `test` image stage | MIT | Read by the test that checks the `.github/workflows/*.yml` files (`tests/unit/test_workflows.py`). |
 | git | distribution package in the `test` image stage | GPL-2.0-only | Used by tests and by `make upstream-diff`. |
 | jq | distribution package in the `test` image stage | MIT | Reads Grype's reports in the tests of `.github/scripts/image-scan.sh`, as the runner does. |
 | `jenkins/jenkins` images | `lts` and `latest` tags | MIT | Real controllers in `make it-airgapped` and `make it-online`. |
@@ -103,10 +103,11 @@ repository at the commit `.pre-commit-config.yaml` pins, and Dependabot proposes
 The jars the image ships, update-center2 itself included:
 
 ```bash
-docker compose run --rm --no-deps --entrypoint ls uc /opt/uc/generator
+docker run --rm --entrypoint ls ghcr.io/haletechco/easy-update-center-uc:<version> /opt/uc/generator
 ```
 
-(From Git Bash on Windows, prefix it with `MSYS_NO_PATHCONV=1`.) Their licenses are listed in the
+Put the release you run in place of `<version>`. (From Git Bash on Windows, prefix it with
+`MSYS_NO_PATHCONV=1`.) Their licenses are listed in the
 image, in `/opt/uc/licenses/THIRD-PARTY.txt`.
 
 ## Third-party notices
@@ -122,7 +123,7 @@ The uc image carries the notices for everything it ships that is not this projec
 | `Apache-2.0.txt`, `MIT.txt`, `LGPL-2.1.txt`, `jaxen-BSD.txt`, `dom4j.txt`, `BouncyCastle.txt` | The license texts the libraries use, as published by each license's author or project. |
 | `supercronic-MIT.txt` | supercronic's license. |
 
-To read them: `docker compose run --rm --no-deps --entrypoint cat uc /opt/uc/licenses/NOTICE.txt`.
+To read them: `docker run --rm --entrypoint cat ghcr.io/haletechco/easy-update-center-uc:<version> /opt/uc/licenses/NOTICE.txt`.
 
 The build keeps them complete. Maven's license plugin lists each runtime library with the license
 its POM declares, and the build fails when a library has no known license, or when a jar the image
