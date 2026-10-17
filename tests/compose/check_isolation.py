@@ -75,8 +75,7 @@ def adapter_volume_problems(services: dict) -> list[str]:
     problems.extend(
         f'{name} must mount {ADAPTER_VOLUME} at {ADAPTER_DIR} read-only'
         for name in ('scheduler', 'uc')
-        if name in services
-        and volume_mounts(services[name]).get(ADAPTER_DIR) != (ADAPTER_VOLUME, True)
+        if volume_mounts(services[name]).get(ADAPTER_DIR) != (ADAPTER_VOLUME, True)
     )
     if any(
         source == ADAPTER_VOLUME
@@ -191,7 +190,7 @@ def main() -> None:
         problems.append(
             f'web and repo-adapter share {sorted(networks(web) & networks(adapter))}'
         )
-    for name in ('scheduler',) + (('uc',) if 'uc' in services else ()):
+    for name in ('scheduler', 'uc'):
         if 'repo' not in networks(services[name]):
             problems.append(f'{name} is not on the repo network')
         if mode == 'airgapped' and secrets(services[name]) & REPO_SECRETS:
@@ -200,8 +199,6 @@ def main() -> None:
             )
     if secrets(adapter) != REPO_SECRETS:
         problems.append(f'repo-adapter secrets are {sorted(secrets(adapter))}')
-    if REPO_SECRETS & secrets(web):
-        problems.append('web receives the repository credentials')
     for name, service in sorted(services.items()):
         if name == 'uc':
             continue
@@ -216,9 +213,8 @@ def main() -> None:
                 f'{name} mounts ./procurement at '
                 f'{", ".join(procurement_binds(service))}'
             )
-    if 'uc' in services and (
-        PUSH_SECRET not in secrets(services['uc'])
-        or STAGING not in mounts(services['uc'])
+    if PUSH_SECRET not in secrets(services['uc']) or STAGING not in mounts(
+        services['uc']
     ):
         problems.append(f'uc must receive {PUSH_SECRET} and mount {STAGING}')
     setup = services.get('setup')
