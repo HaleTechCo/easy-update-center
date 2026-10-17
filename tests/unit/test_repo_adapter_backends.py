@@ -18,7 +18,7 @@ from archivefixture import make_hpi, make_jar
 from httpstub import StubServer, serve_bytes
 from uc.aql import AQL_TEMPLATE
 from uc.http import Http, HttpError
-from uc.repo_adapter import backends
+from uc.repo_adapter import archive, backends
 from uc.repo_adapter.backends import (
     ArtifactKeeperBackend,
     ArtifactoryBackend,
@@ -27,6 +27,8 @@ from uc.repo_adapter.backends import (
     RepoEntry,
     artifactory_time,
 )
+from uc.repo_adapter.cache import Cache
+from uc.repo_adapter.listing import build_index
 
 UTC = dt.UTC
 GIT = ('org.jenkins-ci.plugins', 'git', '5.2.0')
@@ -185,6 +187,51 @@ def test_artifactory_without_range_support_gives_no_date():
     prefix = f'/artifactory/jenkins/{HPI_PATH}'
     with StubServer({('GET', prefix): serve_bytes(data, ranges=False)}) as stub:
         assert artifactory(stub).archive_released(entry(data)) is None
+
+
+def test_an_archive_with_an_oversized_directory_keeps_the_repositorys_date(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(archive, 'CENTRAL_DIRECTORY_LIMIT', 10)
+    data = make_hpi(*GIT)
+    prefix = f'/artifactory/jenkins/{HPI_PATH}'
+    zipped = zipfile.ZipFile(io.BytesIO(data))
+    routes = {
+        ('GET', prefix): serve_bytes(data),
+        ('POST', '/artifactory/api/search/aql'): (
+            200,
+            {},
+            json.dumps(
+                {
+                    'results': [
+                        {
+                            'repo': 'jenkins',
+                            'path': HPI_PATH.rpartition('/')[0],
+                            'name': 'git-5.2.0.hpi',
+                            'created': '2026-09-01T00:00:00.000Z',
+                            'modified': '2026-09-02T00:00:00.000Z',
+                            'sha256': hashlib.sha256(data).hexdigest(),
+                            'actual_sha1': 'b' * 40,
+                            'size': len(data),
+                        }
+                    ]
+                }
+            ).encode(),
+        ),
+    }
+    # the inner jar is left out: it would meet the same small limit
+    for name in (n for n in zipped.namelist() if not n.endswith('.jar')):
+        routes[('GET', f'{prefix}!/{name}')] = (200, {}, zipped.read(name))
+    now = dt.datetime(2026, 9, 23, tzinfo=UTC)
+    with StubServer(routes) as stub:
+        index = build_index(
+            artifactory(stub), Cache(tmp_path / 'cache'), key='jenkins', now=now
+        )
+    assert [r['name'] for r in index.rows][:1] == ['git-5.2.0.hpi']
+    assert index.rows[0]['modified'] == '2026-09-02T00:00:00.000Z'
+    assert index.report.dates_from_repository == [
+        {'path': HPI_PATH, 'reason': 'archive has no readable date'}
+    ]
 
 
 def test_protocol_errors_are_backend_errors():

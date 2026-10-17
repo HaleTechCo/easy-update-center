@@ -327,14 +327,18 @@ class ArtifactoryBackend:
     def archive_released(self, entry: RepoEntry) -> dt.datetime | None:
         """Read the archive date from its central directory via Range requests.
 
-        None without Range support.
+        None without Range support, or when the directory cannot be read: the
+        listing then keeps the repository's date.
         """
         url = self.base + _quote(entry.path)
-        if not RangeReader.supported(self.http, url, self.auth):
+        try:
+            if not RangeReader.supported(self.http, url, self.auth):
+                return None
+            return archive_date(
+                open_archive(RangeReader(self.http, url, self.auth, entry.size))
+            )
+        except (ArchiveError, BackendError):
             return None
-        return archive_date(
-            open_archive(RangeReader(self.http, url, self.auth, entry.size))
-        )
 
     def facts(
         self, entry: RepoEntry, path_coordinates: Coordinates, *, plugin: bool

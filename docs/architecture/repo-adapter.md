@@ -124,7 +124,7 @@ Archives are untrusted input.
 | Archive download | `REPO_MAX_ARCHIVE_MB` (512 MB); a larger archive is skipped and reported |
 | A POM, manifest or `index.jelly` | 1 MiB |
 | An inner `.jar` | 64 MiB |
-| The zip directory read for dates | 16 MiB; larger falls back to the repository's time |
+| The zip directory read for dates | 16 MiB; Artifactory keeps a larger one with the repository's time, Artifact Keeper (which opens the whole archive) skips it and reports it |
 | The listing response | 256 MiB |
 | Backend request timeout | 60 s; 600 s for archive downloads and the listing |
 | Requests handled at once | 32; more get 503 |
