@@ -152,10 +152,15 @@ _SECTION_KEYS = {
 }
 
 
+GAV_PARTS = 3  # group:artifact:version
+
+
 def _well_formed(name: str, section: object) -> bool:
+    # procure unpacks a gav into its three parts
     return isinstance(section, list) and all(
         isinstance(item, dict)
         and all(isinstance(item.get(key), str) for key in _SECTION_KEYS[name])
+        and ('gav' not in item or len(item['gav'].split(':')) == GAV_PARTS)
         for item in section
     )
 
