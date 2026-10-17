@@ -134,7 +134,12 @@ def scheduled_step(job: str, name: str) -> dict:
 
 @pytest.mark.parametrize(
     ('username', 'password', 'present'),
-    [('user', 'secret', 'true'), ('', '', 'false'), ('user', '', 'false')],
+    [
+        ('user', 'secret', 'true'),
+        ('', '', 'false'),
+        ('user', '', 'false'),
+        ('', 'secret', 'false'),
+    ],
 )
 def test_it_online_is_skipped_with_a_notice_without_the_community_account(
     tmp_path, username, password, present
@@ -299,6 +304,9 @@ def test_image_scan_issue_lists_high_and_critical_vulnerabilities_with_a_fix(tmp
 def test_image_scan_updates_the_open_issue(tmp_path):
     result = run_image_scan(tmp_path, [], FINDINGS, issue='12')
     assert result.returncode == 0, result.stdout
+    # only an open issue is updated or closed: a closed one stays closed
+    first = (tmp_path / 'gh.log').read_text(encoding='utf-8').splitlines()[0]
+    assert first.startswith('issue list --state open ')
     assert last_call(tmp_path, 'gh').startswith('issue edit 12 --body-file ')
     body = (tmp_path / 'body.md').read_text(encoding='utf-8')
     assert '| CVE-2026-1 | Critical |' in body
@@ -475,6 +483,13 @@ def test_the_bundle_holds_the_signed_digests(tmp_path):
     assert docker_calls(tmp_path, 'tag') == [
         f'tag {UC}@sha256:1111 {UC}:0.2.1',
         f'tag {WEB}@sha256:2222 {WEB}:0.2.1',
+    ]
+    # the tags compose.yaml names, so that docker load gives the images it asks for
+    assert docker_calls(tmp_path, 'save') == [
+        (
+            'save --output bundle/easy-update-center-0.2.1-airgapped-arm64/images.tar '
+            f'{UC}:0.2.1 {WEB}:0.2.1'
+        )
     ]
     bundle_tar = tmp_path / 'assets' / 'easy-update-center-0.2.1-airgapped-arm64.tar'
     assert bundle_tar.is_file()
