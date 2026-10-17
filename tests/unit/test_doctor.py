@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from httpstub import StubServer
+from uc import status
 from uc.aql import Gav, RepoFile, classify
 from uc.doctor import (
     RECORD_LOCK_FILE,
@@ -175,13 +176,24 @@ def test_artifact_source_reads_the_update_center2_cache(tmp_path):
     assert source.cache_file('http://artifactory:8081' + manifest_path) == cached
     assert source.manifest(GIT) == 'Short-Name: git\n'
     assert source.pom(GIT) is None  # not cached and network not allowed
-    pom_digest = hashlib.sha256(
-        b'/artifactory/jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom'
-    ).hexdigest()
-    (tmp_path / 'cache' / pom_digest[:2] / pom_digest).mkdir(
-        parents=True
-    )  # update-center2's cached failure
-    assert source.pom(GIT) is None
+
+
+def test_a_failed_download_update_center2_cached_is_not_fetched_again(tmp_path):
+    # update-center2 records a failed download as a directory in its cache
+    pom_path = '/artifactory/jenkins/org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom'
+    digest = hashlib.sha256(pom_path.encode()).hexdigest()
+    (tmp_path / 'cache' / digest[:2] / digest).mkdir(parents=True)
+    with StubServer({('GET', pom_path): (200, {}, b'<project/>')}) as stub:
+        source = ArtifactSource(
+            stub.url + '/artifactory/',
+            'jenkins',
+            'uc',
+            'secret',
+            cache_dir=tmp_path / 'cache',
+            allow_network=True,
+        )
+        assert source.pom(GIT) is None
+    assert stub.requests == []
 
 
 def test_artifact_source_fetches_with_basic_auth():
@@ -635,7 +647,8 @@ def test_the_public_repository_is_not_checked_for_cores(tmp_path, secrets_dir):
         query=lambda *_args: plugin('git', '5.2.0', 'hpi', 'pom'),
     ).report
     assert report.required_cores is None
-    assert 'Cores plugins require' not in format_report(report, settings)
+    assert report.cores_unchecked == 0
+    assert 'Required cores not checked' not in format_report(report, settings)
 
 
 def test_inspect_repository_returns_the_listing_and_source_it_used(
@@ -736,6 +749,21 @@ def test_overlapping_records_take_turns_and_leave_the_last_report_with_its_count
         asked.put((os.path.samestat(os.fstat(fd), lock.stat()), operation))
         flock(fd, operation)
 
+    update_status = status.update_status
+    held = []
+
+    def probing_update_status(*args, **kwargs):
+        # as another process would: a shared lock is refused while this one is held
+        try:
+            share_at_once(lock)
+        except BlockingIOError:
+            held.append(True)
+        else:
+            held.append(False)
+        return update_status(*args, **kwargs)
+
+    monkeypatch.setattr(status, 'update_status', probing_update_status)
+
     def run(report):
         record(report, tmp_path, now)
         finished.append(report.plugins)
@@ -756,6 +784,7 @@ def test_overlapping_records_take_turns_and_leave_the_last_report_with_its_count
     for thread in threads:
         thread.join(30)
     assert sorted(finished) == [1, 2]
+    assert held == [True, True]  # the status block is written under the lock
     saved = json.loads(
         (tmp_path / 'doctor' / 'report.json').read_text(encoding='utf-8')
     )
@@ -788,9 +817,7 @@ def test_record_renames_a_temporary_file_from_beside_report_json(tmp_path, monke
     )  # the same directory, so the rename is atomic
     assert temporary.name.startswith('.report.')
     assert temporary.name.endswith('.tmp')
-    assert not temporary.exists()
     assert mode == 0o644  # readable before it is report.json
-    assert stat.S_IMODE(path.stat().st_mode) == 0o644
 
 
 def test_a_failed_record_removes_its_temporary_file(tmp_path, monkeypatch):

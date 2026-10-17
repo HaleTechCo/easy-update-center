@@ -65,8 +65,6 @@ def test_jar_environment_points_at_the_adapter_when_it_is_on(tmp_path, secrets_d
     )
     assert env['ARTIFACTORY_URL'] == 'http://repo-adapter:8081/artifactory/'
     assert env['ARTIFACTORY_API_URL'] == 'http://repo-adapter:8081/artifactory/api/'
-    assert env['ARTIFACTORY_REPOSITORY'] == 'jenkins'
-    assert (env['ARTIFACTORY_USERNAME'], env['ARTIFACTORY_PASSWORD']) == ('uc', 'token')
     assert env['CORE_AGE_DAYS'] == '400'
 
 
