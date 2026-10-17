@@ -630,3 +630,23 @@ def test_unrecorded_bytes_larger_than_the_staged_file_stop_the_comparison(
         and line.endswith('is larger than 10 bytes)')
     ], lines
     assert ('PUT', 'file') not in calls(stub)
+
+
+def test_a_staged_file_that_became_a_link_out_of_the_folder_is_refused(
+    keeper, tmp_path, secrets_dir
+):
+    repo, url = keeper
+    stage_dir = tmp_path / 'stage'
+    staged(stage_dir, {POM: b'<project/>'})
+    # the bytes match the record, so only where the file lives gives it away
+    outside = tmp_path / 'outside.pom'
+    outside.write_bytes(b'<project/>')
+    (stage_dir / POM).unlink()
+    (stage_dir / POM).symlink_to(outside)
+    code, lines = run(keeper_settings(tmp_path, secrets_dir, url), stage_dir)
+    assert code == 1
+    assert not (repo / POM).exists()
+    assert (
+        f'TAMPERED  {POM}  (changed or missing since it was downloaded; '
+        'download it again)'
+    ) in lines
