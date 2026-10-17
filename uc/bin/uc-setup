@@ -126,9 +126,16 @@ do_pki_rotate() {
 refuse_directories() { # stop on a directory where setup keeps a secret file
     # Docker creates an empty directory at every missing bind-mount path when a container starts
     # before setup, and a directory there would pass the "exists" checks below.
-    for name in update-center.key update-center.cert ${credential_files}; do
-        [ ! -d "${secrets}/${name}" ] || die "secrets/${name} is a directory, not a file: Docker creates one when a container starts before setup; remove it and run setup again"
+    # root-ca.crt is a Compose secret of uc and scheduler, so it becomes a directory the same way.
+    # Name every offender, so one run shows all of them.
+    bad=0
+    for name in update-center.key update-center.cert root-ca.crt ${credential_files}; do
+        if [ -d "${secrets}/${name}" ]; then
+            echo "uc-setup: error: secrets/${name} is a directory, not a file: Docker creates one when a container starts before setup; remove it and run setup again" >&2
+            bad=1
+        fi
     done
+    [ "${bad}" -eq 0 ] || exit 1
 }
 
 refuse_directories
