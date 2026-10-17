@@ -134,7 +134,8 @@ def fetch_upstream(
         if not isinstance(sha, str) or not _SHA.fullmatch(sha):
             msg = f'unexpected GitHub response for {settings.resources_ref!r}'
             raise ResourcesError(msg)
-        committer = (commit.get('commit') or {}).get('committer')
+        inner = commit.get('commit')
+        committer = inner.get('committer') if isinstance(inner, dict) else None
         date = committer.get('date') if isinstance(committer, dict) else None
         if not isinstance(date, str):
             msg = f'unexpected GitHub response for {settings.resources_ref!r}'
