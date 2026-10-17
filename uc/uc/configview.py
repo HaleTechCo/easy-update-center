@@ -98,8 +98,6 @@ def format_rows(shown: list[Row]) -> str:
     lines: list[str] = []
     for group in GROUPS:
         members = [row for row in shown if REGISTRY[row.env].group == group]
-        if not members:
-            continue
         lines += ['', group]
         for row in members:
             where = SOURCE_NAMES.get(row.source, row.source)
