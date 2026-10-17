@@ -87,7 +87,12 @@ class Stager:
             staged_at=iso(utcnow()),
             replaces_unusable=wanted.replaces_unusable,
         )
-        self.staging.commit(staged, part)
+        try:
+            self.staging.commit(staged, part)
+        except ProcureError as exc:
+            part.unlink(missing_ok=True)  # commit leaves it when it cannot move it
+            self.problem(wanted.path, str(exc))
+            return False
         self.staged += 1
         self.say('staged', wanted.path, wanted.reason)
         return True

@@ -89,3 +89,22 @@ def test_a_path_outside_the_layout_is_a_problem_not_a_crash(releases, tmp_path):
     assert not stager.stage(Wanted('../evil-1.pom', 'pom', 'x'))
     assert stager.problems == 1
     assert 'not a Maven path' in out.getvalue()
+
+
+def test_a_file_that_cannot_be_written_is_a_problem_and_staging_goes_on(
+    releases, tmp_path
+):
+    root, url = releases
+    other = 'com/example/other/1.0/other-1.0.pom'
+    publish(root, POM, b'<project/>')
+    publish(root, other, b'<other/>')
+    stage = tmp_path / 'stage'
+    stage.mkdir()
+    (stage / 'org').write_bytes(b'in the way')  # POM's folder cannot be created
+    stager, out = stager_for(stage, url)
+    assert not stager.stage(Wanted(POM, 'pom', 'x'))
+    assert stager.stage(Wanted(other, 'pom', 'y'))
+    assert out.getvalue().splitlines()[0].startswith(f'FAILED    {POM}  (cannot write ')
+    assert (stager.staged, stager.problems) == (1, 1)
+    assert POM not in stager.staging.files
+    assert not list(stage.glob('.part-*'))
