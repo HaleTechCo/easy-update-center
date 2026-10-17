@@ -162,22 +162,44 @@ def fetch_upstream(
     return info
 
 
+def _id_key(warning_id: object) -> str:
+    return json.dumps(warning_id, sort_keys=True)  # ids from a file may be unhashable
+
+
 def _merge_warnings(base: object, extra: object) -> list:
-    if not isinstance(base, list) or not isinstance(extra, list):
+    if not isinstance(base, list):
+        msg = "upstream's warnings.json must be a JSON array"
+        raise ResourcesError(msg)
+    if not isinstance(extra, list):
         msg = 'warnings.json must be a JSON array'
         raise ResourcesError(msg)
     if any(not isinstance(w, dict) or 'id' not in w for w in extra):
         msg = "every overlay warning needs an 'id'"
         raise ResourcesError(msg)
-    ids = [w['id'] for w in extra]
-    duplicates = sorted({i for i in ids if ids.count(i) > 1})
+    keys = [_id_key(w['id']) for w in extra]
+    duplicates = sorted(
+        {str(w['id']) for w, k in zip(extra, keys, strict=True) if keys.count(k) > 1}
+    )
     if duplicates:
-        msg = f'duplicate warning id(s) in the overlay: {", ".join(duplicates)}'
+        msg = f'duplicate warning id(s): {", ".join(duplicates)}'
         raise ResourcesError(msg)
-    by_id = {w['id']: w for w in extra}
-    merged = [by_id.pop(w.get('id'), w) if isinstance(w, dict) else w for w in base]
-    merged.extend(by_id.values())
+    by_key = dict(zip(keys, extra, strict=True))
+    merged = [
+        by_key.pop(_id_key(w.get('id')), w) if isinstance(w, dict) else w for w in base
+    ]
+    merged.extend(by_key.values())
     return merged
+
+
+def _read_overlay_json(path: Path) -> object:
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except UnicodeDecodeError as exc:
+        msg = 'not UTF-8'
+        raise ResourcesError(msg) from exc
+    except json.JSONDecodeError as exc:
+        msg = f'not valid JSON (line {exc.lineno} column {exc.colno})'
+        raise ResourcesError(msg) from exc
 
 
 def merge_overlay(upstream: Path, overlay: Path, dest: Path) -> list[str]:
@@ -207,10 +229,14 @@ def merge_overlay(upstream: Path, overlay: Path, dest: Path) -> list[str]:
             )
             target.write_bytes(base + banner + item.read_bytes())
         elif item.name == 'warnings.json':
-            merged = _merge_warnings(
-                json.loads(target.read_text(encoding='utf-8')),
-                json.loads(item.read_text(encoding='utf-8')),
-            )
+            try:
+                merged = _merge_warnings(
+                    json.loads(target.read_text(encoding='utf-8')),
+                    _read_overlay_json(item),
+                )
+            except ResourcesError as exc:
+                msg = f'config/overlay/{item.name}: {exc}'
+                raise ResourcesError(msg) from exc
             target.write_text(
                 json.dumps(merged, indent=2, ensure_ascii=False) + '\n',
                 encoding='utf-8',
