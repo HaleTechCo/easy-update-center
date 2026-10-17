@@ -40,21 +40,22 @@ def adapter(**lists):
 
 
 def test_every_pom_the_adapter_names_is_planned_once_in_path_order():
+    # each list is out of path order against the others, so only sorting orders them
     report = adapter(
         derived_poms=[
-            {'gav': 'io.jenkins.plugins:caffeine-api:3.2.4', 'url': 'u'},
+            {'gav': 'org.jenkins-ci.plugins:polaris:1.4.0', 'url': 'u'},
             {'gav': AD, 'url': 'u'},
         ],
         replaced_poms=[{'path': AD_POM, 'reason': 'not XML', 'url': 'u'}],
-        needs_pom=[{'gav': 'org.jenkins-ci.plugins:polaris:1.4.0', 'url': 'u'}],
+        needs_pom=[{'gav': 'io.jenkins.plugins:caffeine-api:3.2.4', 'url': 'u'}],
     )
     assert plan_poms(report) == [
         Wanted(
             CAFFEINE_POM,
             'pom',
             (
-                'real POM for io.jenkins.plugins:caffeine-api:3.2.4; '
-                'the one derived from its archive works meanwhile'
+                'io.jenkins.plugins:caffeine-api:3.2.4 has no POM in the repository '
+                'or its archive: the generator drops it without one'
             ),
         ),
         Wanted(
@@ -70,26 +71,28 @@ def test_every_pom_the_adapter_names_is_planned_once_in_path_order():
             POLARIS_POM,
             'pom',
             (
-                'org.jenkins-ci.plugins:polaris:1.4.0 has no POM in the repository '
-                'or its archive: the generator drops it without one'
+                'real POM for org.jenkins-ci.plugins:polaris:1.4.0; '
+                'the one derived from its archive works meanwhile'
             ),
         ),
     ]
 
 
 def test_without_the_adapter_every_hpi_without_a_pom_is_planned():
-    report = DoctorReport(
-        hpi_without_pom=['org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.hpi']
-    )
+    git = 'org/jenkins-ci/plugins/git/5.2.0/git-5.2.0'
+    caffeine = 'io/jenkins/plugins/caffeine-api/3.2.4/caffeine-api-3.2.4'
+    report = DoctorReport(hpi_without_pom=[f'{git}.hpi', f'{caffeine}.hpi'])
     assert plan_poms(report) == [
         Wanted(
-            'org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.pom',
+            f'{caffeine}.pom',
             'pom',
-            (
-                'no .pom beside org/jenkins-ci/plugins/git/5.2.0/git-5.2.0.hpi: '
-                'the generator drops it without one'
-            ),
-        )
+            f'no .pom beside {caffeine}.hpi: the generator drops it without one',
+        ),
+        Wanted(
+            f'{git}.pom',
+            'pom',
+            f'no .pom beside {git}.hpi: the generator drops it without one',
+        ),
     ]
 
 

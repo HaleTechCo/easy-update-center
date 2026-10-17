@@ -157,19 +157,24 @@ def test_a_manifest_naming_a_path_outside_the_layout_is_refused(tmp_path):
         Staging.open(tmp_path, SOURCE)
 
 
-def test_an_unknown_kind_or_a_bad_sha1_is_refused(tmp_path):
+@pytest.mark.parametrize(
+    ('kind', 'sha1'),
+    [('plugin', '0' * 40), ('pom', 'nope')],
+    ids=['unknown kind', 'bad sha1'],
+)
+def test_an_unknown_kind_or_a_bad_sha1_is_refused(tmp_path, kind, sha1):
     entry = {
         'url': 'u',
-        'sha1': 'nope',
+        'sha1': sha1,
         'size': 1,
-        'kind': 'plugin',
+        'kind': kind,
         'reason': 'r',
         'staged_at': 't',
     }
     (tmp_path / MANIFEST).write_text(
         json.dumps({'format': 1, 'source': SOURCE, 'files': {POM: entry}})
     )
-    with pytest.raises(ProcureError, match="has kind 'plugin' and sha1 'nope'"):
+    with pytest.raises(ProcureError, match=f'has kind {kind!r} and sha1 {sha1!r}'):
         Staging.open(tmp_path, SOURCE)
 
 

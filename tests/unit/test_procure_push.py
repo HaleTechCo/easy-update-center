@@ -108,7 +108,6 @@ def test_a_different_file_is_left_alone(keeper, tmp_path, secrets_dir):
     code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
     assert code == 1
     assert not [line for line in lines if line.startswith('next:')]
-    assert (repo / POM).read_bytes() == b'<html>404</html>'
     digest = hashlib.sha1(b'<html>404</html>', usedforsecurity=False).hexdigest()
     assert (
         f'DIFFERENT {POM}  (the repository holds another file (sha1 {digest}); '
@@ -150,23 +149,37 @@ def test_a_file_changed_after_download_is_refused(keeper, tmp_path, secrets_dir)
 def test_an_authentication_failure_is_an_error_not_an_absence(
     keeper, tmp_path, secrets_dir
 ):
-    repo, url = keeper
+    _, url = keeper
     staged(tmp_path / 'stage', {POM: b'<project/>'})
+    http = RecordingHttp()
     code, lines = run(
-        keeper_settings(tmp_path, secrets_dir, url, auth='uc:wrong'), tmp_path / 'stage'
+        keeper_settings(tmp_path, secrets_dir, url, auth='uc:wrong'),
+        tmp_path / 'stage',
+        http=http,
     )
     assert code == 1
-    assert not (repo / POM).exists()
     assert f'ERROR     {POM}  (the repository answered HTTP 401)' in lines
+    assert [(method, call.rsplit('/', 1)[1]) for method, call in http.calls] == [
+        ('GET', 'mailer-534.v1.pom.sha1')
+    ]
 
 
 def test_a_dry_run_uploads_nothing(keeper, tmp_path, secrets_dir):
     repo, url = keeper
     staged(tmp_path / 'stage', {POM: b'<project/>'})
+    http = RecordingHttp()
     code, lines = run(
-        keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage', dry_run=True
+        keeper_settings(tmp_path, secrets_dir, url),
+        tmp_path / 'stage',
+        dry_run=True,
+        http=http,
     )
     assert code == 0
+    # the comparison with the repository still happens, only the upload does not
+    assert http.calls == [
+        ('GET', f'{url}maven/jenkins/{POM}.sha1'),
+        ('HEAD', f'{url}maven/jenkins/{POM}'),
+    ]
     assert f'would put {POM}' in lines
     assert not [line for line in lines if line.startswith('next:')]
     assert (
@@ -320,7 +333,6 @@ def test_a_path_the_repository_holds_without_a_checksum_is_never_uploaded(
         f'ERROR     {POM}  (the repository holds this path but publishes no '
         'checksum for it; check it by hand)'
     ) in lines
-    assert (repo / POM).read_bytes() == b'<other/>'
     assert [method for method, _ in http.calls] == ['GET', 'HEAD']
 
 

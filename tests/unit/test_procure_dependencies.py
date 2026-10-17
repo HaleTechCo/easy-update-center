@@ -184,6 +184,8 @@ def test_a_dependency_the_repository_has_new_enough_is_not_staged(releases, tmp_
         requires='display-url-api:2.0',
         pom_dependencies=[(PLUGINS, 'display-url-api', '2.0')],
     )
+    # the source has the asked-for version, so only the listing keeps it out
+    release(root, PLUGINS, 'display-url-api', '2.0')
     listing = repository(
         (PLUGINS, 'active-directory', '2.0'), (PLUGINS, 'display-url-api', '3.0')
     )
@@ -198,6 +200,7 @@ def test_a_dependency_the_repository_has_new_enough_is_not_staged(releases, tmp_
         path(PLUGINS, 'mailer', '534.v1', 'hpi'),
         path(PLUGINS, 'mailer', '534.v1', 'pom'),
     }
+    assert stager.problems == 0
 
 
 def test_the_highest_minimum_wins(releases, tmp_path):
@@ -313,7 +316,7 @@ def test_an_unresolvable_dependency_is_a_problem_and_the_rest_continue(
     assert path(PLUGINS, 'mailer', '534.v1', 'hpi') in stager.staging.files
 
 
-def test_optional_dependencies_and_cycles_end_the_walk(releases, tmp_path):
+def test_optional_and_already_satisfied_dependencies_end_the_walk(releases, tmp_path):
     root, url = releases
     release(
         root,
