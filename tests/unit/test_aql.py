@@ -138,6 +138,27 @@ def test_an_aql_row_that_is_not_an_object_is_refused():
         query_repository(stub.url + '/artifactory/api/', 'jenkins', 'uc', 'secret')
 
 
+def test_an_aql_answer_that_is_not_json_is_refused():
+    # a login page or proxy error behind a 200
+    routes = {('POST', '/api/search/aql'): (200, {}, b'<html>sign in</html>')}
+    with (
+        StubServer(routes) as stub,
+        pytest.raises(AqlError, match=r'^AQL query to .* failed: ') as caught,
+    ):
+        query_repository(stub.url + '/api/', 'jenkins', 'uc', 'secret')
+    assert isinstance(caught.value.__cause__, ValueError)
+
+
+@pytest.mark.parametrize('body', [b'{}', b'[]', b'{"results": null}', b'"x"'])
+def test_an_aql_answer_without_a_results_list_is_refused(body):
+    routes = {('POST', '/api/search/aql'): (200, {}, body)}
+    with (
+        StubServer(routes) as stub,
+        pytest.raises(AqlError, match=r'^AQL response has no results list$'),
+    ):
+        query_repository(stub.url + '/api/', 'jenkins', 'uc', 'secret')
+
+
 def test_query_repository_http_error():
     routes = {('POST', '/api/search/aql'): (403, {}, b'forbidden')}
     with (
