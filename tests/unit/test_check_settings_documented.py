@@ -28,7 +28,7 @@ value = _get(env, 'NOT_A_REGISTRY_ENTRY')
 """
 
 ENTRYPOINT_SH = """
-[[ -n "${PUBLIC_URL:-}" ]] || die "PUBLIC_URL must be set"
+[[ -n "$PUBLIC_URL" ]] || die "PUBLIC_URL must be set"
 export PUBLIC_URL="${PUBLIC_URL%/}"
 adapter="${REPO_ADAPTER-on}"
 auth_file="${DOWNLOAD_PROXY_AUTH_FILE:-/run/secrets/download_proxy_auth}"
@@ -101,7 +101,6 @@ def test_main_refuses_a_settings_file_that_does_not_parse(
 
 def test_shell_reads_are_the_defaulted_expansions_only():
     assert hook.names_read(ENTRYPOINT_SH, hook.SHELL_READ) == {
-        'PUBLIC_URL',
         'REPO_ADAPTER',
         'DOWNLOAD_PROXY_AUTH_FILE',
     }
@@ -165,10 +164,15 @@ def _tree(root, page):
         "SETTINGS = (Setting('MODE', 'choice', 'Required', 'x.'),)\n", encoding='utf-8'
     )
     (root / 'web' / 'entrypoint.sh').write_text(
-        'key="${TLS_KEY_FILE:-}"\n', encoding='utf-8'
+        'key="${TLS_KEY_FILE:-}"\nimage="${UC_IMAGE:-x}"\n', encoding='utf-8'
     )
-    (root / 'compose.yaml').write_text('image: ${UC_IMAGE:-x}\n', encoding='utf-8')
-    (root / 'compose.airgapped.yaml').write_text('services: {}\n', encoding='utf-8')
+    # every name is read by a later source too: the first one is the reader named
+    (root / 'compose.yaml').write_text(
+        'image: ${UC_IMAGE:-x}\nmode: ${MODE:-x}\n', encoding='utf-8'
+    )
+    (root / 'compose.airgapped.yaml').write_text(
+        'tls: ${TLS_KEY_FILE:-}\n', encoding='utf-8'
+    )
     (root / 'docs' / 'reference' / 'configuration.md').write_text(
         page, encoding='utf-8'
     )
@@ -179,7 +183,7 @@ def test_code_settings_names_the_first_reader(tmp_path):
     assert hook.code_settings(tmp_path) == {
         'MODE': 'uc/uc/settings.py',
         'TLS_KEY_FILE': 'web/entrypoint.sh',
-        'UC_IMAGE': 'compose.yaml',
+        'UC_IMAGE': 'web/entrypoint.sh',
     }
 
 
