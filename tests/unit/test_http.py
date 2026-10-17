@@ -3,12 +3,13 @@
 Redirects, the User-Agent and error wrapping of the GET helper.
 """
 
+import io
 import socket
 import threading
 
 import pytest
 
-from httpstub import StubServer
+from httpstub import StubServer, free_port
 from uc import http
 from uc.http import SHA1, HttpError, get, parse_sha1_file
 
@@ -97,3 +98,30 @@ def test_the_sha1_pattern_refuses_a_trailing_newline():
 )
 def test_parse_sha1_file(body, expected):
     assert parse_sha1_file(body) == expected
+
+
+def download(url, limit=1 << 20):
+    out = io.BytesIO()
+    http.Http(None).download(url, headers={}, out=out, limit=limit)
+    return out.getvalue()
+
+
+def test_download_streams_the_body():
+    with StubServer({('GET', '/f'): (200, {}, b'bytes')}) as stub:
+        assert download(stub.url + '/f') == b'bytes'
+
+
+@pytest.mark.parametrize('status', [403, 404])
+def test_download_names_the_http_status_of_a_refusal(status):
+    with (
+        StubServer({('GET', '/f'): (status, {}, b'no')}) as stub,
+        pytest.raises(HttpError) as caught,
+    ):
+        download(stub.url + '/f')
+    assert str(caught.value) == f'GET {stub.url}/f failed with HTTP {status}'
+
+
+def test_download_turns_a_refused_connection_into_an_http_error():
+    url = f'http://127.0.0.1:{free_port()}/f'
+    with pytest.raises(HttpError, match=r'^GET http://127\.0\.0\.1:\d+/f failed: '):
+        download(url)
