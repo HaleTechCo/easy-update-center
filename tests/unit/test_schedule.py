@@ -5,6 +5,7 @@ The crontab, and the first run before handing over to supercronic.
 
 import pytest
 
+from uc.errors import UcError
 from uc.schedule import ScheduleError, crontab_text, job_line, run_schedule
 from ucsupport import make_settings
 
@@ -101,6 +102,36 @@ def test_failed_first_run_still_schedules(tmp_path, secrets_dir):
         'generate',
         ['supercronic', '-passthrough-logs', str(tmp_path / 'crontab')],
     ]
+
+
+def test_failed_first_run_prints_a_uc_error_without_a_traceback(
+    tmp_path, secrets_dir, capsys
+):
+    settings = make_settings(tmp_path, secrets_dir)
+
+    def refused():
+        msg = 'repository credentials missing'
+        raise UcError(msg)
+
+    run(settings, tmp_path, refused)
+    err = capsys.readouterr().err
+    assert 'uc: error: repository credentials missing' in err
+    assert 'Traceback' not in err
+
+
+def test_failed_first_run_keeps_the_traceback_for_other_errors(
+    tmp_path, secrets_dir, capsys
+):
+    settings = make_settings(tmp_path, secrets_dir)
+
+    def boom():
+        msg = 'generator crashed'
+        raise RuntimeError(msg)
+
+    run(settings, tmp_path, boom)
+    err = capsys.readouterr().err
+    assert 'Traceback' in err
+    assert 'generator crashed' in err
 
 
 def test_the_scheduler_hands_supercronic_its_environment(
