@@ -78,7 +78,7 @@ repository at the commit `.pre-commit-config.yaml` pins, and Dependabot proposes
 | shfmt | `.pre-commit-config.yaml` (pre-commit-shfmt) | BSD-3-Clause | yes |
 | actionlint | `.pre-commit-config.yaml` (actionlint-py) | MIT | yes |
 | zizmor | `.pre-commit-config.yaml` (zizmor-pre-commit) | MIT | yes |
-| hadolint | run as a container by the hook | GPL-3.0-only | when a Dockerfile changes |
+| hadolint | `.pre-commit-config.yaml` (hadolint-py) | GPL-3.0-only (hadolint-py wrapper: MIT) | yes |
 
 ## Pinning policy
 

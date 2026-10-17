@@ -18,10 +18,10 @@
 # There is no test hook. The suites run in containers against images built from this tree, which is
 # too slow for every commit; `make test` is the gate for behavior (see the Makefile).
 #
-# The hadolint and docker-compose-config hooks need Docker running; hadolint fails without it, so
-# when Docker is down on purpose, commit with `git commit --no-verify`.
+# The docker-compose-config hooks need Docker and are skipped without it. hadolint does not: it is a
+# pip-installed binary.
 #
-# Skip a single hook for one commit:
+# Skip a single hook for one commit (never --no-verify, which skips the secret check too):
 #   SKIP=ruff-check git commit ...
 
 exclude: |
@@ -127,6 +127,14 @@ repos:
       hooks:
           - id: zizmor
 
+    # ── Dockerfiles ─────────────────────────────────────────────────────────────
+    # hadolint-py installs the checksum-verified hadolint release binary through pip, so no Docker
+    # and no unpinned image. Inline `# hadolint ignore=` directives in the Dockerfiles apply.
+    - repo: https://github.com/AleksaC/hadolint-py
+      rev: 6e7504451511eaeb62a3e7f14d63b0296cbf86eb # frozen: v2.15.1
+      hooks:
+          - id: hadolint
+
     # ── this repository's own checks (tools/README.md) ──────────────────────────
     - repo: local
       hooks:
@@ -183,14 +191,6 @@ repos:
             language: python
             types: [text]
             exclude: '^uc/patches/'
-
-          # hadolint lints any Dockerfile, run as a container by tools/run_hadolint.py (inline
-          # `# hadolint ignore=` directives apply). Needs Docker running.
-          - id: hadolint
-            name: hadolint (Dockerfile)
-            entry: python tools/run_hadolint.py
-            language: python
-            files: '(^|/)Dockerfile([^/]*)$'
 
           # Schema-validate the compose files: the base stack on its own, and with the air-gapped or
           # build override merged on top. --no-interpolate validates structure without an env file.
