@@ -495,13 +495,22 @@ SETTINGS: tuple[Setting, ...] = (
     ),
     # Compose
     Setting(
-        'COMPOSE_FILE',
+        'COMPOSE_PATH_SEPARATOR',
         'str',
         'Compose',
         (
-            'The Compose files every plain docker compose command uses (on Windows, '
-            'separate them with ;).'
+            'The separator between the files in COMPOSE_FILE. Set to : so the same '
+            'line works on Windows, where Docker Compose otherwise splits on ;.'
         ),
+        env_only=True,
+        sample=':',
+        active=('online', 'airgapped'),
+    ),
+    Setting(
+        'COMPOSE_FILE',
+        'str',
+        'Compose',
+        'The Compose files every plain docker compose command uses.',
         env_only=True,
         hint=(
             (
