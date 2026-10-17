@@ -5,13 +5,16 @@ The gap-filled listing (derived and replaced POMs, dates) and its report.
 
 import datetime as dt
 import hashlib
+import io
 import json
 import os
 import stat
+import zipfile
 
 from archivefixture import make_hpi, make_war, pom_xml
 from fakebackend import FakeBackend
 from uc.repo_adapter import listing
+from uc.repo_adapter.backends import BackendError
 from uc.repo_adapter.cache import Cache
 from uc.repo_adapter.listing import build_index, read_report, write_report
 
@@ -394,3 +397,86 @@ def test_a_usable_verdict_cached_without_its_bytes_is_checked_again(tmp_path):
     index = build_index(backend, cache, key='jenkins', now=NOW)
     assert ('get', CHECKED_POM_PATH) in backend.calls
     assert index.poms[CHECKED_POM_PATH] == files[CHECKED_POM_PATH]
+
+
+def test_a_second_listing_serves_the_checked_repository_pom_from_the_cache(tmp_path):
+    files = checked_files()
+    backend = FakeBackend(files)
+    cache = Cache(tmp_path / 'cache')
+    build_index(backend, cache, key='jenkins', now=NOW)
+    backend.calls.clear()
+    index = build_index(backend, cache, key='jenkins', now=NOW)
+    assert ('get', CHECKED_POM_PATH) not in backend.calls
+    assert index.poms[CHECKED_POM_PATH] == files[CHECKED_POM_PATH]
+
+
+def test_a_listed_pom_that_is_gone_is_reported_missing(tmp_path):
+    class Gone(FakeBackend):
+        def get(self, path, limit):
+            return None if path.endswith('.pom') else super().get(path, limit)
+
+    index = build_index(
+        Gone(checked_files()), Cache(tmp_path / 'cache'), key='jenkins', now=NOW
+    )
+    assert [r['reason'] for r in index.report.replaced_poms] == [
+        'missing from the repository'
+    ]
+    assert index.poms[CHECKED_POM_PATH] == pom_xml(*CHECKED_GAV)  # derived instead
+
+
+def test_an_archive_without_a_manifest_is_listed_without_one(tmp_path):
+    base = 'org/example/old/1.0/old-1.0'
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w') as archive:
+        archive.writestr(
+            'META-INF/maven/org.example/old/pom.xml',
+            pom_xml('org.example', 'old', '1.0'),
+        )
+    _, index = index_of({f'{base}.hpi': buffer.getvalue()}, tmp_path)
+    assert index.manifests == {}
+    assert [r['name'] for r in index.rows] == ['old-1.0.hpi', 'old-1.0.pom']
+    assert index.report.dates_from_repository == [
+        {'path': f'{base}.hpi', 'reason': 'archive has no readable date'}
+    ]
+
+
+ORPHAN = 'org/jenkins-ci/plugins/plugin/4.88/plugin-4.88.pom'
+
+
+def test_an_orphan_pom_the_repository_fails_on_is_left_out_and_reported(tmp_path):
+    class Failing(FakeBackend):
+        def get(self, path, _limit):
+            msg = f'GET {path} failed with HTTP 500'
+            raise BackendError(msg)
+
+    backend = Failing({ORPHAN: pom_xml('org.jenkins-ci.plugins', 'plugin', '4.88')})
+    index = build_index(backend, Cache(tmp_path / 'cache'), key='k', now=NOW)
+    assert index.rows == []
+    assert index.report.replaced_poms == [
+        {
+            'path': ORPHAN,
+            'reason': f'unreadable: GET {ORPHAN} failed with HTTP 500',
+            'url': f'{RELEASES}{ORPHAN}',
+        }
+    ]
+
+
+def test_an_orphan_pom_without_a_sha1_is_left_out_and_reported(tmp_path):
+    class NoSha1(FakeBackend):
+        def sha1(self, entry):
+            msg = f'no valid sha1 file for {entry.path}'
+            raise BackendError(msg)
+
+    backend = NoSha1({ORPHAN: pom_xml('org.jenkins-ci.plugins', 'plugin', '4.88')})
+    index = build_index(backend, Cache(tmp_path / 'cache'), key='k', now=NOW)
+    assert index.rows == []
+    assert index.report.replaced_poms[0]['reason'] == (
+        f'unreadable: no valid sha1 file for {ORPHAN}'
+    )
+
+
+def test_a_report_that_is_not_json_reads_as_none(tmp_path):
+    path = tmp_path / 'report.json'
+    for text in ('{"archives": 1', 'not json at all'):
+        path.write_text(text)  # as left by a write the adapter was killed in
+        assert read_report(path) is None
