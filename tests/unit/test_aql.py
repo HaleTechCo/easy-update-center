@@ -11,13 +11,21 @@ import pytest
 from httpstub import StubServer
 from uc import aql
 from uc.aql import (
-    AQL_TEMPLATE,
     AqlError,
     Gav,
     RepoFile,
     classify,
     query_repository,
     to_gav,
+)
+
+# update-center2's ArtifactoryRepositoryImpl.AQL_QUERY for the repository 'jenkins', so
+# a change to uc's copy of the query is a change from upstream's.
+UPSTREAM_QUERY = (
+    'items.find({"repo":{"$eq":"jenkins"},"$or":[{"name":{"$match":"*.hpi"}},'
+    '{"name":{"$match":"*.jpi"}},{"name":{"$match":"*.war"}},'
+    '{"name":{"$match":"*.pom"}}]}).include("repo", "path", "name", "modified", '
+    '"created", "sha256", "actual_sha1", "size")'
 )
 
 
@@ -40,9 +48,11 @@ from uc.aql import (
             Gav('io.jenkins.plugins', 'foo', '1.0', 'pom'),
         ),
         ('plugins/git/5.2.0', 'git.hpi', None),
-        ('git', 'git-5.2.0.hpi', None),
+        # the name matches the path: only the path is too shallow for a group
+        ('git/5.2.0', 'git-5.2.0.hpi', None),
         ('org/x/git/5.2.0', 'git-5.2.0-sources.hpi', None),
-        ('org/x/git/5.2.0', 'git 5.2.0.hpi', None),
+        # the name matches the path: only the space is not allowed
+        ('org/x/g it/5.2.0', 'g it-5.2.0.hpi', None),
     ],
 )
 def test_to_gav(path, name, expected):
@@ -71,8 +81,11 @@ def test_classify():
                 'org/jenkins-ci/main/jenkins-war/2.528.1', 'jenkins-war-2.528.1.pom'
             ),
             RepoFile('org/jenkins-ci/main/jenkins-war/2.540', 'jenkins-war-2.540.war'),
-            RepoFile('org/other/something-war/1.0', 'something-war-1.0.war'),
-            RepoFile('org/other/something-war/1.0', 'something-war-1.0.pom'),
+            # right artifact in another group, and right group, another artifact
+            RepoFile('org/other/jenkins-war/1.0', 'jenkins-war-1.0.war'),
+            RepoFile('org/other/jenkins-war/1.0', 'jenkins-war-1.0.pom'),
+            RepoFile('org/jenkins-ci/main/other-war/1.0', 'other-war-1.0.war'),
+            RepoFile('org/jenkins-ci/main/other-war/1.0', 'other-war-1.0.pom'),
             RepoFile('plugins/git/5.2.0', 'git.hpi'),
         ]
     )
@@ -124,7 +137,7 @@ def test_query_repository_sends_the_upstream_query():
     assert (
         headers['Authorization'] == 'Basic ' + base64.b64encode(b'uc:secret').decode()
     )
-    assert body.decode() == AQL_TEMPLATE % 'jenkins'
+    assert body.decode() == UPSTREAM_QUERY
 
 
 def test_an_aql_row_that_is_not_an_object_is_refused():
