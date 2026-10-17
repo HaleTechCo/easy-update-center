@@ -102,9 +102,6 @@ def _extract_resources(archive: bytes, dest: Path) -> dt.datetime:
             target = dest.joinpath(*relative.parts)
             target.parent.mkdir(parents=True, exist_ok=True)
             extracted = tar.extractfile(member)
-            if extracted is None:  # never for a regular file
-                msg = f'cannot read {member.name} from the resources archive'
-                raise RuntimeError(msg)
             target.write_bytes(extracted.read())
             newest = max(newest, float(member.mtime))
     return dt.datetime.fromtimestamp(newest, dt.UTC)
