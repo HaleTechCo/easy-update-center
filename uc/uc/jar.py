@@ -94,9 +94,6 @@ def run_jar(cmd: list[str], env: Mapping[str, str], log_path: Path) -> None:
             errors='replace',
         ) as proc,
     ):
-        if proc.stdout is None:
-            msg = 'update-center2 was started without a stdout pipe'
-            raise RuntimeError(msg)
         for line in proc.stdout:
             sys.stdout.write(line)
             sys.stdout.flush()
