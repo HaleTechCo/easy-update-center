@@ -131,7 +131,7 @@ Archives are untrusted input.
 | An idle connection | closed after 120 s |
 | A listing request's `Content-Length` | at most 64 KiB (413); not a number, or negative: 400 |
 
-Reads stop at the limit plus one byte whatever the archive claims, only named entries are read, and
+No read goes past its limit, whatever the archive claims (an entry whose declared size is over it is refused, zipfile reads no further than that size, and HTTP reads stop at the limit plus one byte), only named entries are read, and
 nothing is ever extracted to a path taken from an archive. Every fetched file must return HTTP 200
 and pass its own check, so an error page is never cached as content.
 

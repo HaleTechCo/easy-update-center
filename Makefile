@@ -74,7 +74,7 @@ test-setup: build-uc ## Check uc-setup in the uc image
 	  -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" -v "$(CURDIR)/tests/setup:/tests:ro" $(UC_IMAGE) /tests/setup-checks.sh
 
 test-pipelines: build-uc ## Check the example pipeline runs the procurement stages in order, with the approval before the push
-	docker run --rm $(SRC_MOUNTS) $(UC_TEST_IMAGE) -q /tests/unit/test_pipeline_examples.py
+	docker run --rm $(SRC_MOUNTS) $(UC_TEST_IMAGE) -q /tests/unit/test_example_pipeline.py
 
 # The example .env files are generated from the settings registry (uc/uc/settings.py), using the
 # working tree's code; test-unit fails while a committed copy is out of date.

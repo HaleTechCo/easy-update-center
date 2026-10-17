@@ -235,7 +235,7 @@ class Staging:
             part.chmod(0o644)
             part.replace(target)
         except OSError as exc:
-            msg = f'cannot write {target}: {exc}'
+            msg = f'cannot write {shown_staging(self.root)}/{staged.path}: {exc}'
             raise ProcureError(msg) from exc
         self.files[staged.path] = staged
 
