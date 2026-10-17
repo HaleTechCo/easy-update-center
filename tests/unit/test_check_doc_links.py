@@ -79,3 +79,51 @@ def test_bare_reference_in_a_makefile_comment_is_checked(tmp_path):
     assert links.broken_links(makefile, tmp_path) == [
         f'{makefile}: no such anchor: guide/page.md#gone'
     ]
+
+
+def _docs(tmp_path):
+    (tmp_path / 'docs').mkdir()
+    (tmp_path / 'docs' / 'guide.md').write_text('# Guide\n## Real\n', encoding='utf-8')
+    return tmp_path / 'docs' / 'page.md'
+
+
+def test_markdown_links_are_checked_relative_to_the_page(tmp_path):
+    page = _docs(tmp_path)
+    page.write_text(
+        '[ok](guide.md#real) [file](gone.md) [anchor](guide.md#gone) '
+        '[same page](#top) [dir](.) [web](https://example.com/x.md)\n'
+        '```\n[fenced](nope.md)\n```\n',
+        encoding='utf-8',
+    )
+    assert links.broken_links(page, tmp_path) == [
+        f'{page}: no such file: gone.md',
+        f'{page}: no such anchor: guide.md#gone',
+        f'{page}: no such anchor: #top',
+    ]
+
+
+def test_main_exits_1_for_a_broken_link_and_0_for_a_clean_page(
+    tmp_path, monkeypatch, capsys
+):
+    page = _docs(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    page.write_text('[ok](guide.md#real)\n', encoding='utf-8')
+    assert links.main([str(page)]) == 0
+    assert capsys.readouterr().out == ''
+    page.write_text('[bad](guide.md#gone)\n', encoding='utf-8')
+    assert links.main([str(page)]) == 1
+    out = capsys.readouterr().out
+    assert 'no such anchor: guide.md#gone' in out
+    assert '1 broken documentation reference(s).' in out
+
+
+def test_main_refuses_no_paths_with_exit_2(capsys):
+    assert links.main([]) == 2
+    assert 'usage: check_doc_links.py' in capsys.readouterr().err
+
+
+def test_main_refuses_a_tracked_scan_that_lists_nothing(tmp_path, monkeypatch, capsys):
+    subprocess.run(['git', 'init', '-q'], cwd=tmp_path, check=True)
+    monkeypatch.chdir(tmp_path)
+    assert links.main(['--tracked']) == 2
+    assert 'git listed no file to check' in capsys.readouterr().err
