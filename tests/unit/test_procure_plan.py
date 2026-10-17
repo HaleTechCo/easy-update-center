@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from uc.doctor import DoctorReport
+from uc.errors import UsageError
 from uc.procure import ProcureError
 from uc.procure.plan import check_war_args, plan_cores, plan_poms, suggest_stage
 from uc.procure.stager import Wanted
@@ -156,9 +157,11 @@ def test_war_arguments_accepted(value):
     assert check_war_args([value]) is None
 
 
-@pytest.mark.parametrize('value', ['2.479.x', 'latest', '2.479.1-rc', '../2.479.1', ''])
+@pytest.mark.parametrize(
+    'value', ['2.479.x', 'latest', '2.479.1-rc', '../2.479.1', '2.479.1\n', '']
+)
 def test_war_arguments_refused(value):
-    with pytest.raises(ProcureError, match='--war takes a Jenkins version'):
+    with pytest.raises(UsageError, match='--war takes a Jenkins version'):
         check_war_args([value])
 
 
