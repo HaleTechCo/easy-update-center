@@ -17,10 +17,14 @@ x-hardened: &hardened
     driver: json-file
     options: {max-size: 10m, max-file: "3"}
 
+# Written once each: the services that run the uc image, and every service's user, cannot drift apart.
+x-uc-image: &uc-image "${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}"
+x-user: &user "${UC_UID:-10001}:${UC_GID:-10001}"  # docs/reference/configuration.md#compose
+
 x-uc: &uc
   <<: *hardened
-  image: ${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}
-  user: "${UC_UID:-10001}:${UC_GID:-10001}"  # docs/reference/configuration.md#compose
+  image: *uc-image
+  user: *user
   env_file: ${UC_ENV_FILE:-.env}
   read_only: true
   tmpfs:
@@ -45,7 +49,7 @@ services:
   web:
     <<: *hardened
     image: ${WEB_IMAGE:-ghcr.io/haletechco/easy-update-center-web:0.1.0}
-    user: "${UC_UID:-10001}:${UC_GID:-10001}"
+    user: *user
     read_only: true
     tmpfs:
       - /tmp
@@ -74,8 +78,8 @@ services:
   # compose secrets, no settings; it writes only ./secrets.
   setup:
     <<: *hardened
-    image: ${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}
-    user: "${UC_UID:-10001}:${UC_GID:-10001}"
+    image: *uc-image
+    user: *user
     profiles: ["setup"]
     network_mode: none
     entrypoint: ["uc-setup"]
@@ -89,8 +93,8 @@ services:
   # descriptions and release dates from the archives. Idle when REPO_ADAPTER is off (the online default).
   repo-adapter:
     <<: *hardened
-    image: ${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}
-    user: "${UC_UID:-10001}:${UC_GID:-10001}"
+    image: *uc-image
+    user: *user
     env_file: ${UC_ENV_FILE:-.env}
     command: ["repo-adapter"]
     read_only: true
