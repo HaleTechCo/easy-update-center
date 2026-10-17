@@ -87,7 +87,7 @@ A missing trailing slash on `REPO_URL` is added, so `${REPO_URL}${REPO_KEY}` alw
 | Setting | Default | Read by | Notes |
 |---|---|---|---|
 | `REPO_ADAPTER` | see [Mode defaults](#mode-defaults) | generate, doctor, procure, repo-adapter | Whether the generator reads the repository through the [repo-adapter](../architecture/repo-adapter.md). `REPO_TYPE=artifact-keeper` with `REPO_ADAPTER=off` is refused. The service stays idle when off. |
-| `REPO_CA_FILE` | none | repo-adapter, procure; generate and doctor only with `REPO_ADAPTER=off` | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca): set it in `.env`, and mount the file with `compose.repo-ca.yaml`. `uc procure push` and `clean`, and the downloads of `uc procure stage`, verify against it too. |
+| `REPO_CA_FILE` | none | repo-adapter, procure; uc's own requests (generate, doctor) with `REPO_ADAPTER=off` | A PEM bundle added to the system bundle, for a repository behind a private CA. See [Repository behind a private CA](../getting-started/airgapped.md#repository-behind-a-private-ca): set it in `.env`, and mount the file with `compose.repo-ca.yaml`. The Java generator never uses it, so a private CA needs `REPO_ADAPTER=on`. `uc procure push` and `clean`, and the downloads of `uc procure stage`, verify against it too. |
 | `REPO_MAX_ARCHIVE_MB` | `512` | repo-adapter, procure | Archives larger than this are skipped and reported. `uc procure stage --dependencies` and `--war` download none larger either. Minimum 1. |
 
 ## Downloads
