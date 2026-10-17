@@ -204,6 +204,7 @@ def test_resources_url_required_for_url_source():
     ('name', 'value', 'message'),
     [
         ('MIN_PLUGIN_RATIO', '1.5', 'between 0 and 1'),
+        ('MIN_PLUGIN_RATIO', 'abc', 'MIN_PLUGIN_RATIO must be a number'),
         ('RETAIN_RELEASES', 'abc', 'must be an integer'),
         ('RETAIN_RELEASES', '0', 'must be >= 1'),
         ('DOWNLOAD_BACKEND', 's3', 'DOWNLOAD_BACKEND must be one of'),
