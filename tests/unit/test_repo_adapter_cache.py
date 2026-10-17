@@ -85,3 +85,16 @@ def test_the_sha256_pattern_refuses_a_trailing_newline():
 
     assert pattern.match('a' * 64)
     assert not pattern.match('a' * 64 + '\n')
+
+
+def test_prune_leaves_what_is_not_a_cache_shard_alone(tmp_path):
+    cache = Cache(tmp_path)
+    long_ago = time.time() - 31 * 86400
+    (tmp_path / 'zz').write_text('a stray file with a shard name')
+    (tmp_path / 'stray').write_text('a stray file')
+    # an old content directory, but under a folder that is not 2 characters
+    misplaced = tmp_path / 'abc' / ('cd' + '1' * 62)
+    misplaced.mkdir(parents=True)
+    os.utime(misplaced, (long_ago, long_ago))
+    assert cache.prune() == 0
+    assert misplaced.is_dir()
