@@ -7,12 +7,10 @@ directly.
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from uc.config import Settings, load_settings
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from uc.versions import VersionTool
 
 
 def make_settings(tmp_path: Path, secrets: Path, **env: str) -> Settings:
@@ -36,3 +34,8 @@ def make_settings(tmp_path: Path, secrets: Path, **env: str) -> Settings:
         load_settings(base),
         **{name: value for name, value in env.items() if not name.isupper()},
     )
+
+
+def versions() -> VersionTool:
+    """Return a VersionTool pointing at the installed generator, never run."""
+    return VersionTool(Path('/opt/uc/generator'), Path('/opt/uc/tools'))

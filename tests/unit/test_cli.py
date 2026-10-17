@@ -9,7 +9,6 @@ import os
 import re
 import shutil
 import signal
-import socket
 import stat
 import subprocess
 import sys
@@ -20,6 +19,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from httpstub import free_port
 from sitefixture import uc_document, write_site
 from uc import cli, pki
 from uc.aql import classify
@@ -1343,12 +1343,6 @@ def healthz_port():
     server.server_close()
 
 
-def _free_port():
-    with socket.socket() as sock:
-        sock.bind(('127.0.0.1', 0))
-        return sock.getsockname()[1]
-
-
 @pytest.fixture
 def port_file(monkeypatch, tmp_path):
     path = tmp_path / 'adapter.port'
@@ -1366,7 +1360,7 @@ def test_healthcheck_probes_the_recorded_port_and_reads_no_settings(
     )
     record_port(healthz_port)
     assert main(['repo-adapter', '--healthcheck']) == 0
-    port_file.write_text(f'{_free_port()}\n', encoding='utf-8')
+    port_file.write_text(f'{free_port()}\n', encoding='utf-8')
     assert main(['repo-adapter', '--healthcheck', '--port', str(healthz_port)]) == 0
 
 
@@ -1442,7 +1436,7 @@ def test_healthcheck_ignores_the_proxy_settings(
 
 @pytest.mark.usefixtures('port_file')
 def test_healthcheck_fails_with_a_message_when_nothing_listens(capsys):
-    port = _free_port()
+    port = free_port()
     record_port(port)
     assert main(['repo-adapter', '--healthcheck']) == 1
     assert (

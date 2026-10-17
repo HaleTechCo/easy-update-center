@@ -3,59 +3,26 @@
 Uploading exactly the staged files, never overwriting.
 """
 
-import hashlib
 import io
-import socket
 
 import pytest
 
-from httpstub import StubServer
-from procurefixture import SOURCE, publish, stage
+from httpstub import StubServer, free_port
+from procurefixture import (
+    RecordingHttp,
+    artifactory_settings,
+    keeper_settings,
+    publish,
+    sha1,
+    staged,
+)
 from uc.http import Http
 from uc.procure import ProcureError
 from uc.procure.push import push
-from uc.procure.staging import Staging
 from ucsupport import make_settings
 
 POM = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.pom'
 HPI = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.hpi'
-
-
-class RecordingHttp(Http):
-    """An Http that records the method and URL of every request."""
-
-    def __init__(self):
-        """Verify TLS against the system bundle; nothing recorded yet."""
-        super().__init__(None)
-        self.calls = []
-
-    def request(self, url, **kwargs):
-        """Record the request, then make it."""
-        self.calls.append((kwargs.get('method') or 'GET', url))
-        return super().request(url, **kwargs)
-
-
-def sha1(data):
-    return hashlib.sha1(data, usedforsecurity=False).hexdigest()
-
-
-def keeper_settings(tmp_path, secrets_dir, url, auth='uc:tok'):
-    (secrets_dir / 'repo_push_auth').write_text(auth + '\n')
-    return make_settings(
-        tmp_path,
-        secrets_dir,
-        REPO_TYPE='artifact-keeper',
-        REPO_URL=url,
-        REPO_KEY='jenkins',
-        REPO_ADAPTER='on',
-    )
-
-
-def staged(stage_dir, files, **fields):
-    staging = Staging.open(stage_dir, SOURCE)
-    for path, data in files.items():
-        stage(staging, path, data, **fields)
-    staging.save()
 
 
 def run(settings, stage_dir, *, dry_run=False, http=None):
@@ -63,11 +30,6 @@ def run(settings, stage_dir, *, dry_run=False, http=None):
     return push(
         settings, stage_dir, dry_run=dry_run, out=out, http=http
     ), out.getvalue().splitlines()
-
-
-def artifactory_settings(tmp_path, secrets_dir, url):
-    (secrets_dir / 'repo_push_auth').write_text('uc:tok')
-    return make_settings(tmp_path, secrets_dir, REPO_URL=url, REPO_KEY='jenkins')
 
 
 def test_push_uploads_what_the_repository_lacks_and_verifies_it(
@@ -108,7 +70,7 @@ def test_a_different_file_is_left_alone(keeper, tmp_path, secrets_dir):
     code, lines = run(keeper_settings(tmp_path, secrets_dir, url), tmp_path / 'stage')
     assert code == 1
     assert not [line for line in lines if line.startswith('next:')]
-    digest = hashlib.sha1(b'<html>404</html>', usedforsecurity=False).hexdigest()
+    digest = sha1(b'<html>404</html>')
     assert (
         f'DIFFERENT {POM}  (the repository holds another file (sha1 {digest}); '
         "delete it in the repository first, then run Artifact Keeper's storage "
@@ -126,7 +88,7 @@ def test_on_artifactory_a_different_file_only_needs_deleting(
         artifactory_settings(tmp_path, secrets_dir, url), tmp_path / 'stage'
     )
     assert code == 1
-    digest = hashlib.sha1(b'<html>404</html>', usedforsecurity=False).hexdigest()
+    digest = sha1(b'<html>404</html>')
     assert (
         f'DIFFERENT {POM}  (the repository holds another file (sha1 {digest}); '
         'delete it in the repository first)'
@@ -242,7 +204,7 @@ def test_a_conflict_with_the_same_content_is_present(tmp_path, secrets_dir):
     answers = iter(
         [
             (404, {}, b''),
-            (200, {}, hashlib.sha1(data, usedforsecurity=False).hexdigest().encode()),
+            (200, {}, sha1(data).encode()),
         ]
     )
     routes = {
@@ -339,9 +301,7 @@ def test_a_path_the_repository_holds_without_a_checksum_is_never_uploaded(
 def test_an_unreachable_repository_is_an_error_and_nothing_is_uploaded(
     tmp_path, secrets_dir
 ):
-    with socket.socket() as sock:
-        sock.bind(('127.0.0.1', 0))
-        port = sock.getsockname()[1]
+    port = free_port()
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     http = RecordingHttp()
     code, lines = run(

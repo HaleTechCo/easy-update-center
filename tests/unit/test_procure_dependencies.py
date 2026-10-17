@@ -4,12 +4,11 @@ Missing required dependencies, staged transitively.
 """
 
 import io
-from pathlib import Path
 
 import pytest
 
 from archivefixture import make_hpi, pom_xml
-from procurefixture import publish
+from procurefixture import RecordingHttp, publish
 from uc.aql import RepoFile, classify
 from uc.doctor import DoctorReport, Inspection
 from uc.http import Http
@@ -17,13 +16,9 @@ from uc.procure.dependencies import resolve_dependencies
 from uc.procure.stager import Stager
 from uc.procure.staging import Staging
 from uc.procure.upstream import Upstream
-from uc.versions import VersionTool
+from ucsupport import versions
 
 PLUGINS = 'org.jenkins-ci.plugins'
-
-
-def versions():
-    return VersionTool(Path('/opt/uc/generator'), Path('/opt/uc/tools'))
 
 
 def path(group, artifact, version, ext):
@@ -92,25 +87,6 @@ def missing(plugin, version, dependency, required, group=PLUGINS):
         'dependency': dependency,
         'required': required,
     }
-
-
-class RecordingHttp(Http):
-    """An Http that records the URL of every request and download."""
-
-    def __init__(self):
-        """Verify TLS against the system bundle; nothing recorded yet."""
-        super().__init__(None)
-        self.urls = []
-
-    def request(self, url, **kwargs):
-        """Record the URL, then make the request."""
-        self.urls.append(url)
-        return super().request(url, **kwargs)
-
-    def download(self, url, **kwargs):
-        """Record the URL, then download it."""
-        self.urls.append(url)
-        return super().download(url, **kwargs)
 
 
 def run(tmp_path, url, *, listing, details, poms=None, http=None):

@@ -7,6 +7,7 @@ one. A HEAD request gets its route's status and headers, without the body.
 from __future__ import annotations
 
 import re
+import socket
 import threading
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -15,6 +16,13 @@ from typing import Self
 Reply = tuple[int, dict[str, str], bytes]
 Route = Reply | Callable[[dict[str, str], bytes], Reply]
 _RANGE = re.compile(r'^bytes=(\d*)-(\d*)$')
+
+
+def free_port() -> int:
+    """Return a localhost port nothing listens on (for now)."""
+    with socket.socket() as sock:
+        sock.bind(('127.0.0.1', 0))
+        return sock.getsockname()[1]
 
 
 def serve_bytes(

@@ -42,14 +42,10 @@ from uc.errors import UsageError
 from uc.model import Credentials
 from uc.status import read_status
 from uc.versions import VersionTool
-from ucsupport import make_settings
+from ucsupport import make_settings, versions
 
 CREDS = Credentials('uc', 'secret', 'uc', 'uc', github_placeholder=True)
 GIT = Gav('org.jenkins-ci.plugins', 'git', '5.2.0', 'hpi')
-
-
-def versions():
-    return VersionTool(Path('/opt/uc/generator'), Path('/opt/uc/tools'))
 
 
 def plugin(artifact, version, *extensions, group='org/jenkins-ci/plugins'):
