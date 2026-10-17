@@ -49,7 +49,9 @@ def paged_keeper(tmp_path):
     httpd = ThreadingHTTPServer(
         ('127.0.0.1', 0), make_handler(tmp_path, 'zac', 'tok', anonymous_read=False)
     )
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    threading.Thread(
+        target=httpd.serve_forever, kwargs={'poll_interval': 0.05}, daemon=True
+    ).start()
     yield f'http://127.0.0.1:{httpd.server_address[1]}/'
     httpd.shutdown()
     httpd.server_close()
