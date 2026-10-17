@@ -206,14 +206,14 @@ def test_check_a_pushed_release(version):
     changelog, compose = released(version)
     tags = [*TAGS, f'v{version}']
     flags = release.check(version, tags, changelog, compose)
-    assert flags == {'prerelease': False, 'latest': True, 'minor_latest': True}
+    assert flags == {'prerelease': False}
 
 
-def test_check_the_first_release():
+def test_check_the_first_release_with_no_version_tag():
     compose = release.pin_images(COMPOSE, '0.1.0')
-    tags = ['backup/x', 'v0.1.0']
+    tags = ['backup/x', 'v0.1.0']  # no other version tag at all
     flags = release.check('0.1.0', tags, CHANGELOG, compose)
-    assert flags == {'prerelease': False, 'latest': True, 'minor_latest': True}
+    assert flags == {'prerelease': False}
 
 
 def test_check_refuses_a_tag_never_pushed():
@@ -225,7 +225,7 @@ def test_check_refuses_a_tag_never_pushed():
 
 def test_check_refuses_a_new_tag_not_above_the_highest_release():
     changelog, compose = released('0.1.2')
-    message = r'0\.1\.2 is not above the highest release, 0\.2\.0'
+    message = r'0\.1\.2 is not above the highest version tag, 0\.2\.0'
     with pytest.raises(release.ReleaseError, match=message):
         release.check('0.1.2', [*TAGS, 'v0.1.2'], changelog, compose)
 
@@ -273,7 +273,7 @@ def test_the_command_line_prepares_checks_and_prints_notes(
     monkeypatch.setattr(release, 'git_tags', lambda: [*TAGS, 'v0.2.1'])
     assert release.main(['check', '0.2.1']) == 0
     output = capsys.readouterr().out
-    assert output == 'version=0.2.1\nprerelease=false\nlatest=true\nminor_latest=true\n'
+    assert output == 'version=0.2.1\nprerelease=false\n'
     assert release.main(['notes', '0.2.1']) == 0
     notes = capsys.readouterr().out
     assert notes == '### Changed\n\n- A change.\n\n### Added\n\n- A new thing.\n'
@@ -289,7 +289,7 @@ def test_the_command_line_refuses_to_prepare_a_version_not_above_the_highest(
     (tmp_path / 'compose.yaml').write_bytes(COMPOSE.encode('utf-8'))
     monkeypatch.setattr(release, 'git_tags', lambda: TAGS)
     assert release.main(['prepare', '0.2.0']) == 1
-    expected = 'release.py: error: 0.2.0 is not above the highest release, 0.2.0\n'
+    expected = 'release.py: error: 0.2.0 is not above the highest version tag, 0.2.0\n'
     assert capsys.readouterr().err == expected
     assert (tmp_path / 'CHANGELOG.md').read_bytes() == CHANGELOG.encode('utf-8')
 
@@ -345,16 +345,16 @@ def test_highest_can_ignore_candidates():
     assert release.highest(tags, releases_only=True) == '0.1.0'
 
 
-def test_check_a_candidate_moves_no_floating_tag():
+def test_check_a_candidate_is_a_prerelease():
     flags = release.check(
         '0.2.0-rc.1', ['v0.1.0', 'v0.2.0-rc.1'], CHANGELOG, COMPOSE_RC
     )
-    assert flags == {'prerelease': True, 'latest': False, 'minor_latest': False}
+    assert flags == {'prerelease': True}
 
 
 def test_check_refuses_a_candidate_below_its_release():
     with pytest.raises(
-        release.ReleaseError, match=r'not above the highest release, 0\.2\.0'
+        release.ReleaseError, match=r'not above the highest version tag, 0\.2\.0'
     ):
         release.check('0.2.0-rc.3', ['v0.2.0', 'v0.2.0-rc.3'], CHANGELOG, COMPOSE_RC)
 
@@ -364,12 +364,12 @@ def test_check_refuses_a_candidate_with_nothing_unreleased():
         release.check('0.2.0-rc.1', ['v0.1.0', 'v0.2.0-rc.1'], PREPARED, COMPOSE_RC)
 
 
-def test_a_release_after_its_candidates_is_the_latest():
+def test_a_release_after_its_candidates_is_no_prerelease():
     compose = COMPOSE_RC.replace('0.2.0-rc.1', '0.2.0')
     flags = release.check(
         '0.2.0', ['v0.1.0', 'v0.2.0-rc.1', 'v0.2.0'], PREPARED, compose
     )
-    assert flags == {'prerelease': False, 'latest': True, 'minor_latest': True}
+    assert flags == {'prerelease': False}
 
 
 def test_candidate_notes_are_the_unreleased_entries():
@@ -391,5 +391,5 @@ def test_the_command_line_prepares_and_checks_a_candidate(
     assert compose == COMPOSE.replace(':0.2.0}', ':0.3.0-rc.1}')
     monkeypatch.setattr(release, 'git_tags', lambda: [*TAGS, 'v0.3.0-rc.1'])
     assert release.main(['check', '0.3.0-rc.1']) == 0
-    expected = 'version=0.3.0-rc.1\nprerelease=true\nlatest=false\nminor_latest=false\n'
+    expected = 'version=0.3.0-rc.1\nprerelease=true\n'
     assert capsys.readouterr().out == expected
