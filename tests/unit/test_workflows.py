@@ -123,7 +123,6 @@ case "$1 $2" in
             if [ "$1" = --body-file ]; then cp "$2" "$STUB_DIR/body.md"; fi
             shift
         done ;;
-    'release view') exit "${STUB_RELEASE_VIEW:-0}" ;;
 esac
 """
 
