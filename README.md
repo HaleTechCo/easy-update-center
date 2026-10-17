@@ -9,6 +9,16 @@ The same update center Jenkins uses (`updates.jenkins.io`), in containers on you
 controllers and `jenkins-plugin-cli` point at it with no plugin or code change. It reads plugins
 from the public plugin repository or from your own, and runs online or fully air-gapped.
 
+## How this was built
+
+I built this with AI, and want to be upfront about how. It started because I wanted the Jenkins
+update-center2 in containers; later I needed it to run in air-gapped networks, and later still to
+work with Artifact Keeper. I set the requirements, chose the features and made the design
+decisions. Claude, Anthropic's AI model, working in Claude Code, wrote the code, the tests and the
+documentation. Reviews of that work were also done by Claude, with me deciding what to act on, and
+I tested it against my own private Artifact Keeper. The git history shows this too: commits carry a
+`Co-Authored-By` line naming the Claude model that wrote them.
+
 ## What you get
 
 ### From upstream
