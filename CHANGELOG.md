@@ -6,6 +6,8 @@ the interface.
 
 ## Unreleased
 
+## [0.1.0] - 2026-10-17
+
 ### Added
 
 - A self-hosted Jenkins update center in containers, run with Docker Compose: `uc` (generation and
