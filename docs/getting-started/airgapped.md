@@ -233,8 +233,11 @@ REPO_CA_FILE=/etc/ssl/uc-repo-ca.crt
 COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.repo-ca.yaml
 ```
 
-With `REPO_ADAPTER=off` the scheduler reads the repository itself, so mount the bundle into the
-`scheduler` service too. Through the repo-adapter, the scheduler talks plain http and needs none.
+The update-center generator (the Java program the `scheduler` runs) never uses `REPO_CA_FILE`: a
+repository behind a private CA needs `REPO_ADAPTER=on` (the air-gapped default), which makes the
+repo-adapter read the repository for it. With `REPO_ADAPTER=off`, the generator reads the repository
+itself and cannot verify a private CA at all. Mounting the bundle into the `scheduler` service then
+serves only uc's own requests (the listing and POMs of `uc doctor`), not the generator's.
 
 This bundle is **added to** the system bundle, unlike `DOWNLOAD_PROXY_CA_FILE`, which replaces it
 for downloads ([Backend with a private CA](../how-to/proxy-downloads.md#backend-with-a-private-ca)).
