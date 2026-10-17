@@ -179,9 +179,10 @@ docker compose logs -f scheduler repo-adapter
 Its length depends on the repository: the adapter reads each archive's manifest once and caches it.
 The first run prints no `published release <id>` line, unlike later scheduled runs. It is done when
 `docker compose run --rm uc status` shows a `live_release`.
-Until then, the web container logs "waiting for the first published release". A failed run is logged as
-`uc: error: ...` (a traceback for an unexpected error), saying why; repository errors (401, certificates) also appear in the repo-adapter's
-log ([Troubleshooting](../troubleshooting.md#generation)).
+Until then, the web container logs "waiting for the first published release". A failed run is
+logged as `uc: error: ...` (a traceback for an unexpected error), saying why; repository errors
+(401, certificates) also appear in the repo-adapter's log
+([Troubleshooting](../troubleshooting.md#generation)).
 
 ## 8. Verify
 
