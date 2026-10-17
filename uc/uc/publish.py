@@ -61,9 +61,6 @@ class RunLock:
 
     def __exit__(self, *exc: object) -> None:
         """Release the lock."""
-        if self._fd is None:
-            msg = f'{self.path} is not held'
-            raise RuntimeError(msg)
         fcntl.flock(self._fd, fcntl.LOCK_UN)
         os.close(self._fd)
         self._fd = None
