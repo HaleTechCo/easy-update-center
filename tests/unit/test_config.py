@@ -262,6 +262,13 @@ def test_a_secret_that_cannot_be_read_is_a_config_error(tmp_path):
         read_secret(tmp_path / 'repo_password')
 
 
+def test_a_secret_that_is_not_utf8_is_a_config_error(tmp_path):
+    # PowerShell 5.1's > writes UTF-16 with a byte order mark.
+    (tmp_path / 'repo_password').write_bytes('pw'.encode('utf-16'))
+    with pytest.raises(ConfigError, match=r'repo_password is not UTF-8 text'):
+        read_secret(tmp_path / 'repo_password')
+
+
 def test_procurement_defaults():
     s = load_settings(AIRGAPPED)
     assert s.procurement_source_url == 'https://repo.jenkins-ci.org/releases/'
