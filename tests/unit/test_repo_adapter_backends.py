@@ -471,8 +471,23 @@ AQL_ROW = {
         b'{"results": 5}',
         json.dumps({'results': [{'name': 'x-1.pom'}]}).encode(),
         json.dumps({'results': [{**AQL_ROW, 'size': 'big'}]}).encode(),
+        json.dumps({'results': [{**AQL_ROW, 'path': None}]}).encode(),
+        json.dumps({'results': [{**AQL_ROW, 'path': 1}]}).encode(),
+        json.dumps({'results': [{**AQL_ROW, 'name': None}]}).encode(),
+        json.dumps({'results': [{**AQL_ROW, 'name': []}]}).encode(),
     ],
-    ids=['not JSON', 'no results', 'a list', 'results not a list', 'no path', 'size'],
+    ids=[
+        'not JSON',
+        'no results',
+        'a list',
+        'results not a list',
+        'no path',
+        'size',
+        'path null',
+        'path number',
+        'name null',
+        'name list',
+    ],
 )
 def test_an_artifactory_listing_in_an_unexpected_shape_is_a_backend_error(body):
     with (

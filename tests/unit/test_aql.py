@@ -161,6 +161,21 @@ def test_an_aql_row_with_a_size_that_is_not_a_number_is_refused(size):
         query_repository(stub.url + '/api/', 'jenkins', 'uc', 'secret')
 
 
+@pytest.mark.parametrize(
+    ('field', 'value'),
+    [('path', None), ('path', 1), ('name', None), ('name', [])],
+)
+def test_an_aql_row_with_a_path_or_name_that_is_not_text_is_refused(field, value):
+    row = {'path': 'p', 'name': 'n', field: value}
+    body = json.dumps({'results': [row]}).encode()
+    routes = {('POST', '/api/search/aql'): (200, {}, body)}
+    with (
+        StubServer(routes) as stub,
+        pytest.raises(AqlError, match=f'whose {field} is not text'),
+    ):
+        query_repository(stub.url + '/api/', 'jenkins', 'uc', 'secret')
+
+
 @pytest.mark.parametrize('body', [b'{}', b'[]', b'{"results": null}', b'"x"'])
 def test_an_aql_answer_without_a_results_list_is_refused(body):
     routes = {('POST', '/api/search/aql'): (200, {}, body)}
