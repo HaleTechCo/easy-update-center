@@ -278,6 +278,17 @@ def test_a_leftover_token_temp_file_does_not_stop_the_adapter(tmp_path):
     assert stat.S_IMODE(path.stat().st_mode) == 0o600
 
 
+def test_a_token_that_cannot_be_written_leaves_no_temp_file(tmp_path, monkeypatch):
+    def refuse(*_args):
+        msg = 'disk full'
+        raise OSError(msg)
+
+    monkeypatch.setattr(Path, 'replace', refuse)
+    with pytest.raises(OSError, match='disk full'):
+        ensure_token(tmp_path / 'token')
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_make_server_needs_repository_credentials_only_when_on(tmp_path, secrets_dir):
     (secrets_dir / 'repo_username').unlink()
     (secrets_dir / 'repo_password').unlink()

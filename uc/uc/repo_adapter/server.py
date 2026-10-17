@@ -129,10 +129,15 @@ def ensure_token(path: Path) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
     token = secrets.token_hex(32)
     # a fresh name each time: a file left by a killed start must not stop this one
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix='.token.')
-    with os.fdopen(fd, 'w', encoding='utf-8') as out:
-        out.write(token + '\n')
-    Path(tmp).replace(path)
+    fd, name = tempfile.mkstemp(dir=path.parent, prefix='.token.')
+    tmp = Path(name)
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as out:
+            out.write(token + '\n')
+        tmp.replace(path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     return token
 
 
