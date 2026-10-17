@@ -7,6 +7,7 @@ and a recorded uc doctor report on DOCTOR_SCHEDULE (docs/reference/cli.md#uc-sch
 from __future__ import annotations
 
 import os
+import sys
 import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -85,6 +86,8 @@ def run_schedule(
             else:
                 generate_once()
         # whatever fails, keep scheduling; status.json records the failure
+        except UcError as exc:
+            print(f'uc: error: {exc}', file=sys.stderr)
         except Exception:  # noqa: BLE001
             traceback.print_exc()
     crontab.write_text(text, encoding='utf-8')
