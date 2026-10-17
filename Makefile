@@ -30,6 +30,10 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
 # instead of building it again. Without it they always build.
 UNLESS_PREBUILT = $(if $(PREBUILT),docker image inspect $(1) >/dev/null 2>&1 || )
 
+# A build tagged ghcr.io/... would take a release's name without being that release, and a later
+# `docker compose up` would run it as the release. Only a loaded image (PREBUILT=1) may carry such a name.
+REFUSE_RELEASE_NAME = $(if $(PREBUILT),,$(if $(filter ghcr.io/%,$($(1))),$(error $(1)=$($(1)) is a release image name: add PREBUILT=1 to use the loaded image, or leave $(1) unset to build locally)))
+
 ##@ Build
 
 build: build-uc build-web ## Build the uc, uc-test and web images; works before .env exists
@@ -39,11 +43,13 @@ build: build-uc build-web ## Build the uc, uc-test and web images; works before 
 UC_TEST_BASE = $(if $(filter easy-update-center/uc:local,$(UC_IMAGE)),runtime,$(UC_IMAGE))
 
 build-uc:
+	$(call REFUSE_RELEASE_NAME,UC_IMAGE)
 	$(call UNLESS_PREBUILT,$(UC_IMAGE))docker build --target runtime --build-arg UC_VERSION=$(UC_VERSION) -t $(UC_IMAGE) uc
 	$(call UNLESS_PREBUILT,$(UC_TEST_IMAGE))docker build --target test --build-arg UC_VERSION=$(UC_VERSION) \
 	  --build-arg RUNTIME_IMAGE=$(UC_TEST_BASE) -t $(UC_TEST_IMAGE) uc
 
 build-web:
+	$(call REFUSE_RELEASE_NAME,WEB_IMAGE)
 	$(call UNLESS_PREBUILT,$(WEB_IMAGE))docker build -t $(WEB_IMAGE) web
 
 ##@ Development
