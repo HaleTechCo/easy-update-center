@@ -12,7 +12,7 @@ import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from uc.aql import RepoFile, to_gav
+from uc.aql import Gav, RepoFile, to_gav
 from uc.http import SHA1
 
 from . import ProcureError
@@ -65,8 +65,8 @@ class StagedFile:
     replaces_unusable: bool = False
 
 
-def check_path(path: str) -> str:
-    """Return path when it is a relative Maven path to a .hpi, .jpi, .war or .pom.
+def maven_gav(path: str) -> Gav:
+    """Return the coordinates of a relative Maven path to a .hpi, .jpi, .war or .pom.
 
     Raise ProcureError otherwise.
     """
@@ -79,6 +79,15 @@ def check_path(path: str) -> str:
     ):
         msg = f'not a Maven path to a .hpi, .jpi, .war or .pom: {path!r}'
         raise ProcureError(msg)
+    return gav
+
+
+def check_path(path: str) -> str:
+    """Return path when it is a relative Maven path to a .hpi, .jpi, .war or .pom.
+
+    Raise ProcureError otherwise.
+    """
+    maven_gav(path)
     return path
 
 

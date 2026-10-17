@@ -10,7 +10,7 @@ import sys
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TextIO
 
-from uc.aql import WAR_ARTIFACT, WAR_GROUP, Gav, RepoFile, to_gav
+from uc.aql import WAR_ARTIFACT, WAR_GROUP, Gav
 from uc.doctor import required_jenkins_version
 from uc.http import SMALL_FILE_LIMIT
 from uc.pom import pom_coordinates, unusable_reason
@@ -24,6 +24,7 @@ from .staging import (
     StagedFile,
     Staging,
     check_path,
+    maven_gav,
     prune_empty,
     review_line,
     sha1_of,
@@ -129,7 +130,7 @@ def check_local(file: Path, path: str, inside: Path) -> str | None:
         raise ProcureError(msg)
     found = declared(file, path.rsplit('.', 1)[-1])
     try:
-        check_path(path)
+        gav = maven_gav(path)
     except ProcureError as exc:
         if found is None:
             raise
@@ -137,11 +138,6 @@ def check_local(file: Path, path: str, inside: Path) -> str | None:
         raise ProcureError(msg) from exc
     if found is not None and found.path != path:
         raise ProcureError(str(found))
-    directory, _, name = path.rpartition('/')
-    gav = to_gav(RepoFile(directory, name))
-    if gav is None:
-        msg = 'not a file of its own inside the staging folder'
-        raise ProcureError(msg)
     if gav.extension == 'pom':
         if file.stat().st_size > SMALL_FILE_LIMIT:
             msg = f'larger than {SMALL_FILE_LIMIT} bytes'
