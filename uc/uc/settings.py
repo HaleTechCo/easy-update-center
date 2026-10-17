@@ -493,76 +493,6 @@ SETTINGS: tuple[Setting, ...] = (
     Setting(
         'TLS_KEY_FILE', 'path', 'Web and TLS', 'The private key for TLS_CERT_FILE.'
     ),
-    # Procurement
-    Setting(
-        'PROCUREMENT_SOURCE_URL',
-        'url',
-        'Procurement',
-        (
-            'Where uc procure stage fetches files from, by Maven path; '
-            'https://repo.jenkins-ci.org/releases/ by default. Air-gapped, downloads '
-            'are refused unless it is set.'
-        ),
-        derived=True,
-    ),
-    # Testing and evaluation
-    Setting(
-        'ALLOW_LOCAL_PUBLIC_URL',
-        'bool',
-        'Testing and evaluation',
-        (
-            'Allows a localhost or loopback PUBLIC_URL, which controllers on other '
-            'hosts cannot reach. Not for production.'
-        ),
-        default='false',
-    ),
-    Setting(
-        'UC_EXTRA_ARGS',
-        'str',
-        'Testing and evaluation',
-        (
-            'Extra update-center2 arguments appended to every run, for example '
-            '--max-plugins 25 to cap a trial run.'
-        ),
-        attr='extra_args',
-    ),
-    # Read by bundled software
-    Setting(
-        'JAVA_TOOL_OPTIONS',
-        'str',
-        'Read by bundled software',
-        (
-            "The generator's JVM options: heap size (-Xmx6g) and outbound proxy "
-            '(-Dhttps.proxyHost=... -Dhttps.proxyPort=...).'
-        ),
-        sample='-Xmx4g -Dhttps.proxyHost=proxy.example.com -Dhttps.proxyPort=3128',
-    ),
-    Setting(
-        'HTTPS_PROXY',
-        'url',
-        'Read by bundled software',
-        (
-            'The outbound proxy for everything the generator does not fetch itself. '
-            'Behind a proxy, set it and the proxy flags in JAVA_TOOL_OPTIONS.'
-        ),
-        sample='http://proxy.example.com:3128',
-    ),
-    Setting(
-        'HTTP_PROXY',
-        'url',
-        'Read by bundled software',
-        'As HTTPS_PROXY, for plain-http URLs.',
-    ),
-    Setting(
-        'NO_PROXY',
-        'str',
-        'Read by bundled software',
-        (
-            'Hosts to reach directly. With a proxy set, include repo-adapter (and an '
-            'internal repository host).'
-        ),
-        sample='repo-adapter',
-    ),
     # Compose
     Setting(
         'COMPOSE_FILE',
@@ -660,6 +590,76 @@ SETTINGS: tuple[Setting, ...] = (
         ),
         default='8443',
         env_only=True,
+    ),
+    # Testing and evaluation
+    Setting(
+        'ALLOW_LOCAL_PUBLIC_URL',
+        'bool',
+        'Testing and evaluation',
+        (
+            'Allows a localhost or loopback PUBLIC_URL, which controllers on other '
+            'hosts cannot reach. Not for production.'
+        ),
+        default='false',
+    ),
+    Setting(
+        'UC_EXTRA_ARGS',
+        'str',
+        'Testing and evaluation',
+        (
+            'Extra update-center2 arguments appended to every run, for example '
+            '--max-plugins 25 to cap a trial run.'
+        ),
+        attr='extra_args',
+    ),
+    # Read by bundled software
+    Setting(
+        'JAVA_TOOL_OPTIONS',
+        'str',
+        'Read by bundled software',
+        (
+            "The generator's JVM options: heap size (-Xmx6g) and outbound proxy "
+            '(-Dhttps.proxyHost=... -Dhttps.proxyPort=...).'
+        ),
+        sample='-Xmx4g -Dhttps.proxyHost=proxy.example.com -Dhttps.proxyPort=3128',
+    ),
+    Setting(
+        'HTTPS_PROXY',
+        'url',
+        'Read by bundled software',
+        (
+            'The outbound proxy for everything the generator does not fetch itself. '
+            'Behind a proxy, set it and the proxy flags in JAVA_TOOL_OPTIONS.'
+        ),
+        sample='http://proxy.example.com:3128',
+    ),
+    Setting(
+        'HTTP_PROXY',
+        'url',
+        'Read by bundled software',
+        'As HTTPS_PROXY, for plain-http URLs.',
+    ),
+    Setting(
+        'NO_PROXY',
+        'str',
+        'Read by bundled software',
+        (
+            'Hosts to reach directly. With a proxy set, include repo-adapter (and an '
+            'internal repository host).'
+        ),
+        sample='repo-adapter',
+    ),
+    # Procurement
+    Setting(
+        'PROCUREMENT_SOURCE_URL',
+        'url',
+        'Procurement',
+        (
+            'Where uc procure stage fetches files from, by Maven path; '
+            'https://repo.jenkins-ci.org/releases/ by default. Air-gapped, downloads '
+            'are refused unless it is set.'
+        ),
+        derived=True,
     ),
 )
 REGISTRY: dict[str, Setting] = {setting.env: setting for setting in SETTINGS}
