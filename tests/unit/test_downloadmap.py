@@ -3,7 +3,7 @@
 Building, writing and reading the .htdownload-map RewriteMap.
 """
 
-from uc.aql import RepoFile, classify
+from uc.aql import Gav, Listing, RepoFile, classify
 from uc.downloadmap import (
     build_download_map,
     preferred_groups,
@@ -40,19 +40,31 @@ def test_group_conflict_prefers_the_offered_group():
         files('org/jenkins-ci/plugins', 'foo', '1.0', 'hpi', 'pom')
         + files('io/jenkins/plugins', 'foo', '1.0', 'hpi', 'pom')
     )
-    mapping, warnings = build_download_map(listing, {'foo': 'io.jenkins.plugins'})
-    assert mapping['plugins/foo/1.0'] == 'io/jenkins/plugins/foo/1.0/foo-1.0.hpi'
+    # the group that sorts last, so lexical order alone would pick the other
+    offered = {'foo': 'org.jenkins-ci.plugins'}
+    mapping, warnings = build_download_map(listing, offered)
+    assert mapping['plugins/foo/1.0'] == 'org/jenkins-ci/plugins/foo/1.0/foo-1.0.hpi'
     assert warnings == [
         (
             'plugins/foo/1.0 exists under several groupIds '
-            '(io.jenkins.plugins, org.jenkins-ci.plugins); using io.jenkins.plugins'
+            '(io.jenkins.plugins, org.jenkins-ci.plugins); '
+            'using org.jenkins-ci.plugins'
         )
     ]
+    mapping, _ = build_download_map(listing, {})
+    assert mapping['plugins/foo/1.0'] == 'io/jenkins/plugins/foo/1.0/foo-1.0.hpi'
 
 
 def test_hpi_is_preferred_over_jpi():
-    listing = classify(
-        files('org/jenkins-ci/plugins', 'foo', '1.0', 'jpi', 'hpi', 'pom')
+    group = 'org.jenkins-ci.plugins'
+    # classify lists .hpi first; here the .jpi comes first, as only the preference can
+    # then pick the .hpi
+    listing = Listing(
+        plugins=(Gav(group, 'foo', '1.0', 'jpi'), Gav(group, 'foo', '1.0', 'hpi')),
+        plugins_without_pom=(),
+        wars=(),
+        wars_without_pom=(),
+        rejected=(),
     )
     assert build_download_map(listing, {})[0]['plugins/foo/1.0'].endswith('foo-1.0.hpi')
 
