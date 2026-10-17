@@ -48,7 +48,7 @@ HEALTH_PATH = '/healthz'
 PORT_FILE = Path('/tmp/uc-repo-adapter.port')  # noqa: S108
 """Where the running adapter records the port it bound, for --healthcheck.
 
-Health follows the server, not the settings files.
+Health follows the server, not the settings.
 """
 HEALTH_TIMEOUT = 3
 """Seconds uc repo-adapter --healthcheck waits for the adapter to answer."""

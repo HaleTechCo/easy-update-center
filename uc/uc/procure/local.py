@@ -55,7 +55,7 @@ class Declared:
         )
 
 
-def stage_local(
+def record(
     root: Path, source: str, *, fix: bool = False, out: TextIO = sys.stdout
 ) -> int:
     """Record every .hpi, .jpi, .war and .pom in root.

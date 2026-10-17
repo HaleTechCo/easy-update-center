@@ -253,8 +253,8 @@ def test_a_writable_or_missing_data_directory_passes(tmp_path):
 def test_a_data_volume_whose_contents_belong_to_another_uid_is_refused(
     tmp_path, monkeypatch
 ):
-    # A volume this release creates has a world-writable, sticky /data, so what the
-    # first UC_UID owns is its contents.
+    # A new volume (the image's /data is 1777) has a world-writable, sticky /data, so
+    # what the first UC_UID owns is its contents.
     data = tmp_path / 'data'
     (data / 'releases').mkdir(parents=True)
     (data / 'status.json').write_text('{}')

@@ -34,6 +34,7 @@ from uc.cli import (
 from uc.doctor import DoctorReport, Inspection
 from uc.examples import example_env
 from uc.pki import cert_info
+from uc.procure.staging import DEFAULT_STAGING
 from uc.publish import RunLock
 from uc.repo_adapter.server import record_port
 from uc.status import read_status, write_status
@@ -288,7 +289,7 @@ def test_staging_flag_inside_the_data_volume_is_refused_before_anything_runs(
     command, inside = case
     data = use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
-    for name in ('stage_local', 'push', 'clean', 'inspect_repository', 'download'):
+    for name in ('record_staged', 'push', 'clean', 'inspect_repository', 'download'):
         monkeypatch.setattr(f'uc.cli.{name}', lambda *_, **__: pytest.fail('ran'))
     staging = data / inside
     argv = ['procure', command, '--staging', str(staging)]
@@ -325,7 +326,7 @@ def test_staging_flag_outside_the_data_volume_is_accepted(
     use_env(monkeypatch, tmp_path, secrets_dir)
     monkeypatch.setenv('PROCUREMENT_SOURCE_URL', 'http://source.invalid/releases/')
     seen = []
-    for name in ('stage_local', 'push', 'clean'):
+    for name in ('record_staged', 'push', 'clean'):
         monkeypatch.setattr(f'uc.cli.{name}', lambda *_, **__: seen.append(1) or 0)
     monkeypatch.setattr(
         'uc.cli.inspect_repository', lambda *_, **__: SimpleNamespace(report=None)
@@ -1506,7 +1507,7 @@ def test_procure_stage_options_come_from_the_command_line(tmp_path, secrets_dir)
         dependencies=False,
         wars=(),
         since='2.462.1',
-        staging=settings.procurement_staging_dir,
+        staging=DEFAULT_STAGING,
     )
     given = [
         'procure',
@@ -1526,7 +1527,7 @@ def test_procure_stage_options_come_from_the_command_line(tmp_path, secrets_dir)
         dependencies=True,
         wars=('required', '2.479.1'),
         since='2.479.1',
-        staging=settings.procurement_staging_dir,
+        staging=DEFAULT_STAGING,
     )
     assert procure_options(
         parse(['procure', 'stage', '--staging', '/elsewhere']), settings
@@ -1555,7 +1556,7 @@ def test_procure_record_takes_fix_from_the_command_line(
     use_env(monkeypatch, tmp_path, secrets_dir)
     seen = {}
     monkeypatch.setattr(
-        'uc.cli.stage_local', lambda *_, fix, **__: seen.update(fix=fix) or 0
+        'uc.cli.record_staged', lambda *_, fix, **__: seen.update(fix=fix) or 0
     )
     assert main(['procure', 'record', *argv, '--staging', str(tmp_path / 'stage')]) == 0
     assert seen == {'fix': expected}

@@ -35,7 +35,6 @@ from uc.doctor import (
     record,
     record_locked,
     required_cores,
-    run_doctor,
 )
 from uc.errors import UsageError
 from uc.model import Credentials
@@ -209,7 +208,7 @@ def test_artifact_source_fetches_with_basic_auth():
     )
 
 
-def test_run_doctor_includes_live_tiers(tmp_path, secrets_dir):
+def test_inspect_repository_includes_live_tiers(tmp_path, secrets_dir):
     settings = make_settings(tmp_path, secrets_dir)
     release = settings.data_dir / 'releases' / '20260922T000000Z'
     release.mkdir(parents=True)
@@ -220,20 +219,20 @@ def test_run_doctor_includes_live_tiers(tmp_path, secrets_dir):
     files = plugin('git', '5.2.0', 'hpi', 'pom') + plugin(
         'jenkins-war', '2.528.1', 'war', 'pom', group='org/jenkins-ci/main'
     )
-    report = run_doctor(
+    report = inspect_repository(
         settings,
         CREDS,
         fetch=False,
         versions=VersionTool.from_settings(settings),
         query=lambda *_args: files,
-    )
+    ).report
     assert report.tiers == {'weeklyCores': [], 'stableCores': ['2.528.1']}
     assert report.unchecked == 1
     assert report.exit_code() == 0
 
 
 @pytest.mark.parametrize('content', ['[]', '"weekly"', 'null', '{bad'])
-def test_run_doctor_ignores_a_tiers_file_that_is_not_an_object(
+def test_inspect_repository_ignores_a_tiers_file_that_is_not_an_object(
     tmp_path, secrets_dir, content
 ):
     settings = make_settings(tmp_path, secrets_dir)
@@ -241,13 +240,13 @@ def test_run_doctor_ignores_a_tiers_file_that_is_not_an_object(
     release.mkdir(parents=True)
     (release / 'tiers.json').write_text(content)
     (settings.data_dir / 'live').symlink_to('releases/20260922T000000Z')
-    report = run_doctor(
+    report = inspect_repository(
         settings,
         CREDS,
         fetch=False,
         versions=VersionTool.from_settings(settings),
         query=lambda *_args: plugin('git', '5.2.0', 'hpi', 'pom'),
-    )
+    ).report
     assert report.tiers is None
 
 
@@ -628,13 +627,13 @@ def test_the_public_repository_is_not_checked_for_cores(tmp_path, secrets_dir):
         REPO_URL='https://repo.jenkins-ci.org/',
         REPO_KEY='releases',
     )
-    report = run_doctor(
+    report = inspect_repository(
         settings,
         CREDS,
         fetch=False,
         versions=versions(),
         query=lambda *_args: plugin('git', '5.2.0', 'hpi', 'pom'),
-    )
+    ).report
     assert report.required_cores is None
     assert 'Cores plugins require' not in format_report(report, settings)
 

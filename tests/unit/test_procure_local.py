@@ -11,7 +11,7 @@ import pytest
 
 from archivefixture import make_hpi, make_war, pom_xml
 from procurefixture import SOURCE, publish, stage
-from uc.procure.local import stage_local
+from uc.procure.local import record
 from uc.procure.staging import Staging
 
 PLUGINS = 'org.jenkins-ci.plugins'
@@ -22,7 +22,7 @@ FIX = '; --fix moves it there'
 
 def run(root, *, fix=False):
     out = io.StringIO()
-    return stage_local(root, SOURCE, fix=fix, out=out), out.getvalue().splitlines()
+    return record(root, SOURCE, fix=fix, out=out), out.getvalue().splitlines()
 
 
 def summary(_root, recorded, refused, moved=None):

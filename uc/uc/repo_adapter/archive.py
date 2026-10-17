@@ -56,7 +56,9 @@ class ArchiveFacts:
     coordinates: Coordinates | None
     pom: bytes | None  # META-INF/maven/<groupId>/<artifactId>/pom.xml
     description: bytes | None  # index.jelly (plugins only)
-    released: dt.datetime | None  # rule 9's archive date, before the plausibility check
+    # the archive date (docs/architecture/repo-adapter.md#release-dates), before the
+    # plausibility check
+    released: dt.datetime | None
 
 
 def central_directory_size(stream: BinaryIO) -> int:
@@ -192,9 +194,10 @@ def archive_date(archive: zipfile.ZipFile) -> dt.datetime | None:
 
 
 def plausible(released: dt.datetime | None, repository_time: dt.datetime) -> str | None:
-    """None when the archive date may be used (rule 9).
+    """None when the archive date may be used.
 
-    Otherwise why the repository's time is used.
+    Otherwise why the repository's time is used (see
+    docs/architecture/repo-adapter.md#release-dates).
     """
     if released is None:
         return 'archive has no readable date'

@@ -24,7 +24,7 @@ fence goes unreported, because it was never live to begin with.
 
 `heading_slug` reproduces GitHub's algorithm, because GitHub is where these pages are
 read. It gives each space its own hyphen and does NOT collapse runs, so a heading like
-`uc.env / web.env` slugs to `ucenv--webenv` with TWO hyphens, and keeps accented
+`Online / air-gapped` slugs to `online--air-gapped` with TWO hyphens, and keeps accented
 letters.
 """
 
@@ -75,8 +75,8 @@ def heading_slug(text: str) -> str:
     Inline code, links and raw HTML are reduced to their text, and the result is
     lowercased. Every character that is not a letter, mark, number, connector
     punctuation (`_`), hyphen or space is dropped, and each space becomes one hyphen.
-    Runs are NOT collapsed: `uc.env / web.env` is `ucenv--webenv`. Accented letters stay
-    as they are (`Café` is `café`).
+    Runs are NOT collapsed: `Online / air-gapped` is `online--air-gapped`. Accented
+    letters stay as they are (`Café` is `café`).
     """
     text = re.sub(r'`([^`]*)`', r'\1', text)
     text = re.sub(r'\[([^\]]*)\]\([^)]*\)', r'\1', text)

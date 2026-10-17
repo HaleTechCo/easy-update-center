@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING
 from urllib.parse import unquote, urlsplit, urlunsplit
 
 from .errors import ConfigError, UcError
-from .procure.staging import DEFAULT_STAGING
 from .settings import CORE_VERSION, REGISTRY
 
 if TYPE_CHECKING:
@@ -152,7 +151,6 @@ class Settings:
     download_proxy_ca_file: str
     procurement_source_url: str
     procurement_source_set: bool
-    procurement_staging_dir: Path
     retain_releases: int
     min_plugin_ratio: float
     certificate_minimum_valid_days: int
@@ -457,7 +455,6 @@ def settings_from(r: Resolver) -> Settings:
             procurement_source or PUBLIC_RELEASES_URL
         ),
         procurement_source_set=bool(procurement_source),
-        procurement_staging_dir=DEFAULT_STAGING,
         retain_releases=_int(r, 'RETAIN_RELEASES'),
         min_plugin_ratio=_ratio(r, 'MIN_PLUGIN_RATIO'),
         certificate_minimum_valid_days=_int(r, 'CERTIFICATE_MINIMUM_VALID_DAYS'),

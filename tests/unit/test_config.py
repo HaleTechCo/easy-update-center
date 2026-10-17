@@ -798,10 +798,9 @@ def test_internal_paths_are_fixed_unless_a_test_overrides_them(tmp_path):
         Path('/opt/uc'),
         Path('/run/secrets'),
     )
-    assert (s.repo_adapter_url, s.repo_adapter_dir, s.procurement_staging_dir) == (
+    assert (s.repo_adapter_url, s.repo_adapter_dir) == (
         'http://repo-adapter:8081/artifactory/',
         Path('/data/repo-adapter'),
-        Path('/procurement'),
     )
     assert s.signing_key_file == Path('/run/secrets/update-center.key')
     moved = load_settings(
