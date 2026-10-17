@@ -7,7 +7,7 @@ import hashlib
 
 import pytest
 
-from httpstub import StubServer
+from httpstub import StubServer, free_port
 from procurefixture import publish
 from uc.http import Http
 from uc.procure import ProcureError
@@ -71,6 +71,24 @@ def test_a_server_error_is_not_read_as_absent():
         pytest.raises(ProcureError, match='HTTP 503'),
     ):
         Upstream(stub.url + '/r/', Http(None), limit=1 << 20).sha1(POM)
+
+
+def test_a_source_that_cannot_be_reached_is_a_message_not_a_traceback():
+    url = f'http://127.0.0.1:{free_port()}/r/'
+    with pytest.raises(ProcureError, match=r'GET .*\.sha1 failed'):
+        Upstream(url, Http(None), limit=1 << 20).sha1(POM)
+
+
+def test_a_page_answering_200_for_a_sha1_is_named_as_not_a_sha1_file():
+    # a login or error page behind a proxy answers 200 with HTML
+    with (
+        StubServer(
+            {('GET', '/r/' + POM + '.sha1'): (200, {}, b'<html>sign in</html>')}
+        ) as stub,
+        pytest.raises(ProcureError) as caught,
+    ):
+        Upstream(stub.url + '/r/', Http(None), limit=1 << 20).sha1(POM)
+    assert str(caught.value) == f'{stub.url}/r/{POM}.sha1 is not a sha1 file'
 
 
 @pytest.mark.parametrize(
