@@ -1,3 +1,15 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Zachary Hale <zacharyshale95@gmail.com>
+Date: Tue, 22 Sep 2026 18:09:42 -0700
+Subject: [PATCH] Make the popularity data URL configurable and optional
+
+Popularities.java fetched a fixed raw.githubusercontent.com URL and
+failed the run when it was unreachable, as it is in an air-gapped
+deployment. Read the URL from POPULARITY_JSON_URL (the default
+is unchanged); an empty value skips popularity data, and a failed fetch
+logs a warning and continues without it.
+
+---
 diff --git a/src/main/java/io/jenkins/update_center/Popularities.java b/src/main/java/io/jenkins/update_center/Popularities.java
 index 71e8a07..d55e520 100644
 --- a/src/main/java/io/jenkins/update_center/Popularities.java
