@@ -53,7 +53,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](ref
 | `signing certificate expires in N days (minimum 30); run 'uc pki rotate'` | [Rotate the signing certificate](how-to/rotate-signing-certificate.md), then recreate the scheduler. |
 | `... update-center.key does not match ... update-center.cert` | The key and certificate come from different runs of `uc pki`. Restore the matching pair, or rotate. |
 | `... update-center.cert is not issued by ... root-ca.crt` | `root-ca.crt` was replaced without the signing certificate (or the reverse). Restore the matching files. |
-| `uc: error: no certificate in <dir>` (from `uc pki show --dir <dir>`) | Neither `root-ca.crt` nor `update-center.cert` is in that folder. Point `--dir` at the folder that holds them (`secrets/` on the host, `/setup/secrets` inside `setup`). |
+| `uc: error: no certificate in <dir>` (from `uc pki show --dir <dir>`) | Neither `root-ca.crt` nor `update-center.cert` is in that folder. Point `--dir` at the folder that holds them (`secrets/` on the host, `/setup/secrets` inside `setup`). Both certificates are secrets of `uc`, so `docker compose run --rm --no-deps uc pki show --dir /run/secrets` shows what the stack sees. |
 | Generation still uses the old certificate after rotating | The scheduler was started before the rotation: `docker compose up -d --force-recreate scheduler`. |
 
 ## Downloads
