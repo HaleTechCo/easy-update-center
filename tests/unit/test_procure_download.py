@@ -5,7 +5,6 @@ One download run, from the report to the staging folder.
 
 import io
 import json
-from pathlib import Path
 
 import pytest
 
@@ -15,8 +14,7 @@ from uc.aql import classify
 from uc.doctor import DoctorReport, Inspection
 from uc.procure import ProcureError
 from uc.procure.download import check_download_allowed, download
-from uc.versions import VersionTool
-from ucsupport import make_settings
+from ucsupport import make_settings, versions
 
 PLUGINS = 'org.jenkins-ci.plugins'
 AD = 'org.jenkins-ci.plugins:active-directory:2.967.v1'
@@ -37,10 +35,6 @@ class NoPoms:
     def manifest(self, gav):
         """Return nothing for gav."""
         return {}.get(gav)
-
-
-def versions():
-    return VersionTool(Path('/opt/uc/generator'), Path('/opt/uc/tools'))
 
 
 def inspection(report, *, fetch=False):

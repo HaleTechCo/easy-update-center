@@ -3,21 +3,12 @@
 from __future__ import annotations
 
 import http.client
-from dataclasses import dataclass
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'support'))
 
-@dataclass
-class Response:
-    """A response read in full: status, lower-cased headers and body."""
-
-    status: int
-    headers: dict[str, str]
-    body: bytes
-
-    @property
-    def location(self) -> str | None:
-        """The Location header, if any."""
-        return self.headers.get('location')
+from httpresponse import Response, exchange
 
 
 def fetch(
@@ -26,16 +17,9 @@ def fetch(
     headers: dict[str, str] | None = None,
     method: str = 'GET',
 ) -> Response:
-    connection = http.client.HTTPConnection(host, 8080, timeout=10)
-    try:
-        connection.request(
-            method, path, headers={'User-Agent': 'uc-routing-test', **(headers or {})}
-        )
-        response = connection.getresponse()
-        return Response(
-            response.status,
-            {k.lower(): v for k, v in response.getheaders()},
-            response.read(),
-        )
-    finally:
-        connection.close()
+    return exchange(
+        http.client.HTTPConnection(host, 8080, timeout=10),
+        method,
+        path,
+        {'User-Agent': 'uc-routing-test', **(headers or {})},
+    )

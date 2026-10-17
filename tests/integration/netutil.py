@@ -3,26 +3,17 @@
 from __future__ import annotations
 
 import http.client
+import sys
 import time
 import urllib.request
-from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlsplit
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'support'))
+
+from httpresponse import Response, exchange
+
 WAIT_FOR_SECONDS = 300
-
-
-@dataclass
-class Response:
-    """A response read in full: status, lower-cased headers and body."""
-
-    status: int
-    headers: dict[str, str]
-    body: bytes
-
-    @property
-    def location(self) -> str | None:
-        """The Location header, if any."""
-        return self.headers.get('location')
 
 
 def fetch(url: str) -> Response:
@@ -34,21 +25,10 @@ def fetch(url: str) -> Response:
         else http.client.HTTPConnection
     )
     connection = connection_class(parts.hostname, parts.port, timeout=30)
-    try:
-        path = parts.path + (f'?{parts.query}' if parts.query else '')
-        connection.request(
-            'GET',
-            path or '/',
-            headers={'User-Agent': 'uc-integration-test'},
-        )
-        response = connection.getresponse()
-        return Response(
-            response.status,
-            {k.lower(): v for k, v in response.getheaders()},
-            response.read(),
-        )
-    finally:
-        connection.close()
+    path = parts.path + (f'?{parts.query}' if parts.query else '')
+    return exchange(
+        connection, 'GET', path or '/', {'User-Agent': 'uc-integration-test'}
+    )
 
 
 def get(url: str) -> bytes:

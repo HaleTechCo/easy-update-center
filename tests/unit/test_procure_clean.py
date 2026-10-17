@@ -3,14 +3,12 @@
 Deleting the staged files the repository already holds.
 """
 
-import hashlib
 import io
-import socket
 
 import pytest
 
-from httpstub import StubServer
-from procurefixture import SOURCE, publish, stage
+from httpstub import StubServer, free_port
+from procurefixture import SOURCE, keeper_settings, publish, sha1, staged
 from uc.procure import ProcureError
 from uc.procure.clean import clean
 from uc.procure.staging import MANIFEST, Staging
@@ -19,25 +17,6 @@ from ucsupport import make_settings
 POM = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.pom'
 HPI = 'org/jenkins-ci/plugins/mailer/534.v1/mailer-534.v1.hpi'
 WAR = 'org/jenkins-ci/main/jenkins-war/2.479.1/jenkins-war-2.479.1.war'
-
-
-def keeper_settings(tmp_path, secrets_dir, url):
-    (secrets_dir / 'repo_push_auth').write_text('uc:tok\n')
-    return make_settings(
-        tmp_path,
-        secrets_dir,
-        REPO_TYPE='artifact-keeper',
-        REPO_URL=url,
-        REPO_KEY='jenkins',
-        REPO_ADAPTER='on',
-    )
-
-
-def staged(stage_dir, files):
-    staging = Staging.open(stage_dir, SOURCE)
-    for path, data in files.items():
-        stage(staging, path, data)
-    staging.save()
 
 
 def listed(stage_dir):
@@ -130,7 +109,7 @@ def test_a_different_file_in_the_repository_keeps_the_staged_one(
     assert code == 1
     assert (tmp_path / 'stage' / POM).is_file()
     assert listed(tmp_path / 'stage') == {POM}
-    digest = hashlib.sha1(b'<html>404</html>', usedforsecurity=False).hexdigest()
+    digest = sha1(b'<html>404</html>')
     assert lines == [
         line('DIFFERENT', POM, f'the repository holds another file (sha1 {digest})'),
         f'0 removed, 0 kept, 1 problem(s) -> {url}maven/jenkins/',
@@ -172,9 +151,7 @@ def test_a_listed_file_already_gone_is_forgotten_once_the_repository_holds_it(
 
 
 def test_an_unreachable_repository_keeps_every_file(tmp_path, secrets_dir):
-    with socket.socket() as sock:
-        sock.bind(('127.0.0.1', 0))
-        port = sock.getsockname()[1]
+    port = free_port()
     staged(tmp_path / 'stage', {POM: b'<project/>'})
     code, lines = run(
         keeper_settings(tmp_path, secrets_dir, f'http://127.0.0.1:{port}/'),
