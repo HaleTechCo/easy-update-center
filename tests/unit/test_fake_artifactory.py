@@ -194,12 +194,12 @@ def test_client_checksums_are_served_only_when_the_upload_sent_one(tmp_path):
     try:
         assert put(base + 'plain/1.0/plain-1.0.pom', b'<project/>', basic) == 201
         assert status(base + 'plain/1.0/plain-1.0.pom.sha1') == (404, b'')
-        assert status(base + 'plain/1.0/plain-1.0.pom', 'HEAD') == (200, b'')
+        assert status(base + 'plain/1.0/plain-1.0.pom', 'HEAD')[0] == 200
         assert put_with(base + 'bad/1.0/bad-1.0.pom', b'<project/>', '0' * 40) == 409
         assert not (tmp_path / 'jenkins/org/example/bad/1.0/bad-1.0.pom').exists()
         assert put_with(base + 'good/1.0/good-1.0.pom', b'<project/>', digest) == 201
         assert status(base + 'good/1.0/good-1.0.pom.sha1') == (200, digest.encode())
-        assert status(base + 'none/1.0/none-1.0.pom', 'HEAD') == (404, b'')
+        assert status(base + 'none/1.0/none-1.0.pom', 'HEAD')[0] == 404
     finally:
         httpd.shutdown()
         httpd.server_close()

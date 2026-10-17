@@ -5,6 +5,7 @@ As the adapter's Artifact Keeper backend sees it.
 
 import base64
 import datetime as dt
+import socket
 import sys
 import threading
 import urllib.error
@@ -119,19 +120,22 @@ def test_the_fake_accepts_an_upload_once(keeper, tmp_path):
 
 def test_the_fake_answers_head_without_a_body(keeper):
     basic = 'Basic ' + base64.b64encode(b'zac:tok').decode()
+    port = int(keeper.split(':')[2].split('/')[0])
 
     def head(path):
-        request = urllib.request.Request(
-            f'{keeper}maven/jenkins-prod-local/{path}',
-            method='HEAD',
-            headers={'Authorization': basic},
-        )
-        try:
-            with urllib.request.urlopen(request) as response:
-                return response.status, response.read()
-        except urllib.error.HTTPError as exc:
-            exc.close()  # it holds the response
-            return exc.code, b''
+        # urllib never reads a body after HEAD, so the bytes are read off the socket
+        with socket.create_connection(('127.0.0.1', port), timeout=10) as sock:
+            sock.sendall(
+                (
+                    f'HEAD /maven/jenkins-prod-local/{path} HTTP/1.0\r\n'
+                    f'Authorization: {basic}\r\n\r\n'
+                ).encode()
+            )
+            answer = b''
+            while chunk := sock.recv(65536):
+                answer += chunk
+        head, _, body = answer.partition(b'\r\n\r\n')
+        return int(head.split()[1]), body
 
     assert head(f'{BASE}.hpi') == (200, b'')
     assert head('org/example/absent/1.0/absent-1.0.pom') == (404, b'')
