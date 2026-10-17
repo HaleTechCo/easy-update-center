@@ -6,6 +6,8 @@ Stub commands on PATH, and bash with -e and pipefail.
 import subprocess
 from pathlib import Path
 
+STEP_TIMEOUT = 30
+
 
 def stub(tmp_path: Path, name: str, body: str) -> Path:
     """Write an executable stub command into tmp_path/bin; return that directory."""
@@ -17,7 +19,7 @@ def stub(tmp_path: Path, name: str, body: str) -> Path:
 
 
 def run_bash(
-    tmp_path: Path, script: str, env: dict[str, str], cwd: Path, timeout: float = 30
+    tmp_path: Path, script: str, env: dict[str, str], cwd: Path
 ) -> subprocess.CompletedProcess[str]:
     """Run a script as a GitHub Actions bash step runs it.
 
@@ -32,5 +34,5 @@ def run_bash(
         stderr=subprocess.STDOUT,
         text=True,
         check=False,
-        timeout=timeout,
+        timeout=STEP_TIMEOUT,
     )

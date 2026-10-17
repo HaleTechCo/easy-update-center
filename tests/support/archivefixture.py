@@ -38,7 +38,6 @@ def manifest(
     group: str | None,
     artifact: str | None,
     version: str,
-    extra: str = '',
     *,
     jenkins_version: str = '2.479.1',
     dependencies: str = '',
@@ -55,7 +54,7 @@ def manifest(
     ]
     if dependencies:
         lines.append(f'Plugin-Dependencies: {dependencies}')
-    return '\r\n'.join(lines) + '\r\n' + extra + '\r\n'
+    return '\r\n'.join(lines) + '\r\n\r\n'
 
 
 def extended_timestamp(seconds: int) -> bytes:
@@ -77,7 +76,6 @@ def make_hpi(
     version: str,
     *,
     layout: str = 'maven',
-    embed_pom: bool = True,
     pom: bytes | None = None,
     manifest_group: str | None = '',
     manifest_artifact: str | None = '',
@@ -110,7 +108,7 @@ def make_hpi(
                 dependencies=dependencies,
             ),
         )
-        if embed_pom and layout != 'gradle':
+        if layout != 'gradle':
             archive.writestr(
                 f'META-INF/maven/{group}/{artifact}/pom.xml',
                 pom or pom_xml(group, artifact, version),
@@ -131,28 +129,22 @@ def make_hpi(
     return buffer.getvalue()
 
 
-def make_war(version: str, *, embed_pom: bool = True, date: tuple = DATE) -> bytes:
+def make_war(version: str, *, date: tuple = DATE) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, 'w') as archive:
         archive.writestr(
             zipfile.ZipInfo('META-INF/MANIFEST.MF', date_time=date),
             f'Manifest-Version: 1.0\r\nJenkins-Version: {version}\r\n\r\n',
         )
-        if embed_pom:
-            archive.writestr(
-                'META-INF/maven/org.jenkins-ci.main/jenkins-war/pom.xml',
-                pom_xml('org.jenkins-ci.main', 'jenkins-war', version, 'Jenkins war'),
-            )
+        archive.writestr(
+            'META-INF/maven/org.jenkins-ci.main/jenkins-war/pom.xml',
+            pom_xml('org.jenkins-ci.main', 'jenkins-war', version, 'Jenkins war'),
+        )
         archive.writestr(
             'WEB-INF/lib/jenkins-core.jar', _jar({'hudson/Main.class': b'\xca\xfe'})
         )
     return buffer.getvalue()
 
 
-def make_jar(description: bytes | None) -> bytes:
-    return _jar(
-        {
-            'x/Plugin.class': b'\xca\xfe',
-            **({'index.jelly': description} if description else {}),
-        }
-    )
+def make_jar(description: bytes) -> bytes:
+    return _jar({'x/Plugin.class': b'\xca\xfe', 'index.jelly': description})
