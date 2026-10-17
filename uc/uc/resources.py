@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 GITHUB_REPO = 'jenkins-infra/update-center2'
 REQUIRED_FILES = ('warnings.json', 'artifact-ignores.properties', 'index-template.html')
 INFO_FILE = '.uc-resources.json'
-_SHA = re.compile(r'^[0-9a-f]{40}$')
+_SHA = re.compile(r'[0-9a-f]{40}')
 
 
 class ResourcesError(UcError):
@@ -130,8 +130,8 @@ def fetch_upstream(
                 {'Accept': 'application/vnd.github+json'},
             )
         )
-        sha = commit.get('sha', '')
-        if not _SHA.match(sha):
+        sha = commit.get('sha') if isinstance(commit, dict) else None
+        if not isinstance(sha, str) or not _SHA.fullmatch(sha):
             msg = f'unexpected GitHub response for {settings.resources_ref!r}'
             raise ResourcesError(msg)
         _extract_resources(

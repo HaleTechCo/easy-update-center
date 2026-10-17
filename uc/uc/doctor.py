@@ -554,7 +554,9 @@ def inspect_repository(
     tiers_file = settings.data_dir / 'live' / 'tiers.json'
     if tiers_file.is_file():
         with contextlib.suppress(ValueError):
-            report.tiers = json.loads(tiers_file.read_text(encoding='utf-8'))
+            tiers = json.loads(tiers_file.read_text(encoding='utf-8'))
+            if isinstance(tiers, dict):
+                report.tiers = tiers
     return Inspection(report, listing, source)
 
 
