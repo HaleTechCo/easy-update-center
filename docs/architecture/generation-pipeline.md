@@ -40,7 +40,7 @@ left behind by a run that was killed, and records that as a warning.
   `ALLOW_LOCAL_PUBLIC_URL=true`. Plain `http` is allowed with a warning: signatures protect the
   metadata's integrity, but TLS is still recommended.
 - The signing key and certificate must exist, match each other, be issued by `root-ca.crt`, and stay
-  valid for more than `CERTIFICATE_MINIMUM_VALID_DAYS` (30). An expiring certificate stops
+  valid for at least `CERTIFICATE_MINIMUM_VALID_DAYS` (30) more days. An expiring certificate stops
   publication before Jenkins would reject the signature.
 - Credentials: with the repo-adapter on, the token the adapter created in
   `/data/repo-adapter/token`; with it off, `repo_username` and `repo_password`. GitHub credentials

@@ -146,7 +146,7 @@ Now `docker compose run --rm --no-deps uc config` shows what each setting ends u
 ## 5. Move the root key offline
 
 `setup` created the root CA and the signing certificate in `secrets/`. Now **move the root CA's key to
-offline storage**: it is needed only about every five months, to issue the next signing certificate.
+offline storage**: it is needed only about every four and a half months, to issue the next signing certificate.
 
 ```bash
 mv secrets/root /media/offline-usb/easy-update-center-root      # any offline location
@@ -189,8 +189,9 @@ log ([Troubleshooting](../troubleshooting.md#generation)).
 docker compose run --rm uc status
 ```
 
-`last_run.result` is `success`; `warnings` lists what the air gap dropped (GitHub labels, popularity
-and tool installers are expected). Then, from a controller's host, with your own URL and a core
+`last_run.result` is `success`; `warnings` lists what the air gap dropped (the omitted GitHub labels are expected,
+and so is the plain-http note for an `http://` `PUBLIC_URL`; popularity and tool installers are
+simply off here and warn of nothing). Then, from a controller's host, with your own URL and a core
 version you stocked:
 
 ```bash

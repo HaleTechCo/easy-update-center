@@ -98,7 +98,7 @@ and `docker compose run --rm --no-deps uc config` shows what each setting ends u
 ## 4. Move the root key offline
 
 `setup` created the root CA and the signing certificate in `secrets/`. Now **move the root CA's key to
-offline storage**: it is needed only about every five months, to issue the next signing certificate.
+offline storage**: it is needed only about every four and a half months, to issue the next signing certificate.
 
 ```bash
 mv secrets/root /media/offline-usb/easy-update-center-root      # any offline location

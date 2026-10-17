@@ -18,8 +18,12 @@ docker compose pull                             # air-gapped: docker load -i ima
 docker compose run --rm setup
 docker compose run --rm --no-deps uc config --check
 docker compose up -d
-docker compose run --rm uc status               # uc_version names the new release
+docker compose run --rm --no-deps uc --version   # the new release
 ```
+
+`uc --version` names the release the images are; `uc status` shows `uc_version` of the live
+release, so it names the new one only after the next generation (`docker compose run --rm uc generate`
+publishes now).
 
 `setup` creates what the new release needs, such as a credential file it added, and leaves what
 exists. `uc config --check` prints `configuration ok`, or names the setting a newer release refuses.

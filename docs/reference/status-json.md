@@ -113,8 +113,8 @@ An air-gapped deployment after a successful run, with the doctor report schedule
     "stale": false
   },
   "signing_cert": {
-    "days_left": 301,
-    "not_after": "2027-07-22T10:00:00Z",
+    "days_left": 157,
+    "not_after": "2027-02-28T10:00:00Z",
     "subject": "CN=Easy Update Center Signing,O=Easy Update Center"
   },
   "tiers": {"stable": ["2.528.1", "2.528.3"], "weekly": []},
