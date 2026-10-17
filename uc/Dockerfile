@@ -65,7 +65,8 @@ ARG UC_VERSION
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 openssl tini ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
-# pipefail, so a failed download cannot hide behind the checksum pipe below.
+# pipefail applies to every RUN below, and to the test stage, which inherits this shell. The only pipe
+# today is echo into sha256sum -c, so it guards a pipe added later.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN set -eu; \
     arch="${TARGETARCH:-amd64}"; \
