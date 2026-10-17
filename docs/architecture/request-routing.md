@@ -115,9 +115,12 @@ lists them under `web`'s `environment:`): `PUBLIC_URL`, `MODE`, `DOWNLOAD_BACKEN
 - With `DOWNLOAD_BACKEND` unset, web uses `artifactory` in air-gapped mode and `mirror` otherwise,
   the same rule as uc. `mirror` sends downloads to get.jenkins.io unless `DOWNLOAD_BACKEND_URL`
   says otherwise; `artifactory` needs `DOWNLOAD_BACKEND_URL`.
-- `docker compose run --rm --no-deps uc config --check` checks web's settings too, so run it before
-  `docker compose up -d`. When one of them is invalid, web exits with `entrypoint: ...` naming it:
-  `docker compose logs web` shows the message.
+- `docker compose run --rm --no-deps uc config --check` checks web's values (`PUBLIC_URL`, the
+  backend, its URL and the access mode), so run it before `docker compose up -d`. It cannot see
+  what only the web container has: whether the TLS certificate and key files and
+  `DOWNLOAD_PROXY_CA_FILE` are readable, that `PUBLIC_URL` is `https://` when TLS is on, or the
+  `download_proxy_auth` secret. When web finds any of those invalid, or one of the values above,
+  it exits with `entrypoint: ...` naming it: `docker compose logs web` shows the message.
 - A Compose override can set any of them on `web` itself, as `compose.tls.yaml` does
   ([Enable TLS](../how-to/enable-tls.md)).
 - Before it waits for the first release, `web` logs one line, `entrypoint: serving <PUBLIC_URL>;

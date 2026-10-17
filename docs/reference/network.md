@@ -34,6 +34,7 @@ not on it. The repo-adapter reaches the repository through `repo-egress`.
 | `raw.githubusercontent.com` | `scheduler`, `uc` | Plugin popularity (`POPULARITY_JSON_URL`). |
 | `updates.jenkins.io` | `scheduler`, `uc` | Tool installer metadata (`TOOL_INSTALLERS_URL`). It redirects to `mirrors.updates.jenkins.io`. |
 | `reports.jenkins.io` | `scheduler`, `uc` | Issue trackers, maintainers and health scores. Optional: the run warns and continues without them. |
+| `DOWNLOAD_BACKEND_URL`'s host | `web` | Only with `DOWNLOAD_ACCESS=proxy`: the files it streams to controllers. |
 | `PROCUREMENT_SOURCE_URL`'s host (default `repo.jenkins-ci.org`) | `uc` | Only for `uc procure stage`: the files it stages. |
 | `REPO_URL`'s host, when it is your own repository | `scheduler`, `uc` (`REPO_ADAPTER` off); `repo-adapter` (`REPO_ADAPTER` on, always for Artifact Keeper); `uc` for `uc procure push` and `clean` | The listing, POMs and manifests instead of repo.jenkins-ci.org, the uploads of `uc procure push`, and the checks of both. |
 

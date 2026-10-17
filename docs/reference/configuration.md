@@ -40,8 +40,10 @@ docker compose run --rm --no-deps uc config --check
 docker compose up -d
 ```
 
-A generation in progress restarts when the scheduler is recreated. `PUBLIC_URL` and the download
-settings are written into each release: after changing them, also publish a new release with
+Recreating the scheduler loses a generation in progress; the next one waits for
+`GENERATE_SCHEDULE` (the scheduler generates at once only when no release is live), and
+`docker compose run --rm uc generate` publishes now. Only `PUBLIC_URL` and `DOWNLOAD_BACKEND` are
+written into a release: after changing either, also publish a new release with
 `docker compose run --rm uc generate`.
 
 ## Required

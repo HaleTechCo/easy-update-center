@@ -19,6 +19,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](ref
 | `uc must not run as root`, `setup must not run as root` or `web must not run as root` | The container runs as uid 0. With Compose, set `UC_UID` and `UC_GID` in `.env` to your own user (`id -u`, `id -g`); with `docker run`, pass `--user $(id -u):$(id -g)`. |
 | `UC_UID must not be 0: every container would run as root` (or `UC_GID`) | Set it to the output of `id -u` (`id -g` for `UC_GID`) in `.env`. If the volumes already hold data, give them to that user ([Compose](reference/configuration.md#compose)). |
 | `/data is not writable by uid N` or `/data/repo-adapter is not writable by uid N` | `UC_UID` changed after the volumes were created. Set it back to the volumes' owner, or give both volumes to the new user ([Compose](reference/configuration.md#compose)). |
+| `secrets/<name> is a directory, not a file: Docker creates one when a container starts before setup; remove it and run setup again` | Docker made an empty folder where a secret file belongs, because a container started before `setup` ran. Remove the folder (`rmdir secrets/<name>`, with the name the message gives), then run `docker compose run --rm setup` again. |
 
 ## Generation
 
@@ -52,6 +53,7 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](ref
 | `signing certificate expires in N days (minimum 30); run 'uc pki rotate'` | [Rotate the signing certificate](how-to/rotate-signing-certificate.md), then recreate the scheduler. |
 | `... update-center.key does not match ... update-center.cert` | The key and certificate come from different runs of `uc pki`. Restore the matching pair, or rotate. |
 | `... update-center.cert is not issued by ... root-ca.crt` | `root-ca.crt` was replaced without the signing certificate (or the reverse). Restore the matching files. |
+| `uc: error: no certificate in <dir>` (from `uc pki show --dir <dir>`) | Neither `root-ca.crt` nor `update-center.cert` is in that folder. Point `--dir` at the folder that holds them (`secrets/` on the host, `/setup/secrets` inside `setup`). |
 | Generation still uses the old certificate after rotating | The scheduler was started before the rotation: `docker compose up -d --force-recreate scheduler`. |
 
 ## Downloads
@@ -73,6 +75,9 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](ref
 | It exits with `entrypoint: PUBLIC_URL must be set` or `MODE must be online or airgapped` | Set `PUBLIC_URL`, and `MODE` to `online` or `airgapped`, in `.env` in the project directory, which Compose passes to web; then `docker compose up -d`. |
 | It exits with `DOWNLOAD_ACCESS=proxy needs username:password in /run/secrets/download_proxy_auth` | Write `secrets/download_proxy_auth` as `username:password`, then run `docker compose run --rm setup secrets`. |
 | It exits with `TLS_CERT_FILE and TLS_KEY_FILE must both be readable` | Set both, and mount both files readable by `UC_UID` ([Enable TLS](how-to/enable-tls.md)). |
+| It exits with `with TLS_CERT_FILE and TLS_KEY_FILE set, PUBLIC_URL must start with https:// (port 8080 then only redirects to it)` | Set `PUBLIC_URL=https://...` in `.env`, with the port controllers reach if it is not 443 ([Enable TLS](how-to/enable-tls.md#in-the-web-container)), then `docker compose up -d`. `uc config --check` does not catch this. |
+| It exits with `DOWNLOAD_ACCESS=proxy needs DOWNLOAD_BACKEND_URL set explicitly: web sends download_proxy_auth to it` | Proxy mode never assumes a backend, because it sends the credentials there. Set `DOWNLOAD_BACKEND_URL` in `.env` ([Proxy plugin downloads](how-to/proxy-downloads.md)), then `docker compose up -d`. |
+| It exits with `DOWNLOAD_PROXY_CA_FILE <path> cannot be read` | The path, as the web container sees it, is not a readable file. Mount the CA bundle into `web` and point `DOWNLOAD_PROXY_CA_FILE` at it ([Backend with a private CA](how-to/proxy-downloads.md#backend-with-a-private-ca)); leave it unset for the container's own CA bundle. `uc config --check` does not read it. |
 | It exits with `DOWNLOAD_BACKEND=artifactory needs DOWNLOAD_BACKEND_URL` | Set `DOWNLOAD_BACKEND_URL` in `.env` to your repository by Maven path ([Downloads](reference/configuration.md#downloads)), then `docker compose up -d`. Air-gapped mode uses the artifactory backend unless `DOWNLOAD_BACKEND` says otherwise. |
 | Redirects name the wrong host or port | `PUBLIC_URL` is not the origin clients use. Redirects always use `PUBLIC_URL`. |
 | The browser gets an empty response (`NS_ERROR_NET_EMPTY_RESPONSE`; curl: `Empty reply from server`) while the container is healthy and its log shows no request | Docker Desktop's forwarding of the published port went stale, often after sleep or a network change. Run `docker compose up -d --force-recreate web`; if that does not help, restart Docker Desktop. |

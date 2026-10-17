@@ -5,7 +5,8 @@ Every uc command, its options and its exit codes.
 ## Running uc
 
 `uc` is the entrypoint of the uc image. Run one-shot commands through Compose's `uc` service, which
-has the same volume, secrets and settings as the scheduler:
+has the scheduler's volume, secrets and settings, plus `./procurement` and the `repo_push_auth`
+secret that only it receives:
 
 ```bash
 docker compose run --rm uc <command> [options]
@@ -18,8 +19,10 @@ Air-gapped, these commands assume `COMPOSE_FILE` is set in `.env` ([Compose](con
 - With no command, the image runs `uc status`.
 - `uc --version` prints the release the image was built as, such as `uc 0.1.0`, or `uc dev` for an
   image built from source.
-- Every command except `uc pki` reads the [configuration](configuration.md) and fails at once with
-  `uc: error: ...` when it is invalid.
+- Every command except three reads the [configuration](configuration.md) and fails at once with
+  `uc: error: ...` when it is invalid. The three read none: `uc pki`, `uc config --example` and
+  `uc repo-adapter --healthcheck`. (`uc config` without `--example` reads it too, but prints what it
+  can instead of failing.)
 
 Exit codes shared by every command:
 
@@ -335,4 +338,8 @@ docker compose run --rm -v "<folder holding root-ca.key>:/setup/root:ro" setup p
 
 When `secrets/` (or the `--out` directory) is not writable by the user it runs as, `uc-setup` exits 1:
 `secrets/ is not writable by uid N: set UC_UID and UC_GID in .env to the output of id -u and id -g`.
-Any other argument exits 2 with the usage line.
+If a secret's path in `secrets/` is a directory, which Docker creates when a container starts
+before `setup`, it exits 1 for each such name with `uc-setup: error: secrets/<name> is a directory,
+not a file: Docker creates one when a container starts before setup; remove it and run setup again`
+([Troubleshooting](../troubleshooting.md#users-and-volumes)). Any other argument exits 2 with the
+usage line.

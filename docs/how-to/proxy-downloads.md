@@ -66,7 +66,8 @@ the override to `COMPOSE_FILE` in `.env` ([Compose](../reference/configuration.m
 recreate the web container:
 
 ```bash
-COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.proxy-ca.yaml    # in .env
+COMPOSE_FILE=compose.yaml:compose.proxy-ca.yaml                           # online, in .env
+COMPOSE_FILE=compose.yaml:compose.airgapped.yaml:compose.proxy-ca.yaml    # air-gapped, in .env
 ```
 
 ```bash
