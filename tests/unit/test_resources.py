@@ -249,6 +249,37 @@ def test_a_broken_upstream_warnings_file_is_not_blamed_on_the_overlay(tmp_path):
         merge_overlay(upstream, overlay, tmp_path / 'merged')
 
 
+@pytest.mark.parametrize('content', [b'{bad', b'["\xff"]', b''])
+def test_an_unparsable_upstream_warnings_file_is_not_blamed_on_the_overlay(
+    tmp_path, content
+):
+    upstream = tmp_path / 'up'
+    upstream.mkdir()
+    (upstream / 'warnings.json').write_bytes(content)
+    overlay = tmp_path / 'overlay'
+    overlay.mkdir()
+    (overlay / 'warnings.json').write_text('[]')
+    with pytest.raises(
+        ResourcesError,
+        match=r"^upstream's resources/warnings\.json is not valid JSON text$",
+    ):
+        merge_overlay(upstream, overlay, tmp_path / 'merged')
+
+
+def test_an_overlay_warnings_file_that_is_not_an_array_names_itself_once(tmp_path):
+    upstream = tmp_path / 'up'
+    upstream.mkdir()
+    (upstream / 'warnings.json').write_text('[]')
+    overlay = tmp_path / 'overlay'
+    overlay.mkdir()
+    (overlay / 'warnings.json').write_text('{}')
+    with pytest.raises(
+        ResourcesError,
+        match=r'^config/overlay/warnings\.json: must be a JSON array$',
+    ):
+        merge_overlay(upstream, overlay, tmp_path / 'merged')
+
+
 def test_overlay_warning_without_id(tmp_path):
     upstream = tmp_path / 'up'
     upstream.mkdir()

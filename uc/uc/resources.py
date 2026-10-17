@@ -176,7 +176,7 @@ def _merge_warnings(base: object, extra: object) -> list:
         msg = "upstream's resources/warnings.json must be a JSON array"
         raise _UpstreamWarningsError(msg)
     if not isinstance(extra, list):
-        msg = 'warnings.json must be a JSON array'
+        msg = 'must be a JSON array'
         raise ResourcesError(msg)
     if any(not isinstance(w, dict) or 'id' not in w for w in extra):
         msg = "every overlay warning needs an 'id'"
@@ -205,6 +205,14 @@ def _read_overlay_json(path: Path) -> object:
     except json.JSONDecodeError as exc:
         msg = f'not valid JSON (line {exc.lineno} column {exc.colno})'
         raise ResourcesError(msg) from exc
+
+
+def _read_upstream_warnings(path: Path) -> object:
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        msg = "upstream's resources/warnings.json is not valid JSON text"
+        raise _UpstreamWarningsError(msg) from exc
 
 
 def merge_overlay(upstream: Path, overlay: Path, dest: Path) -> list[str]:
@@ -236,7 +244,7 @@ def merge_overlay(upstream: Path, overlay: Path, dest: Path) -> list[str]:
         elif item.name == 'warnings.json':
             try:
                 merged = _merge_warnings(
-                    json.loads(target.read_text(encoding='utf-8')),
+                    _read_upstream_warnings(target),
                     _read_overlay_json(item),
                 )
             except _UpstreamWarningsError:
