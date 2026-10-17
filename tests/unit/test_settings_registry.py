@@ -4,6 +4,7 @@ See docs/reference/configuration.md#how-settings-are-read.
 """
 
 import re
+from pathlib import Path
 from urllib.parse import urlsplit
 
 import pytest
@@ -143,3 +144,17 @@ def test_a_mode_sample_comes_before_the_common_one():
     assert REGISTRY['PUBLIC_URL'].sample_for('online') == REGISTRY['PUBLIC_URL'].sample
     assert REGISTRY['REPO_TYPE'].hint_for('online') == REGISTRY['REPO_TYPE'].online_hint
     assert REGISTRY['REPO_TYPE'].hint_for('airgapped') == ()
+
+
+def test_groups_follow_the_configuration_page():
+    # The page's other sections (how settings are read, mode defaults, several
+    # configurations) are not groups; the groups' sections come in GROUPS' order.
+    page = Path('/docs/reference/configuration.md').read_text()
+    headings = re.findall(r'^## (.+)$', page, re.MULTILINE)
+    assert [h for h in headings if h in GROUPS] == list(GROUPS)
+
+
+def test_host_ports_are_strings():
+    # enable-tls.md recommends 127.0.0.1:8080, which Compose accepts as a port.
+    assert REGISTRY['HTTP_PORT'].type == 'str'
+    assert REGISTRY['HTTPS_PORT'].type == 'str'

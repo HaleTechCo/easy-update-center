@@ -159,8 +159,8 @@ directory, not by the containers.
 | `UC_GID` | `10001` | The group id every container runs as. On Linux, the output of `id -g`. |
 | `UC_IMAGE` | this release's | The image for `uc`, `scheduler`, `repo-adapter` and `setup`. Unset, `compose.yaml` names this release's, `ghcr.io/haletechco/easy-update-center-uc:<version>`, and `compose.build.yaml` names `easy-update-center/uc:local`. |
 | `WEB_IMAGE` | this release's | The image for `web`: `ghcr.io/haletechco/easy-update-center-web:<version>`, or `easy-update-center/web:local` with `compose.build.yaml`. |
-| `HTTP_PORT` | `8080` | Host port published for the web container's HTTP listener. |
-| `HTTPS_PORT` | `8443` | Host port published for the web container's TLS listener. |
+| `HTTP_PORT` | `8080` | Host port, or `address:port` (`127.0.0.1:8080`), published for the web container's HTTP listener. |
+| `HTTPS_PORT` | `8443` | Host port, or `address:port` (`127.0.0.1:8443`), published for the web container's TLS listener. |
 
 Changing `UC_UID` later: give both volumes to the new user once, then `docker compose up -d`. Every
 service drops all Linux capabilities, so each command runs as root with just the two that changing

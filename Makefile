@@ -11,13 +11,13 @@ UC_VERSION ?= dev
 .DEFAULT_GOAL := help
 
 # Unit tests read the Python, templates and lint tools straight from the working tree, and the
-# workflows in .github/
+# workflows in .github/ and the docs
 # (VersionTool.java is compiled into the image, so changing it needs `make build-uc`).
 SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/uc:/opt/uc/python/uc:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro" \
              -v "$(CURDIR)/tools:/tools:ro" \
-             -v "$(CURDIR)/web:/web:ro" \
+             -v "$(CURDIR)/web:/web:ro"              -v "$(CURDIR)/docs:/docs:ro" \
              $(if $(wildcard examples/pipelines),-v "$(CURDIR)/examples/pipelines:/examples/pipelines:ro") \
              $(if $(wildcard .github),-v "$(CURDIR)/.github:/github:ro") \
              -v "$(CURDIR)/.env.online.example:/examples/env.online.example:ro" \
