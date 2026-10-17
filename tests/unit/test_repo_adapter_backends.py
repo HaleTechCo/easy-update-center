@@ -189,6 +189,32 @@ def test_artifactory_without_range_support_gives_no_date():
         assert artifactory(stub).archive_released(entry(data)) is None
 
 
+def test_a_transient_range_failure_does_not_make_an_archive_undatable():
+    data = make_hpi(*GIT)
+    prefix = f'/artifactory/jenkins/{HPI_PATH}'
+    probe = serve_bytes(data)
+
+    def route(headers, body):
+        # The probe is answered; the block reads then hit a failing server.
+        if headers.get('Range') == 'bytes=0-0':
+            return probe(headers, body)
+        return 503, {}, b''
+
+    with (
+        StubServer({('GET', prefix): route}) as stub,
+        pytest.raises(BackendError, match='HTTP 503'),
+    ):
+        artifactory(stub).archive_released(entry(data))
+
+
+def test_an_archive_over_the_range_read_limit_is_undatable(monkeypatch):
+    monkeypatch.setattr(backends, 'RANGE_READ_LIMIT', 1)
+    data = make_hpi(*GIT)
+    prefix = f'/artifactory/jenkins/{HPI_PATH}'
+    with StubServer({('GET', prefix): serve_bytes(data)}) as stub:
+        assert artifactory(stub).archive_released(entry(data)) is None
+
+
 def test_an_archive_with_an_oversized_directory_keeps_the_repositorys_date(
     monkeypatch, tmp_path
 ):
