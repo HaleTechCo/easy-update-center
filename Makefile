@@ -18,6 +18,7 @@ SRC_MOUNTS = -v "$(CURDIR)/tests:/tests:ro" \
              -v "$(CURDIR)/uc/templates:/opt/uc/templates:ro" \
              -v "$(CURDIR)/tools:/tools:ro" \
              -v "$(CURDIR)/web:/web:ro" \
+             -v "$(CURDIR)/uc/Dockerfile:/uc/Dockerfile:ro" \
              -v "$(CURDIR)/docs:/docs:ro" \
              -v "$(CURDIR)/examples/pipelines:/examples/pipelines:ro" \
              -v "$(CURDIR)/.github:/github:ro" \

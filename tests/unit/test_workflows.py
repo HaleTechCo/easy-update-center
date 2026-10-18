@@ -540,6 +540,79 @@ def docker_calls(tmp_path: Path, prefix: str) -> list[str]:
     return [line for line in log if line.startswith(prefix)]
 
 
+GIT_LOG_STUB = (
+    '#!/bin/sh\necho "$*" >> "$STUB_DIR/git.log"\necho 2026-10-17T15:00:00-07:00\n'
+)
+DIGEST_A, DIGEST_B = 'sha256:' + 'a' * 64, 'sha256:' + 'b' * 64
+
+
+def run_image_metadata(
+    tmp_path: Path, cwd: Path
+) -> tuple[subprocess.CompletedProcess[str], dict]:
+    stubs = stub(tmp_path, 'git', GIT_LOG_STUB)
+    output = tmp_path / 'output'
+    env = {
+        'PATH': f'{stubs}:{PATH}',
+        'STUB_DIR': str(tmp_path),
+        'GITHUB_SHA': 'abc123',
+        'GITHUB_OUTPUT': str(output),
+    }
+    script = release_step('check', 'Work out the image metadata')['run']
+    result = run_bash(tmp_path, script, env, cwd)
+    lines = output.read_text(encoding='utf-8').splitlines() if output.exists() else []
+    return result, dict(line.split('=', 1) for line in lines)
+
+
+def test_the_image_metadata_reads_the_base_of_each_real_dockerfile(tmp_path):
+    # A FROM line the step cannot read would stop a release at its first job.
+    result, meta = run_image_metadata(tmp_path, Path('/'))
+    assert result.returncode == 0, result.stdout
+    assert meta['created'] == '2026-10-17T15:00:00-07:00'
+    assert (tmp_path / 'git.log').read_text(encoding='utf-8') == (
+        'log -1 --format=%cI abc123\n'
+    )
+    for image in ('uc', 'web'):
+        dockerfile = Path(f'/{image}/Dockerfile').read_text(encoding='utf-8')
+        name, digest = re.search(
+            r'^FROM (\S+)@(sha256:[0-9a-f]{64}) AS root$', dockerfile, re.MULTILINE
+        ).groups()
+        assert meta[f'{image}-base-name'] == f'docker.io/library/{name}'
+        assert meta[f'{image}-base-digest'] == digest
+
+
+def test_the_image_metadata_names_a_base_outside_docker_hub_as_it_is(tmp_path):
+    for image, base in (
+        ('uc', f'ghcr.io/acme/base:1@{DIGEST_A}'),
+        ('web', f'httpd:2.4@{DIGEST_B}'),
+    ):
+        (tmp_path / image).mkdir()
+        (tmp_path / image / 'Dockerfile').write_text(
+            f'FROM {base} AS root\n', encoding='utf-8'
+        )
+    result, meta = run_image_metadata(tmp_path, tmp_path)
+    assert result.returncode == 0, result.stdout
+    assert meta['uc-base-name'] == 'ghcr.io/acme/base:1'
+    assert meta['uc-base-digest'] == DIGEST_A
+    assert meta['web-base-name'] == 'docker.io/library/httpd:2.4'
+
+
+def test_the_image_metadata_refuses_a_base_not_pinned_by_digest(tmp_path):
+    for image, base in (
+        ('uc', 'eclipse-temurin:21-jre'),
+        ('web', f'httpd:2.4@{DIGEST_B}'),
+    ):
+        (tmp_path / image).mkdir()
+        (tmp_path / image / 'Dockerfile').write_text(
+            f'FROM {base} AS root\n', encoding='utf-8'
+        )
+    result, _ = run_image_metadata(tmp_path, tmp_path)
+    assert result.returncode == 1
+    assert (
+        "::error::uc/Dockerfile has no 'FROM <image>@sha256:<digest> AS root' line"
+        in (result.stdout)
+    )
+
+
 def test_the_index_job_tags_nothing_a_user_would_pull(tmp_path):
     for image in ('uc', 'web'):
         (tmp_path / 'digests' / image).mkdir(parents=True)
@@ -551,6 +624,7 @@ def test_the_index_job_tags_nothing_a_user_would_pull(tmp_path):
         'PATH': f'{stubs}:{PATH}',
         'STUB_DIR': str(tmp_path),
         'VERSION': '0.2.1',
+        'CREATED': '2026-10-17T15:00:00-07:00',
         'GITHUB_SHA': 'abc123',
         'GITHUB_OUTPUT': str(output),
         **REPOS,
@@ -563,6 +637,31 @@ def test_the_index_job_tags_nothing_a_user_would_pull(tmp_path):
     for repo, line in zip((UC, WEB), creates, strict=True):
         assert re.findall(r'--tag (\S+)', line) == [f'{repo}:build-abc123']
         assert line.endswith(f'{repo}@sha256:aaaa {repo}@sha256:bbbb')
+    # Each index carries its own image's OCI annotations, and the release's.
+    for line, title, description in (
+        (creates[0], 'uc', 'Generates, signs and publishes the update center'),
+        (creates[1], 'web', 'Serves the update center (Apache httpd)'),
+    ):
+        annotations = re.findall(
+            r'--annotation index:org\.opencontainers\.image\.([a-z.]+)=', line
+        )
+        assert annotations == [
+            'title',
+            'description',
+            'url',
+            'documentation',
+            'source',
+            'vendor',
+            'licenses',
+            'version',
+            'revision',
+            'created',
+        ]
+        assert f'image.title=Easy Update Center for Jenkins: {title} ' in line
+        assert f'image.description={description}' in line
+        assert 'image.revision=abc123 ' in line
+        assert 'image.created=2026-10-17T15:00:00-07:00 ' in line
+        assert 'image.licenses=MIT ' in line
     assert output.read_text(encoding='utf-8') == (
         'uc-digest=sha256:1111\nweb-digest=sha256:2222\n'
     )

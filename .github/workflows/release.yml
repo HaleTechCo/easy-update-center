@@ -46,6 +46,11 @@ jobs:
     outputs:
       version: ${{ steps.check.outputs.version }}
       prerelease: ${{ steps.check.outputs.prerelease }}
+      created: ${{ steps.meta.outputs.created }}
+      uc-base-name: ${{ steps.meta.outputs.uc-base-name }}
+      uc-base-digest: ${{ steps.meta.outputs.uc-base-digest }}
+      web-base-name: ${{ steps.meta.outputs.web-base-name }}
+      web-base-digest: ${{ steps.meta.outputs.web-base-digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,6 +64,24 @@ jobs:
               exit 1
           fi
           python3 tools/release.py check "${GITHUB_REF_NAME#v}" | tee -a "${GITHUB_OUTPUT}"
+      # The images' OCI labels and annotations: created is the release commit's time, the same in
+      # every attempt, and each image's base is what its Dockerfile copies from (FROM ... AS root),
+      # the digest Dependabot keeps current.
+      - name: Work out the image metadata
+        id: meta
+        run: |
+          echo "created=$(git log -1 --format=%cI "${GITHUB_SHA}")" >> "${GITHUB_OUTPUT}"
+          for image in uc web; do
+              from="$(sed -n 's/^FROM \([^ ]*\) AS root$/\1/p' "${image}/Dockerfile")"
+              if [[ "${from}" != *@sha256:* ]]; then
+                  echo "::error::${image}/Dockerfile has no 'FROM <image>@sha256:<digest> AS root' line"
+                  exit 1
+              fi
+              name="${from%@*}"
+              if [[ "${name}" != */* ]]; then name="docker.io/library/${name}"; fi
+              echo "${image}-base-name=${name}" >> "${GITHUB_OUTPUT}"
+              echo "${image}-base-digest=${from#*@}" >> "${GITHUB_OUTPUT}"
+          done
 
   # No build cache: every release builds from scratch, so it gets the distribution's current
   # packages even when the Dockerfiles are unchanged, and nothing cached can reach a release.
@@ -98,16 +121,31 @@ jobs:
           target: runtime
           platforms: ${{ matrix.platform }}
           build-args: UC_VERSION=${{ env.VERSION }}
+          # The Dockerfile's LABELs carry title, description, url, documentation, source, vendor
+          # and licenses; these add what only a release knows. The annotations repeat all of them on
+          # the manifest, where OCI tools read them without fetching the config.
           labels: |
-            org.opencontainers.image.title=Easy Update Center for Jenkins: uc
-            org.opencontainers.image.description=Generates, signs and publishes the update center (update-center2, patched)
             org.opencontainers.image.version=${{ env.VERSION }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=${{ env.SOURCE_URL }}
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.created=${{ needs.check.outputs.created }}
+            org.opencontainers.image.base.name=${{ needs.check.outputs.uc-base-name }}
+            org.opencontainers.image.base.digest=${{ needs.check.outputs.uc-base-digest }}
+          annotations: |
+            manifest:org.opencontainers.image.title=Easy Update Center for Jenkins: uc
+            manifest:org.opencontainers.image.description=Generates, signs and publishes the update center (update-center2, patched)
+            manifest:org.opencontainers.image.url=${{ env.SOURCE_URL }}
+            manifest:org.opencontainers.image.documentation=${{ env.SOURCE_URL }}/tree/main/docs
+            manifest:org.opencontainers.image.source=${{ env.SOURCE_URL }}
+            manifest:org.opencontainers.image.vendor=HaleTechCo
+            manifest:org.opencontainers.image.licenses=MIT
+            manifest:org.opencontainers.image.version=${{ env.VERSION }}
+            manifest:org.opencontainers.image.revision=${{ github.sha }}
+            manifest:org.opencontainers.image.created=${{ needs.check.outputs.created }}
+            manifest:org.opencontainers.image.base.name=${{ needs.check.outputs.uc-base-name }}
+            manifest:org.opencontainers.image.base.digest=${{ needs.check.outputs.uc-base-digest }}
           provenance: false
           sbom: false
-          outputs: type=image,name=${{ env.UC_REPO }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.UC_REPO }},push-by-digest=true,name-canonical=true,push=true,oci-mediatypes=true
       - name: Build and push the web image by digest
         id: web
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -115,15 +153,27 @@ jobs:
           context: web
           platforms: ${{ matrix.platform }}
           labels: |
-            org.opencontainers.image.title=Easy Update Center for Jenkins: web
-            org.opencontainers.image.description=Serves the update center (Apache httpd)
             org.opencontainers.image.version=${{ env.VERSION }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=${{ env.SOURCE_URL }}
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.created=${{ needs.check.outputs.created }}
+            org.opencontainers.image.base.name=${{ needs.check.outputs.web-base-name }}
+            org.opencontainers.image.base.digest=${{ needs.check.outputs.web-base-digest }}
+          annotations: |
+            manifest:org.opencontainers.image.title=Easy Update Center for Jenkins: web
+            manifest:org.opencontainers.image.description=Serves the update center (Apache httpd)
+            manifest:org.opencontainers.image.url=${{ env.SOURCE_URL }}
+            manifest:org.opencontainers.image.documentation=${{ env.SOURCE_URL }}/tree/main/docs
+            manifest:org.opencontainers.image.source=${{ env.SOURCE_URL }}
+            manifest:org.opencontainers.image.vendor=HaleTechCo
+            manifest:org.opencontainers.image.licenses=MIT
+            manifest:org.opencontainers.image.version=${{ env.VERSION }}
+            manifest:org.opencontainers.image.revision=${{ github.sha }}
+            manifest:org.opencontainers.image.created=${{ needs.check.outputs.created }}
+            manifest:org.opencontainers.image.base.name=${{ needs.check.outputs.web-base-name }}
+            manifest:org.opencontainers.image.base.digest=${{ needs.check.outputs.web-base-digest }}
           provenance: false
           sbom: false
-          outputs: type=image,name=${{ env.WEB_REPO }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.WEB_REPO }},push-by-digest=true,name-canonical=true,push=true,oci-mediatypes=true
       - name: Record the digests
         env:
           UC_DIGEST: ${{ steps.uc.outputs.digest }}
@@ -148,6 +198,7 @@ jobs:
       packages: write
     env:
       VERSION: ${{ needs.check.outputs.version }}
+      CREATED: ${{ needs.check.outputs.created }}
     outputs:
       uc-digest: ${{ steps.merge.outputs.uc-digest }}
       web-digest: ${{ steps.merge.outputs.web-digest }}
@@ -177,13 +228,27 @@ jobs:
               fi
           done
           for image in uc web; do
-              if [[ "${image}" == uc ]]; then repo="${UC_REPO}"; else repo="${WEB_REPO}"; fi
+              if [[ "${image}" == uc ]]; then
+                  repo="${UC_REPO}" title="Easy Update Center for Jenkins: uc"
+                  description="Generates, signs and publishes the update center (update-center2, patched)"
+              else
+                  repo="${WEB_REPO}" title="Easy Update Center for Jenkins: web"
+                  description="Serves the update center (Apache httpd)"
+              fi
               sources=()
               for digest in "digests/${image}"/*; do sources+=("${repo}@sha256:${digest##*/}"); done
+              # The same OCI annotations as each manifest's (the images job), on the index a tag names.
               docker buildx imagetools create --tag "${repo}:build-${GITHUB_SHA}" \
+                  --annotation "index:org.opencontainers.image.title=${title}" \
+                  --annotation "index:org.opencontainers.image.description=${description}" \
+                  --annotation "index:org.opencontainers.image.url=${SOURCE_URL}" \
+                  --annotation "index:org.opencontainers.image.documentation=${SOURCE_URL}/tree/main/docs" \
                   --annotation "index:org.opencontainers.image.source=${SOURCE_URL}" \
-                  --annotation "index:org.opencontainers.image.version=${VERSION}" \
+                  --annotation "index:org.opencontainers.image.vendor=HaleTechCo" \
                   --annotation "index:org.opencontainers.image.licenses=MIT" \
+                  --annotation "index:org.opencontainers.image.version=${VERSION}" \
+                  --annotation "index:org.opencontainers.image.revision=${GITHUB_SHA}" \
+                  --annotation "index:org.opencontainers.image.created=${CREATED}" \
                   "${sources[@]}"
               digest="$(docker buildx imagetools inspect "${repo}:build-${GITHUB_SHA}" --format '{{.Manifest.Digest}}')"
               echo "${image}-digest=${digest}" >> "${GITHUB_OUTPUT}"
