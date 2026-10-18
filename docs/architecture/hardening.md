@@ -9,11 +9,25 @@ left to the operator, and how to scan the images yourself. For operators and sec
   `UC_UID:UC_GID` (default 10001). `tini` is PID 1 in the uc image.
 - **Pinned bases.** The uc image builds on `eclipse-temurin:21-jre` and the web image on
   `httpd:2.4`, each pinned by digest. Dependabot proposes digest updates weekly.
-- **Small installs.** Packages are installed without recommended extras, and the apt lists are
-  removed.
+- **Fully updated.** Every build upgrades all of the base image's packages to the archive's newest
+  versions, so a release ships fixes the base image has not picked up yet. Libraries upstream pins
+  at vulnerable versions are raised by `uc/patches/0003-update-vulnerable-libraries.patch`.
+- **Only what runs.** Packages are installed without recommended extras, and what the image does
+  not run is removed. The web image keeps `httpd` and the 18 modules its configuration loads, out of
+  130, and drops Apache's other programs, curl and the libraries of the removed modules (LDAP, Lua,
+  libxml2, HTTP/2, Kerberos). The uc image drops curl once it has fetched supercronic, the base
+  image's locales, fontconfig, wget, gnupg, p11-kit and procps, and Canonical's `pebble`.
+- **One layer.** Each image is built in a full stage, then copied into an empty one, so nothing
+  the build deleted survives in a lower layer. The web image is one layer; the uc image adds a 4 kB
+  one, the `/data` directory its `WORKDIR` needs.
+- **No setuid or setgid.** No file keeps either bit, so nothing in the images can run as another
+  user.
 - **No imports from the working directory.** The uc image sets `PYTHONSAFEPATH=1`, so
   `python3 -m uc` never imports a file someone placed in its working directory, next to the signing
   key.
+- **OCI.** Images, manifests and indexes use the OCI media types, and carry the standard
+  `org.opencontainers.image.*` labels and annotations: title, description, URLs, vendor, license,
+  version, revision, creation time, and the base image they were built from.
 
 ## Containers
 
@@ -87,11 +101,11 @@ trivy image ghcr.io/haletechco/easy-update-center-web:<version>
 Both tools also run as containers (`anchore/grype`, `aquasec/trivy`). Findings come from three
 places:
 
-- the base images' operating-system packages (Ubuntu in the uc image, Debian in the web image),
-  most with no fix released yet;
-- update-center2's Java libraries, at the versions upstream's build pins;
-- Go programs in the uc image (supercronic, and `pebble` from its base image), fixed by updating
-  them.
+- the base images' operating-system packages (Ubuntu in the uc image, Debian in the web image).
+  The build installs every fix the archive has, so what a scan finds here has none released yet;
+- update-center2's Java libraries, at the versions upstream's build pins, raised by patch 0003
+  where a fix exists;
+- supercronic, a Go program, fixed by moving to a release built with a fixed Go.
 
 The weekly issue lists only the High and Critical ones with a fix.
 

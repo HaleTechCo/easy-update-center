@@ -7,9 +7,9 @@ a language of its own. This page is for contributors weighing changes to the gen
 
 [update-center2](https://github.com/jenkins-infra/update-center2) is the Java program the Jenkins
 project runs to build updates.jenkins.io. This repository builds a pinned release of it, applies
-two small patches (`uc/patches/`), and adds everything around it: containers, scheduling,
-validation, atomic publishing, signing keys, air-gapped mode, procurement and the
-[repo-adapter](repo-adapter.md).
+two small patches and a library update (`uc/patches/`), and adds everything around it:
+containers, scheduling, validation, atomic publishing, signing keys, air-gapped mode,
+procurement and the [repo-adapter](repo-adapter.md).
 
 Rewriting the generator, for example in Python like the rest of `uc`, would remove the Java build,
 the patches and the repo-adapter. It would also give up the reasons below.
@@ -40,7 +40,8 @@ At 0.1.0, roughly a fifth of the `uc` package exists only because the generator 
   Artifactory or Artifact Keeper and fills in POMs, descriptions and release dates from the plugin
   archives;
 - the glue that runs the generator and prepares its input (`uc/uc/jar.py`, `aql.py`, `layout.py`);
-- two patches with 21 changed lines, kept current on every upgrade;
+- two patches with 21 changed lines, kept current on every upgrade, and a third that raises library
+  versions upstream has not updated yet;
 - a Java build in the uc image, and the weekly job that watches upstream for new releases.
 
 Everything else would be needed with any generator: procurement, `uc doctor`, validation,
@@ -63,6 +64,7 @@ contributions upstream would shrink the wrapper:
 - **A second implementation of that interface**, for Artifact Keeper or for a plain Maven layout.
   It would retire most of the repo-adapter.
 - **The two patches**: popularity data made optional, and the core age for tiers made a setting.
+  The library update needs no contribution: it shrinks as upstream raises its own versions.
 
 Either way the generator stays upstream's, and this repository keeps what only it provides:
 deployment, air-gapped operation, procurement and release engineering.
