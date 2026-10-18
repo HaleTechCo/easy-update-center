@@ -6,6 +6,33 @@ the interface.
 
 ## Unreleased
 
+### Changed
+
+- Both images are fully updated at build time and hold only what they run, in a single layer
+  ([Hardening](docs/architecture/hardening.md#images)):
+  - every package is at its archive's newest version;
+  - the web image keeps `httpd` and the 18 modules its configuration loads, and drops curl and the
+    libraries of the unused modules;
+  - the uc image drops curl, locales, fontconfig, wget, gnupg, p11-kit, procps and the base image's
+    `pebble`;
+  - no file keeps a setuid or setgid bit.
+- The web container's health check makes its request with bash and openssl instead of curl.
+- Release images carry the full set of OCI annotations on each manifest and index, including the
+  creation time and the base image, and use OCI media types explicitly.
+
+### Security
+
+- update-center2's libraries moved past known vulnerabilities by a new patch:
+  - bouncycastle 1.85 (CVE-2026-8763, CVE-2026-13506);
+  - jsoup 1.23.2 (CVE-2026-75140);
+  - owasp-java-html-sanitizer 20260101.1 (CVE-2025-66021);
+  - commons-beanutils 1.11.0 (CVE-2025-48734).
+- supercronic v0.2.50, built with Go 1.27.2, which fixes vulnerabilities in the Go standard library
+  (among them CVE-2026-78667, CVE-2026-78669 and CVE-2026-97031).
+- The web image's libexpat1 is at 2.9.0 (CVE-2026-66046, CVE-2026-76956, CVE-2026-76957,
+  CVE-2026-77214, CVE-2026-93990).
+- Neither image has a High or Critical vulnerability with a known fix.
+
 ## [0.1.0] - 2026-10-17
 
 ### Added
