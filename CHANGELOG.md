@@ -6,6 +6,8 @@ the interface.
 
 ## Unreleased
 
+## [0.1.1] - 2026-10-18
+
 ### Changed
 
 - Both images are fully updated at build time and hold only what they run, in a single layer
