@@ -18,7 +18,7 @@ x-hardened: &hardened
     options: {max-size: 10m, max-file: "3"}
 
 # Written once each: the services that run the uc image, and every service's user, cannot drift apart.
-x-uc-image: &uc-image "${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.0}"
+x-uc-image: &uc-image "${UC_IMAGE:-ghcr.io/haletechco/easy-update-center-uc:0.1.1}"
 x-user: &user "${UC_UID:-10001}:${UC_GID:-10001}"  # docs/reference/configuration.md#compose
 
 x-uc: &uc
@@ -48,7 +48,7 @@ x-uc: &uc
 services:
   web:
     <<: *hardened
-    image: ${WEB_IMAGE:-ghcr.io/haletechco/easy-update-center-web:0.1.0}
+    image: ${WEB_IMAGE:-ghcr.io/haletechco/easy-update-center-web:0.1.1}
     user: *user
     read_only: true
     tmpfs:
