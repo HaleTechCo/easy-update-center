@@ -32,6 +32,7 @@ listed below, and whether the patches still apply. Review each diff:
 | `HPI.java` | The archive entries the repo-adapter serves: `META-INF/MANIFEST.MF` and `<artifactId>-<version>.jar!/index.jelly` ([Filling gaps](../architecture/repo-adapter.md#filling-gaps)). |
 | `Popularities.java` | Whether `0001-popularity-configurable-and-optional.patch` still applies, or is no longer needed. |
 | `json/TieredUpdateSitesGenerator.java` | Whether `0002-core-age-configurable.patch` still applies, or is no longer needed. |
+| `pom.xml` | Which lines of `0003-update-vulnerable-libraries.patch` upstream's versions have caught up with. |
 
 Then, in a checkout of the new tag, search the sources for internet hosts:
 
@@ -88,7 +89,7 @@ scheduled run uses the new generator; `docker compose run --rm uc generate` publ
 
 ## The patches
 
-Two small patches in `uc/patches/` are applied to update-center2 at build time:
+Three patches in `uc/patches/` are applied to update-center2 at build time, in order:
 
 - `0001-popularity-configurable-and-optional.patch` (`Popularities.java`): the popularity URL
   becomes `POPULARITY_JSON_URL`, following the pattern that file already uses for five other URLs,
@@ -98,6 +99,11 @@ Two small patches in `uc/patches/` are applied to update-center2 at build time:
 - `0002-core-age-configurable.patch` (`json/TieredUpdateSitesGenerator.java`): the 400-day core
   age for tiers becomes `CORE_AGE_DAYS`, where `0` means no limit. See
   [Core age](../architecture/modes.md#core-age).
+- `0003-update-vulnerable-libraries.patch` (`pom.xml`): raises the libraries that scanners flag in
+  3.18.4 to their fixed releases, and pins `commons-beanutils`, which upstream gets through
+  `json-lib`, with the `commons-logging` it needs. update-center2's own tests run against the new
+  versions during the build.
 
-Both are meant to go upstream. Once a release contains them, drop them as described in
-[step 2](#2-update-the-pin).
+0001 and 0002 are meant to go upstream. Once a release contains them, drop them as described in
+[step 2](#2-update-the-pin). For 0003, drop each line once upstream's `pom.xml` has that version
+or newer, and the patch when no line is left.

@@ -17,13 +17,13 @@ The image behind the `uc`, `scheduler`, `repo-adapter` and `setup` services. Bui
 | update-center2 | `3.18.4`, commit `b2c8ad2b2feb425b471e6dcc9174c50dc3b3c1dd`, checked at build | `uc/Dockerfile` (`UC2_VERSION`, `UC2_COMMIT`) | MIT, under the Jenkins project's governance (see [note](#note-on-update-center2s-license)) | The generator Jenkins' own update center runs, built from source. |
 | `0001-popularity-configurable-and-optional.patch` | in this repository | `uc/patches/` | MIT | Makes the popularity URL configurable (`POPULARITY_JSON_URL`) and its absence non-fatal. |
 | `0002-core-age-configurable.patch` | in this repository | `uc/patches/` | MIT | Makes the 400-day core age for tiers configurable (`CORE_AGE_DAYS`, `0` for no limit). |
-| update-center2's Java libraries | resolved by Maven for 3.18.4 (28 jars) | update-center2's `pom.xml` | Apache-2.0, MIT, BSD-style, Bouncy Castle; one LGPL-2.1 (see [Third-party notices](#third-party-notices)) | The generator's own dependencies. |
-| supercronic | `v0.2.49`, SHA-256 per architecture (amd64 `a53ae236...0c1`, arm64 `02aa0cb2...dd5`) | `uc/Dockerfile` (`SUPERCRONIC_VERSION`, checksums) | MIT | Runs `uc generate` on `GENERATE_SCHEDULE`, and `uc doctor --record` on `DOCTOR_SCHEDULE` when that is set. |
+| `0003-update-vulnerable-libraries.patch` | in this repository | `uc/patches/` | MIT | Raises the libraries scanners flag in 3.18.4 to their fixed releases: bouncycastle 1.85, jsoup 1.23.2, owasp-java-html-sanitizer 20260101.1, commons-beanutils 1.11.0 (with commons-logging 1.3.5). |
+| update-center2's Java libraries | resolved by Maven for 3.18.4 and patch 0003 (28 jars) | update-center2's `pom.xml` | Apache-2.0, MIT, BSD-style, Bouncy Castle; one LGPL-2.1 (see [Third-party notices](#third-party-notices)) | The generator's own dependencies. |
+| supercronic | `v0.2.50`, SHA-256 per architecture (amd64 `d2d7c97f...dd0`, arm64 `a1c0af98...9e2`) | `uc/Dockerfile` (`SUPERCRONIC_VERSION`, checksums) | MIT | Runs `uc generate` on `GENERATE_SCHEDULE`, and `uc doctor --record` on `DOCTOR_SCHEDULE` when that is set. |
 | python3 | distribution package, floats (3.14.4) | not pinned | PSF-2.0 | Runs the `uc` command. Standard library only: no pip packages. |
 | openssl | distribution package, floats (3.5.5) | not pinned | Apache-2.0 | Signing PKI (`uc pki`) and certificate checks. |
 | tini | distribution package, floats | not pinned | MIT | Init process: forwards signals, reaps children. |
 | ca-certificates | distribution package, floats | not pinned | MPL-2.0 (certificate data), GPL-2.0-or-later (scripts) | TLS trust for the repository and upstream hosts. |
-| curl | distribution package, floats | not pinned | curl | Fetches supercronic during the build; stays installed for troubleshooting. |
 | VersionTool | in this repository | `uc/java/VersionTool.java` | MIT | Compares Jenkins versions with the generator's own `VersionNumber`; compiled at build time. |
 | `uc` package | in this repository | `uc/uc/` | MIT | Configuration, the generation pipeline, the repo-adapter, `uc doctor`. |
 
@@ -33,10 +33,9 @@ The image behind the `web` service. Built from [`web/Dockerfile`](../../web/Dock
 
 | Component | Version or pin | Pinned in | License | Why |
 |---|---|---|---|---|
-| `httpd:2.4` base image | tag `2.4`, pinned by digest (Debian 13, Apache 2.4.68) | `web/Dockerfile` | Apache-2.0 | Serves the release and runs upstream's `.htaccess` routing. |
+| `httpd:2.4` base image | tag `2.4`, pinned by digest (Debian 13, Apache 2.4.69) | `web/Dockerfile` | Apache-2.0 | Serves the release and runs upstream's `.htaccess` routing. Only `httpd` and the 18 modules the configuration loads are kept. |
 | ca-certificates | distribution package, floats | not pinned | MPL-2.0 (certificate data), GPL-2.0-or-later (scripts) | Verifies the download backend in proxy mode. |
-| curl | distribution package, floats | not pinned | curl | The container health check. |
-| openssl | distribution package, floats | not pinned | Apache-2.0 | The build's configuration check uses it to make a throwaway certificate. It stays installed because the `ca-certificates` package depends on it; nothing uses it at run time. |
+| openssl | distribution package, floats | not pinned | Apache-2.0 | The health check's request with TLS on, and the build's configuration check, which makes a throwaway certificate. `ca-certificates` depends on it too. |
 | Apache configuration and scripts | in this repository | `web/conf/`, `web/*.sh` | MIT | Download routing, headers, TLS, the entrypoint and health check. |
 
 ## Build time
@@ -47,6 +46,7 @@ Used while building the images, not shipped in the runtime images.
 |---|---|---|---|
 | `maven:3.9-eclipse-temurin-21` | tag, pinned by digest in `uc/Dockerfile` | Apache-2.0 (Maven), GPL-2.0-only WITH Classpath-exception-2.0 (JDK) | Builds and tests update-center2 with the patches applied, and compiles VersionTool. |
 | git | distribution package, floats | GPL-2.0-only | Clones update-center2 at the pinned tag. |
+| curl | distribution package, floats | curl | Fetches supercronic in the uc build, which then removes it. |
 
 The Maven build downloads update-center2's dependencies; see
 [Outbound: image builds](network.md#outbound-image-builds).
@@ -82,7 +82,7 @@ repository at the commit `.pre-commit-config.yaml` pins, and Dependabot proposes
 
 ## Pinning policy
 
-- **Pinned:** update-center2's tag, with its commit checked during the build, and the two patches,
+- **Pinned:** update-center2's tag, with its commit checked during the build, and the patches,
   which must apply cleanly or the build fails; supercronic's version and per-architecture SHA-256.
   These are what decide the generated metadata and what runs with the signing key.
 - **Pinned by digest:** the base images (`eclipse-temurin:21-jre`, `httpd:2.4`,
@@ -92,7 +92,8 @@ repository at the commit `.pre-commit-config.yaml` pins, and Dependabot proposes
   change, made by hand.
 - **Floating:** every distribution package. The distributions drop superseded package versions from
   their archives, so a pinned package version breaks the build as soon as the base image moves on.
-  A build installs the current ones.
+  A build upgrades every package the base image has to the archive's newest version, then installs
+  the current ones of what it adds, so a release ships fixes the base image has not picked up yet.
 - A release's images keep what they were built with. The Scheduled workflow scans the latest
   release's images every week and opens an issue when a fix is waiting:
   [Security fixes in the base images](../development/releasing.md#security-fixes-in-the-base-images).
@@ -159,5 +160,5 @@ software too, some of it under the GPL, so source availability for it is part of
   the MIT license." (https://www.jenkins.io/project/governance/)
 
 This project therefore treats update-center2 as MIT-licensed, and the image's notices say so. The
-two patches in `uc/patches/` are this project's own work, under its MIT license. A LICENSE file in
+patches in `uc/patches/` are this project's own work, under its MIT license. A LICENSE file in
 the upstream repository would settle the question beyond the governance statement.

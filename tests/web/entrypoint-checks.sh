@@ -107,11 +107,40 @@ else
     failures=$((failures + 1))
 fi
 
+# expect_health HEALTHY MESSAGE CONTAINER: runs the image's health check in CONTAINER; HEALTHY is yes
+# when it must pass, no when it must fail.
+expect_health() {
+    local healthy="$1" message="$2" container="$3" output rc
+    output="$(docker exec "${container}" /usr/local/bin/healthcheck.sh 2>&1)"
+    rc=$?
+    if [[ (${healthy} == yes && ${rc} -eq 0) || (${healthy} == no && ${rc} -ne 0) ]]; then
+        echo "ok: ${message}"
+    else
+        echo "FAIL: ${message}: the health check exited ${rc}: ${output}"
+        failures=$((failures + 1))
+    fi
+}
+
+# A live release for the health check: the file it looks for, and uctest.json to fetch.
+live='mkdir -p /data/live && touch /data/live/.htdownload-map && printf "{}\n" > /data/live/uctest.json'
+
 name="uc-web-wait-$$"
 # Removed on every way out of this script, a failed check or an interrupt included.
-trap 'docker rm -f "${name}" "${name}-proxy" > /dev/null 2>&1' EXIT
+trap 'docker rm -f "${name}" "${name}-proxy" "${name}-live" "${name}-tls" > /dev/null 2>&1' EXIT
+docker run -d --name "${name}-live" -e PUBLIC_URL=http://uc --entrypoint bash "${image}" \
+    -c "${live} && exec /usr/local/bin/entrypoint.sh" > /dev/null
+docker run -d --name "${name}-tls" -e PUBLIC_URL=https://uc -e TLS_CERT_FILE=/tmp/tls/c.pem -e TLS_KEY_FILE=/tmp/tls/k.pem \
+    --entrypoint bash "${image}" -c "${live} && mkdir -p /tmp/tls && openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+    -subj /CN=uc -keyout /tmp/tls/k.pem -out /tmp/tls/c.pem 2> /dev/null && exec /usr/local/bin/entrypoint.sh" > /dev/null
+expect_log "${name}-live" "resuming normal operations" "serves a live release"
+expect_health yes "the health check passes while the site answers" "${name}-live"
+docker exec "${name}-live" rm /data/live/uctest.json
+expect_health no "the health check fails when the site does not answer 200" "${name}-live"
+expect_log "${name}-tls" "resuming normal operations" "serves a live release with TLS"
+expect_health yes "the health check passes with TLS on, over 8443" "${name}-tls"
 docker run -d --name "${name}" -e PUBLIC_URL=http://uc "${image}" > /dev/null
 expect_log "${name}" "waiting for the first published release" "waits for the first release"
+expect_health no "the health check fails while no release is live" "${name}"
 docker run -d --name "${name}-proxy" -e PUBLIC_URL=http://uc -e DOWNLOAD_ACCESS=proxy -e DOWNLOAD_BACKEND=artifactory \
     -e DOWNLOAD_BACKEND_URL=http://repo.corp/jenkins --entrypoint sh "${image}" \
     -c 'mkdir -p /tmp/s && printf u:p > /tmp/s/a && sed "s#/run/secrets/download_proxy_auth#/tmp/s/a#" /usr/local/bin/entrypoint.sh > /tmp/e.sh && exec bash /tmp/e.sh' > /dev/null
