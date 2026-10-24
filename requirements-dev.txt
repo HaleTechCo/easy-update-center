@@ -3,4 +3,4 @@
 # (`make test`). In a venv or with pipx:
 #   pip install -r requirements-dev.txt
 #   pre-commit install
-pre-commit==4.6.2
+pre-commit==4.7.0
