@@ -56,7 +56,7 @@ RUN mvn -B -ntp -q org.codehaus.mojo:license-maven-plugin:2.4.0:add-third-party 
       grep -qxF "${name}" /tmp/listed || { echo "no third-party notice for ${name}" >&2; exit 1; }; \
     done
 
-FROM eclipse-temurin:21-jre@sha256:cff19e6215689161eb6162c11b86b0c60ddf802164f2eaf48d570f8fb79a36c5 AS root
+FROM eclipse-temurin:21-jre@sha256:0b99b3376fbb50dbf9c0af8535fdd5b8eb0d3fdfc8b1e4967f383b6919f6901a AS root
 ARG SUPERCRONIC_VERSION
 ARG TARGETARCH
 # pipefail: a failure anywhere in a pipe below fails the build.
