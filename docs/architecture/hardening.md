@@ -8,7 +8,8 @@ left to the operator, and how to scan the images yourself. For operators and sec
 - **No root.** Both images run as user 10001; every service in `compose.yaml` runs as
   `UC_UID:UC_GID` (default 10001). `tini` is PID 1 in the uc image.
 - **Pinned bases.** The uc image builds on `eclipse-temurin:21-jre` and the web image on
-  `httpd:2.4`, each pinned by digest. Dependabot proposes digest updates weekly.
+  `httpd:2.4`, each pinned by digest. Dependabot proposes digest updates weekly. Why not Red Hat's
+  UBI: [Base images](base-images.md).
 - **Fully updated.** Every build upgrades all of the base image's packages to the archive's newest
   versions, so a release ships fixes the base image has not picked up yet. Libraries upstream pins
   at vulnerable versions are raised by `uc/patches/0003-update-vulnerable-libraries.patch`.
