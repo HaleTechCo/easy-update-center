@@ -6,6 +6,16 @@ the interface.
 
 ## Unreleased
 
+### Security
+
+- Both images are rebuilt on current packages, which fixes the High vulnerabilities found in 0.1.1:
+  - apt and libapt-pkg7.0 are at 3.2.1ubuntu0.1 in the uc image and 3.0.4 in the web image
+    (CVE-2026-109518);
+  - the web image's zlib1g is at 1:1.3.dfsg+really1.3.1-1+deb13u1 (CVE-2026-76844,
+    CVE-2026-85091).
+- The uc image's Java runtime is Temurin 21.0.13, OpenJDK's October 2026 security update.
+- Neither image has a High or Critical vulnerability with a known fix.
+
 ## [0.1.1] - 2026-10-18
 
 ### Changed
