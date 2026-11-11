@@ -6,6 +6,8 @@ the interface.
 
 ## Unreleased
 
+## [0.1.2] - 2026-11-11
+
 ### Security
 
 - Both images are rebuilt on current packages, which fixes the High vulnerabilities found in 0.1.1:
