@@ -5,7 +5,7 @@
 
 # Pinned by digest, so a build starts from a known image; Dependabot proposes the new digest when the
 # tag moves (docs/reference/dependencies.md#pinning-policy).
-FROM httpd:2.4@sha256:c842ac797bd1fe8b3cd26d002ac9d948aa2814097544600600b35aef42e6785a AS root
+FROM httpd:2.4@sha256:32e9403360ab2f1047523e72f256527fb9aee68b342abf6ad03f0d629157f3d9 AS root
 # pipefail: a failure anywhere in a pipe below fails the build.
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # Every package is brought up to the archive's newest version, so a release ships the fixes its base
